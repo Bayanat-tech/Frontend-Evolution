@@ -219,7 +219,7 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
     useImperativeHandle(ref, () => ({ save: handleSave }));
 
     return (
-      <div className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-1.5">
+      <div style={{ zoom: 0.8 }} className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-1.5">
         
         {/* ══════════ TOP HALF ══════════ */}
         <div className="grid items-start gap-1.5 xl:grid-cols-3">
@@ -266,7 +266,6 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
                 <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_CATEGORY" valueField="category_code" descField="category_name" descHeader="Category" value={form.category_code} onChange={pick("category_code")} />
               </CField>
               <CField label="Date Of Birth" required error={errors.birth_date}>
-                {/* Removed explicit type="date" here to fix duplicate prop error */}
                 <Input className={CTL} {...date("birth_date")} />
               </CField>
               <CField label="Date Of Joining" required error={errors.join_date}>
@@ -341,36 +340,40 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
 
           {/* Column 2: Contract + Insurance */}
           <div className="flex h-full flex-col gap-1.5">
-            <HeaderBlock label="Contract Information" icon={<FileText size={11} />} gridCols="grid-cols-1 sm:grid-cols-3">
-              <CField label="Contract Type" required error={errors.contract_type}><ParamLookup parameter="MS_EMP_HR_EMPLOYEE_CONTRACT" valueField="contract_type" descField="contract_type_desc" value={form.contract_type} onChange={pick("contract_type")} /></CField>
-              <CField label="Start Date" required error={errors.contract_start_date}><Input className={CTL} {...date("contract_start_date")} /></CField>
-              <CField label="End Date" required error={errors.contract_end_date}><Input className={CTL} {...date("contract_end_date")} min={toInputDatenull(form.contract_start_date)} disabled={!form.contract_start_date} /></CField>
-              <CField label="Renewable" required error={errors.contract_renewable} className="sm:col-span-3"><ParamLookup parameter="MS_EMP_HR_CONTRACT_RENEWABLE" valueField="value_code" descField="value_desc" value={form.contract_renewable} onChange={pick("contract_renewable")} /></CField>
+            {/* Changed grid to 4 cols to fit Type and Renewable on row 1, Dates on row 2 */}
+            <HeaderBlock label="Contract Information" icon={<FileText size={11} />} gridCols="grid-cols-1 sm:grid-cols-4">
+              <CField label="Contract Type" required error={errors.contract_type} className="sm:col-span-3"><ParamLookup parameter="MS_EMP_HR_EMPLOYEE_CONTRACT" valueField="contract_type" descField="contract_type_desc" value={form.contract_type} onChange={pick("contract_type")} /></CField>
+              <CField label="Renewable" required error={errors.contract_renewable} className="sm:col-span-1"><ParamLookup parameter="MS_EMP_HR_CONTRACT_RENEWABLE" valueField="value_code" descField="value_desc" value={form.contract_renewable} onChange={pick("contract_renewable")} /></CField>
+              <CField label="Start Date" required error={errors.contract_start_date} className="sm:col-span-2"><Input className={CTL} {...date("contract_start_date")} /></CField>
+              <CField label="End Date" required error={errors.contract_end_date} className="sm:col-span-2"><Input className={CTL} {...date("contract_end_date")} min={toInputDatenull(form.contract_start_date)} disabled={!form.contract_start_date} /></CField>
             </HeaderBlock>
 
-            <HeaderBlock className="flex-1" label="Insurance Information" icon={<ShieldCheck size={11} />} gridCols="grid-cols-1 sm:grid-cols-3">
-              <CField label="Card No." className="sm:col-span-2"><Input className={CTL} value={form.ins_card_no ?? ""} onChange={(e) => e.target.value.charAt(0) !== "-" && set("ins_card_no", e.target.value)} /></CField>
-              <CField label="Type"><Input className={CTL} {...text("ins_card_type")} /></CField>
-              <CField label="Valid From"><Input className={CTL} {...date("ins_card_issue_dt")} /></CField>
-              <CField label="Valid To" error={errors.ins_card_exp_dt}><Input className={CTL} {...date("ins_card_exp_dt")} min={toInputDatenull(form.ins_card_issue_dt)} disabled={!form.ins_card_issue_dt} /></CField>
+            {/* Changed grid to 4 cols for wider dates */}
+            <HeaderBlock className="flex-1" label="Insurance Information" icon={<ShieldCheck size={11} />} gridCols="grid-cols-1 sm:grid-cols-4">
+              <CField label="Card No." className="sm:col-span-3"><Input className={CTL} value={form.ins_card_no ?? ""} onChange={(e) => e.target.value.charAt(0) !== "-" && set("ins_card_no", e.target.value)} /></CField>
+              <CField label="Type" className="sm:col-span-1"><Input className={CTL} {...text("ins_card_type")} /></CField>
+              <CField label="Valid From" className="sm:col-span-2"><Input className={CTL} {...date("ins_card_issue_dt")} /></CField>
+              <CField label="Valid To" error={errors.ins_card_exp_dt} className="sm:col-span-2"><Input className={CTL} {...date("ins_card_exp_dt")} min={toInputDatenull(form.ins_card_issue_dt)} disabled={!form.ins_card_issue_dt} /></CField>
             </HeaderBlock>
           </div>
 
           {/* Column 3: Sponsor + ID / Labour */}
           <div className="flex h-full flex-col gap-1.5">
-            <HeaderBlock label="Sponsor Information" icon={<Building2 size={11} />} gridCols="grid-cols-1 sm:grid-cols-3">
-              <CField label="Sponsor Name" required error={errors.sponsor_id} className="sm:col-span-2"><ParamLookup parameter="MS_EMP_HR_EMPLOYEE_SPONSOR" valueField="sponsor_code" descField="sponsor_name" descHeader="Sponsor" value={form.sponsor_id} onChange={pick("sponsor_id")} /></CField>
-              <CField label="Visa Type" required error={errors.visa_type}><ParamLookup parameter="MS_EMP_HR_VISA_TYPE" valueField="value_code" descField="value_desc" value={form.visa_type} onChange={pick("visa_type")} /></CField>
-              <CField label="Valid From" required error={errors.visa_valid_from}><Input className={CTL} {...date("visa_valid_from")} /></CField>
-              <CField label="Valid To" required error={errors.visa_valid_to}><Input className={CTL} {...date("visa_valid_to")} min={toInputDatenull(form.visa_valid_from)} disabled={!form.visa_valid_from} /></CField>
+            {/* Changed grid to 4 cols for wider dates */}
+            <HeaderBlock label="Sponsor Information" icon={<Building2 size={11} />} gridCols="grid-cols-1 sm:grid-cols-4">
+              <CField label="Sponsor Name" required error={errors.sponsor_id} className="sm:col-span-3"><ParamLookup parameter="MS_EMP_HR_EMPLOYEE_SPONSOR" valueField="sponsor_code" descField="sponsor_name" descHeader="Sponsor" value={form.sponsor_id} onChange={pick("sponsor_id")} /></CField>
+              <CField label="Visa Type" required error={errors.visa_type} className="sm:col-span-1"><ParamLookup parameter="MS_EMP_HR_VISA_TYPE" valueField="value_code" descField="value_desc" value={form.visa_type} onChange={pick("visa_type")} /></CField>
+              <CField label="Valid From" required error={errors.visa_valid_from} className="sm:col-span-2"><Input className={CTL} {...date("visa_valid_from")} /></CField>
+              <CField label="Valid To" required error={errors.visa_valid_to} className="sm:col-span-2"><Input className={CTL} {...date("visa_valid_to")} min={toInputDatenull(form.visa_valid_from)} disabled={!form.visa_valid_from} /></CField>
             </HeaderBlock>
 
-            <HeaderBlock className="flex-1" label="Id / Labour Card / PASI No." icon={<IdCard size={11} />} gridCols="grid-cols-1 sm:grid-cols-3">
-              <CField label="ID/Labourcard No." required error={errors.labourcard_no} className="sm:col-span-1"><Input className={CTL} {...text("labourcard_no")} /></CField>
-              <CField label="PASI No." className="sm:col-span-2"><Input className={CTL} {...text("pasi_no")} /></CField>
-              <CField label="Valid From" required error={errors.labourcard_valid_from}><Input className={CTL} {...date("labourcard_valid_from")} /></CField>
-              <CField label="Valid To" required error={errors.labourcard_valid_to}><Input className={CTL} {...date("labourcard_valid_to")} min={toInputDatenull(form.labourcard_valid_from)} disabled={!form.labourcard_valid_from} /></CField>
-              <CField label="Status" required error={errors.labourcard_status}><ParamLookup parameter="MS_EMP_HR_LABOUR_CARD_STATUS" valueField="value_code" descField="value_desc" value={form.labourcard_status} onChange={pick("labourcard_status")} /></CField>
+            {/* Changed grid to 4 cols, expanded ID field, shrank PASI, expanded dates, shrank Status */}
+            <HeaderBlock className="flex-1" label="Id / Labour Card / PASI No." icon={<IdCard size={11} />} gridCols="grid-cols-1 sm:grid-cols-4">
+              <CField label="ID/Labourcard No." required error={errors.labourcard_no} className="sm:col-span-3"><Input className={CTL} {...text("labourcard_no")} /></CField>
+              <CField label="PASI No." className="sm:col-span-1"><Input className={CTL} {...text("pasi_no")} /></CField>
+              <CField label="Valid From" required error={errors.labourcard_valid_from} className="sm:col-span-2"><Input className={CTL} {...date("labourcard_valid_from")} /></CField>
+              <CField label="Valid To" required error={errors.labourcard_valid_to} className="sm:col-span-2"><Input className={CTL} {...date("labourcard_valid_to")} min={toInputDatenull(form.labourcard_valid_from)} disabled={!form.labourcard_valid_from} /></CField>
+              <CField label="Status" required error={errors.labourcard_status} className="sm:col-span-2"><ParamLookup parameter="MS_EMP_HR_LABOUR_CARD_STATUS" valueField="value_code" descField="value_desc" value={form.labourcard_status} onChange={pick("labourcard_status")} /></CField>
             </HeaderBlock>
           </div>
 

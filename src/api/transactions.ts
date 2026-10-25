@@ -277,6 +277,7 @@ export async function getCompanyFinanceSetup(companyCode?: string) {
 }
 
 export async function saveCompanyFinanceSetup(payload: SaveCompanyFinanceSetupPayload) {
+  try {
   const response = await api.post<ApiResponse<void>>(
     "/api/finance/transactions/company-setup",
     payload
@@ -285,9 +286,13 @@ export async function saveCompanyFinanceSetup(payload: SaveCompanyFinanceSetupPa
     throw new Error(response.data.message || "Failed to save company finance setup");
   }
   return response.data;
+  } catch (err: any) {
+    throw new Error(err?.response?.data?.message || err?.message || "Failed to save company finance setup");
+  }
 }
 
 export async function saveFyPeriod(payload: SaveFyPeriodPayload) {
+  try {
   const response = await api.post<ApiResponse<void>>(
     "/api/finance/transactions/company-setup/fy-period",
     payload
@@ -296,6 +301,9 @@ export async function saveFyPeriod(payload: SaveFyPeriodPayload) {
     throw new Error(response.data.message || "Failed to save financial period");
   }
   return response.data;
+} catch (err: any) {
+  throw new Error(err?.response?.data?.message || err?.message || "Failed to save financial period");
+}
 }
 
 export async function initializeCompanyFinance(companyCode?: string) {
@@ -598,10 +606,15 @@ export async function upsertBulkAccountEntryApi(payload: {
   jobDetails: Record<string, unknown>[];
   loginid: string;
 }) {
+  try {
   const response = await api.post<ApiResponse<unknown>>("/api/finance/transactions/account-entry/bulk", payload);
   const details = (response.data as ApiResponse<unknown> & { details?: string }).details;
   if (!response.data.success) throw new Error(response.data.message || details || "Unable to save transaction");
   return response.data;
+  } catch (err: any) {
+    const data = err?.response?.data;
+    throw new Error(data?.message || data?.details || err?.message || "Unable to save transaction");
+  } 
 }
 export async function upsertBulkAccountBudgetEntryApi(
   payload: {

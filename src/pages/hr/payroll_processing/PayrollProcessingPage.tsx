@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Play, Users, Lock, X, Download } from "lucide-react";
+import { Loader2, Play, Users, Lock, X, Download, Layers, Save } from "lucide-react";
 
 import { DataTable } from "../../../components/ui/DataTable";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
+import { MultiSelectField } from "../../../components/ui/MultiSelectField"; // adjust path if needed
 import { useAuth } from "../../../state/AuthContext";
 import { DynamicDropDown } from "../api/DynamicDropDown";
 import { DynamicQueryParams, getDynamicLookup } from "../../../api/lookups";
@@ -37,6 +38,22 @@ function pick(row: any, key: string): any {
   return row[key] ?? row[key.toLowerCase()] ?? row[key.toUpperCase()];
 }
 
+const norm = (v: unknown) => String(v ?? "").trim().toUpperCase();
+
+/** Every identifier a lookup row might carry for an employee. */
+function employeeIdCandidates(row: any, fallback: string): string[] {
+  const keys = ["employee_id", "employee_code", "emp_code", "emp_id", "code", "value", "id"];
+  const list = [fallback, ...keys.map((k) => pick(row, k))].map(norm).filter(Boolean);
+  return Array.from(new Set(list));
+}
+
+/** Employee name: the main grid returns rpt_name, the employee lookup returns emp_name. */
+function nameOf(row: any): string {
+  return String(
+    pick(row, "rpt_name") || pick(row, "emp_name") || pick(row, "employee_name") || ""
+  ).trim();
+}
+
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -45,6 +62,7 @@ export interface PayrollEmployeeRow {
   select_emp?: number | boolean;
   employee_code: string;
   rpt_name: string;
+  emp_name?: string;
   grade_name: string | null;
   desg_name: string | null;
   div_name: string | null;
@@ -94,10 +112,11 @@ export interface AddDedRow {
   pay_comp_earn_ded: string | null; // E / D
   recover_mth_amt: number;
   cancel_status: "Y" | "N";
+  pay_comp_code: string | null;
   _rowKey: string;
 }
 
-type TxnType = "E" | "D";
+type TxnType = "E" | "D" | "ALL";
 
 /* -------------------------------------------------------------------------- */
 /* API                                                                        */
@@ -148,11 +167,10 @@ async function fetchPayrollProcessingData(params: {
 /**
  * Populate Addition / Deductions
  * PROC_PAY_CONSOLIDATE -> PAY_CONSOLIDATE_VW_HR_SALARY_ADVDED_FROM
- * (builds the SQL, run through the dynamic SQL endpoint via getDynamicLookup)
  *   code1 = company code      (P_CODE1)
  *   code2 = division code     (P_CODE2)
- *   code3 = employee code     (P_CODE3)
- *   code4 = PAY_COMP_EARN_DED (P_CODE4) -> E / D
+ *   code3 = employee code     (P_CODE3)  -> a code, or "ALL"
+ *   code4 = PAY_COMP_EARN_DED (P_CODE4)  -> E / D / ALL
  */
 async function fetchAddDedData(params: {
   companyCode: string;
@@ -172,18 +190,60 @@ async function fetchAddDedData(params: {
 
   const rows = (await getDynamicLookup(queryParams)) ?? [];
 
-  return (rows as any[]).map((r, i) => ({
-    doc_no: pick(r, "DOC_NO") ?? null,
-    doc_date: pick(r, "DOC_DATE") ?? null,
-    employee_code: String(pick(r, "EMPLOYEE_CODE") ?? ""),
-    employee_name: String(pick(r, "EMPLOYEE_NAME") ?? ""),
-    pay_comp_desc: pick(r, "PAY_COMP_DESC") ?? null,
-    pay_comp_earn_ded: pick(r, "PAY_COMP_EARN_DED") ?? null,
-    recover_mth_amt: Number(pick(r, "RECOVER_MTH_AMT") ?? 0) || 0,
-    cancel_status:
-      String(pick(r, "CANCEL_STATUS") ?? "N").toUpperCase() === "Y" ? "Y" : "N",
-    _rowKey: `adv-${pick(r, "DOC_NO") ?? i}-${i}`,
-  }));
+  return (rows as any[]).map((r, i) => {
+    const cancel: "Y" | "N" =
+      String(pick(r, "CANCEL_STATUS") ?? "N").toUpperCase() === "Y" ? "Y" : "N";
+    return {
+      doc_no: pick(r, "DOC_NO") ?? null,
+      doc_date: pick(r, "DOC_DATE") ?? null,
+      employee_code: String(pick(r, "EMPLOYEE_CODE") ?? ""),
+      employee_name: String(
+        pick(r, "EMPLOYEE_NAME") || pick(r, "EMP_NAME") || pick(r, "RPT_NAME") || ""
+      ),
+      pay_comp_code: pick(r, "PAY_COMP_CODE") ?? null,
+      pay_comp_desc: pick(r, "PAY_COMP_DESC") ?? null,
+      pay_comp_earn_ded: pick(r, "PAY_COMP_EARN_DED") ?? null,
+      recover_mth_amt: Number(pick(r, "RECOVER_MTH_AMT") ?? 0) || 0,
+      cancel_status: cancel,
+      _rowKey: `adv-${pick(r, "DOC_NO") ?? i}-${i}`,
+    };
+  });
+}
+
+/**
+ * Save the ticked rows in ONE request: the rows go in the payload as an array.
+ * NOTE: set CONSOLIDATE_SAVE_PARAMETER to the real backend procedure name and
+ * adjust the payload keys if the backend expects different names.
+ */
+const CONSOLIDATE_SAVE_PARAMETER = "PROC_PAY_CONSOLIDATE_SAVE";
+
+async function saveConsolidation(params: {
+  companyCode: string;
+  divCode: string;
+  rows: AddDedRow[];
+  loginId?: string;
+}): Promise<void> {
+  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+    parameter: CONSOLIDATE_SAVE_PARAMETER,
+    loginid: params.loginId || "",
+    company_code: params.companyCode,
+    div_code: params.divCode,
+    rows: params.rows.map((r) => ({
+      doc_no: r.doc_no,
+      doc_date: formatDateForInput(r.doc_date),
+      employee_code: r.employee_code,
+      employee_name: r.employee_name,
+      pay_comp_code: r.pay_comp_code,
+      pay_comp_desc: r.pay_comp_desc,
+      pay_comp_earn_ded: r.pay_comp_earn_ded,
+      recover_mth_amt: r.recover_mth_amt,
+      cancel_status: r.cancel_status, // "Y" | "N"
+    })),
+  });
+  // this endpoint answers "success: true" even for an unknown parameter
+  const msg = String(res.data?.message ?? "");
+  if (!res.data?.success || /invalid parameter/i.test(msg))
+    throw new Error(msg || "Failed to save consolidation");
 }
 
 async function deleteAccrualTempData(
@@ -268,12 +328,9 @@ interface PopulateAddDedModalProps {
   loginId: string;
   initialDivCode: string;
   initialDivName: string;
-  initialEmpCode: string;
-  initialEmpName: string;
+  /** Employees ticked in the main grid (pre-selected when the modal opens) */
+  initialEmployees: { employee_code: string; rpt_name?: string }[];
   onClose: () => void;
-  /** Called when the user clicks "Continue Processing" inside the modal. */
-  onContinue: () => void | Promise<void>;
-  continueDisabled?: boolean;
 }
 
 function PopulateAddDedModal({
@@ -282,38 +339,68 @@ function PopulateAddDedModal({
   loginId,
   initialDivCode,
   initialDivName,
-  initialEmpCode,
-  initialEmpName,
+  initialEmployees,
   onClose,
-  onContinue,
-  continueDisabled,
 }: PopulateAddDedModalProps) {
   const [mDivCode, setMDivCode] = useState("");
   const [mDivName, setMDivName] = useState("");
-  const [mEmpCode, setMEmpCode] = useState("");
-  const [mEmpName, setMEmpName] = useState("");
-  const [txnType, setTxnType] = useState<TxnType>("E");
+  const [mEmpCodes, setMEmpCodes] = useState<string[]>([]);
+  const [txnType, setTxnType] = useState<TxnType>("ALL");
 
   const [data, setData] = useState<AddDedRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [populated, setPopulated] = useState(false);
   const [error, setError] = useState("");
-  const [running, setRunning] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+
+  // Employee list for the chosen division (feeds the multi-select)
+  const empQuery = useQuery({
+    queryKey: ["addDedEmployees", companyCode, mDivCode],
+    queryFn: () =>
+      getDynamicLookup({
+        parameter: "HR_LEAVE_ENCASHMENT_EMPLOYEE_DROP_DOWN",
+        loginid: loginId,
+        code1: mDivCode,
+        code2: "",
+        code3: "",
+        code4: companyCode,
+      }),
+    enabled: open && !!mDivCode,
+    staleTime: 0,
+  });
+
+  const empOptions = useMemo(
+    () =>
+      ((empQuery.data ?? []) as any[])
+        .map((r) => {
+          const code = String(pick(r, "employee_code") ?? "").trim();
+          return { value: code, code, label: nameOf(r) };
+        })
+        .filter((o) => o.value),
+    [empQuery.data]
+  );
+
+  // every employee in the list is ticked
+  const allEmp = empOptions.length > 0 && empOptions.every((o) => mEmpCodes.includes(o.value));
 
   // Reset every time the modal opens, pre-filling from page filters
   useEffect(() => {
     if (!open) return;
     setMDivCode(initialDivCode);
     setMDivName(initialDivName);
-    setMEmpCode(initialEmpCode);
-    setMEmpName(initialEmpName);
-    setTxnType("E");
+    setMEmpCodes((initialEmployees ?? []).map((e) => String(e.employee_code)).filter(Boolean));
+    setTxnType("ALL");
+    setSuccess("");
+    setSelectedKeys(new Set());
     setData([]);
     setPopulated(false);
     setError("");
     setLoading(false);
-    setRunning(false);
-  }, [open, initialDivCode, initialDivName, initialEmpCode, initialEmpName]);
+    setSaving(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Close on Escape
   useEffect(() => {
@@ -327,25 +414,34 @@ function PopulateAddDedModal({
 
   const handlePopulate = useCallback(async () => {
     setError("");
+    setSuccess("");
     if (!mDivCode) {
       setError("Division is required.");
       return;
     }
-    if (!mEmpCode) {
-      setError("Employee is required.");
+    if (mEmpCodes.length === 0) {
+      setError("Select at least one employee.");
       return;
     }
 
     setLoading(true);
     try {
-      const rows = await fetchAddDedData({
-        companyCode,
-        divCode: mDivCode,
-        employeeCode: mEmpCode,
-        txnType,
-        loginId,
-      });
+      // everything ticked → one "ALL" request, otherwise one request per employee
+      const codes = allEmp ? ["ALL"] : mEmpCodes;
+      const results = await Promise.all(
+        codes.map((c) =>
+          fetchAddDedData({
+            companyCode,
+            divCode: mDivCode,
+            employeeCode: c,
+            txnType,
+            loginId,
+          })
+        )
+      );
+      const rows = results.flat().map((r, i) => ({ ...r, _rowKey: `${r._rowKey}-${i}` }));
       setData(rows);
+      setSelectedKeys(new Set());
       setPopulated(true);
     } catch (e) {
       setData([]);
@@ -354,30 +450,57 @@ function PopulateAddDedModal({
     } finally {
       setLoading(false);
     }
-  }, [companyCode, loginId, mDivCode, mEmpCode, txnType]);
+  }, [companyCode, loginId, mDivCode, mEmpCodes, txnType, allEmp]);
 
-  const updateCancelStatus = useCallback(
-    (rowKey: string, value: "Y" | "N") => {
-      setData((prev) =>
-        prev.map((r) =>
-          r._rowKey === rowKey ? { ...r, cancel_status: value } : r
-        )
-      );
-    },
-    []
-  );
+  const updateCancelStatus = useCallback((rowKey: string, value: "Y" | "N") => {
+    setData((prev) =>
+      prev.map((r) => (r._rowKey === rowKey ? { ...r, cancel_status: value } : r))
+    );
+    // changing a row ticks it, so it is included in Save
+    setSelectedKeys((prev) => new Set(prev).add(rowKey));
+  }, []);
 
   const total = useMemo(
     () => data.reduce((sum, r) => sum + (Number(r.recover_mth_amt) || 0), 0),
     [data]
   );
 
-  const handleContinue = async () => {
-    setRunning(true);
+  const selectedList = useMemo(
+    () => data.filter((r) => selectedKeys.has(r._rowKey)),
+    [data, selectedKeys]
+  );
+  const allSelected = data.length > 0 && selectedKeys.size === data.length;
+  const someSelected = selectedKeys.size > 0 && !allSelected;
+
+  const toggleRow = (key: string) =>
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelectedKeys(allSelected ? new Set() : new Set(data.map((r) => r._rowKey)));
+
+  const handleSave = async () => {
+    if (selectedList.length === 0) return;
+    setError("");
+    setSuccess("");
+    setSaving(true);
     try {
-      await onContinue();
+      await saveConsolidation({
+        companyCode,
+        divCode: mDivCode,
+        rows: selectedList,
+        loginId,
+      });
+      setSuccess(`${selectedList.length} record(s) saved.`);
+      setSelectedKeys(new Set());
+    } catch (e) {
+      setError((e as Error).message || "Failed to save.");
     } finally {
-      setRunning(false);
+      setSaving(false);
     }
   };
 
@@ -405,7 +528,7 @@ function PopulateAddDedModal({
               Populate Addition / Deductions
             </h2>
             <p className="text-[12px] text-[#667085]">
-              Select division, employee and transaction type, then populate.
+              Select division, employees and transaction type, populate, tick the rows and save.
             </p>
           </div>
           <button
@@ -432,9 +555,8 @@ function PopulateAddDedModal({
                 onChange={(value: string, row: any) => {
                   setMDivCode(value);
                   setMDivName(row?.div_name ?? row?.name ?? "");
-                  // employee depends on division
-                  setMEmpCode("");
-                  setMEmpName("");
+                  // employees depend on division
+                  setMEmpCodes([]);
                   setData([]);
                   setPopulated(false);
                 }}
@@ -443,27 +565,32 @@ function PopulateAddDedModal({
               />
             </label>
 
-            <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
+            {/* div (not label) so the click is not forwarded to the trigger twice */}
+            <div className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
               <span className="flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5 text-[#98A2B3]" />
                 Employee <span className="text-[#DC2626]">*</span>
               </span>
-              <DynamicDropDown
-                type="employee"
-                value={mEmpCode}
-                displayName={mEmpName}
-                onChange={(value: string, row: any) => {
-                  setMEmpCode(row?.employee_code ?? value ?? "");
-                  setMEmpName(row?.rpt_name ?? row?.name ?? "");
+              <MultiSelectField
+                label=""
+                compact
+                toggleAllItems
+                showCheckboxes
+                options={empOptions}
+                value={mEmpCodes}
+                loading={empQuery.isFetching}
+                disabled={!mDivCode}
+                placeholder="Select employees…"
+                codeColumnLabel="Code"
+                labelColumnLabel="Name"
+                onChange={(v) => {
+                  setMEmpCodes(v);
                   setData([]);
                   setPopulated(false);
+                  setSuccess("");
                 }}
-                code1={mDivCode || ""}
-                code2=""
-                code3=""
-                code4={companyCode}
               />
-            </label>
+            </div>
 
             <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
               <span>
@@ -478,6 +605,7 @@ function PopulateAddDedModal({
                   setPopulated(false);
                 }}
               >
+                <option value="ALL">All</option>
                 <option value="E">Earning</option>
                 <option value="D">Deduction</option>
               </select>
@@ -488,7 +616,7 @@ function PopulateAddDedModal({
                 type="button"
                 size="sm"
                 className="bg-[#4F46E5] text-white hover:bg-[#4338CA]"
-                disabled={loading || !mDivCode || !mEmpCode}
+                disabled={loading || !mDivCode || mEmpCodes.length === 0}
                 onClick={handlePopulate}
               >
                 {loading ? (
@@ -501,6 +629,12 @@ function PopulateAddDedModal({
             </div>
           </div>
 
+          {success && (
+            <div className="mt-3 rounded-md bg-[#ECFDF3] px-2.5 py-1.5 text-[12px] text-[#067647]">
+              {success}
+            </div>
+          )}
+
           {error && (
             <div className="mt-3 rounded-md bg-[#FEF3F2] px-2.5 py-1.5 text-[12px] text-[#B42318]">
               {error}
@@ -509,10 +643,23 @@ function PopulateAddDedModal({
         </div>
 
         {/* Grid */}
-        <div className="min-h-[260px] flex-1 overflow-auto">
+        <div className="max-h-[48vh] min-h-[220px] overflow-auto">
           <table className="w-full border-collapse">
             <thead>
               <tr>
+                <th className={`${th} w-10`}>
+                  <input
+                    type="checkbox"
+                    className="accent-[#4F46E5]"
+                    aria-label="Select all rows"
+                    disabled={data.length === 0}
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected;
+                    }}
+                    onChange={toggleAll}
+                  />
+                </th>
                 <th className={th}>Doc No</th>
                 <th className={th}>Doc Date</th>
                 <th className={th}>Employee Code</th>
@@ -526,7 +673,7 @@ function PopulateAddDedModal({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-[13px] text-[#667085]">
+                  <td colSpan={9} className="py-16 text-center text-[13px] text-[#667085]">
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Loading…
@@ -535,15 +682,29 @@ function PopulateAddDedModal({
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-[13px] text-[#667085]">
+                  <td colSpan={9} className="py-16 text-center text-[13px] text-[#667085]">
                     {populated
                       ? "No records found for the selected criteria."
-                      : "Select Division, Employee and Type, then click Populate."}
+                      : "Select Division, Employees and Type, then click Populate."}
                   </td>
                 </tr>
               ) : (
                 data.map((r) => (
-                  <tr key={r._rowKey} className="hover:bg-[#F9FAFB]">
+                  <tr
+                    key={r._rowKey}
+                    className={
+                      selectedKeys.has(r._rowKey) ? "bg-[#F5F6FF]" : "hover:bg-[#F9FAFB]"
+                    }
+                  >
+                    <td className={td}>
+                      <input
+                        type="checkbox"
+                        className="accent-[#4F46E5]"
+                        aria-label="Select row"
+                        checked={selectedKeys.has(r._rowKey)}
+                        onChange={() => toggleRow(r._rowKey)}
+                      />
+                    </td>
                     <td className={td}>{r.doc_no ?? ""}</td>
                     <td className={td}>{formatDateDMY(r.doc_date)}</td>
                     <td className={td}>{r.employee_code}</td>
@@ -584,6 +745,9 @@ function PopulateAddDedModal({
           <span>
             Record Count:{" "}
             <strong className="font-semibold text-[#101828]">{data.length}</strong>
+            <span className="mx-2 text-[#D0D5DD]">|</span>
+            Selected:{" "}
+            <strong className="font-semibold text-[#101828]">{selectedKeys.size}</strong>
           </span>
           <span>
             Total:{" "}
@@ -603,7 +767,7 @@ function PopulateAddDedModal({
             size="sm"
             variant="outline"
             onClick={onClose}
-            disabled={running}
+            disabled={saving}
           >
             Close
           </Button>
@@ -611,15 +775,20 @@ function PopulateAddDedModal({
             type="button"
             size="sm"
             className="bg-[#101828] text-white hover:bg-[#1D2939]"
-            disabled={running || continueDisabled}
-            onClick={handleContinue}
+            disabled={saving || selectedKeys.size === 0}
+            title={
+              selectedKeys.size === 0
+                ? "Tick at least one row to enable Save"
+                : `Save ${selectedKeys.size} selected record(s)`
+            }
+            onClick={handleSave}
           >
-            {running ? (
+            {saving ? (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
             ) : (
-              <Play className="mr-1.5 h-4 w-4" />
+              <Save className="mr-1.5 h-4 w-4" />
             )}
-            Continue Processing
+            Save{selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ""}
           </Button>
         </div>
       </div>
@@ -689,6 +858,8 @@ export default function PayrollProcessingPage() {
 
     let list = loadQuery.data.map((r, i) => ({
       ...r,
+      rpt_name: nameOf(r),
+      emp_name: nameOf(r),
       select_emp: r.select_emp ?? 0,
       processed: r.processed ?? 0,
       _rowKey: `db-${r.employee_id ?? i}-${i}`,
@@ -696,19 +867,23 @@ export default function PayrollProcessingPage() {
     }));
 
     if (empId) {
-      list = list.filter(
-        (r) =>
-          String(r.employee_id) === String(empId) ||
-          String(r.employee_code) === String(empId)
+      const ids = employeeIdCandidates(empRow, empId);
+      let matched = list.filter(
+        (r) => ids.includes(norm(r.employee_id)) || ids.includes(norm(r.employee_code))
       );
+      // fallback: the lookup value may not be an id/code, so try the name
+      if (matched.length === 0 && empName) {
+        matched = list.filter((r) => norm(r.rpt_name) === norm(empName));
+      }
+      list = matched;
     }
 
     setRows(list);
     setHasLoaded(true);
-  }, [loadQuery.data, empId]);
+  }, [loadQuery.data, empId, empRow, empName]);
 
-  /* ── Process Payroll (actual processing – runs from the modal) ─────────── */
-  const runProcessPayroll = useCallback(async () => {
+  /* ── Process Payroll (runs directly) ───────────────────────────────────── */
+  const handleProcessPayroll = useCallback(async () => {
     if (!divCode) {
       alert("Division is required.");
       return;
@@ -724,9 +899,7 @@ export default function PayrollProcessingPage() {
       });
 
       const checkValue = Number(
-        (checkRows?.[0] as any)?.check_value ??
-          (checkRows?.[0] as any)?.CHECK_VALUE ??
-          0
+        (checkRows?.[0] as any)?.check_value ?? (checkRows?.[0] as any)?.CHECK_VALUE ?? 0
       );
 
       if (checkValue !== 0) {
@@ -759,22 +932,11 @@ export default function PayrollProcessingPage() {
         )
       );
 
-      setAddDedOpen(false);
       alert(`${selectedRows.length} employee(s) marked for process.`);
     } catch (err) {
       alert((err as Error).message || "Failed to process payroll.");
     }
   }, [divCode, companyCode, loginid, selectedRows]);
-
-  /* ── "Process Payroll" button → opens the Add/Ded modal ────────────────── */
-  const handleProcessPayroll = useCallback(() => {
-    if (!divCode) {
-      alert("Division is required.");
-      return;
-    }
-    if (selectedRows.length === 0) return;
-    setAddDedOpen(true);
-  }, [divCode, selectedRows.length]);
 
   /* ── Cascade handlers ──────────────────────────────────────────────────── */
   const onDivChange = (value: string, row: any) => {
@@ -819,7 +981,7 @@ export default function PayrollProcessingPage() {
 
   const onEmpChange = (value: string, row: any) => {
     setEmpId(value);
-    setEmpName(row?.rpt_name ?? row?.name ?? "");
+    setEmpName(row?.emp_name ?? row?.rpt_name ?? row?.name ?? "");
     setEmpRow(row ?? null);
 
     if (row?.div_code) {
@@ -843,14 +1005,9 @@ export default function PayrollProcessingPage() {
   }, []);
 
   /* ── Inline updates ────────────────────────────────────────────────────── */
-  const updateRow = useCallback(
-    (rowKey: string, patch: Partial<PayrollEmployeeRow>) => {
-      setRows((prev) =>
-        prev.map((r) => (r._rowKey === rowKey ? { ...r, ...patch } : r))
-      );
-    },
-    []
-  );
+  const updateRow = useCallback((rowKey: string, patch: Partial<PayrollEmployeeRow>) => {
+    setRows((prev) => prev.map((r) => (r._rowKey === rowKey ? { ...r, ...patch } : r)));
+  }, []);
 
   const updateNewRowEmployee = useCallback((rowKey: string, empRow: any) => {
     setRows((prev) =>
@@ -860,7 +1017,7 @@ export default function PayrollProcessingPage() {
               ...r,
               employee_id: empRow?.employee_id ?? empRow?.value ?? "",
               employee_code: empRow?.employee_code ?? "",
-              rpt_name: empRow?.rpt_name ?? "",
+              rpt_name: empRow?.rpt_name ?? empRow?.emp_name ?? "",
               grade_name: empRow?.grade_name ?? null,
               grade_code: empRow?.grade_code ?? null,
               desg_name: empRow?.desg_name ?? null,
@@ -922,9 +1079,7 @@ export default function PayrollProcessingPage() {
             return (
               <div className="flex min-w-[180px] items-center gap-1.5 text-[13px] text-[#101828]">
                 <Lock className="h-3 w-3 shrink-0 text-[#98A2B3]" />
-                <span className="truncate">
-                  {r.employee_code || r.rpt_name || "—"}
-                </span>
+                <span className="truncate">{r.employee_code || r.rpt_name || "—"}</span>
               </div>
             );
           }
@@ -1012,9 +1167,7 @@ export default function PayrollProcessingPage() {
               className="h-7 w-full rounded-md border border-[#E3E6EB] bg-white px-1.5 text-xs text-[#101828] outline-none transition-colors focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15"
               value={r.include_in_payroll ?? "Y"}
               onClick={(e) => e.stopPropagation()}
-              onChange={(e) =>
-                updateRow(r._rowKey!, { include_in_payroll: e.target.value })
-              }
+              onChange={(e) => updateRow(r._rowKey!, { include_in_payroll: e.target.value })}
             >
               <option value="Y">Y</option>
               <option value="N">N</option>
@@ -1039,9 +1192,7 @@ export default function PayrollProcessingPage() {
               className="h-7 w-full rounded-md border border-[#E3E6EB] bg-white px-1.5 text-xs text-[#101828] outline-none transition-colors focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15"
               value={String(r.adv_paid ?? "N")}
               onClick={(e) => e.stopPropagation()}
-              onChange={(e) =>
-                updateRow(r._rowKey!, { adv_paid: e.target.value })
-              }
+              onChange={(e) => updateRow(r._rowKey!, { adv_paid: e.target.value })}
             >
               <option value="N">N</option>
               <option value="Y">Y</option>
@@ -1081,7 +1232,7 @@ export default function PayrollProcessingPage() {
   const employeeCount = rows.length;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 bg-[#F7F8FA] p-4">
+    <div className="flex min-h-full flex-col gap-4 bg-[#F7F8FA] p-4">
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1206,6 +1357,17 @@ export default function PayrollProcessingPage() {
           <Button
             type="button"
             size="sm"
+            variant="outline"
+            disabled={loading || !companyCode}
+            onClick={() => setAddDedOpen(true)}
+          >
+            <Layers className="mr-1.5 h-4 w-4" />
+            Consolidate
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
             className="bg-[#101828] text-white hover:bg-[#1D2939]"
             disabled={!hasLoaded || loading || selectedRows.length === 0}
             onClick={handleProcessPayroll}
@@ -1217,23 +1379,21 @@ export default function PayrollProcessingPage() {
       </div>
 
       {/* Table */}
-      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-[#E3E6EB] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <div className="overflow-hidden rounded-lg border border-[#E3E6EB] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
         <DataTable
           columns={columns}
           data={rows}
           loading={loadQuery.isFetching}
           loaderType="circle"
           density="compact"
-          height={480}
+          height={420}
           stickyFirstColumn
           stickyLastColumn={false}
           enablePagination
           pageSize={100}
           enableExport
           exportFilename="payroll-processing"
-          getRowId={(row, index) =>
-            row._rowKey ?? String(row.employee_id ?? index)
-          }
+          getRowId={(row, index) => row._rowKey ?? String(row.employee_id ?? index)}
           onRowSelectionChange={setSelectedRows}
           emptyText={
             hasLoaded
@@ -1253,9 +1413,7 @@ export default function PayrollProcessingPage() {
         {selectedRows.length > 0 && (
           <span>
             Selected:{" "}
-            <strong className="font-semibold text-[#101828]">
-              {selectedRows.length}
-            </strong>
+            <strong className="font-semibold text-[#101828]">{selectedRows.length}</strong>
           </span>
         )}
       </div>
@@ -1265,13 +1423,16 @@ export default function PayrollProcessingPage() {
         open={addDedOpen}
         companyCode={companyCode}
         loginId={loginid}
-        initialDivCode={divCode}
-        initialDivName={divName}
-        initialEmpCode={empRow?.employee_code ?? ""}
-        initialEmpName={empName}
+        initialDivCode={selectedRows[0]?.div_code || divCode}
+        initialDivName={selectedRows[0]?.div_name || divName}
+        initialEmployees={
+          selectedRows.length > 0
+            ? selectedRows.map((r) => ({ employee_code: r.employee_code, rpt_name: r.rpt_name }))
+            : empRow?.employee_code
+            ? [{ employee_code: empRow.employee_code, rpt_name: empName }]
+            : []
+        }
         onClose={() => setAddDedOpen(false)}
-        onContinue={runProcessPayroll}
-        continueDisabled={selectedRows.length === 0}
       />
     </div>
   );
