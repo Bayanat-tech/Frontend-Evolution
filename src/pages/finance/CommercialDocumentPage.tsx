@@ -2606,27 +2606,49 @@ const limitProps = (f: keyof FormState) => ({
 
               setForm((current) => {
                 let serial = current.detail.filter((l) => Number(l.serial_no) < 9000).length;
+                const docCurr = current.curr_code || "OMR";
+                const docEx = Number(current.ex_rate || 1);
+
                 const newLines: Line[] = selectedExpenses.map((exp) => {
                   serial++;
-                  const lineCurr = exp.curr_code || current.curr_code;
-                  const lineEx = Number(exp.ex_rate || current.ex_rate || 1);
-                  const lineAmt = Number(exp.amount || 0);
-                  const lcurAmt = lineAmt * lineEx;
+                  const expCurr = exp.curr_code || docCurr;
+                  const expEx = Number(exp.ex_rate || 1);
+                  const expAmt = Number(exp.amount || 0);
+                  const expLcurAmt = Number(exp.lcur_amount != null ? exp.lcur_amount : expAmt * expEx);
+
+                  // Currency conversion logic aligned with PowerBuilder ERP:
+                  // All invoice lines express amount in document currency (docCurr)
+                  let lineAmt: number;
+                  let remarksExtra = "";
+
+                  if (expCurr === docCurr) {
+                    lineAmt = expAmt;
+                  } else if (docCurr === "OMR" || docEx === 1) {
+                    // Invoice is in base currency: use the local currency amount
+                    lineAmt = Number(expLcurAmt.toFixed(3));
+                    remarksExtra = ` [Orig: ${expAmt} ${expCurr} @ ${expEx}]`;
+                  } else {
+                    // Invoice is in foreign currency: convert base amount using invoice exchange rate
+                    lineAmt = docEx > 0 ? Number((expLcurAmt / docEx).toFixed(3)) : expAmt;
+                    remarksExtra = ` [Orig: ${expAmt} ${expCurr} @ ${expEx}]`;
+                  }
+
+                  const lcurAmt = Number((lineAmt * docEx).toFixed(3));
 
                   return {
-                    ...emptyLine("PI", serial, lineCurr, current.curr_name, lineEx),
+                    ...emptyLine("PI", serial, docCurr, current.curr_name, docEx),
                     id: newId(),
                     serial_no: serial,
                     ac_code: firstAcCode,
                     ac_name: firstAcName,
-                    remarks: `${exp.act_code} - ${exp.activity} (${exp.cost_type})${exp.vehicle_no ? ` - Veh: ${exp.vehicle_no}` : ""}`,
+                    remarks: `${exp.act_code} - ${exp.activity} (${exp.cost_type})${exp.vehicle_no ? ` - Veh: ${exp.vehicle_no}` : ""}${remarksExtra}`,
                     qty: 1,
                     price: lineAmt,
                     amount: lineAmt,
                     lcur_amount: lcurAmt,
                     job_no: exp.job_no,
-                    curr_code: lineCurr,
-                    ex_rate: lineEx,
+                    curr_code: docCurr,
+                    ex_rate: docEx,
                     sign_ind: 1,
                     tx_cat_code: exp.tx_cat_code || current.tx_cat_code || "",
                     tx_compntcat_code_1: exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "10100",
