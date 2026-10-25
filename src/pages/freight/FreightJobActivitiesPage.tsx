@@ -1202,8 +1202,8 @@ export function FreightJobActivitiesPage({
                   <td className="px-2 py-1.5 text-center font-mono font-bold text-emerald-800 bg-emerald-50/80 border-r border-slate-200">
                     {money(totals.tax)}
                   </td>
-                  <td className="px-2 py-1.5 text-center text-[10px] text-slate-500 font-mono">
-                    OMR
+                  <td className="px-2 py-1.5 text-center text-[10px] text-slate-400 font-mono">
+                    —
                   </td>
                 </tr>
               </tfoot>
@@ -1730,13 +1730,13 @@ export function FreightJobActivitiesPage({
       {activeTaxIndex !== null && lines[activeTaxIndex] && (
         <Dialog
           open={true}
-          title={`Tax & VAT Configuration (Line #${activeTaxIndex + 1})`}
+          title={`Sales Tax Configuration (Line #${activeTaxIndex + 1})`}
           onClose={() => setActiveTaxIndex(null)}
           contentClassName="w-[min(96vw,860px)]"
           footer={
             <div className="flex items-center justify-between w-full">
               <span className="text-[11px] text-muted-foreground italic">
-                * Taxes are computed dynamically based on base OMR revenue and cost.
+                * Customer Sales Tax is computed dynamically based on revenue. Vendor/Cost Tax is handled directly during Purchase Booking.
               </span>
               <Button type="button" size="sm" onClick={() => setActiveTaxIndex(null)}>
                 Apply & Close
@@ -1767,7 +1767,7 @@ export function FreightJobActivitiesPage({
             {/* 1. Sales / Output Tax */}
             <div className="rounded-lg border border-border p-3 space-y-3 bg-card">
               <div className="font-bold text-primary flex items-center justify-between uppercase tracking-wider text-[11px]">
-                <span>1. Sales Tax / Output VAT (Customer Billing)</span>
+                <span>Customer Sales Tax / Output VAT</span>
                 <span className="text-[11px] font-mono text-muted-foreground">
                   Sales Tax Amt: <strong className="text-primary font-bold">{baseCurrency} {money(lines[activeTaxIndex].tx_compnt_lcuramt_1)}</strong>
                   {Boolean(lines[activeTaxIndex].bill_curr_code && lines[activeTaxIndex].bill_curr_code !== "OMR") && (
@@ -1856,98 +1856,7 @@ export function FreightJobActivitiesPage({
               </div>
             </div>
 
-            {/* 2. Cost / Input Tax */}
-            <div className="rounded-lg border border-border p-3 space-y-3 bg-card">
-              <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
-                <span>2. Vendor Cost Tax / Input VAT (Expenses)</span>
-                <span className="text-[11px] font-mono text-muted-foreground">
-                  Cost Tax Amt: <strong className="text-emerald-700 font-bold">{baseCurrency} {money(lines[activeTaxIndex].tx_compnt_lcuramt_1_cost)}</strong>
-                  {Boolean(lines[activeTaxIndex].ac_curr_code && lines[activeTaxIndex].ac_curr_code !== "OMR") && (
-                    <span className="ml-1 text-[10px] text-emerald-700 font-normal">
-                      ({money(lines[activeTaxIndex].tx_compnt_amt_1_cost)} {lines[activeTaxIndex].ac_curr_code})
-                    </span>
-                  )}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1.5fr_1fr_80px] gap-2.5 items-end">
-                <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Tax Category</label>
-                  <TaxCategoryLookup
-                    companyCode={companyCode}
-                    divisionCode={lines[activeTaxIndex].div_code || lookupText(header, "div_code") || "10"}
-                    value={lines[activeTaxIndex].tx_cat_code_cost}
-                    displayValue={lines[activeTaxIndex].tx_cat_name_cost}
-                    disabled={isLineLocked}
-                    placeholder="Cost Category"
-                    onChange={(val, row) => {
-                      const catName = lookupText(row, "tx_cat_name");
-                      updateLine(activeTaxIndex, recalcCostTax({
-                        ...lines[activeTaxIndex],
-                        tx_cat_code_cost: val,
-                        tx_cat_name_cost: catName,
-                        tx_compntcat_code_1_cost: "",
-                        tx_compntcat_name_1_cost: "",
-                        tx_compnt_perc_1_cost: "0",
-                        tx_compnt_1_expmt_cost: "N",
-                      }));
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Tax Code</label>
-                  <TaxCodeLookup
-                    companyCode={companyCode}
-                    divisionCode={lines[activeTaxIndex].div_code || lookupText(header, "div_code") || "10"}
-                    taxCategory={lines[activeTaxIndex].tx_cat_code_cost}
-                    activityCode={lines[activeTaxIndex].act_code}
-                    value={lines[activeTaxIndex].tx_compntcat_code_1_cost}
-                    displayValue={lines[activeTaxIndex].tx_compntcat_name_1_cost}
-                    disabled={isLineLocked}
-                    placeholder="Cost Tax Code"
-                    onChange={(val, row) => {
-                      const perc = lookupText(row, "tx_percnt") || "0";
-                      const codeName = lookupText(row, "tx_compntcat_name");
-                      const treatment = numberValue(perc) > 0 ? "S" : "Z";
-                      updateLine(activeTaxIndex, recalcCostTax({
-                        ...lines[activeTaxIndex],
-                        tx_compntcat_code_1_cost: val,
-                        tx_compntcat_name_1_cost: codeName,
-                        tx_compnt_perc_1_cost: perc,
-                        tx_compnt_1_expmt_cost: treatment,
-                      }));
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Treatment</label>
-                  <TaxTreatmentSelect
-                    value={lines[activeTaxIndex].tx_compnt_1_expmt_cost}
-                    disabled={isLineLocked}
-                    onChange={(treatment) => {
-                      updateLine(activeTaxIndex, recalcCostTax({
-                        ...lines[activeTaxIndex],
-                        tx_compnt_1_expmt_cost: treatment,
-                      }));
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Tax %</label>
-                  <Input
-                    className="h-7 text-right text-xs font-mono"
-                    value={lines[activeTaxIndex].tx_compnt_perc_1_cost}
-                    disabled={isLineLocked}
-                    onChange={(e) => {
-                      updateLine(activeTaxIndex, recalcCostTax({
-                        ...lines[activeTaxIndex],
-                        tx_compnt_perc_1_cost: e.target.value,
-                      }));
-                    }}
-                  />
-                </div>
-              </div>
             </div>
-          </div>
         </Dialog>
       )}
       
