@@ -27,7 +27,7 @@ const LOOKUP = {
   section:     { parameter: "AC_ASSETS_SECTION",                    code: "section_code", name: "section_name" },
   grade:       { parameter: "AC_ASSETS_HR_GRADE_LIST",              code: "grade_code",   name: "grade_name" },
   designation: { parameter: "MST_HR_MS_HR_DESIGNATION_LIST",        code: "desg_code",    name: "desg_name" },
-  employee:    { parameter: "EDUCATION_QUALIFICATION_EMPLOYEE_LIST",           code: "employee_id",       name: "employee_name" },
+  employee:    { parameter: "EDUCATION_QUALIFICATION_EMPLOYEE_LIST",           code: "employee_code",       name: "employee_name" },
   sponsor:     { parameter: "AC_ASSETS_HR_SPONSOR",                 code: "sponsor_name", name: "sponsor_short_name" },
 } as const;
 
