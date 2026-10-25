@@ -67,6 +67,47 @@ export function FreightJobActivitySelectorDialog({
   // Map of selected items: key -> SelectedFreightExpense
   const [selectedMap, setSelectedMap] = useState<Map<string, SelectedFreightExpense>>(new Map());
 
+  const fetchJobs = useCallback(
+    async (query: string, supplierOverride?: string | null) => {
+      if (!companyCode) return;
+      setLoadingJobs(true);
+      try {
+        const suppToUse =
+          supplierOverride !== undefined
+            ? supplierOverride
+            : filterBySupplier && supplierCode
+            ? supplierCode.trim()
+            : null;
+
+        const response = await api.post<{ success?: boolean; data?: any[] }>(
+          "/api/freight/job-activities/jobs",
+          {
+            company_code: companyCode,
+            search: query || "",
+            supplier_code: suppToUse || undefined,
+          }
+        );
+        const data = response.data?.data || [];
+        const jobList = Array.isArray(data) ? data : [];
+        setJobs(jobList);
+        if (jobList.length > 0) {
+          void handleSelectJob(jobList[0]);
+        } else {
+          setSelectedJob(null);
+          setActivities([]);
+        }
+      } catch (err) {
+        console.error("Failed to load freight jobs:", err);
+        setJobs([]);
+        setSelectedJob(null);
+        setActivities([]);
+      } finally {
+        setLoadingJobs(false);
+      }
+    },
+    [companyCode, filterBySupplier, supplierCode]
+  );
+
   // Reset or load jobs when dialog opens
   useEffect(() => {
     if (open) {
@@ -74,47 +115,13 @@ export function FreightJobActivitySelectorDialog({
       setSelectedJob(null);
       setActivities([]);
       setBookedPIList([]);
-      setFilterBySupplier(Boolean(supplierCode));
-      setHideAlreadyBooked(true);
-      setHideFullyBookedJobs(true);
-      void fetchJobs("");
+      const shouldFilter = Boolean(supplierCode);
+      setFilterBySupplier(shouldFilter);
+      setHideAlreadyBooked(false);
+      setHideFullyBookedJobs(false);
+      void fetchJobs("", shouldFilter ? supplierCode.trim() : null);
     }
   }, [open, companyCode, supplierCode]);
-
-  const fetchJobs = useCallback(async (query: string) => {
-    if (!companyCode) return;
-    setLoadingJobs(true);
-    try {
-      const response = await api.post<{ success?: boolean; data?: any[] }>("/api/freight/job-activities/jobs", {
-        company_code: companyCode,
-        search: query || "",
-        supplier_code: filterBySupplier && supplierCode ? supplierCode.trim() : undefined,
-      });
-      const data = response.data?.data || [];
-      const jobList = Array.isArray(data) ? data : [];
-      setJobs(jobList);
-      if (jobList.length > 0) {
-        void handleSelectJob(jobList[0]);
-      } else {
-        setSelectedJob(null);
-        setActivities([]);
-      }
-    } catch (err) {
-      console.error("Failed to load freight jobs:", err);
-      setJobs([]);
-      setSelectedJob(null);
-      setActivities([]);
-    } finally {
-      setLoadingJobs(false);
-    }
-  }, [companyCode, filterBySupplier, supplierCode]);
-
-  // Re-fetch jobs whenever filterBySupplier toggle changes
-  useEffect(() => {
-    if (open && companyCode) {
-      void fetchJobs(jobSearch);
-    }
-  }, [filterBySupplier]);
 
   const handleSelectJob = async (job: any) => {
     setSelectedJob(job);
@@ -437,7 +444,11 @@ export function FreightJobActivitySelectorDialog({
                 <input
                   type="checkbox"
                   checked={filterBySupplier}
-                  onChange={(e) => setFilterBySupplier(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFilterBySupplier(checked);
+                    void fetchJobs(jobSearch, checked && supplierCode ? supplierCode.trim() : null);
+                  }}
                   className="rounded border-slate-300 text-[#00378C] focus:ring-[#00378C]"
                 />
                 <span>Filter activities matching this Supplier</span>
