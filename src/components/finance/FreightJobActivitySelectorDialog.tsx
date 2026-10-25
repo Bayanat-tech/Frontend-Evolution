@@ -505,7 +505,7 @@ export function FreightJobActivitySelectorDialog({
                     onChange={(e) => setHideFullyBookedJobs(e.target.checked)}
                     className="rounded border-slate-300 text-[#00378C]"
                   />
-                  <span>Hide fully booked jobs (PB Mode)</span>
+                  <span>Hide fully booked jobs</span>
                 </label>
                 <span className="text-slate-400 font-mono">
                   {visibleJobs.length}/{jobs.length}

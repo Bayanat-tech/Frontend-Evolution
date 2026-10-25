@@ -255,6 +255,12 @@ export function WmsMasterForm({
         }
       }
 
+      if (field.dropdownParam === "DROP_DOWN_CITY" || field.name.includes("city")) {
+        const countryVal = form.country_code || form.tax_country_code || "";
+        params.country_code = countryVal;
+        params.code1 = countryVal;
+      }
+
       const results = await getDynamicLookup(params as any);
       const labelKey = field.dropdownLabelKey || "label";
       const valueKey = field.dropdownValueKey || "value";
@@ -566,7 +572,7 @@ export function WmsMasterForm({
   /* ---------------- layout ---------------- */
 
   return (
-    <form id={formId} className="wms-master-form-container flex flex-col gap-2.5" onSubmit={handleSubmit} noValidate>
+    <form id={formId} className="wms-master-form-container flex flex-col gap-2.5" onSubmit={handleSubmit} noValidate autoComplete="off">
       {/* ---------- Step strip (only when tabs are provided) ---------- */}
       {hasTabs && (
         <div className="flex items-center gap-0 overflow-x-auto rounded-lg border border-slate-200 bg-white px-2 shadow-xs">
@@ -654,5 +660,8 @@ function getFieldDependencyKey(field: WmsMasterField, form: Record<string, unkno
     }
   }
   if (field.asyncOptions?.dependsOn) deps.push(String(form[field.asyncOptions.dependsOn] ?? ""));
+  if ((field.dropdownParam === "DROP_DOWN_CITY" || field.name.includes("city")) && (form.country_code || form.tax_country_code)) {
+    deps.push(String(form.country_code || form.tax_country_code));
+  }
   return deps.length > 0 ? deps.join("__") : "static";
 }
