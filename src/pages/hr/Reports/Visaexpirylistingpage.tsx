@@ -23,11 +23,11 @@ import { NewReportDialog } from "../../../components/new_report_format";
 
 const LOOKUP = {
   division:    { parameter: "AC_ASSETS_DEPRECIATION_DIVISION_LIST", code: "div_code",     name: "div_name" },
-  department:  { parameter: "HR_CAM_DEPARTMENT_DEPTCODE",           code: "dept_code",    name: "dept_short_name" },
+  department:  { parameter: "HR_CAM_DEPARTMENT_DEPTCODE",           code: "dept_code",    name: "dept_name" },
   section:     { parameter: "AC_ASSETS_SECTION",                    code: "section_code", name: "section_name" },
   grade:       { parameter: "AC_ASSETS_HR_GRADE_LIST",              code: "grade_code",   name: "grade_name" },
   designation: { parameter: "MST_HR_MS_HR_DESIGNATION_LIST",        code: "desg_code",    name: "desg_name" },
-  employee:    { parameter: "AC_ASSETS_HR_EMPLOYEE_LIST",           code: "emp_id",       name: "emp_name" },
+  employee:    { parameter: "EDUCATION_QUALIFICATION_EMPLOYEE_LIST",           code: "employee_id",       name: "employee_name" },
   sponsor:     { parameter: "AC_ASSETS_HR_SPONSOR",                 code: "sponsor_name", name: "sponsor_short_name" },
 } as const;
 
@@ -60,15 +60,21 @@ const toApiCodeString = (selected: string[]): string => {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-const getToday = (): string => {
+const toIso = (d: Date): string =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/** Default "From": 6 months back, so recently expired visas are visible. */
+const getDefaultFrom = (): string => {
   const n = new Date();
-  return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
+  n.setMonth(n.getMonth() - 6);
+  return toIso(n);
 };
 
-const getNextMonth = (): string => {
+/** Default "To": 1 year ahead. */
+const getDefaultTo = (): string => {
   const n = new Date();
-  n.setMonth(n.getMonth() + 1);
-  return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
+  n.setFullYear(n.getFullYear() + 1);
+  return toIso(n);
 };
 
 const toDisplayDate = (isoDate: string): string => {
@@ -203,8 +209,8 @@ export default function VisaExpiryListingPage() {
   const [sponsors, setSponsors] = useState<string[]>([]);
 
   // ── Date + employee type ──────────────────────────────────────────────────
-  const [visaExpiryFrom, setVisaExpiryFrom] = useState(getToday());
-  const [visaExpiryTo, setVisaExpiryTo] = useState(getNextMonth());
+  const [visaExpiryFrom, setVisaExpiryFrom] = useState(getDefaultFrom());
+  const [visaExpiryTo, setVisaExpiryTo] = useState(getDefaultTo());
   const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
 
   // ── UI state ──────────────────────────────────────────────────────────────
@@ -273,8 +279,8 @@ export default function VisaExpiryListingPage() {
     setDesignations([]);
     setEmployees([]);
     setSponsors([]);
-    setVisaExpiryFrom(getToday());
-    setVisaExpiryTo(getNextMonth());
+    setVisaExpiryFrom(getDefaultFrom());
+    setVisaExpiryTo(getDefaultTo());
     setEmployeeFilter("A");
     setError("");
     setMessage("Select filters and run the report.");
@@ -373,7 +379,6 @@ export default function VisaExpiryListingPage() {
   return (
     <section className="freight-ui-standard freight-report-screen">
       <div className="freight-report-card">
-        {/* ── Title bar ─────────────────────────────────────────────────── */}
         <div className="freight-report-titlebar">
           <h1>Visa Expiry Report</h1>
           <span className="freight-report-title-dot" aria-hidden="true" />
@@ -381,7 +386,7 @@ export default function VisaExpiryListingPage() {
 
         <ReportFilterHeader onClear={handleClearAll} />
 
-        {/* ── Row 1: Division / Department / Section ────────────────────── */}
+        {/* Row 1: Division / Department / Section */}
         <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
           <MultiSelectField
             className="freight-report-multi-select"
@@ -409,7 +414,7 @@ export default function VisaExpiryListingPage() {
           />
         </div>
 
-        {/* ── Row 2: Grade / Designation / Employee ─────────────────────── */}
+        {/* Row 2: Grade / Designation / Employee */}
         <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <MultiSelectField
             className="freight-report-multi-select"
@@ -437,7 +442,7 @@ export default function VisaExpiryListingPage() {
           />
         </div>
 
-        {/* ── Row 3: Sponsor / Employee Type ────────────────────────────── */}
+        {/* Row 3: Sponsor / Employee Type */}
         <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <MultiSelectField
             className="freight-report-multi-select"
@@ -460,7 +465,7 @@ export default function VisaExpiryListingPage() {
           </Field>
         </div>
 
-        {/* ── Row 4: Visa Expiry From / To ──────────────────────────────── */}
+        {/* Row 4: Visa Expiry From / To */}
         <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Visa Expiry From">
             <BiscDatePicker
@@ -487,7 +492,6 @@ export default function VisaExpiryListingPage() {
           </p>
         )}
 
-        {/* ── Actions ───────────────────────────────────────────────────── */}
         <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2">
           <Button type="button" size="sm" onClick={handleGenerate} disabled={loading || !dateRangeValid}>
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}{" "}
