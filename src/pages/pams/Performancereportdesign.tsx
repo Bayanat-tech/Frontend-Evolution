@@ -112,6 +112,8 @@ interface ReportContentProps {
   charTotal: string;
   skillTotal: string;
   goalTotal: string;
+  finalRating: string;
+  deptHeadDate: string;
   section5: AppraisalSection5;
   flowHistory: AppraisalFlowHistory[];
   commentLog: AppraisalCommentLogRow[];
@@ -127,12 +129,29 @@ function fmtDateTime(val: string): string {
   return `${date} ${time}`;
 }
 
-/** CHANGE #2 : date-only formatter — strips ISO T18:30:00.000Z suffix */
+/** date-only formatter — strips ISO T18:30:00.000Z suffix */
 function fmtDate(val: string): string {
   if (!val || val === "null" || val === "undefined") return "";
   const d = new Date(val);
   if (isNaN(d.getTime())) return val;
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+/** Joining date se aaj tak ka tenure: "8 years 11 months" */
+function fmtTenure(joinVal: string): string {
+  if (!joinVal || joinVal === "null" || joinVal === "undefined") return "";
+  const j = new Date(joinVal);
+  if (isNaN(j.getTime())) return "";
+  const now = new Date();
+  let months = (now.getFullYear() - j.getFullYear()) * 12 + (now.getMonth() - j.getMonth());
+  if (now.getDate() < j.getDate()) months -= 1;
+  if (months < 0) months = 0;
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  const parts: string[] = [];
+  if (y > 0) parts.push(`${y} year${y > 1 ? "s" : ""}`);
+  if (m > 0 || y === 0) parts.push(`${m} month${m !== 1 ? "s" : ""}`);
+  return parts.join(" ");
 }
 
 function groupByKpi(tasks: AppraisalTaskDtl[]): KpiGroup[] {
@@ -190,6 +209,8 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
       charTotal,
       skillTotal,
       goalTotal,
+      finalRating,
+      deptHeadDate,
       section5,
       flowHistory,
       commentLog,
@@ -215,6 +236,10 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
         </td>
       </tr>
     );
+
+    // Dept Head ne jis din submit kiya wahi date; na mile to purani value
+    const reviewDateText = fmtDate(deptHeadDate) || fmtDate(appraisal.REVIEW_DATE);
+    const discussionDateText = fmtDate(deptHeadDate) || fmtDate(appraisal.DISCUSSION_DATE);
 
     return (
       <div
@@ -273,7 +298,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
         `}</style>
 
         <div className="prf-wrap">
-          {/* CHANGE #1 : company logo from MS_COMPANY (fallback = original SVG) */}
+          {/* company logo from MS_COMPANY (fallback = original SVG) */}
           <div className="prf-header">
             <div style={{ flexShrink: 0, width: 187, height: 68 }}>
               {companyLogoUrl ? (
@@ -328,19 +353,23 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                 <td className="c-bold">Date of joining:</td>
                 <td>{fmtDate(appraisal.JOIN_DATE)}</td>
                 <td className="c-bold">Time in present<br />position:</td>
-                <td>{appraisal.TIME_IN_PRESENT_POSITION}</td>
+                <td>
+                  {appraisal.JOIN_DATE ? `Since ${fmtDate(appraisal.JOIN_DATE)}` : ""}
+                  <br />
+                  {fmtTenure(appraisal.JOIN_DATE)}
+                </td>
               </tr>
               <tr>
                 <td className="c-bold">Name &amp; Emp.No. of Appraiser:</td>
                 <td>{appraisal.SUPERVISOR_NAME}</td>
                 <td className="c-bold">Review Date:</td>
-                <td className="c-center">{fmtDate(appraisal.REVIEW_DATE)}</td>
+                <td className="c-left">{reviewDateText}</td>
               </tr>
               <tr>
                 <td className="c-bold">Name of Reviewer:</td>
                 <td>{appraisal.DEPT_HEAD_NAME}</td>
                 <td className="c-bold">Discussion Date:</td>
-                <td className="c-center">{fmtDate(appraisal.DISCUSSION_DATE)}</td>
+                <td className="c-left">{discussionDateText}</td>
               </tr>
               <tr>
                 <td className="c-bold">Review Period</td>
@@ -402,7 +431,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                       <tr>
                         <td className="c-center c-bold">{groupIdx + 1}</td>
                         <td colSpan={2} className="c-kpi-merged">
-                          {/* CHANGE #4 : (overall rating) removed */}
                           <span className="prf-kpi-name-text">{kpi.kpiDesc}</span>
                         </td>
                         <td className="c-center c-bold">
@@ -434,7 +462,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-          {/* Section 3 : Employee Characteristics (unchanged) */}
+          {/* Section 3 : Employee Characteristics */}
           <table className="prf-tbl prf-sec3">
             <tbody>
               <tr>
@@ -474,7 +502,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-          {/* CHANGE #3 : Section 3B : Skills */}
+          {/* Section 3B : Skills */}
           <table className="prf-tbl prf-sec3b">
             <tbody>
               <tr>
@@ -514,7 +542,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-          {/* CHANGE #3 : Section 3C : Goals */}
+          {/* Section 3C : Goals */}
           <table className="prf-tbl prf-sec3c">
             <tbody>
               <tr>
@@ -554,20 +582,46 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-          {/* Section 4 : Overall Rating */}
+          {/* Section 4 : Overall Rating (Goals ke niche — final rating) */}
           <table className="prf-tbl prf-sec4">
             <tbody>
               <tr>
-                <td colSpan={2} className="c-bold c-section-head">Section 4: Overall Rating</td>
+                <td colSpan={3} className="c-bold c-section-head">Section 4: Overall Rating</td>
               </tr>
               <tr>
-                <td className="c-bold" style={{ width: "88%" }}>Overall Rating for the Review</td>
-                <td className="c-center c-bold" style={{ width: "12%" }}>{totalScoreDisplay || ""}</td>
+                <td className="c-dark-header" style={{ width: "60%" }}>Component</td>
+                <td className="c-dark-header" style={{ width: "20%" }}>Weightage</td>
+                <td className="c-dark-header" style={{ width: "20%" }}>Score</td>
+              </tr>
+              <tr>
+                <td>Task Score</td>
+                <td className="c-center">70%</td>
+                <td className="c-center">{totalScoreDisplay || "0.00"}</td>
+              </tr>
+              <tr>
+                <td>Character Score</td>
+                <td className="c-center">10%</td>
+                <td className="c-center">{charTotal || "0.00"}</td>
+              </tr>
+              <tr>
+                <td>Goal Score</td>
+                <td className="c-center">10%</td>
+                <td className="c-center">{goalTotal || "0.00"}</td>
+              </tr>
+              <tr>
+                <td>Skill Score</td>
+                <td className="c-center">10%</td>
+                <td className="c-center">{skillTotal || "0.00"}</td>
+              </tr>
+              <tr>
+                <td className="c-bold c-total-top">Final Rating</td>
+                <td className="c-total-top-blank">&nbsp;</td>
+                <td className="c-center c-bold c-total-top">{finalRating || "0.00"}</td>
               </tr>
             </tbody>
           </table>
 
-          {/* Section 5 (unchanged) */}
+          {/* Section 5 */}
           <table className="prf-tbl prf-sec5">
             <tbody>
               <tr>
@@ -654,22 +708,25 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-          {/* Section 6 (unchanged) */}
+          {/* Signatures (Section 6 ki jagah) */}
           <table className="prf-tbl prf-sec6">
+            <colgroup>
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "50%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "22%" }} />
+            </colgroup>
             <tbody>
-              <tr>
-                <td colSpan={3} className="c-bold c-section-head">
-                  Section 6 : For use by the CEO/COO for overall rating of 1 or 5
-                </td>
-              </tr>
-              <tr>
-                <td style={{ width: "20%" }}>&nbsp;</td>
-                <td className="c-dark-header" style={{ width: "60%" }}>Name &amp; Signature</td>
-                <td className="c-dark-header" style={{ width: "20%" }}>Date</td>
-              </tr>
-              <tr>
-                <td className="c-bold">Approval for Rating 1 &amp; 5:</td>
+              <tr style={{ height: "26px" }}>
+                <td className="c-bold">Appraisee Name &amp; Signature</td>
                 <td>&nbsp;</td>
+                <td className="c-bold">Date:</td>
+                <td>&nbsp;</td>
+              </tr>
+              <tr style={{ height: "26px" }}>
+                <td className="c-bold">Appraiser Name &amp; Signature</td>
+                <td>&nbsp;</td>
+                <td className="c-bold">Date:</td>
                 <td>&nbsp;</td>
               </tr>
             </tbody>
@@ -719,6 +776,7 @@ const PerformanceReportDesign: React.FC<Props> = ({
   const [goalsData, setGoals] = useState<AppraisalCharacteristic[]>([]);
   const [commentLog, setCommentLog] = useState<AppraisalCommentLogRow[]>([]);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string>(FALLBACK_LOGOS[company_code] ?? "");
+  const [deptHeadDate, setDeptHeadDate] = useState<string>("");
 
   const [section5Data, setSection5Data] = useState<AppraisalSection5>({
     APPRAISER_COMMENTS: "",
@@ -732,7 +790,7 @@ const PerformanceReportDesign: React.FC<Props> = ({
   const [isFetching, setIsFetching] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  /* CHANGE #1 : fetch company logo (fallback already set from FALLBACK_LOGOS) */
+  /* fetch company logo (fallback already set from FALLBACK_LOGOS) */
   useEffect(() => {
     if (!loginid || !company_code) return;
     let cancelled = false;
@@ -793,7 +851,7 @@ const PerformanceReportDesign: React.FC<Props> = ({
         code2: doc_no,
         code3: employee_code,
       }),
-      // CHANGE #3 : skills
+      // skills
       pamsSelect<AppraisalCharacteristic>({
         parameter: "Trn_skill", // rename if backend param name differs
         loginid,
@@ -801,7 +859,7 @@ const PerformanceReportDesign: React.FC<Props> = ({
         code2: doc_no,
         code3: employee_code,
       }).catch(() => [] as AppraisalCharacteristic[]),
-      // CHANGE #3 : goals
+      // goals
       pamsSelect<AppraisalCharacteristic>({
         parameter: "Trn_goal", // rename if backend param name differs
         loginid,
@@ -850,6 +908,31 @@ const PerformanceReportDesign: React.FC<Props> = ({
           });
           setFlowHistory(uniqueFlow);
 
+          // Dept Head ne jis din submit/approve kiya, wo date
+          const dhName = String(
+            get(
+              ((appraisal as Record<string, unknown>[])[0] ?? {}) as Record<string, unknown>,
+              "DEPT_HEAD_NAME",
+              "dept_head_name"
+            )
+          )
+            .trim()
+            .toUpperCase();
+
+          const dhRows = (flowHist as AppraisalFlowHistory[]).filter(
+            (f) =>
+              f.ACTION_DATE &&
+              String(f.ACTION_BY_NAME ?? "").trim().toUpperCase() === dhName
+          );
+          const dhSubmit = dhRows.filter((f) =>
+            /SUBMIT|APPROV/i.test(String(f.ACTION ?? ""))
+          );
+          const dhPick = [...(dhSubmit.length ? dhSubmit : dhRows)].sort(
+            (a, b) =>
+              new Date(b.ACTION_DATE).getTime() - new Date(a.ACTION_DATE).getTime()
+          )[0];
+          setDeptHeadDate(dhPick?.ACTION_DATE ?? "");
+
           setCommentLog(commentLogRows as AppraisalCommentLogRow[]);
 
           const sortedTasks = [...(tasks as AppraisalTaskDtl[])].sort(
@@ -888,6 +971,7 @@ const PerformanceReportDesign: React.FC<Props> = ({
         setCharacteristics([]);
         setSkills([]);
         setGoals([]);
+        setDeptHeadDate("");
         onReadyRef.current?.(false);
       })
       .finally(() => setIsFetching(false));
@@ -959,6 +1043,14 @@ const PerformanceReportDesign: React.FC<Props> = ({
   const skillTotal = skillTotalNum > 0 ? skillTotalNum.toFixed(2) : "";
   const goalTotal = goalTotalNum > 0 ? goalTotalNum.toFixed(2) : "";
 
+  // Final Rating = Task 70% + Character 10% + Goal 10% + Skill 10%
+  const finalRatingNum =
+    totalScore * 0.7 +
+    charTotalNum * 0.1 +
+    goalTotalNum * 0.1 +
+    skillTotalNum * 0.1;
+  const finalRating = finalRatingNum > 0 ? finalRatingNum.toFixed(2) : "";
+
   /* Build report HTML string for NewReportDialog */
   const htmlContent = useMemo(() => {
     if (!appraisal) return "";
@@ -976,6 +1068,8 @@ const PerformanceReportDesign: React.FC<Props> = ({
           charTotal={charTotal}
           skillTotal={skillTotal}
           goalTotal={goalTotal}
+          finalRating={finalRating}
+          deptHeadDate={deptHeadDate}
           section5={section5Data}
           flowHistory={flowHistory}
           commentLog={commentLog}
@@ -997,6 +1091,8 @@ const PerformanceReportDesign: React.FC<Props> = ({
     charTotal,
     skillTotal,
     goalTotal,
+    finalRating,
+    deptHeadDate,
     section5Data,
     flowHistory,
     commentLog,

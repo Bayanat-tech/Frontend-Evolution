@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins, RotateCcw, Zap, CheckCircle2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
 import { api } from "../../api/client";
 import {
@@ -26,7 +26,9 @@ import {
   upsertBulkAccountEntryApi,
   openDocumentReportv1,
   cancelLpoDocument,
-  getFinanceOutstanding
+  getFinanceOutstanding,
+  getFinanceMasterRows,
+  getTransactionChildren
 } from "../../api/transactions";
 import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
@@ -85,6 +87,26 @@ type Line = {
   amount_rcv?: number;
 };
 
+export type AllocationLine = {
+  id: string;
+  inv_no: string;
+  doc_no?: string;
+  ref_no?: string;
+  inv_date?: string;
+  origin_doc_type?: string;
+  inv_amt: number;
+  c_bal_amt_org: number;
+  amount: number;
+  curr_code?: string;
+  ex_rate?: number;
+  lcur_amount?: number;
+  ac_code?: string;
+  div_code?: string;
+  sign_ind?: number;
+  dtl_sr_no?: number;
+  isExisting?: boolean;
+};
+
 type FormState = {
   doc_no?: string;
   doc_type: CommercialType;
@@ -133,6 +155,7 @@ tx_compnt_perc_1?: number;
   print_letter_head?: boolean;
   canceled?: string;
   detail: Line[];
+  allocations: AllocationLine[];
 };
 
 const TAX_CATEGORY_NAME_MAP: Record<string, string> = {
@@ -615,6 +638,121 @@ function CommercialEditor({
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [settledPaidAmount, setSettledPaidAmount] = useState<number>(0);
 
+  const [activeTab, setActiveTab] = useState<"lines" | "allocations">("lines");
+  const [allocLoading, setAllocLoading] = useState(false);
+
+  const loadAllocations = async (
+    acCode: string,
+    divCode: string,
+    targetDocType: string,
+    existingMap?: Record<string, number>
+  ) => {
+    if (!acCode || !divCode || targetDocType === "PO") {
+      setForm((c) => ({ ...c, allocations: [] }));
+      return;
+    }
+    setAllocLoading(true);
+    try {
+      const resp = await getFinanceMasterRows("invoice", {
+        code: acCode,
+        extra_param1: divCode,
+        extra_param2: targetDocType,
+        page: 1,
+        limit: 500,
+      });
+      const tableData = (Array.isArray(resp) ? resp : ((resp as any)?.tableData || [])) as any[];
+      const mappedAllocations: AllocationLine[] = tableData.map((row, idx) => {
+        const invNo = String(row.inv_no || row.INV_NO || row.doc_no || "").trim();
+        const existingAmt = existingMap ? Number(existingMap[invNo] || 0) : 0;
+        const bal = Number(row.c_bal_amt_org || row.C_BAL_AMT_ORG || 0);
+        return {
+          id: `alloc_${invNo}_${idx}`,
+          inv_no: invNo,
+          doc_no: String(row.doc_no || row.DOC_NO || invNo).trim(),
+          ref_no: String(row.ref_no || row.REF_NO || "").trim(),
+          inv_date: row.inv_date || row.INV_DATE,
+          origin_doc_type: String(row.origin_doc_type || row.ORIGIN_DOC_TYPE || "").trim(),
+          inv_amt: Number(row.inv_amt || row.INV_AMT || 0),
+          c_bal_amt_org: bal,
+          amount: existingAmt > 0 ? existingAmt : 0,
+          curr_code: row.c_curr_code_origin || row.C_CURR_CODE_ORIGIN || form.curr_code,
+          ex_rate: Number(row.c_ex_rate_origin || row.C_EX_RATE_ORIGIN || form.ex_rate || 1),
+          lcur_amount: existingAmt * Number(form.ex_rate || 1),
+          ac_code: acCode,
+          div_code: divCode,
+          sign_ind: targetDocType === "PI" ? -1 : 1,
+          dtl_sr_no: idx + 1,
+          isExisting: existingAmt > 0,
+        };
+      });
+
+      if (existingMap) {
+        const existingKeys = new Set(mappedAllocations.map((a) => a.inv_no));
+        Object.entries(existingMap).forEach(([invNo, amt], i) => {
+          if (!existingKeys.has(invNo) && amt > 0) {
+            mappedAllocations.unshift({
+              id: `alloc_saved_${invNo}_${i}`,
+              inv_no: invNo,
+              doc_no: invNo,
+              ref_no: invNo,
+              inv_amt: amt,
+              c_bal_amt_org: amt,
+              amount: amt,
+              curr_code: form.curr_code,
+              ex_rate: form.ex_rate || 1,
+              lcur_amount: amt * Number(form.ex_rate || 1),
+              ac_code: acCode,
+              div_code: divCode,
+              sign_ind: targetDocType === "PI" ? -1 : 1,
+              dtl_sr_no: 990 + i,
+              isExisting: true,
+            });
+          }
+        });
+      }
+
+      setForm((c) => ({ ...c, allocations: mappedAllocations }));
+    } catch (err) {
+      console.warn("Failed to load open advances/allocations:", err);
+    } finally {
+      setAllocLoading(false);
+    }
+  };
+
+  const updateAllocationAmount = (invNo: string, amount: number) => {
+    setForm((c) => ({
+      ...c,
+      allocations: (c.allocations || []).map((a) => {
+        if (a.inv_no !== invNo) return a;
+        const maxAvailable = a.c_bal_amt_org > 0 ? a.c_bal_amt_org : a.inv_amt;
+        const clamped = Math.max(0, Math.min(amount, maxAvailable));
+        return { ...a, amount: clamped, lcur_amount: clamped * Number(c.ex_rate || 1) };
+      }),
+    }));
+  };
+
+  const autoAllocateFIFO = () => {
+    const invoiceNet = total + taxTotal;
+    let remaining = invoiceNet;
+    setForm((c) => ({
+      ...c,
+      allocations: (c.allocations || []).map((a) => {
+        if (remaining <= 0) return { ...a, amount: 0, lcur_amount: 0 };
+        const maxAvailable = a.c_bal_amt_org > 0 ? a.c_bal_amt_org : a.inv_amt;
+        const take = Math.min(maxAvailable, remaining);
+        remaining -= take;
+        return { ...a, amount: take, lcur_amount: take * Number(c.ex_rate || 1) };
+      }),
+    }));
+  };
+
+  const clearAllocations = () => {
+    setForm((c) => ({
+      ...c,
+      allocations: (c.allocations || []).map((a) => ({ ...a, amount: 0, lcur_amount: 0 })),
+    }));
+  };
+
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
 
   const loadTaxOptions = async () => {
@@ -753,6 +891,10 @@ function CommercialEditor({
             dlvr_email: getVal("e_mail") || current.dlvr_email,
             remarks: getVal("l4_description") || current.remarks,
           }));
+
+          if (docType !== "PO" && defaultAcCode && defaultDiv) {
+            void loadAllocations(defaultAcCode, defaultDiv, docType);
+          }
         } catch {
           // Defaults are optional; use empty form if no setup row is found
         }
@@ -811,6 +953,33 @@ function CommercialEditor({
               }
             } catch {
               setSettledPaidAmount(0);
+            }
+
+            // Load existing child allocations from TR_AC_INVDETAIL
+            if (docType !== "PO") {
+              try {
+                const childrenResp = await getTransactionChildren(
+                  editor.row.doc_no,
+                  editor.row.div_code,
+                  docType as any
+                );
+                const existingAllocRows = (childrenResp?.invoice || []).filter((r: any) => {
+                  const ind = String(r.indicator_origin || r.c_indicator_origin || "").toUpperCase();
+                  return ind === "N";
+                });
+                const existingMap: Record<string, number> = {};
+                existingAllocRows.forEach((r: any) => {
+                  const invNo = String(r.inv_no || r.INV_NO || r.doc_no || "").trim();
+                  if (invNo) existingMap[invNo] = Math.abs(Number(r.amount || r.AMOUNT || 0));
+                });
+                const partyAc = String(header.ac_code || editor.row.ac_code || "");
+                const partyDiv = String(header.div_code || editor.row.div_code || "");
+                if (partyAc && partyDiv) {
+                  void loadAllocations(partyAc, partyDiv, docType, existingMap);
+                }
+              } catch (err) {
+                console.warn("Could not load existing allocations:", err);
+              }
             }
           }
         }
@@ -1040,6 +1209,11 @@ const limitProps = (f: keyof FormState) => ({
   }
 
   const netTotal = total + taxTotal;
+  const currentTotalAllocated = (form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  if (currentTotalAllocated > netTotal + 0.001) {
+    setError(`Total allocated advance amount (${formatAmount(currentTotalAllocated)}) cannot exceed invoice net total (${formatAmount(netTotal)}).`);
+    return;
+  }
   if (settledPaidAmount > 0 && netTotal < settledPaidAmount - 0.001) {
     setError(`Invoice net total (${formatAmount(netTotal)}) cannot be less than already settled payments (${formatAmount(settledPaidAmount)}). Please adjust the payment vouchers or issue a debit/credit note first.`);
     return;
@@ -1310,6 +1484,10 @@ const limitProps = (f: keyof FormState) => ({
                               dlvr_email:    get("e_mail"),
                               remarks:       get("l4_description"),
                             }));
+
+                            if (docType !== "PO" && value && form.div_code) {
+                              void loadAllocations(value, form.div_code, docType);
+                            }
                           })();
                         }}
                       />
@@ -1744,8 +1922,50 @@ const limitProps = (f: keyof FormState) => ({
             </div>
           </div>
         )}
+            {docType !== "PO" && (
+              <div className="flex items-center gap-1 border-b border-[#cbd5e1] bg-slate-100/70 px-3 pt-2 mb-[-1px]">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("lines")}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-t-md border-t border-x transition-colors cursor-pointer ${
+                    activeTab === "lines"
+                      ? "bg-card text-[#00378C] border-[#cbd5e1] -mb-px font-bold shadow-2xs z-10"
+                      : "bg-transparent text-slate-600 border-transparent hover:text-slate-900 hover:bg-slate-200/50"
+                  }`}
+                >
+                  <List size={13} />
+                  <span>Line Items</span>
+                  <span className="ml-1 rounded-full bg-blue-100 px-1.5 py-0.2 text-[10px] font-bold text-[#00378C]">
+                    {form.detail.filter(l => Number(l.serial_no) < 9000).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("allocations")}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-t-md border-t border-x transition-colors cursor-pointer ${
+                    activeTab === "allocations"
+                      ? "bg-card text-[#00378C] border-[#cbd5e1] -mb-px font-bold shadow-2xs z-10"
+                      : "bg-transparent text-slate-600 border-transparent hover:text-slate-900 hover:bg-slate-200/50"
+                  }`}
+                >
+                  <Receipt size={13} />
+                  <span>Bill Allocations</span>
+                  {(form.allocations || []).filter(a => Number(a.amount || 0) > 0).length > 0 ? (
+                    <span className="ml-1 rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.2 text-[10px] font-bold border border-emerald-300">
+                      {(form.allocations || []).filter(a => Number(a.amount || 0) > 0).length} Allocated ({formatAmount((form.allocations || []).reduce((s, a) => s + Number(a.amount || 0), 0))})
+                    </span>
+                  ) : (
+                    <span className="ml-1 rounded-full bg-slate-200 px-1.5 py-0.2 text-[10px] font-semibold text-slate-700">
+                      {(form.allocations || []).length} Open
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
             <div className="commercial-lines-card min-w-0 rounded-md border border-[#cbd5e1] bg-card shadow-sm overflow-hidden mb-3">
-              <div className="finance-line-actions flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
+              {activeTab === "lines" ? (
+                <>
+                <div className="finance-line-actions flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
                 <div className="finance-line-actions-title flex items-center gap-2">
                   <span className="finance-section-icon"><List size={11} className="text-white" /></span>
                   <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">Line Items</h3>
@@ -2072,8 +2292,255 @@ const limitProps = (f: keyof FormState) => ({
                     <span className="text-xs font-bold text-[#00378c] uppercase tracking-wider">Net Total</span>
                     <strong className="font-mono text-base md:text-lg font-black tabular-nums text-[#00378c]">{formatAmount(total + taxTotal)}</strong>
                   </div>
+                  {docType !== "PO" && ((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 shadow-2xs">
+                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">Allocated</span>
+                        <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-emerald-700">{formatAmount(((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)))}</strong>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border-2 border-emerald-600 bg-emerald-100 text-emerald-950 shadow-2xs">
+                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-900">Net Due</span>
+                        <strong className="font-mono text-sm md:text-base font-black tabular-nums text-emerald-900">{formatAmount(Math.max(0, (total + taxTotal) - ((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0))))}</strong>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
+              </>
+            ) : (
+              <div className="flex flex-col">
+                {/* Allocations Toolbar */}
+                <div className="finance-line-actions flex flex-wrap items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-2 gap-2">
+                  <div className="finance-line-actions-title flex items-center gap-2">
+                    <span className="finance-section-icon bg-emerald-600"><Receipt size={12} className="text-white" /></span>
+                    <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-emerald-900">
+                      {isPI ? "Advance Payments & Open Debit Notes" : "Advance Receipts & Open Credit Notes"}
+                    </h3>
+                    <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-300 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                      {(form.allocations || []).length} open items
+                    </span>
+                    {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length) > 0 && (
+                      <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-300 px-2 py-0.5 text-[10px] font-bold text-[#00378C]">
+                        {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length)} active ({formatAmount(((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)))})
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      disabled={isCancelled || allocLoading || (form.allocations || []).length === 0}
+                      size="sm"
+                      type="button"
+                      onClick={autoAllocateFIFO}
+                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer shadow-xs"
+                      title="Auto-allocate invoice total against oldest open advances first (FIFO)"
+                    >
+                      <Zap size={13} />
+                      <span>Auto Allocate (FIFO)</span>
+                    </Button>
+                    <Button
+                      disabled={isCancelled || allocLoading || ((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length) === 0}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={clearAllocations}
+                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                      title="Reset all allocation amounts to zero"
+                    >
+                      <RotateCcw size={13} />
+                      <span>Clear All</span>
+                    </Button>
+                    <Button
+                      disabled={allocLoading || !form.ac_code || !form.div_code}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        if (form.ac_code && form.div_code) {
+                          void loadAllocations(form.ac_code, form.div_code, docType);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-semibold text-blue-700 border-blue-300 hover:bg-blue-50 cursor-pointer"
+                      title="Reload open advances from server"
+                    >
+                      <RefreshCw size={13} className={allocLoading ? "animate-spin" : ""} />
+                      <span>Refresh</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Allocations Table */}
+                <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
+                  {allocLoading ? (
+                    <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-2">
+                      <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
+                      <span className="text-xs font-semibold">Loading open advances and vouchers...</span>
+                    </div>
+                  ) : (form.allocations || []).length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-1.5">
+                      <Receipt size={28} className="text-slate-300" />
+                      <span className="text-xs font-medium text-slate-600">
+                        No open advances or unallocated vouchers found for this party ({form.ac_code || "no account selected"}).
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        All prior payments/receipts are fully settled or none have been booked yet.
+                      </span>
+                    </div>
+                  ) : (
+                    <table className="finance-detail-table w-full border-collapse text-left text-xs">
+                      <thead>
+                        <tr className="border-b bg-slate-100 font-semibold text-slate-700">
+                          <th className="px-2 py-2 text-center w-10">#</th>
+                          <th className="px-3 py-2">Voucher / Advance No</th>
+                          <th className="px-2 py-2 text-center">Date</th>
+                          <th className="px-2 py-2 text-center">Type</th>
+                          <th className="px-2 py-2 text-center">Currency</th>
+                          <th className="px-3 py-2 text-right">Original Amt</th>
+                          <th className="px-3 py-2 text-right">Available Balance</th>
+                          <th className="px-3 py-2 text-right w-44">Allocated Amt</th>
+                          <th className="px-3 py-2 text-right">Remaining Bal</th>
+                          <th className="px-2 py-2 text-center w-20">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(form.allocations || []).map((alloc, idx) => {
+                          const allocatedAmt = Number(alloc.amount || 0);
+                          const maxBal = alloc.c_bal_amt_org > 0 ? alloc.c_bal_amt_org : alloc.inv_amt;
+                          const remainingBal = Math.max(0, maxBal - allocatedAmt);
+                          const isAllocated = allocatedAmt > 0;
+                          return (
+                            <tr
+                              key={alloc.id || idx}
+                              className={`border-t transition-colors ${
+                                isAllocated ? "bg-emerald-50/40 hover:bg-emerald-50/70" : "odd:bg-muted/20 hover:bg-slate-50"
+                              }`}
+                            >
+                              <td className="px-2 py-2 text-center font-mono text-slate-500">{idx + 1}</td>
+                              <td className="px-3 py-2 font-mono font-bold text-slate-800">
+                                <div className="flex items-center gap-1.5">
+                                  <FileText size={12} className={isAllocated ? "text-emerald-600" : "text-slate-400"} />
+                                  <span>{alloc.doc_no || alloc.inv_no}</span>
+                                  {alloc.ref_no && alloc.ref_no !== alloc.doc_no && (
+                                    <span className="text-[10px] text-slate-400 font-normal">({alloc.ref_no})</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-2 py-2 text-center font-mono text-slate-600">{formatDate(alloc.inv_date)}</td>
+                              <td className="px-2 py-2 text-center">
+                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  ["BP", "CP"].includes(alloc.origin_doc_type || "")
+                                    ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                    : ["BR", "CR"].includes(alloc.origin_doc_type || "")
+                                    ? "bg-blue-100 text-blue-800 border border-blue-300"
+                                    : "bg-slate-100 text-slate-700 border border-slate-300"
+                                }`}>
+                                  {alloc.origin_doc_type || "ADV"}
+                                </span>
+                              </td>
+                              <td className="px-2 py-2 text-center font-mono text-slate-600">{alloc.curr_code || form.curr_code || "OMR"}</td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-600">
+                                {formatAmount(alloc.inv_amt)}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums font-bold text-emerald-800">
+                                {formatAmount(maxBal)}
+                              </td>
+                              <td className="px-3 py-1.5 text-right">
+                                <div className="inline-flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="0.001"
+                                    min="0"
+                                    max={maxBal}
+                                    disabled={isCancelled}
+                                    value={alloc.amount === 0 ? "" : alloc.amount}
+                                    placeholder="0.000"
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      updateAllocationAmount(alloc.inv_no, val);
+                                    }}
+                                    className={`h-7 w-28 text-right font-mono tabular-nums px-2 py-1 rounded border text-xs font-semibold focus:outline-none focus:ring-1 ${
+                                      isAllocated
+                                        ? "bg-white border-emerald-500 text-emerald-900 focus:ring-emerald-500 font-bold"
+                                        : "bg-white border-slate-300 text-slate-800 focus:ring-primary"
+                                    }`}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={isCancelled || isAllocated}
+                                    onClick={() => {
+                                      const remainingNeeded = Math.max(0, (total + taxTotal) - ((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) + allocatedAmt);
+                                      const take = Math.min(maxBal, remainingNeeded > 0 ? remainingNeeded : maxBal);
+                                      updateAllocationAmount(alloc.inv_no, take);
+                                    }}
+                                    className="h-7 px-1.5 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[10px] font-bold text-slate-700 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Allocate full balance (or up to remaining invoice total)"
+                                  >
+                                    Full
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums font-semibold text-slate-700">
+                                {formatAmount(remainingBal)}
+                              </td>
+                              <td className="px-2 py-2 text-center">
+                                {isAllocated ? (
+                                  <button
+                                    type="button"
+                                    disabled={isCancelled}
+                                    onClick={() => updateAllocationAmount(alloc.inv_no, 0)}
+                                    className="inline-flex items-center justify-center h-6 w-6 rounded border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                                    title="Clear allocation on this voucher"
+                                  >
+                                    <Trash2 size={11} />
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-300 font-mono">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* Allocations Footer */}
+                <div className="commercial-lines-footer flex flex-wrap items-center justify-between border-t border-[#cbd5e1] bg-slate-50/95 px-4 py-2.5 gap-3.5">
+                  <div className="flex items-center gap-2">
+                    {((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) > 0 ? (
+                      <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded px-2.5 py-1">
+                        <CheckCircle2 size={13} className="text-emerald-600" />
+                        <span>
+                          {formatAmount(((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)))} allocated across {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length)} advance/voucher{((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length) > 1 ? "s" : ""}.
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-500 font-medium italic">
+                        Enter amounts or click &quot;Auto Allocate (FIFO)&quot; to knock off open advances against this invoice.
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="commercial-line-totals flex items-center gap-3.5">
+                    <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3.5 py-1.5 shadow-2xs">
+                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Invoice Net</span>
+                      <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-slate-900">{formatAmount((total + taxTotal))}</strong>
+                    </div>
+                    <div className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-md border shadow-2xs ${
+                      ((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) > 0 ? "bg-emerald-50 border-emerald-300 text-emerald-900" : "bg-slate-50 border-slate-200 text-slate-700"
+                    }`}>
+                      <span className={`font-bold text-xs uppercase tracking-wider ${((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) > 0 ? "text-emerald-800" : "text-slate-600"}`}>Allocated</span>
+                      <strong className={`font-mono text-sm md:text-base font-bold ${((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) > 0 ? "text-emerald-700" : "text-slate-700"}`}>{formatAmount(((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)))}</strong>
+                    </div>
+                    <div className="flex min-h-10 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
+                      <span className="text-xs font-bold text-[#00378c] uppercase tracking-wider">Net Due</span>
+                      <strong className="font-mono text-base md:text-lg font-black tabular-nums text-[#00378c]">{formatAmount(Math.max(0, (total + taxTotal) - ((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0))))}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             </div>
           </div>
         )}
@@ -2139,27 +2606,49 @@ const limitProps = (f: keyof FormState) => ({
 
               setForm((current) => {
                 let serial = current.detail.filter((l) => Number(l.serial_no) < 9000).length;
+                const docCurr = current.curr_code || "OMR";
+                const docEx = Number(current.ex_rate || 1);
+
                 const newLines: Line[] = selectedExpenses.map((exp) => {
                   serial++;
-                  const lineCurr = exp.curr_code || current.curr_code;
-                  const lineEx = Number(exp.ex_rate || current.ex_rate || 1);
-                  const lineAmt = Number(exp.amount || 0);
-                  const lcurAmt = lineAmt * lineEx;
+                  const expCurr = exp.curr_code || docCurr;
+                  const expEx = Number(exp.ex_rate || 1);
+                  const expAmt = Number(exp.amount || 0);
+                  const expLcurAmt = Number(exp.lcur_amount != null ? exp.lcur_amount : expAmt * expEx);
+
+                  // Currency conversion logic aligned with PowerBuilder ERP:
+                  // All invoice lines express amount in document currency (docCurr)
+                  let lineAmt: number;
+                  let remarksExtra = "";
+
+                  if (expCurr === docCurr) {
+                    lineAmt = expAmt;
+                  } else if (docCurr === "OMR" || docEx === 1) {
+                    // Invoice is in base currency: use the local currency amount
+                    lineAmt = Number(expLcurAmt.toFixed(3));
+                    remarksExtra = ` [Orig: ${expAmt} ${expCurr} @ ${expEx}]`;
+                  } else {
+                    // Invoice is in foreign currency: convert base amount using invoice exchange rate
+                    lineAmt = docEx > 0 ? Number((expLcurAmt / docEx).toFixed(3)) : expAmt;
+                    remarksExtra = ` [Orig: ${expAmt} ${expCurr} @ ${expEx}]`;
+                  }
+
+                  const lcurAmt = Number((lineAmt * docEx).toFixed(3));
 
                   return {
-                    ...emptyLine("PI", serial, lineCurr, current.curr_name, lineEx),
+                    ...emptyLine("PI", serial, docCurr, current.curr_name, docEx),
                     id: newId(),
                     serial_no: serial,
                     ac_code: firstAcCode,
                     ac_name: firstAcName,
-                    remarks: `${exp.act_code} - ${exp.activity} (${exp.cost_type})${exp.vehicle_no ? ` - Veh: ${exp.vehicle_no}` : ""}`,
+                    remarks: `${exp.act_code} - ${exp.activity} (${exp.cost_type})${exp.vehicle_no ? ` - Veh: ${exp.vehicle_no}` : ""}${remarksExtra}`,
                     qty: 1,
                     price: lineAmt,
                     amount: lineAmt,
                     lcur_amount: lcurAmt,
                     job_no: exp.job_no,
-                    curr_code: lineCurr,
-                    ex_rate: lineEx,
+                    curr_code: docCurr,
+                    ex_rate: docEx,
                     sign_ind: 1,
                     tx_cat_code: exp.tx_cat_code || current.tx_cat_code || "",
                     tx_compntcat_code_1: exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "10100",
@@ -2238,6 +2727,7 @@ function emptyForm(docType: CommercialType, div?: Division): FormState {
     hse_compliance: "N",
     canceled: "N",
     detail: [],
+    allocations: [],
   };
 }
 
@@ -2313,6 +2803,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
     tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || 0,
     print_letter_head: !!header.print_letter_head,
+    allocations: [],
     detail: (detailRaw.filter((raw) => {
       const sn = Number(lowerRecord(raw).serial_no || 0);
       return sn === 0 || sn < 9000;
@@ -2480,7 +2971,7 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
   if (form.doc_type === "PO") return [];
   const invNo = form.doc_no || form.inv_no || form.ref_no;
   if (!invNo) return [];
-  return form.detail
+  const originRows = form.detail
     .filter((line) => Number(line.amount || 0) !== 0)
     .map((line, index) => ({
       company_code: companyCode,
@@ -2502,6 +2993,31 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       indicator_origin: "Y",
       amount_origin: Math.abs(Number(line.amount || 0)),
     }));
+
+  const allocRows = (form.allocations || [])
+    .filter((a) => Number(a.amount || 0) > 0)
+    .map((a, i) => ({
+      company_code: companyCode,
+      doc_type: form.doc_type,
+      doc_no: docNo,
+      serial_no: 1,
+      dtl_sr_no: i + 2,
+      doc_date: form.doc_date,
+      ac_code: form.ac_code,
+      inv_no: a.inv_no,
+      inv_date: a.inv_date || form.doc_date,
+      amount: Number(a.amount),
+      lcur_amount: Number(a.amount) * Number(form.ex_rate || 1),
+      sign_ind: (form.doc_type === "PI" ? -1 : 1) as (1 | -1),
+      sign_code: form.doc_type === "PI" ? "DR" : "CR",
+      curr_code: a.curr_code || form.curr_code,
+      ex_rate: Number(form.ex_rate || 1),
+      div_code: form.div_code,
+      indicator_origin: "N",
+      amount_origin: Number(a.amount),
+    }));
+
+  return [...originRows, ...allocRows];
 }
 
 function buildCommercialJobDetails(form: FormState, companyCode: string, docNo: string) {
