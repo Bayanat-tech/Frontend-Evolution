@@ -660,5 +660,8 @@ function getFieldDependencyKey(field: WmsMasterField, form: Record<string, unkno
     }
   }
   if (field.asyncOptions?.dependsOn) deps.push(String(form[field.asyncOptions.dependsOn] ?? ""));
+  if ((field.dropdownParam === "DROP_DOWN_CITY" || field.name.includes("city")) && (form.country_code || form.tax_country_code)) {
+    deps.push(`country_${form.country_code || form.tax_country_code}`);
+  }
   return deps.length > 0 ? deps.join("__") : "static";
 }
