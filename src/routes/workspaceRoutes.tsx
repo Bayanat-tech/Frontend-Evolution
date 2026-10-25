@@ -244,6 +244,7 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
   import HrEmployeeDetailsReport from "../pages/hr/Reports/HrEmployeeDetailsReport";
   import HrEmployeeWiseCostReport from "../pages/hr/Reports/HrEmployeeWiseCostReport";
 import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
+import { useAuth } from "../state/AuthContext";
 
   type WorkspaceRouteContext = {
     pathname: string;
@@ -262,6 +263,35 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     const element = route?.element(context);
     return element ? <Fragment key={getWorkspaceRouteKey(context)}>{element}</Fragment> : null;
   }
+
+  const PurchaseSalesDashboardWrapper = () => {
+  const { user } = useAuth();
+
+  // Debug: Check console to see exactly what the user object looks like
+  console.log("User Object:", user);
+
+  // Check for tenant_id, TENANT_ID, tenantId, tenant, etc.
+  const rawTenant = String(
+    (user as any)?.tenant_id || 
+    (user as any)?.TENANT_ID || 
+    (user as any)?.tenantId || 
+    (user as any)?.tenant ||
+    (user as any)?.company_code || 
+    ""
+  ).trim().toUpperCase();
+
+  const isWmsDev = rawTenant.includes("WMSDEV");
+
+  if (isWmsDev) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <p className="text-lg font-semibold text-red-500">No data found</p>
+      </div>
+    );
+  }
+
+  return <PurchaseSalesDashboard />;
+};
 
   export const workspaceRoutes: WorkspaceRoute[] = [
 
@@ -1654,9 +1684,10 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     },
 
     {
-      name: "Purchase & Sales Dashboard",
-      match: ({ pathname }) => isPnSRoute(pathname),
-      element: () => <PurchaseSalesDashboard />},
+  name: "Purchase & Sales Dashboard",
+  match: ({ pathname }) => isPnSRoute(pathname),
+  element: () => <PurchaseSalesDashboardWrapper />, 
+},
 
     {
       name: "Purchase Sales Stock Inquiry",
