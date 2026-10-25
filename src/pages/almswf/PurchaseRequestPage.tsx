@@ -66,6 +66,8 @@ type TaskPopupData = {
   flowDescription: string;
   docType?: string;
   docNo?: string;
+  divCode?: string;
+  divName?: string;
 };
 
 type FlowRow = { flowCode: string; flowDescription: string; divCode: string; divName: string };
@@ -141,6 +143,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       isViewMode: false,
       flowCode: "",
       flowDescription: "",
+      divCode: "",
+      divName: "",
     },
   });
 
@@ -162,6 +166,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   });
 
   const [flowFetching, setFlowFetching] = useState(false);
+
+  const [pendingDivision, setPendingDivision] = useState<{ code: string; name: string }>({ code: "", name: "" });
 
   const activeCode3 = TAB_CODE3[activeTab] ?? TAB_CODE3[0];
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
@@ -188,7 +194,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     enabled: !!loginid && !!companyCode && isPoGeneratedTab,
   });
 
-  // ── Tab counts (same query keys → active tab cache share karto) ───────────
+
   const tabCountQueries = useQueries({
     queries: TAB_CODE3.map((code) => {
       const isPo = code === "POGENERATED";
@@ -244,7 +250,38 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     }
   }, [isError, error]);
 
-  // ── Add PR: flow / division resolution ─────────────────────────────────────
+  // ── Add PR: division → flow → editor ───────────────────────────────────────
+  const openPrEditor = (flow: FlowRow, div: { code: string; name: string }) => {
+    setTaskPopup({
+      open: true,
+      title: "Add PR",
+      data: {
+        existingData: null,
+        isEditMode: false,
+        isViewMode: false,
+        flowCode: flow.flowCode,
+        flowDescription: flow.flowDescription,
+        divCode: div.code,
+        divName: div.name,
+      },
+    });
+  };
+
+
+  const continueWithDivision = (div: { code: string; name: string }, allFlows: FlowRow[]) => {
+    const code = div.code.trim().toUpperCase();
+    const matched = code ? allFlows.filter((f) => String(f.divCode || "").trim().toUpperCase() === code) : [];
+    const usable = matched.length > 0 ? matched : allFlows;
+
+    setPendingDivision(div);
+
+    if (usable.length === 1) {
+      openPrEditor(usable[0], div);
+      return;
+    }
+    setFlowConfirm({ open: true, loading: false, rows: usable, selectedFlowCode: "" });
+  };
+
   const openAddPopup = async () => {
     setFlowFetching(true);
     setNotice(null);
@@ -285,49 +322,39 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return;
       }
 
-      // Case A: only ONE flow → open PR page directly
-      if (flowRows.length === 1) {
-        const only = flowRows[0];
-        setTaskPopup({
-          open: true,
-          title: "Add PR",
-          data: {
-            existingData: null,
-            isEditMode: false,
-            isViewMode: false,
-            flowCode: only.flowCode,
-            flowDescription: only.flowDescription,
-          },
-        });
-        return;
-      }
+  
+      let divisions: Division[] = (divisionsRaw || [])
+        .map((d) => ({
+          div_code: pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code"),
+          div_name: pick(d, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name"),
+        }))
+        .filter((d) => d.div_code) as unknown as Division[];
 
-      // Build unique divisions
-      const divMap = new Map<string, Division>();
-      for (const row of flowRows) {
-        const code = (row.divCode || "__NO_DIV__").toUpperCase();
-        if (!divMap.has(code)) {
-          divMap.set(code, {
-            div_code: row.divCode || "—",
-            div_name: row.divName || row.divCode || "—",
-          } as unknown as Division);
+      if (divisions.length === 0) {
+        const divMap = new Map<string, Division>();
+        for (const row of flowRows) {
+          const code = (row.divCode || "").toUpperCase();
+          if (code && !divMap.has(code)) {
+            divMap.set(code, { div_code: row.divCode, div_name: row.divName || row.divCode } as unknown as Division);
+          }
         }
+        divisions = Array.from(divMap.values());
       }
-      const uniqueDivisions = Array.from(divMap.values());
 
-      // Case B: only ONE division but multiple flows → flow confirm directly
-      if (uniqueDivisions.length === 1) {
-        setFlowConfirm({
-          open: true,
-          loading: false,
-          rows: flowRows,
-          selectedFlowCode: "",
-        });
+      if (divisions.length === 0) {
+        continueWithDivision({ code: "", name: "" }, flowRows);
         return;
       }
 
-      // Case C: multiple divisions → division picker
-      setDivisionPicker({ open: true, divisions: uniqueDivisions, allFlows: flowRows });
+    
+      if (divisions.length === 1) {
+        const only = divisions[0] as any;
+        continueWithDivision({ code: String(only.div_code), name: String(only.div_name || "") }, flowRows);
+        return;
+      }
+
+    
+      setDivisionPicker({ open: true, divisions, allFlows: flowRows });
     } catch (err) {
       setNotice({
         type: "error",
@@ -339,66 +366,20 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   };
 
   const handleDivisionSelect = (division: Division) => {
-    const selectedCode = String(
-      (division as any).div_code ?? (division as any).DIV_CODE ?? ""
-    ).trim().toUpperCase();
-
-    const filteredFlows = divisionPicker.allFlows.filter((f) => {
-      const c = String(f.divCode || "").trim().toUpperCase();
-      if (selectedCode === "__NO_DIV__" || selectedCode === "—") return !c;
-      return c === selectedCode;
-    });
-
+    const div = {
+      code: String((division as any).div_code ?? (division as any).DIV_CODE ?? "").trim(),
+      name: String((division as any).div_name ?? (division as any).DIV_NAME ?? "").trim(),
+    };
+    const flows = divisionPicker.allFlows;
     setDivisionPicker({ open: false, divisions: [], allFlows: [] });
-
-    if (filteredFlows.length === 0) {
-      if (divisionPicker.allFlows.length > 0) {
-        setFlowConfirm({
-          open: true,
-          loading: false,
-          rows: divisionPicker.allFlows,
-          selectedFlowCode: divisionPicker.allFlows.length === 1 ? divisionPicker.allFlows[0].flowCode : "",
-        });
-        return;
-      }
-      setNotice({ type: "error", message: "No approval flow found for selected division." });
-      return;
-    }
-
-    if (filteredFlows.length === 1) {
-      const selected = filteredFlows[0];
-      setTaskPopup({
-        open: true,
-        title: "Add PR",
-        data: {
-          existingData: null,
-          isEditMode: false,
-          isViewMode: false,
-          flowCode: selected.flowCode,
-          flowDescription: selected.flowDescription,
-        },
-      });
-      return;
-    }
-
-    setFlowConfirm({ open: true, loading: false, rows: filteredFlows, selectedFlowCode: "" });
+    continueWithDivision(div, flows);
   };
 
   const confirmFlowAndOpenPR = () => {
     const selected = flowConfirm.rows.find((row) => row.flowCode === flowConfirm.selectedFlowCode);
     if (!selected) return;
     setFlowConfirm((prev) => ({ ...prev, open: false }));
-    setTaskPopup({
-      open: true,
-      title: "Add PR",
-      data: {
-        existingData: null,
-        isEditMode: false,
-        isViewMode: false,
-        flowCode: selected.flowCode,
-        flowDescription: selected.flowDescription,
-      },
-    });
+    openPrEditor(selected, pendingDivision);
   };
 
   const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
@@ -416,7 +397,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     });
   };
 
-  // Save / submit nantar sagle tabs refresh (counts pan badaltat)
+
   const closePopup = useCallback(
     (refresh?: boolean) => {
       setTaskPopup((prev) => ({ ...prev, open: false }));
@@ -578,7 +559,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         cell: ({ row }) => {
           const r = row.original as any;
           const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
-          // Draft: next action usi ke paas hai jisne draft save kiya (USER_ID)
+       
           const code = isDraft
             ? (r.USER_ID || r.user_id || "")
             : (r.NEXT_ACTION_BY || r.next_action_by || "");
@@ -691,6 +672,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         }
         flowCode={taskPopup.data.flowCode}
         flowDescription={taskPopup.data.flowDescription}
+        divCode={taskPopup.data.divCode}
+        divName={taskPopup.data.divName}
         docType={taskPopup.data.docType}
         docNo={taskPopup.data.docNo}
         onClose={closePopup}
@@ -747,7 +730,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
               ? "Loading"
               : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`
           }
-          subtitle={
+                   subtitle={
             isPendingTab ? (
               <button
                 type="button"
@@ -759,11 +742,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
                 {flowFetching ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                 {flowFetching ? "Loading..." : "Add PR"}
               </button>
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                {isPoGeneratedTab ? "Generated PO List" : `${TAB_LABELS[activeTab]} Requests`}
-              </span>
-            )
+            ) : undefined
           }
           searchValue={query}
           onSearchChange={(value) => {
