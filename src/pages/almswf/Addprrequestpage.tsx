@@ -535,23 +535,12 @@ const AddPRRequestPage = ({
     enabled: !!flowCode && !!companyCode && !isEditMode && !isViewMode,
   });
 
-  // useEffect(() => {
-  //   if (isEditMode || isViewMode) return;
-  //   if (!flowDetailData || flowDetailData.length === 0) return;
-  //   const flow = flowDetailData[0];
-  //   const divCode = flow.DIV_CODE || "";
-  //   if (divCode) {
-  //     setHdr("DIV_CODE", divCode);
-  //     const div = divisionList.find((d: any) => d.DIV_CODE === divCode);
-  //     if (div) setHdr("DIV_NAME", div.DIV_NAME || "");
-  //   }
-  // }, [flowDetailData, divisionList, isEditMode, isViewMode]);
 
 
-    useEffect(() => {
+  useEffect(() => {
     if (isEditMode || isViewMode) return;
 
-    // User ne nivadlela division asel tar toch vapar
+   
     if (divCode) {
       setHdr("DIV_CODE", divCode);
       setHdr("DIV_NAME", divName || "");
