@@ -345,6 +345,10 @@ export function LookupField({
               ref={validityRef}
               tabIndex={-1}
               aria-hidden="true"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-form-type="other"
+              name="hidden_validity_no_autofill"
               className="pointer-events-none absolute inset-0 -z-10 h-0 w-0 border-0 bg-transparent p-0 text-transparent opacity-0"
               style={{ opacity: 0, color: "transparent", width: 0, height: 0, pointerEvents: "none" }}
               value={value}
@@ -422,6 +426,10 @@ export function LookupField({
                 <input
                   ref={searchInputRef}
                   autoFocus
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  name="lookup_query_no_autofill"
                   className="lookup-search-input w-full h-8.5 min-h-[34px] pl-8 pr-7 rounded-lg border border-slate-300 focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/20 bg-white text-slate-800 text-[11.5px] placeholder:text-slate-400 focus:outline-none transition-all shadow-xs"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}

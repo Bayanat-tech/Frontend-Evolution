@@ -32,8 +32,8 @@ import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
 import { useAuth } from "../state/AuthContext";
 import type { MenuNode } from "../types/auth";
-import { firstLeafPath, flattenLeaves } from "../utils/menu";
-import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isBtSupportApp, isUtilitiesApp } from "../utils/workspaceApps";
+import { firstLeafPath } from "../utils/menu";
+import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isUtilitiesApp } from "../utils/workspaceApps";
 
 type ModuleAccent = {
   gradient: string;
@@ -265,123 +265,12 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
 ];
 
 const fallbackIcons = [Layers, Package, Boxes, Truck, Building2, ArrowRightLeft, Factory, Gauge];
-// const completedModuleOrder = ["WMS", "Finance", "HCM", "EMS", "MMS", "VMS", "PAMS", "LMS", "Other"];
-
-function isSecurityModule(app: MenuNode) {
-  const text = `${app.title} ${app.id || ""}`.toLowerCase();
-  return text.includes("security");
-}
-
-//
-const trailingCodes = ["EMS","HCM","AMS"];
-
-const appLaunchGroups = [
-  {
-    key: "operations",
-    title: "Operations Suite",
-    subtitle: "Warehouse, freight, transport and maintenance operations",
-    codes: ["WMS", "FMS", "TMS", "MMS"],
-    tone: "operations",
-  },
-  {
-    key: "business",
-    title: "Business Suite",
-    subtitle: "Finance, vendor and customer management workflows",
-    codes: ["FINANCE", "VMS", "CMS", "IMS"],
-    tone: "business",
-  },
-  {
-    key: "people",
-    title: "Workforce Suite",
-    subtitle: "Employee, HR and attendance applications",
-    codes: ["EMS", "HCM", "AMS", "LMS"],
-    tone: "people",
-  },
-];
-
-function getSortWeight(code: string, catalogOrder: string[]) {
-  if (trailingCodes.includes(code)) {
-    return catalogOrder.length - 0.5;
-  }
-  const index = catalogOrder.indexOf(code);
-  return index === -1 ? catalogOrder.length : index;
-}
-
-function sortAppsByDisplayOrder(apps: MenuNode[]) {
-  const catalogOrder = moduleCatalog.map((entry) => entry.meta.code);
-  return [...apps].sort((first, second) => {
-    const firstCode = getModuleMeta(first, 0).code;
-    const secondCode = getModuleMeta(second, 0).code;
-    const normalizedFirst = getSortWeight(firstCode, catalogOrder);
-    const normalizedSecond = getSortWeight(secondCode, catalogOrder);
-    return normalizedFirst - normalizedSecond || first.title.localeCompare(second.title);
-  });
-}
 
 export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { user, menuTree, logout } = useAuth();
   const navigate = useNavigate();
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
-  const canOpenSupportCenter = useMemo(() => isLikelySupportAdmin(user), [user]);
-  const supportApp = useMemo(() => workspaceApps.find((app) => isBtSupportApp(app)), [workspaceApps]);
-  const securityApp = useMemo(() => workspaceApps.find((app) => isSecurityModule(app)), [workspaceApps]);
-  const coreApps = useMemo(
-    () => workspaceApps.filter((app) => !isUtilitiesApp(app) && !isSecurityModule(app) && !isBtSupportApp(app)),
-    [workspaceApps]
-  );
-  const btMastersApp = useMemo(() => workspaceApps.find((app) => isBtMastersApp(app)) || workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
-  const hasUtilityCards = Boolean((canOpenSupportCenter && supportApp) || securityApp || btMastersApp);
-  const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
-
-  const displayCards = useMemo(() => {
-    const appCards = displayCoreApps.map((app, index) => ({
-      kind: "app" as const,
-      key: app.id || app.title,
-      app,
-      meta: getModuleMeta(app, index),
-    }));
-
-    const presentCodes = new Set(appCards.map((c) => c.meta.code));
-
-    const externalCards = moduleCatalog
-      .filter((entry) => entry.external && !presentCodes.has(entry.meta.code))
-      .map((entry) => ({
-        kind: "external" as const,
-        key: `external-${entry.meta.code}`,
-        meta: entry.meta,
-        url: entry.external!.url,
-      }));
-
-    const catalogOrderCodes = moduleCatalog.map((entry) => entry.meta.code);
-    return [...appCards, ...externalCards].sort(
-      (a, b) => getSortWeight(a.meta.code, catalogOrderCodes) - getSortWeight(b.meta.code, catalogOrderCodes)
-    );
-  }, [displayCoreApps]);
-
-  const groupedDisplayCards = useMemo(() => {
-    const groups = appLaunchGroups.map((group) => ({ ...group, cards: [] as typeof displayCards }));
-    const otherGroup = {
-      key: "other",
-      title: "Additional Apps",
-      subtitle: "Other permitted applications",
-      codes: [] as string[],
-      tone: "other",
-      cards: [] as typeof displayCards,
-    };
-    displayCards.forEach((card) => {
-      const code = card.meta.code.toUpperCase();
-      const group = groups.find((item) => item.codes.includes(code)) || otherGroup;
-      group.cards.push(card);
-    });
-    return [...groups, otherGroup].filter((group) => group.cards.length > 0);
-  }, [displayCards]);
-
-//   const trailingBreakIndex = useMemo(() => {
-//   return displayCoreApps.findIndex((app) => {
-//     const weight = getSortWeight(getModuleMeta(app, 0).code, catalogOrderCodes);
-//     return weight >= catalogOrderCodes.length - 0.5;
-//   });
-// }, [displayCoreApps, catalogOrderCodes]);
+  const findApp = (code: string) => workspaceApps.find((app) => getModuleMeta(app, 0).code === code);
   const openApp = (app: MenuNode) => {
     const code = cleanAppCode(app.title);
     if (code === "finance") {
@@ -391,81 +280,81 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     const firstPath = firstLeafPath(app);
     navigate(`/workspace/${code}${firstPath ? `/${firstPath}` : ""}`);
   };
-
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
   };
+  const catalogMeta = (code: string) => moduleCatalog.find((entry) => entry.meta.code === code)!.meta;
+  const renderApp = (code: string, overrides: Partial<ModuleMeta> = {}) => {
+    const app = findApp(code);
+    if (!app) return null;
+    return <ModuleCard key={code} meta={{ ...catalogMeta(code), ...overrides }} onClick={() => openApp(app)} />;
+  };
+  const mastersApp = workspaceApps.find(isBtMastersApp) || workspaceApps.find(isUtilitiesApp);
+  const securityApp = findApp("Security");
+  const sections = [
+    {
+      id: "erp", title: "ERP",
+      cards: [
+        renderApp("Finance"),
+        renderApp("HCM", { description: "Leave management and attendance management." }),
+        renderApp("IMS", { description: "Purchases, sales, stock movements, production, inventory and maintenance management." }),
+      ],
+    },
+    {
+      id: "supply", title: "Supply Chain Extensions",
+      cards: [
+        renderApp("WMS"), renderApp("FMS"),
+        renderApp(findApp("LMS") ? "LMS" : "TMS", { code: "TMS", fullForm: "Transport Management System", Icon: Route }),
+      ],
+    },
+    {
+      id: "onboarding", title: "Unified Onboarding & Self-Service",
+      cards: findApp("VMS") ? [
+        <ModuleCard key="customer" meta={{ ...catalogMeta("CMS"), fullForm: "Customer Onboarding" }} />,
+        renderApp("VMS", { fullForm: "Vendor Onboarding" }),
+        <ModuleCard key="employee" meta={{ ...catalogMeta("EMS"), fullForm: "Employee Onboarding" }} />,
+      ] : [],
+    },
+    {
+      id: "utilities", title: "Utilities",
+      cards: securityApp || mastersApp ? [
+        <ModuleCard key="support" meta={{ ...catalogMeta("Security"), code: "Support", fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking.", Icon: LifeBuoy }} />,
+        securityApp ? <ModuleCard key="security" meta={catalogMeta("Security")} onClick={() => openApp(securityApp)} /> : null,
+        mastersApp ? <ModuleCard key="masters" meta={{ ...catalogMeta("Security"), code: "Masters", fullForm: "General Masters", description: "General masters for your permitted applications.", Icon: FolderCog }} onClick={() => openApp(mastersApp)} /> : null,
+      ] : [],
+    },
+  ].map((section) => ({ ...section, cards: section.cards.filter((card) => card !== null) }))
+    .filter((section) => section.cards.length > 0);
+  const launcherStyle = {
+    "--hub-section-count": sections.length || 1,
+    "--hub-columns": Math.max(1, ...sections.map((section) => section.cards.length)),
+  } as CSSProperties;
+
 
   return (
     <div className={`app app-selection-shell${dark ? " dark" : ""}`}>
       <header className="selection-header app-launch-header">
         <div className="brand-mini">
-          <span className="brand-logo-shell">
-            <img src="/bayanat-logo.png" alt="Bayanat Technology" className="brand-logo" />
-          </span>
-          <div className="brand-wordmark">
-            <strong>Bayanat</strong>
-            <span>Technology</span>
-          </div>
+          <span className="brand-logo-shell"><img src="/bayanat-logo.png" alt="Bayanat Technology" className="brand-logo" /></span>
+          <div className="brand-wordmark"><strong>Bayanat</strong><span>Technology</span></div>
         </div>
         <HeaderProfile user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
       </header>
-
-      <main className="selection-main app-launch-main">
-        {menuTree.length === 0 ? (
-          <div className="empty-state">
-            <ShieldCheck size={34} />
-            <h2>No modules available</h2>
-            <p>Your login is valid, but no permission menu was returned by the backend.</p>
-          </div>
+      <main className="selection-main app-launch-main" style={launcherStyle}>
+        {sections.length === 0 ? (
+          <div className="empty-state"><ShieldCheck size={34} /><h2>No modules available</h2><p>No application modules are assigned to your account.</p></div>
         ) : (
           <div className="app-launch-sections">
-            <section className="app-launch-section">
-              <div className="app-launch-section-title">
-                <span>Core Apps</span>
-              </div>
-
-              <div className="app-core-groups">
-                {groupedDisplayCards.map((group) => (
-                  <div className={`app-core-group app-core-group--${group.tone}`} key={group.key}>
-                    <div className="module-grid app-launch-grid app-core-group-grid">
-                      {group.cards.map((card) => (
-                        <ModuleCard
-                          key={card.key}
-                          childCount={card.kind === "app" ? (card.app.children?.length || 0) : 0}
-                          screenCount={card.kind === "app" ? flattenLeaves(card.app.children || []).length : 0}
-                          meta={card.meta}
-                          isExternal={card.kind === "external"}
-                          onClick={() =>
-                            card.kind === "external"
-                              ? window.open(card.url, "_blank", "noopener,noreferrer")
-                              : openApp(card.app)
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {hasUtilityCards ? (
-              <section className="app-launch-section app-launch-utility-section">
-                <div className="app-launch-section-title">
-                  <span>Utilities</span>
-                </div>
-                <div className="utility-card-grid">
-                  {canOpenSupportCenter && supportApp ? (
-                    <UtilityAppCard app={supportApp} meta={getModuleMeta(supportApp, 0)} onClick={() => openApp(supportApp)} />
-                  ) : null}
-                  {securityApp ? (
-                    <UtilityAppCard app={securityApp} meta={getModuleMeta(securityApp, 0)} onClick={() => openApp(securityApp)} />
-                  ) : null}
-                  {btMastersApp ? <BtMastersCard app={btMastersApp} onClick={() => openApp(btMastersApp)} /> : null}
+            <h1 className="app-launch-title"><Layers size={20} aria-hidden="true" />Enterprise Portal</h1>
+            {sections.map((section) => (
+              <section key={section.id} className="app-launch-section" aria-labelledby={section.id + "-heading"}>
+                <h2 id={section.id + "-heading"} className="app-launch-section-title">{section.title}</h2>
+                <div className={`module-grid app-launch-grid${section.id === "onboarding" ? " app-launch-onboarding-grid" : ""}`}>
+                  {section.cards}
                 </div>
               </section>
-            ) : null}
+            ))}
           </div>
         )}
       </main>
@@ -473,19 +362,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   );
 }
 
-function ModuleCard({
-  childCount,
-  screenCount,
-  meta,
-  onClick,
-  isExternal = false,
-}: {
-  childCount: number;
-  screenCount: number;
-  meta: ModuleMeta;
-  onClick: () => void;
-  isExternal?: boolean;
-}) {
+function ModuleCard({ meta, onClick }: { meta: ModuleMeta; onClick?: () => void }) {
   const Icon = meta.Icon;
   const cardStyle = {
     "--module-gradient": meta.accent.gradient,
@@ -495,120 +372,21 @@ function ModuleCard({
     "--module-text": meta.accent.text,
     "--module-glow": meta.accent.glow,
   } as CSSProperties;
-
-  return (
-    <button className="module-card app-module-card" onClick={onClick} style={cardStyle}>
-      <span className="app-module-card__bar" />
-      <div className="app-module-card__top">
-        <span className="app-module-card__icon">
-          <Icon size={24} />
-        </span>
-        {/* <span className="app-module-card__badges">
-          {meta.status === "in-progress" ? <span className="app-module-card__status">In progress</span> : null}
-          <span className="app-module-card__badge">{childCount} GRP</span>
-        </span> */}
-
-        <span className="app-module-card__badges">
-          {isExternal ? (
-            <span className="app-module-card__status">External</span>
-          ) : meta.status === "in-progress" ? (
-            <span className="app-module-card__status">In progress</span>
-          ) : null}
-          {!isExternal ? <span className="app-module-card__badge">{childCount} GRP</span> : null}
-        </span>
-      </div>
-      <Icon size={86} className="app-module-card__watermark" aria-hidden="true" />
-      <div className="app-module-card__copy">
-        <h2><span>B<sup>T</sup>-</span>{meta.code}</h2>
-        <em>({meta.fullForm})</em>
-        <p>{meta.description}</p>
-      </div>
-      <div className="app-module-card__footer">
-        <span>{isExternal ? "Opens in new tab" : `${screenCount} screen${screenCount === 1 ? "" : "s"}`}</span>
-        <strong>
-          OPEN {isExternal ? <ExternalLink size={13} /> : <ChevronRight size={14} />}
-        {/* <span>{screenCount} screen{screenCount === 1 ? "" : "s"}</span>
-        <strong>
-          OPEN <ChevronRight size={14} /> */}
-        </strong>
-      </div>
-      <span className="app-module-card__ambient" aria-hidden="true" />
-    </button>
-  );
-}
-
-function BtMastersCard({ app, onClick }: { app: MenuNode; onClick: () => void }) {
-  const sourceModules = app.children || [];
-  const masterScreens = flattenLeaves(sourceModules).length;
-  const preview = sourceModules.slice(0, 3);
-  const hiddenCount = Math.max(sourceModules.length - preview.length, 0);
-  const cardStyle = {
-    "--module-gradient": "linear-gradient(135deg, #0f172a 0%, #2563eb 52%, #14b8a6 100%)",
-    "--module-light": "#eef6ff",
-    "--module-border": "#93c5fd",
-    "--module-icon": "#0f4fa8",
-    "--module-text": "#0f172a",
-    "--module-glow": "rgba(37, 99, 235, 0.22)",
-  } as CSSProperties;
-
-  return (
-    <button className="utility-card bt-masters-card" onClick={onClick} style={cardStyle}>
-      <span className="utility-card__icon">
-        <Sparkles size={12} className="app-module-card__spark" />
-        <FolderCog size={22} />
-      </span>
-      <FolderCog size={78} className="utility-card__watermark" aria-hidden="true" />
-      <div className="utility-card__copy">
-        <h2><span>B<sup>T</sup>-</span>Masters</h2>
-        <em>(General Masters)</em>
-      </div>
-      <div className="bt-masters-card__modules">
-        {preview.map((module) => (
-          <span key={module.id || module.title}>
-            {module.title}
-            <strong>{flattenLeaves(module.children || []).length}</strong>
-          </span>
-        ))}
-        {hiddenCount > 0 ? <span>+{hiddenCount} more</span> : null}
-      </div>
-      <div className="bt-masters-card__footer">
-        <span>{masterScreens} master screen{masterScreens === 1 ? "" : "s"}</span>
-        <strong>
-          OPEN <ChevronRight size={14} />
-        </strong>
-      </div>
-    </button>
-  );
-}
-
-function UtilityAppCard({ app, meta, onClick }: { app: MenuNode; meta: ModuleMeta; onClick: () => void }) {
-  const Icon = meta.Icon;
-  const screenCount = flattenLeaves(app.children || []).length;
-  const cardStyle = {
-    "--module-gradient": meta.accent.gradient,
-    "--module-light": meta.accent.light,
-    "--module-border": meta.accent.border,
-    "--module-icon": meta.accent.icon,
-    "--module-text": meta.accent.text,
-    "--module-glow": meta.accent.glow,
-  } as CSSProperties;
-
-  return (
-    <button className="utility-card" type="button" onClick={onClick} style={cardStyle}>
-      <span className="utility-card__icon">
-        <Icon size={22} />
-      </span>
-      <Icon size={78} className="utility-card__watermark" aria-hidden="true" />
-      <div className="utility-card__copy">
-        <h2><span>B<sup>T</sup>-</span>{meta.code}</h2>
-        <em>({meta.fullForm})</em>
-        <p>{meta.description}</p>
-      </div>
-      <div className="bt-masters-card__footer">
-        <span>{screenCount} screen{screenCount === 1 ? "" : "s"}</span>
-        <strong>OPEN <ChevronRight size={14} /></strong>
-      </div>
-    </button>
+  const content = <>
+    <span className="app-module-card__bar" />
+    <div className="app-module-card__top"><span className="app-module-card__icon"><Icon size={24} /></span></div>
+    <Icon size={86} className="app-module-card__watermark" aria-hidden="true" />
+    <div className="app-module-card__copy">
+      {onClick ? <><h2><span>B<sup>T</sup>-</span>{meta.code}</h2><em>({meta.fullForm})</em><p>{meta.description}</p></> : <h2>{meta.fullForm}</h2>}
+    </div>
+    <div className="app-module-card__footer">
+      {onClick ? <strong>OPEN <ChevronRight size={14} /></strong> : <span className="app-module-card__coming-soon">Coming soon</span>}
+    </div>
+  </>;
+  return onClick ? (
+    <button type="button" className="module-card app-module-card" onClick={onClick} style={cardStyle}>{content}</button>
+  ) : (
+    <div className="module-card app-module-card app-module-card--static" style={cardStyle}>{content}</div>
   );
 }
 
