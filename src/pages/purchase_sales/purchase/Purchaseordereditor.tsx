@@ -1023,6 +1023,7 @@ export function PurchaseOrderEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
+          readOnly={!isPendingTab || isCancelled} 
       />
 
 

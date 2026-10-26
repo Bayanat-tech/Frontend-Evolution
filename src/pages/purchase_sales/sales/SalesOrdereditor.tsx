@@ -387,34 +387,34 @@ export function SalesOrderEditor({
 
 
   const buildSoReportParams = () => ({
-  company_code: user?.company_code,
-  doc_type: SO_DOC_TYPE.SO,
-  doc_no: String(form.doc_no),
-});
+    company_code: user?.company_code,
+    doc_type: SO_DOC_TYPE.SO,
+    doc_no: String(form.doc_no),
+  });
 
-const handlePrint = async () => {
-  if (!form.doc_no) {
-    setError("Save the Sales Order before printing");
-    return;
-  }
+  const handlePrint = async () => {
+    if (!form.doc_no) {
+      setError("Save the Sales Order before printing");
+      return;
+    }
 
-  const params = buildSoReportParams();
-  const preview = openPurchaseReport(`Sales Order ${form.doc_no}`.trim());
+    const params = buildSoReportParams();
+    const preview = openPurchaseReport(`Sales Order ${form.doc_no}`.trim());
 
-  try {
-    const html = await getSOrderReportHtml(params);
-    preview.ready({
-      html,
-      filename: `sales_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await getSoOrderReportExcel(params);
-      },
-    });
-  } catch (printError) {
-    preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
-  }
-};
+    try {
+      const html = await getSOrderReportHtml(params);
+      preview.ready({
+        html,
+        filename: `sales_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await getSoOrderReportExcel(params);
+        },
+      });
+    } catch (printError) {
+      preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
+    }
+  };
   // ── Print now opens the in-app NewReportDialog (raw HTML, no blob URL) ──
   const openReport = async () => {
     if (!form.doc_no) {
@@ -624,16 +624,16 @@ const handlePrint = async () => {
   };
 
   const handleExcel = async () => {
-  if (!form.doc_no) {
-    setError("Save the Sales Order before exporting to Excel");
-    return;
-  }
-  try {
-    await getSoOrderReportExcel(buildSoReportParams());
-  } catch (e: any) {
-    setError(e?.response?.data?.message || e?.message || "Excel export failed");
-  }
-};
+    if (!form.doc_no) {
+      setError("Save the Sales Order before exporting to Excel");
+      return;
+    }
+    try {
+      await getSoOrderReportExcel(buildSoReportParams());
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Excel export failed");
+    }
+  };
 
   const actionBarBusy = actionLoading !== null || saving;
 
@@ -747,8 +747,8 @@ const handlePrint = async () => {
                       </Button> */}
 
                       <Button type="button" variant="secondary" onClick={handlePrint}>
-                      <Printer size={15} /> Print
-                    </Button>
+                        <Printer size={15} /> Print
+                      </Button>
                       <Button
                         type="button"
                         variant="secondary"
@@ -951,6 +951,7 @@ const handlePrint = async () => {
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
+        readOnly={!isPendingTab || isCancelled}
       />
     </>
   );

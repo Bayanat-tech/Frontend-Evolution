@@ -40,10 +40,12 @@ useEffect(() => {
       generatedAt: new Date().toLocaleString(),
     };
    
-    const effectiveOrientation = request.document.orientation && !userToggledRef.current
+       const effectiveOrientation = request.document.orientation && !userToggledRef.current
       ? request.document.orientation
       : orientation;
-    const doc = { ...request.document, orientation: effectiveOrientation };
+    const d = request.document;
+    const html = effectiveOrientation === "portrait" && d.htmlPortrait ? d.htmlPortrait : d.html;
+    const doc = { ...d, html, orientation: effectiveOrientation };
     createPurchasePdf(doc, identity.current).then((blob) => {
       if (cancelled) return;
       url = URL.createObjectURL(blob); setPdfUrl(url);
