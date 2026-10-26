@@ -14,7 +14,7 @@ import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesDNEditor } from "./SalesDNeditor";
-import { SDN_CONFIG } from "./SalesOrdertypes";
+import { SDN_CONFIG, SO_DOC_TYPE } from "./SalesOrdertypes";
 
 import { downloadSalesDNExcel, getSalesDNReportHtml } from "./SalesDNReport";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
@@ -172,6 +172,7 @@ export function SalesDNPage({ onClose }: { onClose?: () => void } = {}) {
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
+      code4: SO_DOC_TYPE.SDN
     });
 
     return response as unknown as SalesOrderRow[];
@@ -195,6 +196,7 @@ export function SalesDNPage({ onClose }: { onClose?: () => void } = {}) {
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
           code3: tabValue,
+          code4: SO_DOC_TYPE.SDN
         });
 
         return {
@@ -420,16 +422,16 @@ export function SalesDNPage({ onClose }: { onClose?: () => void } = {}) {
                   setPageIndex(0);
                 }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
-                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
-                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
                   }`}
               >
                 <span>{item.label}</span>
 
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
-                      ? "bg-white/20 text-white"
-                      : "bg-muted text-muted-foreground"
+                    ? "bg-white/20 text-white"
+                    : "bg-muted text-muted-foreground"
                     }`}
                 >
                   {getTabCount(item.value)}
