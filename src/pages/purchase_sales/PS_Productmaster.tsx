@@ -1,5 +1,5 @@
-import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, Building2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, ChevronRight } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, Building2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -32,6 +32,7 @@ const LIST_COLUMNS: { key: string; label: string; width?: number }[] = [
 
 type Notice = { type: "success" | "error"; message: string } | null;
 
+// Tabs now act as scroll-nav for the groups below
 const STEPS = ["Product Details", "UOM & Volume", "Manufacture & Validation", "Category & Product"];
 
 const makeEmpty = (): ProductRow => ({
@@ -150,16 +151,21 @@ const ProductPurchaseSales = () => {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
-  
+
   // View state
   const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [original, setOriginal] = useState<ProductRow | null>(null);
   const [form, setForm] = useState<ProductRow>(() => makeEmpty());
   const [saving, setSaving] = useState(false);
-  const [step, setStep] = useState(0);
+  const [activeTab, setActiveTab] = useState(0);
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
+
+  // Scroll refs
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const groupRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const clickLock = useRef<number | null>(null);
 
   const loadRows = async (clearNotice = true) => {
     setLoading(true);
@@ -192,7 +198,7 @@ const ProductPurchaseSales = () => {
     setEditMode(false);
     setOriginal(null);
     setForm(makeEmpty());
-    setStep(0);
+    setActiveTab(0);
     setError("");
     setNotice(null);
     setView("editor");
@@ -202,7 +208,7 @@ const ProductPurchaseSales = () => {
     setEditMode(true);
     setOriginal(row);
     setForm({ ...makeEmpty(), ...row });
-    setStep(0);
+    setActiveTab(0);
     setError("");
     setNotice(null);
     setView("editor");
@@ -218,10 +224,40 @@ const ProductPurchaseSales = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  /* ---- Tab click → smooth scroll to group ---- */
+  const scrollToGroup = (index: number) => {
+    setActiveTab(index);
+    if (clickLock.current) window.clearTimeout(clickLock.current);
+    // ignore scroll-spy while the smooth scroll is running
+    clickLock.current = window.setTimeout(() => {
+      clickLock.current = null;
+    }, 700);
+    groupRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  /* ---- Scroll spy → highlight active tab ---- */
+  const handleScroll = () => {
+    if (clickLock.current) return;
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const containerTop = container.getBoundingClientRect().top;
+    let current = 0;
+    groupRefs.current.forEach((el, i) => {
+      if (el && el.getBoundingClientRect().top - containerTop <= 60) current = i;
+    });
+
+    // bottom of scroll area → last tab (last group may be too short to reach the top)
+    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 4) {
+      current = STEPS.length - 1;
+    }
+    setActiveTab((prev) => (prev === current ? prev : current));
+  };
+
   const handleSubmit = async (event?: FormEvent) => {
     if (event) event.preventDefault();
     setError("");
-    
+
     if (!form.prod_name?.trim()) {
       setError("Product Name is required");
       return;
@@ -337,6 +373,12 @@ const ProductPurchaseSales = () => {
                 <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
                   {editMode ? "Editing" : "Draft"}
                 </span>
+                <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
+                  Product Code:
+                  <strong className="font-semibold">
+                    {editMode && form.prod_code ? String(form.prod_code) : "Auto-generated"}
+                  </strong>
+                </span>
               </div>
             </div>
           </div>
@@ -356,115 +398,65 @@ const ProductPurchaseSales = () => {
 
         {/* Form content */}
         <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-          
+
           {error && (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
               {error}
             </div>
           )}
 
-          {/* ── Tabs shell (Freight style) ── */}
-          <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
-            <div className="freight-tabs-list flex overflow-x-auto">
-              {STEPS.map((label, index) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setStep(index)}
-                  aria-pressed={step === index}
-                  className={`freight-workspace-tab ${step === index ? "active" : ""}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          {/* ── Tabs shell (Freight style) — now a scroll container ── */}
+          <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm overflow-hidden">
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="overflow-y-auto scroll-smooth"
+              style={{ maxHeight: "calc(100dvh - 190px)" }}
+            >
+              {/* Sticky tab bar */}
+              <div className="freight-tabs-list sticky top-0 z-10 flex overflow-x-auto bg-card">
+                {STEPS.map((label, index) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => scrollToGroup(index)}
+                    aria-pressed={activeTab === index}
+                    className={`freight-workspace-tab ${activeTab === index ? "active" : ""}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-            <div className="freight-tabs-panel border-t p-3 grid gap-3">
-              {/* ══ STEP 0 — Product Details ══ */}
-              {step === 0 && (
-                <>
-                  <SectionPanel title="Classification" icon={Building2}>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Field label="Group Code" required>
-                        <LookupField
-                          label=""
-                          value={form.group_code ?? ""}
-                          valueField="group_code"
-                          displayFields={["group_code", "group_name"]}
-                          columns={[
-                            { field: "group_code", header: "Group Code" },
-                            { field: "group_name", header: "Group Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("group_code", value)}
-                          compact
-                        />
-                      </Field>
-                      <Field label="Brand Code" required>
-                        <LookupField
-                          label=""
-                          value={form.brand_code ?? ""}
-                          valueField="brand_code"
-                          displayFields={["brand_code", "brand_name"]}
-                          columns={[
-                            { field: "brand_code", header: "Brand Code" },
-                            { field: "brand_name", header: "Brand Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("brand_code", value)}
-                          compact
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-
+              <div className="freight-tabs-panel border-t p-3 grid gap-3">
+                {/* ══ GROUP 0 — Product Details (Product Name first) ══ */}
+                <div ref={(el) => { groupRefs.current[0] = el; }} className="grid gap-3 scroll-mt-12">
                   <SectionPanel title="Identification" icon={IdCard}>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <Field label="Product Code" required>
-                        <Input
-                          value={form.prod_code ?? ""}
-                          disabled={editMode}
-                          onChange={(e) => setField("prod_code", e.target.value)}
-                        />
-                      </Field>
+                    <div className="grid gap-3 md:grid-cols-2">
                       <Field label="Product Name" required className="md:col-span-2">
-                        <Input 
-                          value={form.prod_name ?? ""} 
-                          onChange={(e) => setField("prod_name", e.target.value)} 
+                        <Input
+                          value={form.prod_name ?? ""}
+                          onChange={(e) => setField("prod_name", e.target.value)}
                         />
                       </Field>
                       <Field label="Model #">
-                        <Input 
-                          value={form.model_number ?? ""} 
-                          onChange={(e) => setField("model_number", e.target.value)} 
+                        <Input
+                          value={form.model_number ?? ""}
+                          onChange={(e) => setField("model_number", e.target.value)}
                         />
                       </Field>
                       <Field label="Variant / Season">
-                        <Input 
-                          value={form.season_code ?? form.variant_code ?? ""} 
-                          onChange={(e) => setField("season_code", e.target.value)} 
+                        <Input
+                          value={form.season_code ?? form.variant_code ?? ""}
+                          onChange={(e) => setField("season_code", e.target.value)}
                         />
                       </Field>
                     </div>
                   </SectionPanel>
-                </>
-              )}
+                </div>
 
-              {/* ══ STEP 1 — UOM & Volume ══ */}
-              {step === 1 && (
-                <>
+                {/* ══ GROUP 1 — UOM & Volume ══ */}
+                <div ref={(el) => { groupRefs.current[1] = el; }} className="grid gap-3 scroll-mt-12">
                   <SectionPanel title="Unit of Measure" icon={Box}>
                     <div className="grid gap-3 md:grid-cols-4">
                       <Field label="No. of UOMs">
@@ -542,24 +534,22 @@ const ProductPurchaseSales = () => {
                       ))}
                     </div>
                   </SectionPanel>
-                </>
-              )}
+                </div>
 
-              {/* ══ STEP 2 — Manufacture & Validation ══ */}
-              {step === 2 && (
-                <>
+                {/* ══ GROUP 2 — Manufacture & Validation ══ */}
+                <div ref={(el) => { groupRefs.current[2] = el; }} className="grid gap-3 scroll-mt-12">
                   <SectionPanel title="Manufacture Details" icon={Building2}>
                     <div className="grid gap-3 md:grid-cols-3">
                       <Field label="Manufacturer Code">
-                        <Input 
-                          value={form.manu_code ?? ""} 
-                          onChange={(e) => setField("manu_code", e.target.value)} 
+                        <Input
+                          value={form.manu_code ?? ""}
+                          onChange={(e) => setField("manu_code", e.target.value)}
                         />
                       </Field>
                       <Field label="Origin Country">
-                        <Input 
-                          value={form.origin_country ?? ""} 
-                          onChange={(e) => setField("origin_country", e.target.value)} 
+                        <Input
+                          value={form.origin_country ?? ""}
+                          onChange={(e) => setField("origin_country", e.target.value)}
                         />
                       </Field>
                       <Field label="Alternate Product">
@@ -603,7 +593,7 @@ const ProductPurchaseSales = () => {
                       </Field>
                     </div>
                   </SectionPanel>
-                  
+
                   <SectionPanel title="Tax Component" icon={ShieldCheck}>
                     <div className="grid gap-3 md:grid-cols-4">
                       {[1, 2, 3, 4].map((num) => (
@@ -616,12 +606,57 @@ const ProductPurchaseSales = () => {
                       ))}
                     </div>
                   </SectionPanel>
-                </>
-              )}
+                </div>
 
-              {/* ══ STEP 3 — Category & Product ══ */}
-              {step === 3 && (
-                <>
+                {/* ══ GROUP 3 — Category & Product ══ */}
+                <div ref={(el) => { groupRefs.current[3] = el; }} className="grid gap-3 scroll-mt-12">
+                  <SectionPanel title="Classification" icon={Building2}>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Field label="Group Code" required>
+                        <LookupField
+                          label=""
+                          value={form.group_code ?? ""}
+                          valueField="group_code"
+                          displayFields={["group_code", "group_name"]}
+                          columns={[
+                            { field: "group_code", header: "Group Code" },
+                            { field: "group_name", header: "Group Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("group_code", value)}
+                          compact
+                        />
+                      </Field>
+                      <Field label="Brand Code" required>
+                        <LookupField
+                          label=""
+                          value={form.brand_code ?? ""}
+                          valueField="brand_code"
+                          displayFields={["brand_code", "brand_name"]}
+                          columns={[
+                            { field: "brand_code", header: "Brand Code" },
+                            { field: "brand_name", header: "Brand Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("brand_code", value)}
+                          compact
+                        />
+                      </Field>
+                    </div>
+                  </SectionPanel>
+
                   <SectionPanel title="Category & Division" icon={LayoutGrid}>
                     <div className="grid gap-3 md:grid-cols-3">
                       <Field label="Category Code">
@@ -742,61 +777,8 @@ const ProductPurchaseSales = () => {
                       </Field>
                     </div>
                   </SectionPanel>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ── Bottom action row (Freight style) ── */}
-          <div className="flex items-center justify-between gap-2 pt-0.5">
-            <button
-              type="button"
-              onClick={() => setStep((s) => s - 1)}
-              className={`inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-medium text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground transition-colors ${
-                step === 0 ? "invisible" : ""
-              }`}
-            >
-              <X size={11} /> Back
-            </button>
-
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-muted-foreground">
-                Step {step + 1} of {STEPS.length}
-              </span>
-
-              {step < STEPS.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setStep((s) => s + 1)}
-                  className="inline-flex items-center gap-1 rounded-md px-4 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-semibold shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
-                >
-                  Next <ChevronRight size={11} className="ml-1" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => handleSubmit()}
-                  className={`inline-flex items-center gap-1 rounded-md px-4 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-semibold shadow-sm transition-all ${
-                    saving
-                      ? "bg-primary/60 text-primary-foreground cursor-not-allowed"
-                      : editMode
-                      ? "bg-amber-600 hover:bg-amber-700 text-white"
-                      : "bg-primary hover:bg-primary/90 text-primary-foreground"
-                  }`}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 size={11} className="animate-spin" /> Saving…
-                    </>
-                  ) : (
-                    <>
-                      {editMode ? "Update" : "Submit"}
-                      <Save size={11} className="ml-1" />
-                    </>
-                  )}
-                </button>
-              )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -906,7 +888,7 @@ async function saveProduct(form: ProductRow, loginid: string, companyCode: strin
     loginid,
 
     val1s1: companyCode,
-    val1s2: toStr(form.prod_code),
+    val1s2: toStr(form.prod_code), // empty on create → backend auto-generates
     val1s3: toStr(form.prod_name),
     val1s4: toStr(form.model_number),
     val1s5: toStr(form.barcode ?? form.bar_code),
