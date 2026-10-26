@@ -144,6 +144,27 @@ export function FreightJobActivitiesPage({
   const [notice, setNotice] = useState<Notice>(null);
   const [lineSearch, setLineSearch] = useState("");
   const [masterCurrency, setMasterCurrency] = useState<{ curr_code: string; ex_rate: string }>({ curr_code: "OMR", ex_rate: "1" });
+  const [bookedPIList, setBookedPIList] = useState<any[]>([]);
+  const [costBookingModalOpen, setCostBookingModalOpen] = useState(false);
+
+  const getBookedPIForLine = useCallback((costType: "Agent Cost" | "Transporter Cost" | "Other Cost", actCode: string, amount: number) => {
+    if (!bookedPIList.length || !amount) return null;
+    const match = bookedPIList.find((pi: any) => {
+      const rem = String(pi.REMARKS || "").toUpperCase();
+      const typeMatch =
+        costType === "Agent Cost"
+          ? rem.includes("AGENT") || rem.includes("BROKER")
+          : costType === "Transporter Cost"
+          ? rem.includes("TRANS")
+          : rem.includes("OTHER") || rem.includes("ACTUAL");
+      if (!typeMatch) return false;
+      const actMatch = rem.includes(actCode.toUpperCase());
+      if (!actMatch) return false;
+      const amtMatch = Math.abs(Number(pi.AMOUNT) - amount) < 0.001;
+      return amtMatch;
+    });
+    return match ? String(match.DOC_NO) : null;
+  }, [bookedPIList]);
 
   useEffect(() => {
     if (!companyCode) return;
@@ -284,6 +305,8 @@ export function FreightJobActivitiesPage({
       const loadedHeader = normalizeLookupRow(response.data.data?.header || row);
       const quotationRef = lookupText(loadedHeader, "quotation_ref") || lookupText(row, "quotation_ref");
       setHeader({ ...loadedHeader, QUOTATION_REF: quotationRef });
+      const bookedPi = (response.data.data as any)?.booked_pi || [];
+      setBookedPIList(Array.isArray(bookedPi) ? bookedPi : []);
       setLines((response.data.data?.lines || []).map((lineRow, idx) => toLine(lineRow, idx, loadedHeader)));
       setDirty(false);
       setView("editor");
@@ -655,6 +678,17 @@ export function FreightJobActivitiesPage({
 
             <Button
               type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCostBookingModalOpen(true)}
+              className="h-7 px-2.5 text-[11px] font-semibold text-[#00378C] border-blue-300 bg-blue-50/70 hover:bg-blue-100 shadow-2xs cursor-pointer whitespace-nowrap shrink-0"
+              title="View PowerBuilder dw_3 Cost Booking Breakdown & Purchase Invoices"
+            >
+              <Receipt size={12} className="mr-1 text-[#00378C] shrink-0" /> Cost Bookings (dw_3)
+            </Button>
+
+            <Button
+              type="button"
               size="sm"
               onClick={addLine}
               disabled={isLineLocked}
@@ -684,8 +718,8 @@ export function FreightJobActivitiesPage({
                 <th colSpan={1} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
                   Tax
                 </th>
-                <th colSpan={2} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
-                  Invoiced / Booked
+                <th colSpan={1} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2" title="Customer Billing Sales Invoice">
+                  Invoice
                 </th>
                 <th colSpan={1} className="bg-[#00245e] text-white/95 py-1.5 px-2">
                   Actions
@@ -713,9 +747,8 @@ export function FreightJobActivitiesPage({
                 <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Transp Price</th>
                 {/* Tax */}
                 <th className="px-2 py-2 text-center w-[110px] text-emerald-200 bg-[#00378C] border-r border-white/15">Tax / VAT</th>
-                {/* Vouchers: Freight Invoice & Purchase Booking */}
-                <th className="px-2 py-2 text-center w-[110px] bg-[#681822] text-rose-100 border-r border-white/15" title="Freight Invoice Number">Invoice No</th>
-                <th className="px-2 py-2 text-center w-[120px] bg-[#0c3666] text-sky-100 border-r border-white/15" title="Purchase Booking PI Number">PI No</th>
+                {/* Customer Sales Invoice (PowerBuilder consolidated_invno) */}
+                <th className="px-2 py-2 text-center w-[120px] bg-[#681822] text-rose-100 border-r border-white/15" title="Customer Freight Invoice (PB consolidated_invno)">Invoice No</th>
                 {/* Action */}
                 <th className="px-2 py-2 text-center w-[75px] text-white bg-[#00378C]">Actions</th>
               </tr>
@@ -729,6 +762,13 @@ export function FreightJobActivitiesPage({
                   numberValue(line.tx_compnt_amt_1) > 0 ||
                   numberValue(line.tx_compnt_amt_1_cost) > 0 ||
                   line.tx_compnt_1_expmt === "S";
+
+                const agentCostVal = numberValue(line.partners_price);
+                const transpCostVal = numberValue(line.transport_price);
+                const actualCostVal = numberValue(line.actual_cost);
+                const agentPi = getBookedPIForLine("Agent Cost", line.act_code, agentCostVal);
+                const transpPi = getBookedPIForLine("Transporter Cost", line.act_code, transpCostVal);
+                const otherPi = getBookedPIForLine("Other Cost", line.act_code, actualCostVal);
 
                 return (
                   <tr
@@ -926,6 +966,11 @@ export function FreightJobActivitiesPage({
                           );
                         }}
                       />
+                      {otherPi && (
+                        <span className="block mt-0.5 text-[9px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-1 text-center shadow-2xs" title={`Other Cost Booked in PI #${otherPi}`}>
+                          PI: {otherPi}
+                        </span>
+                      )}
                     </td>
 
                     {/* Agent / Broker */}
@@ -968,6 +1013,11 @@ export function FreightJobActivitiesPage({
                           });
                         }}
                       />
+                      {agentPi && (
+                        <span className="block mt-0.5 text-[9px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-1 text-center shadow-2xs" title={`Agent Booked in PI #${agentPi}`}>
+                          PI: {agentPi}
+                        </span>
+                      )}
                     </td>
 
                     {/* Transporter */}
@@ -1010,6 +1060,11 @@ export function FreightJobActivitiesPage({
                           });
                         }}
                       />
+                      {transpPi && (
+                        <span className="block mt-0.5 text-[9px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-1 text-center shadow-2xs" title={`Transporter Booked in PI #${transpPi}`}>
+                          PI: {transpPi}
+                        </span>
+                      )}
                     </td>
 
                     {/* Tax (VAT) Dedicated Button */}
@@ -1054,19 +1109,7 @@ export function FreightJobActivitiesPage({
                       )}
                     </td>
 
-                    {/* Purchase Booking PI No (Blue badge) */}
-                    <td className="px-1.5 py-1 text-center w-[120px] border-r border-slate-200">
-                      {line.pi_no ? (
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-300 font-mono shadow-2xs"
-                          title={`Purchase Booking PI #${line.pi_no}`}
-                        >
-                          {line.pi_no}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
-                      )}
-                    </td>
+
 
                     {/* Action Buttons: Currency Calculator & Delete */}
                     <td className="px-1.5 py-1 w-[75px] text-center">
@@ -1107,7 +1150,7 @@ export function FreightJobActivitiesPage({
 
               {!lines.length && (
                 <tr>
-                  <td colSpan={15} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={14} className="px-3 py-10 text-center text-sm text-muted-foreground">
                     <p className="font-medium text-foreground">No service & activity lines yet.</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Click "+ Add Line" to add services or "Populate Quotation" to import approved activities.
@@ -1118,7 +1161,7 @@ export function FreightJobActivitiesPage({
 
               {lines.length > 0 && filteredLines.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={14} className="px-3 py-8 text-center text-sm text-muted-foreground">
                     No activity lines match "<strong>{lineSearch}</strong>"
                   </td>
                 </tr>
@@ -1156,8 +1199,7 @@ export function FreightJobActivitiesPage({
                   <td className="px-2 py-1.5 text-center font-mono font-bold text-emerald-800 bg-emerald-50/80 border-r border-slate-200">
                     {money(totals.tax)}
                   </td>
-                  {/* Vouchers / Invoices Totals */}
-                  <td className="px-2 py-1.5 text-center text-slate-400 border-r border-slate-200">-</td>
+                  {/* Customer Sales Invoice Total */}
                   <td className="px-2 py-1.5 text-center text-slate-400 border-r border-slate-200">-</td>
                   <td className="px-2 py-1.5 text-center text-[10px] text-slate-400 font-mono">
                     —
@@ -1682,6 +1724,217 @@ export function FreightJobActivitiesPage({
           </div>
         </Dialog>
       )}
+
+      {/* PowerBuilder dw_3 Cost Booking Breakdown & Vouchers Dialog */}
+      <Dialog
+        open={costBookingModalOpen}
+        onClose={() => setCostBookingModalOpen(false)}
+        title="Cost Bookings & Vouchers (PowerBuilder dw_3)"
+        description="Detailed vendor and provision cost allocations from dw_service_activities_costbooking"
+        size="5xl"
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xs text-slate-500">
+              Corresponds to PowerBuilder dw_3 (dw_service_activities_costbooking)
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCostBookingModalOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          {/* Summary Strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Total Job Expenses</span>
+              <span className="text-base font-mono font-bold text-slate-900 mt-1 block">
+                OMR {money(totals.expenseOthers + totals.expenseAgent + totals.expenseTransport)}
+              </span>
+            </div>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3">
+              <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider block">Booked in Purchase Invoice</span>
+              <span className="text-base font-mono font-bold text-emerald-800 mt-1 block">
+                OMR {money(
+                  lines.reduce((sum, l) => {
+                    let s = sum;
+                    const ap = numberValue(l.partners_price);
+                    const tp = numberValue(l.transport_price);
+                    const oc = numberValue(l.actual_cost);
+                    if (ap > 0 && getBookedPIForLine("Agent Cost", l.act_code, ap)) s += ap;
+                    if (tp > 0 && getBookedPIForLine("Transporter Cost", l.act_code, tp)) s += tp;
+                    if (oc > 0 && getBookedPIForLine("Other Cost", l.act_code, oc)) s += oc;
+                    return s;
+                  }, 0)
+                )}
+              </span>
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+              <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider block">Unbooked / Provision</span>
+              <span className="text-base font-mono font-bold text-amber-900 mt-1 block">
+                OMR {money(
+                  lines.reduce((sum, l) => {
+                    let s = sum;
+                    const ap = numberValue(l.partners_price);
+                    const tp = numberValue(l.transport_price);
+                    const oc = numberValue(l.actual_cost);
+                    if (ap > 0 && !getBookedPIForLine("Agent Cost", l.act_code, ap)) s += ap;
+                    if (tp > 0 && !getBookedPIForLine("Transporter Cost", l.act_code, tp)) s += tp;
+                    if (oc > 0 && !getBookedPIForLine("Other Cost", l.act_code, oc)) s += oc;
+                    return s;
+                  }, 0)
+                )}
+              </span>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="rounded-lg border border-slate-200 overflow-hidden shadow-2xs">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-[#002d72] text-white text-[11px] font-bold uppercase tracking-wider">
+                <tr>
+                  <th className="py-2 px-2.5 text-center w-10">#</th>
+                  <th className="py-2 px-3 text-center w-28">Type (Stream)</th>
+                  <th className="py-2 px-3 min-w-[140px]">Activity</th>
+                  <th className="py-2 px-3 min-w-[160px]">Vendor / Beneficiary</th>
+                  <th className="py-2 px-3 w-28">A/C Ref</th>
+                  <th className="py-2 px-3 text-right w-28">Amount</th>
+                  <th className="py-2 px-3 text-center w-28">Status</th>
+                  <th className="py-2 px-3 text-center w-36">PI / Voucher</th>
+                  <th className="py-2 px-2 text-center w-16">Conf</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {(() => {
+                  const rows: any[] = [];
+                  lines.forEach((l, idx) => {
+                    const srno = String(l.srno || idx + 1);
+                    const actCode = l.act_code;
+                    const actName = l.activity || l.other_services || actCode;
+
+                    // 1. Broker
+                    const ap = numberValue(l.partners_price);
+                    if (ap > 0) {
+                      const pi = getBookedPIForLine("Agent Cost", actCode, ap);
+                      rows.push({
+                        key: `${srno}_BROKER`,
+                        srno,
+                        type: "BROKER",
+                        typeBadge: "bg-purple-100 text-purple-800 border-purple-200",
+                        actName,
+                        vendorName: l.broker_name || l.broker_code || "Agent / Broker",
+                        vendorCode: l.broker_code,
+                        acRef: (l as any).broker_acref || "-",
+                        amount: ap,
+                        isBooked: Boolean(pi),
+                        piNo: pi,
+                      });
+                    }
+
+                    // 2. Transporter
+                    const tp = numberValue(l.transport_price);
+                    if (tp > 0) {
+                      const pi = getBookedPIForLine("Transporter Cost", actCode, tp);
+                      rows.push({
+                        key: `${srno}_TRANSPORT`,
+                        srno,
+                        type: "TRANSPORT",
+                        typeBadge: "bg-emerald-100 text-emerald-800 border-emerald-200",
+                        actName,
+                        vendorName: l.transporter_name || l.transporter_code || "Transporter",
+                        vendorCode: l.transporter_code,
+                        acRef: (l as any).transporter_ac_code || "-",
+                        amount: tp,
+                        isBooked: Boolean(pi),
+                        piNo: pi,
+                      });
+                    }
+
+                    // 3. Other Cost
+                    const oc = numberValue(l.actual_cost);
+                    if (oc > 0) {
+                      const pi = getBookedPIForLine("Other Cost", actCode, oc);
+                      rows.push({
+                        key: `${srno}_ACTUAL`,
+                        srno,
+                        type: "ACTUAL",
+                        typeBadge: "bg-amber-100 text-amber-800 border-amber-200",
+                        actName,
+                        vendorName: l.broker_name ? `${l.broker_name} (Direct)` : "Direct Provision",
+                        vendorCode: l.broker_code || "-",
+                        acRef: "2020100000",
+                        amount: oc,
+                        isBooked: Boolean(pi),
+                        piNo: pi,
+                      });
+                    }
+                  });
+
+                  if (!rows.length) {
+                    return (
+                      <tr>
+                        <td colSpan={9} className="py-8 text-center text-slate-400">
+                          No expense cost bookings in this job.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return rows.map((r) => (
+                    <tr key={r.key} className="hover:bg-slate-50/60">
+                      <td className="py-2 px-2.5 text-center font-mono text-slate-500">{r.srno}</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-extrabold border ${r.typeBadge}`}>
+                          {r.type}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 font-medium text-slate-800">{r.actName}</td>
+                      <td className="py-2 px-3">
+                        <span className="font-semibold text-slate-800 block truncate max-w-[200px]">{r.vendorName}</span>
+                        {r.vendorCode && r.vendorCode !== "-" && (
+                          <span className="text-[10px] font-mono text-slate-500">{r.vendorCode}</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-slate-600 text-[11px]">{r.acRef}</td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">{money(r.amount)}</td>
+                      <td className="py-2 px-3 text-center">
+                        {r.isBooked ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 size={11} className="text-emerald-600" /> Booked
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-300">
+                            Unbooked
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        {r.piNo ? (
+                          <span className="inline-block px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-sky-50 text-sky-800 border border-sky-300 shadow-2xs">
+                            {r.piNo}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono italic">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        <span className={`inline-block w-4 h-4 rounded-full text-[10px] font-bold ${r.isBooked ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
+                          {r.isBooked ? "Y" : "N"}
+                        </span>
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Dialog>
 
       {/* Dedicated Tax Configuration Dialog */}
       {activeTaxIndex !== null && lines[activeTaxIndex] && (
