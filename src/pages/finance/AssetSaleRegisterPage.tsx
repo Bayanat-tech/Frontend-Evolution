@@ -594,7 +594,9 @@ const loadAssetDetails = async (assetId: string, assetName: string) => {
               </div>
 
               <div className="freight-master-field">
-                <label className="freight-master-label">FA Disposal A/C</label>
+                <label className="freight-master-label">
+                  FA Disposal A/C <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
+                </label>
                 <LookupField
                   compact
                   value={form.fa_disposal_ac}
@@ -611,6 +613,9 @@ const loadAssetDetails = async (assetId: string, assetName: string) => {
                   })}
                   onChange={(value) => setField("fa_disposal_ac", value)}
                 />
+                {fieldErrors.fa_disposal_ac && (
+                  <span className="text-[10px] text-destructive mt-0.5" style={{ color: "#E24B4A" }}>
+                    {fieldErrors.fa_disposal_ac}</span>)}
               </div>
 
               <div className="freight-master-field">
@@ -856,6 +861,7 @@ function validateSale(f: AssetSaleRow, mode: "sale" | "disposal") {
   if (!f.asset_id) e.asset_id = "Asset is required";
   if (!f.sales_date) e.sales_date = `${label} Date is required`;
   if (!(num(f.sales_amount) > 0)) e.sales_amount = `${label} Amount must be > 0`;
+  if (!f.fa_disposal_ac) e.fa_disposal_ac = "FA Disposal A/C is required";
   for (const [k, l] of Object.entries(SALE_LIMITS)) {
     const v = String((f as Record<string, unknown>)[k] ?? "");
     if (l && v.length > l.max) e[k] = `Max ${l.max} (${v.length})`;
