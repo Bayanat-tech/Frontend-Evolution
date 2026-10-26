@@ -158,7 +158,8 @@ export function FreightJobActivitySelectorDialog({
     const items: FlattenedExpenseItem[] = [];
 
     // Helper to check if an expense was already booked in TR_AC_DETAIL (DOC_TYPE = 'PI')
-    const findBookedPI = (costType: string, actCode: string, amount: number) => {
+    const findBookedPI = (costType: string, actCode: string, amount: number, directPiNo?: string) => {
+      if (directPiNo && directPiNo.trim()) return directPiNo.trim();
       if (!bookedPIList.length) return undefined;
       const match = bookedPIList.find((pi: any) => {
         const rem = String(pi.REMARKS || "").toUpperCase();
@@ -170,7 +171,8 @@ export function FreightJobActivitySelectorDialog({
             : rem.includes("OTHER") || rem.includes("ACTUAL");
         const actMatch = rem.includes(actCode.toUpperCase());
         const amtMatch = Math.abs(Number(pi.AMOUNT) - amount) < 0.001;
-        return (typeMatch && actMatch) || (typeMatch && amtMatch);
+        const jobMatch = String(pi.JOB_NO || "").trim().toUpperCase() === jobNo.toUpperCase();
+        return (typeMatch && actMatch) || (typeMatch && amtMatch) || (jobMatch && amtMatch);
       });
       return match ? String(match.DOC_NO) : undefined;
     };
@@ -178,7 +180,8 @@ export function FreightJobActivitySelectorDialog({
     activities.forEach((act: any, idx: number) => {
       const srno = String(act.srno || act.SRNO || idx + 1);
       const actCode = String(act.act_code || act.ACT_CODE || "");
-      const activityDesc = String(act.activity || act.ACTIVITY || actCode);
+      const activityDesc = String(act.activity || act.ACTIVITY || act.other_services || act.OTHER_SERVICES || actCode);
+      const directPiNo = String(act.pi_no || act.PI_NO || "").trim();
 
       const actualCost = Number(act.actual_cost || act.ACTUAL_COST || 0);
       const partnerPrice = Number(act.partners_price || act.PARTNERS_PRICE || 0);
@@ -207,7 +210,7 @@ export function FreightJobActivitySelectorDialog({
         );
         const curr = String(act.partner_curr_code || "");
         const ex = Number(act.partner_ex_rate || 1);
-        const bookedDoc = findBookedPI("Agent Cost", actCode, partnerPrice);
+        const bookedDoc = findBookedPI("Agent Cost", actCode, partnerPrice, directPiNo);
         items.push({
           key: `${jobNo}_${srno}_AGENT`,
           srno,
@@ -240,7 +243,7 @@ export function FreightJobActivitySelectorDialog({
         );
         const curr = String(act.tp_curr_code || "");
         const ex = Number(act.tp_ex_rate || 1);
-        const bookedDoc = findBookedPI("Transporter Cost", actCode, transportPrice);
+        const bookedDoc = findBookedPI("Transporter Cost", actCode, transportPrice, directPiNo);
         items.push({
           key: `${jobNo}_${srno}_TRANS`,
           srno,
@@ -274,7 +277,7 @@ export function FreightJobActivitySelectorDialog({
         );
         const curr = String(act.ac_curr_code || "");
         const ex = Number(act.ac_ex_rate || 1);
-        const bookedDoc = findBookedPI("Other Cost", actCode, actualCost);
+        const bookedDoc = findBookedPI("Other Cost", actCode, actualCost, directPiNo);
         items.push({
           key: `${jobNo}_${srno}_OTHER`,
           srno,

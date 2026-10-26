@@ -567,6 +567,23 @@ export function FreightJobPage({
           enableExport={false}
           onRowClick={openJob}
         />
+        {auditJob && (
+          <FreightJobFinancialAuditDialog
+            open={auditOpen}
+            onClose={() => {
+              setAuditOpen(false);
+              setAuditJob(null);
+            }}
+            companyCode={companyCode}
+            prinCode={lookupText(auditJob, "prin_code")}
+            jobNo={lookupText(auditJob, "job_no")}
+            prinName={lookupText(auditJob, "prin_name")}
+            jobDate={lookupText(auditJob, "job_date")}
+            transportMode={mode.code}
+            confirmedDate={lookupText(auditJob, "confirm_date")}
+            invoicedDate={lookupText(auditJob, "invoice_date")}
+          />
+        )}
       </section>
     );
   }
