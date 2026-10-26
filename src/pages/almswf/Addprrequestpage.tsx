@@ -1023,9 +1023,13 @@ const AddPRRequestPage = ({
     const preview = openPurchaseReport(`Purchase Request - ${requestNumber}`);
 
     try {
-      const html = await getPrRegisterFormReportHtml(params);
+            const [html, htmlPortrait] = await Promise.all([
+        getPrRegisterFormReportHtml({ ...params, orientation: "landscape" }),
+        getPrRegisterFormReportHtml({ ...params, orientation: "portrait" }),
+      ]);
       preview.ready({
         html,
+        htmlPortrait,
         filename: `purchase_request_${requestNumber}`,
         orientation: "landscape",
         onExcel: async () => {

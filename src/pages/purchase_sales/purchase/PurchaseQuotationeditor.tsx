@@ -929,7 +929,7 @@ export function PurchaseQuotationEditor({
         onConfirm={confirmReject}
       />
 
-      <AttachmentDialog
+      {/* <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}
@@ -939,6 +939,19 @@ export function PurchaseQuotationEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
+      /> */}
+
+      <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Purchase Quotation Attachments"
+        module="PQ"
+        type="Purchase Quotation"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || user?.username || ""}   // CHANGED
+        flowLevel={effectiveFlowLevel}
+        readOnly={!isPendingTab || isCancelled}           // CHANGED
       />
 
       <PurchaseQuotationPrintDialog

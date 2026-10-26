@@ -262,7 +262,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     title: "Freight Brokerage",
     subtitle: "Broker-linked jobs and brokerage base values.",
     icon: WalletCards,
-    amountFields: ["BROKERAGE_BASE"],
+    amountFields: ["BILL_AMOUNT", "BROKERAGE_BASE"],
     filters: ["date"],
     advancedFilters: ["brokerRange", "division", "periodMode", "variant"],
     primaryMetric: "Brokerage",
@@ -275,7 +275,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
       { key: "BROKER_NAME", label: "Broker Name" },
       { key: "TRANSPORT_MODE", label: "Mode", kind: "mode" },
       { key: "JOB_TYPE", label: "Type", kind: "type" },
-      { key: "BROKERAGE_BASE", label: "Base", kind: "amount" },
+      { key: "BILL_AMOUNT", label: "Invoice Amount", kind: "amount" },
+      { key: "BROKERAGE_BASE", label: "Brokerage Amount", kind: "amount" },
     ],
   },
   query_report: {
@@ -690,7 +691,12 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
       };
       // Prioritize portrait first; switch to landscape only when columns exceed 9
       // Columns > 6 will cut in portrait (e.g. Job List has 9 cols), so default to landscape! Narrow reports (Revenue, Expense) default to portrait.
-      const isLandscape = config.columns.filter((c) => !["PRIN_CODE", "PRIN_NAME"].includes(c.key.toUpperCase())).length > 6;
+      const isLandscape = config.columns.filter((c) => {
+        const k = c.key.toUpperCase();
+        if (["PRIN_CODE", "PRIN_NAME"].includes(k)) return false;
+        if (config.title === "Freight Brokerage" && ["BROKER_CODE", "BROKER_NAME"].includes(k)) return false;
+        return true;
+      }).length > 6;
       const orientation: "portrait" | "landscape" = isLandscape ? "landscape" : "portrait";
       preview.ready({ company, html: reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), false, companyLogoUrl, orientation, company), filename: config.title, orientation });
     } catch (error: any) {
@@ -1713,7 +1719,12 @@ function reportBodyHtml(config: ReportConfig, rows: LookupRow[]) {
   if (config.title === "Freight Revenue") return financeReportHtml(rows, "revenue");
 
   const groups = groupRows(rows, config.title === "Freight Brokerage" ? ["BROKER_CODE", "BROKER_NAME", "PRIN_CODE", "PRIN_NAME"] : ["PRIN_CODE", "PRIN_NAME"]);
-  const filteredColumns = config.columns.filter((column) => !["PRIN_CODE", "PRIN_NAME"].includes(column.key.toUpperCase()));
+  const filteredColumns = config.columns.filter((column) => {
+    const k = column.key.toUpperCase();
+    if (["PRIN_CODE", "PRIN_NAME"].includes(k)) return false;
+    if (config.title === "Freight Brokerage" && ["BROKER_CODE", "BROKER_NAME"].includes(k)) return false;
+    return true;
+  });
   const colCount = filteredColumns.length;
 
   const thead = `<thead><tr>${filteredColumns

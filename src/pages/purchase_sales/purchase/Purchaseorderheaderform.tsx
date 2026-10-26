@@ -226,7 +226,7 @@ export function PurchaseOrderHeaderForm({
             </CField>
 
             {docTypeUpper === "LPO" && (
-              <div className="col-span-3">
+              <div className="col-span-4">
                 <LookupField
                   label="Reference No"
                   placeholder="Quotation No"

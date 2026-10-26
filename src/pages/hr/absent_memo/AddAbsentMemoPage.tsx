@@ -15,6 +15,7 @@ import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
 import type { AbsentMemoRow } from "./AbsentMemoMainPage";
 import type { AbsentMemoDetailRow } from "./types";
+import { toApiDateInput } from "../../../hooks/apiDate";
 
 /* ✅ Expose save() to the parent (header Save button) */
 export type AbsentMemoFormHandle = {
@@ -33,6 +34,7 @@ type AbsentMemoFormState = {
   docDate: string;
   refNo: string;
   employeeCode: string;
+  employeeId: string; 
   nameFrom: string;
   addrFrom: string;
   lettrSubject: string;
@@ -66,12 +68,12 @@ const toDocTypeCode = (value: unknown): string => {
 
 const normalizeValue = (value: any) => (value === null || value === undefined ? "" : String(value));
 
-const normalizeDateValue = (value: any) => {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
-};
+// const normalizeDateValue = (value: any) => {
+//   if (!value) return "";
+//   const date = new Date(value);
+//   if (Number.isNaN(date.getTime())) return "";
+//   return date.toISOString().slice(0, 10);
+// };
 
 const round3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 
@@ -247,9 +249,9 @@ const mapDetailRows = (rows: any[]): AbsentMemoDetailRow[] =>
     srNo: row?.sr_no ?? row?.SR_NO ?? row?.serial_no ?? row?.SERIAL_NO ?? index + 1,
     payUnit: String(row?.pay_comp_id ?? row?.PAY_COMP_ID ?? ""),
     description: String(row?.remarks ?? row?.REMARKS ?? row?.description ?? row?.sal_type_flag ?? row?.SAL_TYPE_FLAG ?? ""),
-    effectiveFrom: normalizeDateValue(row?.recover_from_dt ?? row?.RECOVER_FROM_DT),
-    absentFromDate: normalizeDateValue(row?.leave_start_date ?? row?.LEAVE_START_DATE ?? row?.recover_from_dt),
-    absentToDate: normalizeDateValue(row?.leave_end_date ?? row?.LEAVE_END_DATE),
+    effectiveFrom: toApiDateInput(row?.recover_from_dt ?? row?.RECOVER_FROM_DT),
+    absentFromDate: toApiDateInput(row?.leave_start_date ?? row?.LEAVE_START_DATE ?? row?.recover_from_dt),
+    absentToDate: toApiDateInput(row?.leave_end_date ?? row?.LEAVE_END_DATE),
     noOfDays: row?.deduct_noof_leavedays ?? row?.DEDUCT_NOOF_LEAVEDAYS ?? row?.leave_days_paid ?? "",
     amount: row?.amount ?? row?.AMOUNT ?? row?.recover_mth_amt ?? row?.RECOVER_MTH_AMT ?? "",
     refLeaveDocNo: String(row?.ref_leave_doc_no ?? row?.REF_LEAVE_DOC_NO ?? ""),
@@ -259,9 +261,10 @@ const mapDetailRows = (rows: any[]): AbsentMemoDetailRow[] =>
 const getInitialFormValues = (rowData?: any): AbsentMemoFormState => ({
   docNo: normalizeValue(rowData?.docNo ?? rowData?.doc_no),
   docType: toDocTypeCode(rowData?.docType ?? rowData?.doc_type),
-  docDate: normalizeDateValue(rowData?.docDate ?? rowData?.doc_date) || new Date().toISOString().slice(0, 10),
+  docDate: toApiDateInput(rowData?.docDate ?? rowData?.doc_date) || new Date().toISOString().slice(0, 10),
   refNo: normalizeValue(rowData?.refNo ?? rowData?.ref_no),
   employeeCode: normalizeValue(rowData?.employeeCode ?? rowData?.employee_code),
+  employeeId:   normalizeValue(rowData?.employeeId   ?? rowData?.employee_id),
   nameFrom:
     normalizeValue(rowData?.nameFrom ?? rowData?.name_from) || DEFAULT_NAME_FROM,
   addrFrom:
@@ -355,7 +358,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       if (!isEdit || !existingData?.doc_no) return;
       try {
         const response = await getDynamicLookup({
-          parameter: "HR_ABSENT_MEMO_TAB_2_DATA",
+          parameter: "HR_ABSENT_MEMO_TAB_2_DATA1",
           loginid: user?.loginid ?? "",
           code1: user?.company_code ?? "",
           number1: Number(existingData.doc_no),
@@ -449,7 +452,9 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
   const handleEmployeeChange = (value: string, row: LookupRow | null) => {
     const code = String(value ?? "");
     const picked = (row ?? {}) as Record<string, unknown>;
-    setForm((prev) => ({ ...prev, employeeCode: code }));
+    const empId = String(picked.employee_id ?? picked.EMPLOYEE_ID ?? code);
+
+    setForm((prev) => ({ ...prev, employeeCode: code, employeeId: empId }));
     setEmployeeName(String(picked.rpt_name ?? picked.RPT_NAME ?? ""));
     grossCache.current = {};
     if (!code) return;
@@ -509,7 +514,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
         signatory_name: form.signatoryName || "",
         signatory_position: form.signatoryPosition || "",
         employee_code: form.employeeCode || "",
-        employee_id: form.employeeCode || "",
+        employee_id:   form.employeeId   || form.employeeCode || "",
         amount: totalAmount,
         user_id: user?.loginid || "",
       };
@@ -519,7 +524,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
         doc_type: form.docType || DOC_TYPE_ABSENT,
         doc_no: form.docNo ? Number(form.docNo) : 0,
         sr_no: Number(row.srNo) || index + 1,
-        employee_id: undefined,
+        employee_id:   form.employeeId || "",
         emplyee_code: form.employeeCode || "",
         pay_comp_id: row.payUnit || "",
         amount: Number(row.amount || 0),
@@ -529,12 +534,13 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
           : row.absentFromDate
             ? new Date(row.absentFromDate).toISOString()
             : undefined,
+        leave_start_date: row.absentFromDate ,
+        leave_end_date: row.absentToDate,
         deduct_from_leave: row.cancel === "Yes" ? "Y" : "N",
         deduct_noof_leavedays: Number(row.noOfDays || 0),
         ref_leave_doc_no: row.refLeaveDocNo || "",
         remarks: row.description || null, // DTL.REMARKS VARCHAR2(20)
       }));
-
       const success = await hrSalaryAdvDedServiceInstance.upsertHrSalaryAdvDed({
         header,
         details,

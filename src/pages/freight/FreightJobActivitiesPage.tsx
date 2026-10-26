@@ -424,29 +424,6 @@ export function FreightJobActivitiesPage({
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
         {notice && <NoticeChip notice={notice} />}
         {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            const jobNo = lookupText(header, "job_no");
-            if (jobNo) window.location.href = `/freight_invoice/invoice?job_no=${encodeURIComponent(jobNo)}`;
-          }}
-          title="Generate Customer Invoice"
-          className="text-xs"
-        >
-          <FileText size={14} />Invoice
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => window.print()}
-          title="Print Job Invoice & Activities"
-          className="text-xs"
-        >
-          <Printer size={14} />Print
-        </Button>
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
           <Plus size={14} />Line
         </Button>
@@ -568,27 +545,6 @@ export function FreightJobActivitiesPage({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {notice && <NoticeChip notice={notice} />}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const jobNo = lookupText(header, "job_no");
-                if (jobNo) window.location.href = `/freight_invoice/invoice?job_no=${encodeURIComponent(jobNo)}`;
-              }}
-              title="Generate Customer Invoice"
-            >
-              <FileText size={14} /> Generate Invoice
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => window.print()}
-              title="Print Job Invoice & Activities"
-            >
-              <Printer size={14} /> Print Invoice
-            </Button>
             <Button type="button" size="sm" onClick={addLine} disabled={isLineLocked} className="!bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]">
               <Plus size={14} /> Add Line
             </Button>
@@ -621,38 +577,33 @@ export function FreightJobActivitiesPage({
 
       <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
         {/* Finance Line Actions Header */}
-        <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
-          <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
-            <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
-              <List size={14} />
+        <div className="finance-line-actions flex flex-nowrap items-center justify-between gap-1.5 px-2 py-1 bg-slate-50/90 border-b border-slate-200 min-w-0 overflow-hidden">
+          <div className="finance-line-actions-left flex items-center gap-1.5 min-w-0 shrink">
+            <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded shrink-0">
+              <List size={13} />
             </span>
-            <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide whitespace-nowrap shrink-0">
               Service & Activity Lines
             </span>
-            <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            <span className="finance-line-actions-badge text-[10px] font-semibold text-slate-600 bg-slate-200/80 px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0">
               {lineSearch.trim()
-                ? `${filteredLines.length} of ${lines.length} lines`
+                ? `${filteredLines.length}/${lines.length} lines`
                 : `${lines.length} ${lines.length === 1 ? "line" : "lines"}`}
             </span>
-            {lineSearch.trim() && (
-              <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                Filtered ({filteredLines.length})
-              </span>
-            )}
 
-            {/* Inline KPI Strip */}
-            <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
-              <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
-                <span className="text-blue-700 font-bold">Revenue:</span> {money(totals.revenue)} {baseCurrency}
+            {/* Inline KPI Strip (wide screens only to prevent wrapping) */}
+            <div className="hidden xl:flex items-center gap-1 ml-1 text-[10px] whitespace-nowrap shrink-0">
+              <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-medium text-blue-900">
+                <span className="text-blue-700 font-bold">Rev:</span> {money(totals.revenue)} {baseCurrency}
               </span>
-              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
+              <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 font-medium text-emerald-900">
                 <span className="text-emerald-700 font-bold">Tax:</span> {money(totals.tax)} {baseCurrency}
               </span>
-              <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
-                <span className="text-slate-600 font-bold">Expense:</span> {money(totals.expense)} {baseCurrency}
+              <span className="inline-flex items-center gap-0.5 rounded bg-slate-100 border border-slate-200 px-1.5 py-0.5 font-medium text-slate-800">
+                <span className="text-slate-600 font-bold">Exp:</span> {money(totals.expense)} {baseCurrency}
               </span>
               <span
-                className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-bold ${
+                className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 font-bold ${
                   totals.profit >= 0
                     ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                     : "bg-rose-50 border-rose-300 text-rose-800"
@@ -663,12 +614,12 @@ export function FreightJobActivitiesPage({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto flex-nowrap">
             {/* Search Filter input */}
-            <div className="bisc-table-search relative flex items-center">
-              <Search size={13} className="bisc-table-search-icon absolute left-2 text-slate-400" />
+            <div className="bisc-table-search relative flex items-center shrink-0">
+              <Search size={12} className="bisc-table-search-icon absolute left-2 text-slate-400" />
               <input
-                className="bisc-search-input h-7 pl-6 pr-6 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-36 sm:w-48"
+                className="bisc-search-input h-7 pl-6 pr-5 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-28 sm:w-32 md:w-36 transition-all"
                 type="text"
                 value={lineSearch}
                 onChange={(e) => setLineSearch(e.target.value)}
@@ -681,7 +632,7 @@ export function FreightJobActivitiesPage({
                   className="bisc-table-search-clear absolute right-1.5 text-slate-400 hover:text-slate-700"
                   title="Clear"
                 >
-                  <X size={12} />
+                  <X size={11} />
                 </button>
               )}
             </div>
@@ -697,9 +648,9 @@ export function FreightJobActivitiesPage({
                   ? `Load missing activities from ${lookupText(header, "quotation_ref")}`
                   : "Job has no quotation reference"
               }
-              className="h-7 text-xs font-medium"
+              className="h-7 px-2 text-[11px] font-medium whitespace-nowrap shrink-0"
             >
-              <ListPlus size={13} className="mr-1" /> {populating ? "Loading..." : "Populate Quotation"}
+              <ListPlus size={12} className="mr-1 shrink-0" /> {populating ? "..." : "Populate Quotation"}
             </Button>
 
             <Button
@@ -707,10 +658,10 @@ export function FreightJobActivitiesPage({
               size="sm"
               onClick={addLine}
               disabled={isLineLocked}
-              className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+              className="h-7 px-2 text-[11px] font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer whitespace-nowrap shrink-0"
               title="Add activity line (Alt + A)"
             >
-              <Plus size={13} className="mr-1" /> Add Line
+              <Plus size={12} className="mr-1 shrink-0" /> Add Line
             </Button>
           </div>
         </div>
@@ -721,7 +672,7 @@ export function FreightJobActivitiesPage({
             <thead className="sticky top-0 shadow-md z-10 whitespace-nowrap">
               {/* Tier 1 Header: Group Categories (PB Income & Expense Division) in matching Corporate Navy */}
               <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none bg-[#002d72] text-white border-b border-[#002052]">
-                <th colSpan={6} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
+                <th colSpan={4} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
                   Service & Activity Details
                 </th>
                 <th colSpan={2} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
@@ -732,6 +683,9 @@ export function FreightJobActivitiesPage({
                 </th>
                 <th colSpan={1} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
                   Tax
+                </th>
+                <th colSpan={2} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
+                  Invoiced / Booked
                 </th>
                 <th colSpan={1} className="bg-[#00245e] text-white/95 py-1.5 px-2">
                   Actions
@@ -746,8 +700,6 @@ export function FreightJobActivitiesPage({
                 <th className="px-2 py-2 text-center w-9 bg-[#00378C] text-white border-r border-white/15">#</th>
                 <th className="px-2 py-2 text-left min-w-[220px] text-white border-r border-white/15">Activity / Description</th>
                 <th className="px-2 py-2 text-right w-[60px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
-                <th className="px-2 py-2 text-center w-[110px] bg-[#681822] text-rose-100 border-r border-white/15" title="Freight Invoice Number">Invoice No</th>
-                <th className="px-2 py-2 text-center w-[120px] bg-[#0c3666] text-sky-100 border-r border-white/15" title="Purchase Booking PI Number">PI No</th>
                 {/* Income Columns */}
                 <th className="px-2 py-2 text-right w-[85px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
                 <th className="px-2 py-2 text-right w-[95px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
@@ -759,8 +711,12 @@ export function FreightJobActivitiesPage({
                 <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Agent Price</th>
                 <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Transporter</th>
                 <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Transp Price</th>
-                {/* Tax & Action */}
+                {/* Tax */}
                 <th className="px-2 py-2 text-center w-[110px] text-emerald-200 bg-[#00378C] border-r border-white/15">Tax / VAT</th>
+                {/* Vouchers: Freight Invoice & Purchase Booking */}
+                <th className="px-2 py-2 text-center w-[110px] bg-[#681822] text-rose-100 border-r border-white/15" title="Freight Invoice Number">Invoice No</th>
+                <th className="px-2 py-2 text-center w-[120px] bg-[#0c3666] text-sky-100 border-r border-white/15" title="Purchase Booking PI Number">PI No</th>
+                {/* Action */}
                 <th className="px-2 py-2 text-center w-[75px] text-white bg-[#00378C]">Actions</th>
               </tr>
             </thead>
@@ -872,34 +828,6 @@ export function FreightJobActivitiesPage({
                         disabled={isLineLocked}
                         onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))}
                       />
-                    </td>
-
-                    {/* Freight Invoice No (Red badge) */}
-                    <td className="px-1.5 py-1 text-center w-[110px] border-r border-slate-200">
-                      {line.consolidated_invno ? (
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 font-mono shadow-2xs"
-                          title={`Freight Invoice #${line.consolidated_invno}`}
-                        >
-                          {line.consolidated_invno}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
-                      )}
-                    </td>
-
-                    {/* Purchase Booking PI No (Blue badge) */}
-                    <td className="px-1.5 py-1 text-center w-[120px] border-r border-slate-200">
-                      {line.pi_no ? (
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-300 font-mono shadow-2xs"
-                          title={`Purchase Booking PI #${line.pi_no}`}
-                        >
-                          {line.pi_no}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
-                      )}
                     </td>
 
                     {/* Rate (OMR) */}
@@ -1112,6 +1040,34 @@ export function FreightJobActivitiesPage({
                       </button>
                     </td>
 
+                    {/* Freight Invoice No (Red badge) */}
+                    <td className="px-1.5 py-1 text-center w-[110px] border-r border-slate-200">
+                      {line.consolidated_invno ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 font-mono shadow-2xs"
+                          title={`Freight Invoice #${line.consolidated_invno}`}
+                        >
+                          {line.consolidated_invno}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
+                      )}
+                    </td>
+
+                    {/* Purchase Booking PI No (Blue badge) */}
+                    <td className="px-1.5 py-1 text-center w-[120px] border-r border-slate-200">
+                      {line.pi_no ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-300 font-mono shadow-2xs"
+                          title={`Purchase Booking PI #${line.pi_no}`}
+                        >
+                          {line.pi_no}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
+                      )}
+                    </td>
+
                     {/* Action Buttons: Currency Calculator & Delete */}
                     <td className="px-1.5 py-1 w-[75px] text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -1179,8 +1135,6 @@ export function FreightJobActivitiesPage({
                     Totals ({lines.length} {lines.length === 1 ? "line" : "lines"}):
                   </td>
                   <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
-                  <td className="px-2 py-1.5 text-center text-slate-400">-</td>
-                  <td className="px-2 py-1.5 text-center text-slate-400">-</td>
                   {/* Income Totals */}
                   <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
                   <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900 bg-blue-50/70 border-r border-slate-200">
@@ -1202,6 +1156,9 @@ export function FreightJobActivitiesPage({
                   <td className="px-2 py-1.5 text-center font-mono font-bold text-emerald-800 bg-emerald-50/80 border-r border-slate-200">
                     {money(totals.tax)}
                   </td>
+                  {/* Vouchers / Invoices Totals */}
+                  <td className="px-2 py-1.5 text-center text-slate-400 border-r border-slate-200">-</td>
+                  <td className="px-2 py-1.5 text-center text-slate-400 border-r border-slate-200">-</td>
                   <td className="px-2 py-1.5 text-center text-[10px] text-slate-400 font-mono">
                     —
                   </td>
@@ -2528,7 +2485,7 @@ function calculateTotals(lines: ActivityLine[]) {
 }
 
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") {
-  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map(normalizeLookupRow);
+  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 1000 })).map(normalizeLookupRow);
 }
 
 function normalizeLookupRow(row: LookupRow) {
