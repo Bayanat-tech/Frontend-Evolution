@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  TrendingUp,
   Ban,
   BriefcaseBusiness,
   Calendar,
@@ -37,6 +38,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
+import { FreightJobFinancialAuditDialog } from "../../components/freight/FreightJobFinancialAuditDialog";
 
 type ViewMode = "list" | "editor";
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -217,6 +219,13 @@ export function FreightJobPage({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [auditJob, setAuditJob] = useState<LookupRow | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
+
+  const openFinancialAudit = (row: LookupRow) => {
+    setAuditJob(row);
+    setAuditOpen(true);
+  };
   const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
 
   const filteredRows = useMemo(() => {
@@ -286,7 +295,51 @@ export function FreightJobPage({
     { accessorKey: "destination_port", header: "Destination", size: 120 },
     { accessorKey: "vessel_name", header: mode.code === "R" ? "Transporter" : mode.code === "A" ? "Airline" : "Vessel", size: 150 },
     { accessorKey: "canceled", header: "Status", size: 90, cell: ({ row }) => lookupText(row.original, "canceled") === "Y" ? <span className="rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700">Cancelled</span> : <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-emerald-700">Open</span> },
-    { id: "actions", header: "Actions", size: 70, cell: ({ row }) => <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Edit job" onClick={() => openJob(row.original)}><Edit2 size={13} /></Button> },
+    {
+      id: "actions",
+      header: "Actions",
+      size: 165,
+      cell: ({ row }) => {
+        const isConfirmed =
+          lookupText(row.original, "confirmed") === "Y" ||
+          Boolean(lookupText(row.original, "confirm_date")) ||
+          Boolean(lookupText(row.original, "invoice_date")) ||
+          lookupText(row.original, "completed") === "Y";
+
+        return (
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              disabled={!isConfirmed}
+              onClick={() => openFinancialAudit(row.original)}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all shadow-2xs border ${
+                isConfirmed
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                  : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+              }`}
+              title={
+                isConfirmed
+                  ? "Open Financial Audit 360°"
+                  : "Job must be Confirmed to view Financial 360°"
+              }
+            >
+              <TrendingUp size={11} className={isConfirmed ? "text-emerald-700" : "text-slate-400"} />
+              <span>Financial 360°</span>
+            </button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 text-slate-600 hover:text-slate-900"
+              title="Edit job"
+              onClick={() => openJob(row.original)}
+            >
+              <Edit2 size={13} />
+            </Button>
+          </div>
+        );
+      },
+    },
   ], [mode.code]);
 
   const openAdd = () => {
