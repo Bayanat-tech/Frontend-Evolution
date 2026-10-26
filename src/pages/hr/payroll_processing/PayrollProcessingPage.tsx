@@ -104,6 +104,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface AddDedRow {
+  doc_type: string | null;
   doc_no: string | number | null;
   doc_date: string | Date | null;
   employee_code: string;
@@ -113,6 +114,8 @@ export interface AddDedRow {
   recover_mth_amt: number;
   cancel_status: "Y" | "N";
   pay_comp_code: string | null;
+  pay_comp_id: string | number | null;
+  serial_no: string | number | null;
   _rowKey: string;
 }
 
@@ -190,60 +193,69 @@ async function fetchAddDedData(params: {
 
   const rows = (await getDynamicLookup(queryParams)) ?? [];
 
-  return (rows as any[]).map((r, i) => {
-    const cancel: "Y" | "N" =
-      String(pick(r, "CANCEL_STATUS") ?? "N").toUpperCase() === "Y" ? "Y" : "N";
-    return {
-      doc_no: pick(r, "DOC_NO") ?? null,
-      doc_date: pick(r, "DOC_DATE") ?? null,
-      employee_code: String(pick(r, "EMPLOYEE_CODE") ?? ""),
-      employee_name: String(
-        pick(r, "EMPLOYEE_NAME") || pick(r, "EMP_NAME") || pick(r, "RPT_NAME") || ""
-      ),
-      pay_comp_code: pick(r, "PAY_COMP_CODE") ?? null,
-      pay_comp_desc: pick(r, "PAY_COMP_DESC") ?? null,
-      pay_comp_earn_ded: pick(r, "PAY_COMP_EARN_DED") ?? null,
-      recover_mth_amt: Number(pick(r, "RECOVER_MTH_AMT") ?? 0) || 0,
-      cancel_status: cancel,
-      _rowKey: `adv-${pick(r, "DOC_NO") ?? i}-${i}`,
-    };
-  });
+  return (rows as any[]).map((r, i) => ({
+    doc_type: pick(r, "DOC_TYPE") ?? null,
+    doc_no: pick(r, "DOC_NO") ?? null,
+    doc_date: pick(r, "DOC_DATE") ?? null,
+    employee_code: String(pick(r, "EMPLOYEE_CODE") ?? ""),
+    employee_name: String(
+      pick(r, "EMPLOYEE_NAME") || pick(r, "EMP_NAME") || pick(r, "RPT_NAME") || ""
+    ),
+    pay_comp_code: pick(r, "PAY_COMP_CODE") ?? null,
+    pay_comp_id: pick(r, "PAY_COMP_ID") ?? pick(r, "PAY_COMP_CODE") ?? null,
+    pay_comp_desc: pick(r, "PAY_COMP_DESC") ?? null,
+    pay_comp_earn_ded: pick(r, "PAY_COMP_EARN_DED") ?? null,
+    recover_mth_amt: Number(pick(r, "RECOVER_MTH_AMT") ?? 0) || 0,
+    serial_no: pick(r, "SERIAL_NO") ?? null,
+    // always start as "No"; the user switches a row to "Yes" to cancel it
+    cancel_status: "N" as const,
+    _rowKey: `adv-${pick(r, "DOC_NO") ?? i}-${i}`,
+  }));
 }
 
 /**
- * Save the ticked rows in ONE request: the rows go in the payload as an array.
- * NOTE: set CONSOLIDATE_SAVE_PARAMETER to the real backend procedure name and
- * adjust the payload keys if the backend expects different names.
+ * Save the ticked rows in ONE request (PUT /api/hr/consolidate/cancel).
+ * The backend builds an Oracle collection from `records` and calls
+ * PROC_UPDATE_CONSOLIDATE_CANCEL_FLAG.
  */
-const CONSOLIDATE_SAVE_PARAMETER = "PROC_PAY_CONSOLIDATE_SAVE";
-
 async function saveConsolidation(params: {
   companyCode: string;
   divCode: string;
   rows: AddDedRow[];
   loginId?: string;
 }): Promise<void> {
-  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
-    parameter: CONSOLIDATE_SAVE_PARAMETER,
-    loginid: params.loginId || "",
-    company_code: params.companyCode,
-    div_code: params.divCode,
-    rows: params.rows.map((r) => ({
-      doc_no: r.doc_no,
-      doc_date: formatDateForInput(r.doc_date),
-      employee_code: r.employee_code,
-      employee_name: r.employee_name,
-      pay_comp_code: r.pay_comp_code,
-      pay_comp_desc: r.pay_comp_desc,
-      pay_comp_earn_ded: r.pay_comp_earn_ded,
-      recover_mth_amt: r.recover_mth_amt,
-      cancel_status: r.cancel_status, // "Y" | "N"
-    })),
-  });
-  // this endpoint answers "success: true" even for an unknown parameter
-  const msg = String(res.data?.message ?? "");
-  if (!res.data?.success || /invalid parameter/i.test(msg))
-    throw new Error(msg || "Failed to save consolidation");
+  // the procedure needs these on every record
+  const bad = params.rows.find(
+    (r) => !r.doc_type || r.doc_no == null || r.pay_comp_id == null || r.serial_no == null
+  );
+  if (bad) {
+    throw new Error(
+      "DOC_TYPE, DOC_NO, PAY_COMP_ID and SERIAL_NO must be returned by the populate query."
+    );
+  }
+
+  try {
+    const res = await api.put("/api/hr/consolidate/cancel", {
+      loginid: params.loginId || "",
+      company_code: params.companyCode,
+      records: params.rows.map((r) => ({
+        company_code: params.companyCode,
+        doc_type: r.doc_type,
+        doc_no: r.doc_no,
+        pay_comp_id: r.pay_comp_id,
+        serial_no: r.serial_no,
+        updated_by: params.loginId || "",
+        cancel_status: r.cancel_status, // "Y" | "N"
+      })),
+    });
+    if (!res.data?.success) {
+      throw new Error(res.data?.message || "Failed to save");
+    }
+  } catch (e: any) {
+    // surface the backend's message (axios hides it inside e.response)
+    const d = e?.response?.data;
+    throw new Error(d?.details || d?.message || e?.message || "Failed to save");
+  }
 }
 
 async function deleteAccrualTempData(
@@ -495,7 +507,7 @@ function PopulateAddDedModal({
         rows: selectedList,
         loginId,
       });
-      setSuccess(`${selectedList.length} record(s) saved.`);
+      setSuccess(`${selectedList.length} record(s) updated.`);
       setSelectedKeys(new Set());
     } catch (e) {
       setError((e as Error).message || "Failed to save.");
