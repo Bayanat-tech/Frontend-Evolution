@@ -139,9 +139,9 @@ export default function StockReportPage() {
         setMessage("");
         lastRequestRef.current = params;
 
-        const preview = openPurchaseReport("Stock Report");
-
         const isSummary = params.report_type === "SUMMARY";
+const reportTitle = isSummary ? "Stock Summary Report" : "Stock Transaction Report";
+const preview = openPurchaseReport(reportTitle);
         const fetchHtml = isSummary ? getStockSummaryReportHtml : getStockTransactionReportHtml;
         const fetchExcel = isSummary ? getStockSummaryReportExcel : getStockTransactionReportExcel;
 
@@ -152,7 +152,7 @@ export default function StockReportPage() {
                 html,
                 filename: `stock_${isSummary ? "summary" : "transaction"}_${new Date().toISOString().slice(0, 10)}`,
                 orientation: "landscape",
-                stripChrome: true,
+                // stripChrome: true,
                 onExcel: async () => {
                     await fetchExcel(params);
                 },
