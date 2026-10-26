@@ -30,7 +30,7 @@ const LOOKUP = {
   grade: "EDUCATION_QUALIFICATION_TICKET_ELIG_GRADE",
   designation: "EDUCATION_QUALIFICATION_TICKET_ELIG_DESIGNATION",
   formalDesignation: "EDUCATION_QUALIFICATION_TICKET_ELIG_FORMAL_DESIGNATION",
-  employee: "EDUCATION_QUALIFICATION_ADDR_EMPLOYEE_LIST", // unchanged
+  employee: "EDUCATION_QUALIFICATION_ADDR_EMPLOYEE_LIST", 
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
