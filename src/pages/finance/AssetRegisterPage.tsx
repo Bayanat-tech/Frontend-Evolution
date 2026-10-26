@@ -532,6 +532,12 @@ function validateAsset(f: TFullAssetForm) {
   req("ac_exp_code", "Exp Code");
   req("dprc_percentage", "Depreciation %");
 
+  if (f.dprc_required === "Y" || num(f.dprc_percentage) > 0) {
+    req("asset_ac_code", "Asset GL Account");
+    req("dprc_ac_code", "Depreciation Expense GL Account");
+    req("accudprc_ac_code", "Accumulated Depreciation GL Account");
+  }
+
   if (!(num(f.quantity) > 0)) e.quantity = "Quantity must be > 0";
   if (!(num(f.price) > 0))    e.price = "Price must be > 0";
   if (!(num(f.amount) > 0))   e.amount = "Value must be > 0";
@@ -1502,7 +1508,11 @@ function AssetEditor({
               <Field label="WD Value" numeric value={form.wd_value} error={fieldErrors.wd_value}
                 onChange={(v) => set("wd_value", v)} onBlur={(v) => fmt("wd_value", v)} disabled={isReadOnly} />
 
-              <LookupBlock label="Asset AC Code">
+              <LookupBlock
+                label="Asset AC Code"
+                required={form.dprc_required === "Y" || num(form.dprc_percentage) > 0}
+                error={fieldErrors.asset_ac_code}
+              >
                 <LookupField
                   compact
                   value={form.asset_ac_code}
@@ -1515,7 +1525,11 @@ function AssetEditor({
                 />
               </LookupBlock>
 
-              <LookupBlock label="DPRC AC Code">
+              <LookupBlock
+                label="DPRC AC Code"
+                required={form.dprc_required === "Y" || num(form.dprc_percentage) > 0}
+                error={fieldErrors.dprc_ac_code}
+              >
                 <LookupField
                   compact
                   value={form.dprc_ac_code}
@@ -1528,7 +1542,11 @@ function AssetEditor({
                 />
               </LookupBlock>
 
-              <LookupBlock label="AccuDPRC AC Code">
+              <LookupBlock
+                label="AccuDPRC AC Code"
+                required={form.dprc_required === "Y" || num(form.dprc_percentage) > 0}
+                error={fieldErrors.accudprc_ac_code}
+              >
                 <LookupField
                   compact
                   value={form.accudprc_ac_code}
