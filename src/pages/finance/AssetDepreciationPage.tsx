@@ -115,15 +115,18 @@ export function AssetDepreciationPage() {
       //   return;
       // }
 
-      // 2. SP_AC_ASSET_DPRC_JVPOST (vs_company_code, vs_doc_type, vl_docno)
+      // Call PROC_DEPRECIATION_JVPOST (validates rowcount, checks exception register, and posts JV)
       await executeCommonProcedure({
-        parameter: "SP_AC_ASSET_DPRC_JVPOST",
+        parameter: "PROC_DEPRECIATION_JVPOST",
         loginid: loginId,
-        val1s1: companyCode,       // vs_company_code
-        val1s2: docType,           // vs_doc_type ('ADP')
-        val1s3: String(Number(docNo)), // vl_docno (numeric, e.g. 202610)
+        val1s1: companyCode,           // p_company_code
+        val1s2: docType,               // p_doc_type ('ADP')
+        val1s3: String(Number(docNo)), // p_doc_no (numeric string, e.g. '202610')
+        val1s4: division,              // p_div_code
+        val1s5: String(rows.length),   // p_rowcount
+        val1n1: Number(docNo),         // backwards-compatibility
       });
-      setNotice({ type: "success", message: "Depreciation JV posted successfully" });
+      setNotice({ type: "success", message: "Depreciation JV posted successfully to General Ledger" });
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
     } finally {
