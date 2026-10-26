@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { deleteHrGm, deleteHrMaster, getHrMaster, saveHrGm } from "../../api/hr";
+import { deleteHrGm, deleteHrMaster, getHrMaster, getHrReportHtml, saveHrGm } from "../../api/hr";
 import {
   DynamicDeleteParams,
   DynamicMutationParams,
@@ -25,8 +25,9 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
+import { NewReportDialog } from "../../components/new_report_format";
 
-// ── Types (unchanged) ─────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type HrMasterField = {
   name: string;
@@ -57,6 +58,8 @@ export type HrMasterConfig = {
   gmEndpoint: string;
   routeKeys?: string[];
   keyField: string;
+  /** Backend report URL, e.g. "/hr/reports/designation". When set, Print opens this report. */
+  reportEndpoint?: string;
   fields: HrMasterField[];
   defaults?: Record<string, unknown>;
   deleteMode?: "master" | "gm" | "disabled";
@@ -147,6 +150,10 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   // view state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
   const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
@@ -222,7 +229,49 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     setView("editor");
   };
 
-  const printRecord = (record: Record<string, unknown>) => {
+  /* ── Print ──
+     1) config.reportEndpoint set  -> open the formatted backend report
+     2) otherwise                  -> old simple "record details" print      */
+
+  const openBackendReport = async (extraParams: Record<string, unknown>) => {
+    if (!config.reportEndpoint) return;
+
+    setReportHtml(null);
+    setReportError("");
+    setReportLoading(true);
+    setPreviewOpen(true); // dialog turant khulega, andar "Generating report…" dikhega
+
+    try {
+      // NOTE: print:"true" mat bhejo. Dialog ka apna Print button hai,
+      // aur auto-print script preview me dikkat karta hai.
+      const html = await getHrReportHtml(config.reportEndpoint, {
+        company_code: companyCode,
+        ...extraParams,
+      });
+      setReportHtml(html);
+    } catch (error) {
+      setReportError(getErrorMessage(error, `Unable to open ${config.title} report`));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    setPreviewOpen(false);
+    setReportHtml(null);
+    setReportError("");
+  };
+
+  const openReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    if (!win) toast.error("Please allow pop-ups to open the report");
+  };
+
+  const printRecordLocal = (record: Record<string, unknown>) => {
     const printWindow = window.open("", "_blank", "width=900,height=700");
 
     if (!printWindow) {
@@ -255,37 +304,13 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
       <head>
         <title>${escapeHtml(config.title)} - Print</title>
         <style>
-          body {
-            font-family: Arial, sans-serif;
-            padding: 24px;
-            color: #222;
-          }
-          h2 {
-            text-align: center;
-            margin-bottom: 8px;
-          }
-          p {
-            text-align: center;
-            color: #666;
-            margin-bottom: 24px;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-          th, td {
-            border: 1px solid #ccc;
-            padding: 10px;
-            text-align: left;
-            font-size: 13px;
-          }
-          th {
-            width: 35%;
-            background: #f3f4f6;
-          }
-          @media print {
-            body { padding: 0; }
-          }
+          body { font-family: Arial, sans-serif; padding: 24px; color: #222; }
+          h2 { text-align: center; margin-bottom: 8px; }
+          p { text-align: center; color: #666; margin-bottom: 24px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 13px; }
+          th { width: 35%; background: #f3f4f6; }
+          @media print { body { padding: 0; } }
         </style>
       </head>
       <body>
@@ -304,6 +329,23 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   `);
 
     printWindow.document.close();
+  };
+
+  // Print one record
+  const printRecord = (record: Record<string, unknown>) => {
+    if (config.reportEndpoint) {
+      void openBackendReport({
+        code2: String(record[config.keyField] ?? "").trim() || "All",
+        religion_code: record.religion_code ?? undefined, // only used by the caste report
+      });
+      return;
+    }
+    printRecordLocal(record);
+  };
+
+  // Print the whole list
+  const printAll = () => {
+    void openBackendReport({ code2: "All" });
   };
 
   const handleCloseEditor = () => {
@@ -327,7 +369,6 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         enableColumnFilter: false,
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
-
             <button
               type="button"
               className="h-6 w-6 grid place-items-center text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors cursor-pointer"
@@ -345,7 +386,6 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
             >
               <Edit2 size={13} />
             </button>
-
 
             <button
               type="button"
@@ -589,6 +629,18 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
               Refresh
             </button>
 
+            {config.reportEndpoint && (
+              <button
+                type="button"
+                onClick={printAll}
+                title={`Print all ${config.title}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
+              >
+                <Printer size={14} />
+                Print All
+              </button>
+            )}
+
             <button
               type="button"
               onClick={openAdd}
@@ -621,15 +673,32 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
           </>
         }
       >
+
+       
         <p className="m-0 text-sm text-muted-foreground">
           Confirm delete for <strong>{String(deleteTarget?.[config.keyField] || "")}</strong>.
         </p>
       </Dialog>
+       <NewReportDialog
+          open={previewOpen}
+          onClose={closeReportPreview}
+          title={config.title}
+          htmlContent={reportHtml}
+          loading={reportLoading}
+          error={reportError || null}
+          meta={{
+            companyName: companyCode,
+            user: loginid,
+            period: "All",
+            generatedAt: new Date().toLocaleString(),
+          }}
+          onOpenInNewWindow={openReportInNewWindow}
+        />
     </section>
   );
 }
 
-// ── Helpers (unchanged except renderInput's label / placeholder) ──────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function renderInput(
   field: HrMasterField,
