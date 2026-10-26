@@ -34,35 +34,72 @@ interface FreightJobFinancialAuditDialogProps {
 }
 
 interface ActivityLine {
-  srno: string;
-  act_code: string;
-  activity: string;
-  bill: number;
-  bill_lcur: number;
-  actual_cost: number;
-  partners_price: number;
-  transport_price: number;
+  srno?: string;
+  SRNO?: string;
+  act_code?: string;
+  ACT_CODE?: string;
+  activity?: string;
+  ACTIVITY?: string;
+  other_services?: string;
+  OTHER_SERVICES?: string;
+  bill?: number;
+  BILL?: number;
+  bill_oc?: number;
+  BILL_OC?: number;
+  bill_lcur?: number;
+  actual_cost?: number;
+  ACTUAL_COST?: number;
+  partners_price?: number;
+  PARTNERS_PRICE?: number;
+  transport_price?: number;
+  TRANSPORT_PRICE?: number;
   broker_code?: string;
+  BROKER_CODE?: string;
   broker_name?: string;
+  BROKER_NAME?: string;
   broker_acref?: string;
+  BROKER_ACREF?: string;
   transporter_code?: string;
+  TRANSPORTER_CODE?: string;
   transporter_name?: string;
+  TRANSPORTER_NAME?: string;
   transporter_ac_code?: string;
+  TRANSPORTER_AC_CODE?: string;
+  consolidated_invno?: string;
+  CONSOLIDATED_INVNO?: string;
   invoice_no?: string;
+  INVOICE_NO?: string;
   pi_no?: string;
+  PI_NO?: string;
   ac_curr_code?: string;
   partner_curr_code?: string;
   tp_curr_code?: string;
   vehicle_no?: string;
+  VEHICLE_NO?: string;
 }
 
 interface BookedPILine {
-  DOC_NO: string;
-  DOC_DATE: string;
-  AC_CODE: string;
-  AMOUNT: number;
-  REMARKS: string;
+  DOC_NO?: string;
+  doc_no?: string;
+  DOC_DATE?: string;
+  doc_date?: string;
+  AC_CODE?: string;
+  ac_code?: string;
+  AMOUNT?: number;
+  amount?: number;
+  REMARKS?: string;
+  remarks?: string;
   DOC_REFNO?: string;
+  JOB_NO?: string;
+}
+
+interface SalesInvoiceRecord {
+  DOC_TYPE?: string;
+  DOC_NO?: string;
+  DOC_DATE?: string;
+  REF_NO?: string;
+  NET_AMOUNT?: number;
+  GROSS_AMOUNT?: number;
 }
 
 export function FreightJobFinancialAuditDialog({
@@ -81,6 +118,7 @@ export function FreightJobFinancialAuditDialog({
   const [header, setHeader] = useState<any>(null);
   const [lines, setLines] = useState<ActivityLine[]>([]);
   const [bookedPIList, setBookedPIList] = useState<BookedPILine[]>([]);
+  const [salesInvoices, setSalesInvoices] = useState<SalesInvoiceRecord[]>([]);
   const [activeTab, setActiveTab] = useState<"summary" | "vendor_costs" | "customer_revenue">("summary");
   const [costFilter, setCostFilter] = useState<"all" | "booked" | "unbooked">("all");
 
@@ -90,7 +128,7 @@ export function FreightJobFinancialAuditDialog({
     try {
       const response = await api.post<{
         success?: boolean;
-        data?: { header?: any; lines?: any[]; booked_pi?: any[] };
+        data?: { header?: any; lines?: any[]; booked_pi?: any[]; sales_invoices?: any[] };
       }>("/api/freight/job-activities/get", {
         company_code: companyCode,
         prin_code: prinCode,
@@ -101,10 +139,12 @@ export function FreightJobFinancialAuditDialog({
       setHeader(data?.header || null);
       setLines(Array.isArray(data?.lines) ? data!.lines : []);
       setBookedPIList(Array.isArray(data?.booked_pi) ? data!.booked_pi : []);
+      setSalesInvoices(Array.isArray(data?.sales_invoices) ? data!.sales_invoices : []);
     } catch (err) {
       console.error("Failed to load freight job financial audit data:", err);
       setLines([]);
       setBookedPIList([]);
+      setSalesInvoices([]);
     } finally {
       setLoading(false);
     }
@@ -117,21 +157,38 @@ export function FreightJobFinancialAuditDialog({
   }, [open, companyCode, prinCode, jobNo]);
 
   // Helper to match booked PI
-  const findBookedDoc = (costType: string, actCode: string, amount: number) => {
-    if (!bookedPIList.length) return undefined;
-    const match = bookedPIList.find((pi) => {
-      const rem = String(pi.REMARKS || "").toUpperCase();
-      const typeMatch =
-        costType === "Agent Cost"
-          ? rem.includes("AGENT") || rem.includes("BROKER")
-          : costType === "Transporter Cost"
-          ? rem.includes("TRANS")
-          : rem.includes("OTHER") || rem.includes("ACTUAL");
-      const actMatch = rem.includes(actCode.toUpperCase());
-      const amtMatch = Math.abs(Number(pi.AMOUNT) - amount) < 0.001;
-      return (typeMatch && actMatch) || (typeMatch && amtMatch);
-    });
-    return match ? { docNo: match.DOC_NO, date: match.DOC_DATE } : undefined;
+  const findBookedDoc = (costType: string, actCode: string, amount: number, fallbackPiNo?: string) => {
+    if (bookedPIList.length > 0) {
+      const match = bookedPIList.find((pi) => {
+        const rem = String(pi.REMARKS || pi.remarks || "").toUpperCase();
+        const docJob = String(pi.JOB_NO || "").trim().toUpperCase();
+        const typeMatch =
+          costType === "Agent Cost"
+            ? rem.includes("AGENT") || rem.includes("BROKER")
+            : costType === "Transporter Cost"
+            ? rem.includes("TRANS")
+            : rem.includes("OTHER") || rem.includes("ACTUAL");
+        const actMatch = actCode ? rem.includes(actCode.toUpperCase()) : false;
+        const amtMatch = Math.abs(Number(pi.AMOUNT ?? pi.amount ?? 0) - amount) < 0.001;
+
+        if (typeMatch && (actMatch || amtMatch)) return true;
+        if (actMatch && amtMatch) return true;
+        if (docJob === jobNo.toUpperCase() && amtMatch) return true;
+        return false;
+      });
+      if (match) {
+        return {
+          docNo: match.DOC_NO || match.doc_no || "",
+          date: match.DOC_DATE || match.doc_date || "",
+        };
+      }
+    }
+
+    if (fallbackPiNo && fallbackPiNo.trim()) {
+      return { docNo: fallbackPiNo.trim(), date: "" };
+    }
+
+    return undefined;
   };
 
   // Flattened cost lines
@@ -152,25 +209,31 @@ export function FreightJobFinancialAuditDialog({
       vehicle_no?: string;
     }> = [];
 
-    lines.forEach((act, idx) => {
-      const srno = String(act.srno || idx + 1);
-      const actCode = act.act_code || "";
-      const activity = act.activity || actCode;
+    lines.forEach((act: any, idx: number) => {
+      const srno = String(act.srno ?? act.SRNO ?? idx + 1);
+      const actCode = String(act.act_code ?? act.ACT_CODE ?? "");
+      const activity = String(act.activity ?? act.ACTIVITY ?? act.other_services ?? act.OTHER_SERVICES ?? actCode);
+      const piNoDb = String(act.pi_no ?? act.PI_NO ?? "").trim();
 
       // 1. Agent Cost
-      const partnerPrice = Number(act.partners_price || 0);
+      const partnerPrice = Number(act.partners_price ?? act.PARTNERS_PRICE ?? 0);
       if (partnerPrice > 0) {
-        const booked = findBookedDoc("Agent Cost", actCode, partnerPrice);
+        const booked = findBookedDoc("Agent Cost", actCode, partnerPrice, piNoDb);
+        const brokerAcref = String(act.broker_acref ?? act.BROKER_ACREF ?? "").trim();
+        const brokerCode = String(act.broker_code ?? act.BROKER_CODE ?? "").trim();
+        const brokerName = String(act.broker_name ?? act.BROKER_NAME ?? "").trim();
+        const curr = String(act.partner_curr_code ?? act.PARTNER_CURR_CODE ?? "OMR");
+
         list.push({
           key: `${srno}_AGENT`,
           srno,
           cost_type: "Agent Cost",
           act_code: actCode,
           activity,
-          vendor_code: act.broker_acref || act.broker_code || "",
-          vendor_name: act.broker_name || "Overseas Agent / Broker",
+          vendor_code: brokerAcref || brokerCode,
+          vendor_name: brokerName || "Overseas Agent / Broker",
           amount: partnerPrice,
-          curr: act.partner_curr_code || "OMR",
+          curr,
           isBooked: Boolean(booked),
           bookedDoc: booked?.docNo,
           bookedDate: booked?.date,
@@ -178,40 +241,51 @@ export function FreightJobFinancialAuditDialog({
       }
 
       // 2. Transporter Cost
-      const transportPrice = Number(act.transport_price || 0);
+      const transportPrice = Number(act.transport_price ?? act.TRANSPORT_PRICE ?? 0);
       if (transportPrice > 0) {
-        const booked = findBookedDoc("Transporter Cost", actCode, transportPrice);
+        const booked = findBookedDoc("Transporter Cost", actCode, transportPrice, piNoDb);
+        const transporterAcCode = String(act.transporter_ac_code ?? act.TRANSPORTER_AC_CODE ?? "").trim();
+        const transporterCode = String(act.transporter_code ?? act.TRANSPORTER_CODE ?? "").trim();
+        const transporterName = String(act.transporter_name ?? act.TRANSPORTER_NAME ?? "").trim();
+        const vehicleNo = String(act.vehicle_no ?? act.VEHICLE_NO ?? "").trim();
+        const curr = String(act.tp_curr_code ?? act.TP_CURR_CODE ?? "OMR");
+
         list.push({
           key: `${srno}_TRANS`,
           srno,
           cost_type: "Transporter Cost",
           act_code: actCode,
           activity,
-          vendor_code: act.transporter_ac_code || act.transporter_code || "",
-          vendor_name: act.transporter_name || "Transporter",
+          vendor_code: transporterAcCode || transporterCode,
+          vendor_name: transporterName || "Transporter",
           amount: transportPrice,
-          curr: act.tp_curr_code || "OMR",
+          curr,
           isBooked: Boolean(booked),
           bookedDoc: booked?.docNo,
           bookedDate: booked?.date,
-          vehicle_no: act.vehicle_no,
+          vehicle_no: vehicleNo,
         });
       }
 
       // 3. Other Cost
-      const actualCost = Number(act.actual_cost || 0);
+      const actualCost = Number(act.actual_cost ?? act.ACTUAL_COST ?? 0);
       if (actualCost > 0) {
-        const booked = findBookedDoc("Other Cost", actCode, actualCost);
+        const booked = findBookedDoc("Other Cost", actCode, actualCost, piNoDb);
+        const brokerAcref = String(act.broker_acref ?? act.BROKER_ACREF ?? "").trim();
+        const brokerCode = String(act.broker_code ?? act.BROKER_CODE ?? "").trim();
+        const brokerName = String(act.broker_name ?? act.BROKER_NAME ?? "").trim();
+        const curr = String(act.ac_curr_code ?? act.AC_CURR_CODE ?? "OMR");
+
         list.push({
           key: `${srno}_OTHER`,
           srno,
           cost_type: "Other Cost",
           act_code: actCode,
           activity,
-          vendor_code: act.broker_acref || act.broker_code || "",
-          vendor_name: act.broker_name || "Direct / Port Cost",
+          vendor_code: brokerAcref || brokerCode,
+          vendor_name: brokerName || "Direct / Port Cost",
           amount: actualCost,
-          curr: act.ac_curr_code || "OMR",
+          curr,
           isBooked: Boolean(booked),
           bookedDoc: booked?.docNo,
           bookedDate: booked?.date,
@@ -220,12 +294,18 @@ export function FreightJobFinancialAuditDialog({
     });
 
     return list;
-  }, [lines, bookedPIList]);
+  }, [lines, bookedPIList, jobNo]);
 
   // Financial KPIs
   const totalRevenue = useMemo(() => {
-    return lines.reduce((acc, l) => acc + Number(l.bill || 0), 0);
-  }, [lines]);
+    const sumLines = lines.reduce((acc, l: any) => {
+      const amt = Number(l.bill ?? l.BILL ?? l.bill_oc ?? l.BILL_OC ?? 0);
+      return acc + amt;
+    }, 0);
+    if (sumLines > 0) return sumLines;
+    const hdrRev = Number(header?.revenue ?? header?.REVENUE ?? 0);
+    return hdrRev;
+  }, [lines, header]);
 
   const totalCost = useMemo(() => {
     return costLines.reduce((acc, l) => acc + l.amount, 0);
@@ -235,13 +315,25 @@ export function FreightJobFinancialAuditDialog({
     return costLines.filter((l) => l.isBooked).reduce((acc, l) => acc + l.amount, 0);
   }, [costLines]);
 
-  const pendingCost = totalCost - bookedCost;
+  const pendingCost = Math.max(0, totalCost - bookedCost);
   const grossProfit = totalRevenue - totalCost;
   const marginPercentage = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   const distinctBookedPIs = useMemo(() => {
     return Array.from(new Set(costLines.map((l) => l.bookedDoc).filter(Boolean)));
   }, [costLines]);
+
+  const primarySalesInvoice = useMemo<SalesInvoiceRecord | null>(() => {
+    if (salesInvoices.length > 0) {
+      return salesInvoices[0];
+    }
+    // Check line for consolidated_invno
+    for (const l of lines as any[]) {
+      const inv = l.consolidated_invno || l.CONSOLIDATED_INVNO || l.invoice_no || l.INVOICE_NO;
+      if (inv) return { DOC_NO: String(inv), DOC_TYPE: "SI", REF_NO: String(inv) };
+    }
+    return null;
+  }, [salesInvoices, lines]);
 
   const filteredCostLines = useMemo(() => {
     if (costFilter === "booked") return costLines.filter((l) => l.isBooked);
@@ -280,23 +372,23 @@ export function FreightJobFinancialAuditDialog({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm font-bold text-[#00378C]">{jobNo}</span>
-                <span className="text-[11px] text-slate-500 font-medium">{formatDate(jobDate)}</span>
+                <span className="text-[11px] text-slate-500 font-medium">{formatDate(jobDate || header?.JOB_DATE || header?.job_date)}</span>
               </div>
               <div className="text-[11px] font-semibold text-slate-800">
-                {prinName || header?.PRIN_NAME || prinCode} <span className="font-mono text-slate-400 font-normal">({prinCode})</span>
+                {prinName || header?.PRIN_NAME || header?.prin_name || prinCode} <span className="font-mono text-slate-400 font-normal">({prinCode})</span>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            {confirmedDate && (
+            {(confirmedDate || header?.CONFIRM_DATE || header?.confirm_date) && (
               <span className="inline-flex items-center gap-1 rounded bg-sky-50 border border-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">
-                <ShieldCheck size={11} className="text-sky-600" /> Confirmed {formatDate(confirmedDate)}
+                <ShieldCheck size={11} className="text-sky-600" /> Confirmed {formatDate(confirmedDate || header?.CONFIRM_DATE || header?.confirm_date)}
               </span>
             )}
-            {invoicedDate ? (
+            {(invoicedDate || header?.INVOICE_DATE || header?.invoice_date || primarySalesInvoice) ? (
               <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-300 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                <CheckCircle2 size={11} className="text-emerald-600" /> Invoiced {formatDate(invoicedDate)}
+                <CheckCircle2 size={11} className="text-emerald-600" /> Invoiced {primarySalesInvoice ? primarySalesInvoice.DOC_NO : formatDate(invoicedDate || header?.INVOICE_DATE)}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
@@ -344,8 +436,8 @@ export function FreightJobFinancialAuditDialog({
             <div className="mt-1 font-mono text-base font-bold text-blue-950">
               {totalRevenue.toFixed(3)} <span className="text-[10px] font-normal text-slate-500">OMR</span>
             </div>
-            <div className="text-[10px] text-blue-700 mt-0.5">
-              {invoicedDate ? "Billed to Customer" : "Estimated from Activities"}
+            <div className="text-[10px] text-blue-700 mt-0.5 truncate">
+              {primarySalesInvoice ? `SI: ${primarySalesInvoice.DOC_NO}` : invoicedDate ? "Billed to Customer" : "Estimated from Activities"}
             </div>
           </div>
 
@@ -434,7 +526,7 @@ export function FreightJobFinancialAuditDialog({
                   : "border-transparent text-slate-600 hover:text-slate-900"
               }`}
             >
-              Vendor Purchase Bookings (PI)
+              Vendor Purchase Bookings (PI) ({costLines.filter((l) => l.isBooked).length}/{costLines.length})
             </button>
             <button
               type="button"
@@ -465,7 +557,7 @@ export function FreightJobFinancialAuditDialog({
           )}
         </div>
 
-        {/* Tab 1: Comprehensive Summary Table */}
+        {/* Tab Content */}
         <div className="flex-1 overflow-auto rounded border border-slate-200 bg-white shadow-2xs">
           {loading ? (
             <div className="flex h-full items-center justify-center p-8 text-slate-500">
@@ -568,31 +660,47 @@ export function FreightJobFinancialAuditDialog({
                     </td>
                   </tr>
                 ) : (
-                  lines.map((line, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-2 font-mono text-[11px] text-slate-500">{line.srno || idx + 1}</td>
-                      <td className="p-2 font-semibold text-slate-900">{line.activity || line.act_code}</td>
-                      <td className="p-2 font-mono text-[11px] text-slate-500">{line.act_code}</td>
-                      <td className="p-2 text-right font-mono font-bold text-blue-900">
-                        {Number(line.bill || 0).toFixed(3)}
-                      </td>
-                      <td className="p-2">
-                        {line.invoice_no ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-100 border border-emerald-300 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
-                            <CheckCircle2 size={11} className="text-emerald-700" /> {line.invoice_no}
-                          </span>
-                        ) : invoicedDate ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                            <CheckCircle2 size={11} className="text-emerald-600" /> Invoiced {formatDate(invoicedDate)}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                            <Clock size={11} className="text-amber-600" /> Pending Invoicing
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  lines.map((line: any, idx: number) => {
+                    const srno = line.srno ?? line.SRNO ?? idx + 1;
+                    const actCode = line.act_code ?? line.ACT_CODE ?? "";
+                    const activityDesc = line.activity ?? line.ACTIVITY ?? line.other_services ?? line.OTHER_SERVICES ?? actCode;
+                    const billAmt = Number(line.bill ?? line.BILL ?? line.bill_oc ?? line.BILL_OC ?? 0);
+                    const invNo = line.consolidated_invno || line.CONSOLIDATED_INVNO || line.invoice_no || line.INVOICE_NO || primarySalesInvoice?.DOC_NO || primarySalesInvoice?.REF_NO;
+                    const invDate = primarySalesInvoice?.DOC_DATE || invoicedDate || header?.INVOICE_DATE || header?.invoice_date;
+
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-2 font-mono text-[11px] text-slate-500">{srno}</td>
+                        <td className="p-2 font-semibold text-slate-900">{activityDesc}</td>
+                        <td className="p-2 font-mono text-[11px] text-slate-500">{actCode}</td>
+                        <td className="p-2 text-right font-mono font-bold text-blue-900">
+                          {billAmt.toFixed(3)}
+                        </td>
+                        <td className="p-2">
+                          {invNo ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 rounded bg-emerald-100 border border-emerald-300 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
+                                <CheckCircle2 size={11} className="text-emerald-700" /> {invNo}
+                              </span>
+                              {invDate && (
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  {formatDate(invDate)}
+                                </span>
+                              )}
+                            </div>
+                          ) : invDate ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                              <CheckCircle2 size={11} className="text-emerald-600" /> Invoiced {formatDate(invDate)}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                              <Clock size={11} className="text-amber-600" /> Pending Invoicing
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
