@@ -833,7 +833,7 @@ const retrieveAssets = async () => {
                           <tr key={row.id} className="border-t align-top odd:bg-muted/20">
                             <td className="px-2 py-1.5">{row.serial_no}</td>
                             <td className="px-1 py-1">
-                              <LookupField compact placeholder="Asset" value={row.asset_id} displayValue={row.asset_id}
+                              <LookupField compact placeholder="Asset" value={row.asset_id} displayValue={display(row.asset_id, row.asset_name)}
                                 columns={assetColumns} valueField="asset_id" displayFields={["asset_id", "asset_name"]}
                                 disabled={isReadOnly} loadOptions={loader("AC_ASSETS_SearchID")}
                                 onChange={(value, r) =>
