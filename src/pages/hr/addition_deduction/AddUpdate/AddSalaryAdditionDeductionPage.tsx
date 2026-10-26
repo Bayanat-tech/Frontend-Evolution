@@ -45,6 +45,8 @@ type Props = {
 /* ───────────────────────── helpers ───────────────────────── */
 
 const CTL = "h-7 text-xs";
+const TEXTAREA =
+  "h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs outline-none transition-colors focus:border-ring focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
 
 /* Defaults applied only for new (add-mode) documents */
 const NEW_DEFAULTS = {
@@ -820,15 +822,15 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                   />
                 </CField>
                 <CField label="Remarks 1">
-                  <Input
-                    className={CTL}
+                  <textarea
+                    className={TEXTAREA}
                     {...text("remarks1")}
                     maxLength={HEADER_LIMITS.remarks1}
                   />
                 </CField>
-                <CField label="Remarks 2">
-                  <Input
-                    className={CTL}
+                <CField label="Remarks 2">  
+                  <textarea
+                    className={TEXTAREA}
                     {...text("remarks2")}
                     maxLength={HEADER_LIMITS.remarks2}
                   />

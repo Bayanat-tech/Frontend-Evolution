@@ -28,6 +28,12 @@ export interface MultiSelectFieldProps {
   /** Header label for the label column, when options carry a `code`. Defaults to the field `label`. */
   labelColumnLabel?: string;
   className?: string;
+  /** "All" ticks / unticks every listed option. `value` then holds real values, never the sentinel. */
+  toggleAllItems?: boolean;
+  /** Show a checkbox on every row even when options have a code column. */
+  showCheckboxes?: boolean;
+  /** No bottom margin and no "Click to select multiple" hint (for tight form grids). */
+  compact?: boolean;
 }
 
 const fieldLabelStyle: React.CSSProperties = {
@@ -80,35 +86,16 @@ const CheckmarkIcon: React.FC = () => (
 
 /**
  * Dropdown multi-select: click the field to open a checklist of options.
- * Each option has its own checkbox; the closed field shows a summary of what's
- * selected ("All", a single label, or "N selected"). Closes on outside click
- * or Escape. Used anywhere a multi-value filter is needed (Principal, Job
- * Number, Product, Site, etc.) so every report panel shares identical
- * select/clear behavior instead of re-implementing it per field.
  *
- * The dropdown panel is rendered through a React portal into document.body,
- * positioned with `position: fixed` from the trigger's bounding rect. This is
- * deliberate: several screens wrap this field in cards that set
- * `overflow: hidden` (e.g. `.freight-report-card`), which used to clip the
- * panel and break its stacking/shadow. Portaling sidesteps any ancestor's
- * overflow, transform, or z-index entirely, so the panel always floats
- * cleanly above the rest of the page regardless of where the field lives.
+ * Default mode: "All" is a sentinel (value = [allValue]); coded lists show a
+ * trailing checkmark instead of checkboxes.
  *
- * The panel includes a search box (filters by code or label) and a footer
- * showing the visible item count with a Close button. When any option
- * carries a `code`, the panel switches to the coded-list look: a dark navy
- * CODE / label table header, bold blue code text, no checkbox squares, and a
- * trailing checkmark on selected rows instead. Options without a `code`
- * fall back to the plain checkbox list.
+ * Items mode (`toggleAllItems`): "All" ticks / unticks every listed option
+ * (respecting the search box) and `value` always holds real option values.
+ * Combine with `showCheckboxes` to get a checkbox on every row of a coded list.
  *
- * Option rows use <div role="option"> (not bare <label>) so global form CSS
- * that forces label { flex-direction: column } cannot stack the checkbox
- * under the text (e.g. Freight .freight-ui-standard screens).
- *
- * `loading` vs `disabled`:
- * - loading → shows "Loading…", non-interactive
- * - disabled → non-interactive, shows normal summary (All / label / N selected)
- * Existing callers that only pass `loading` are unchanged.
+ * The panel is portaled to document.body so ancestor overflow / z-index never
+ * clips it (including when used inside a modal).
  */
 export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   label,
@@ -123,6 +110,9 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   codeColumnLabel = "Code",
   labelColumnLabel,
   className,
+  toggleAllItems,
+  showCheckboxes,
+  compact,
 }) => {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -133,8 +123,10 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isDisabled = Boolean(loading || disabled);
-  const isAllSelected = !hideAllOption && value.includes(allValue);
+  const itemsMode = Boolean(toggleAllItems);
+  const isAllSelected = !hideAllOption && !itemsMode && value.includes(allValue);
   const hasCode = useMemo(() => options.some((o) => !!o.code), [options]);
+  const showCheck = Boolean(showCheckboxes) || !hasCode;
 
   const recalcPosition = useCallback(() => {
     const el = triggerRef.current;
@@ -185,13 +177,17 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
       if (!insideRoot && !insidePanel) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        // don't let Escape also close a parent modal
+        e.stopPropagation();
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onClickAway);
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("mousedown", onClickAway);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
     };
   }, [open]);
 
@@ -199,7 +195,6 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   useEffect(() => {
     if (open) {
       setSearchQuery("");
-      // Focus after the panel has mounted
       const id = window.setTimeout(() => searchInputRef.current?.focus(), 0);
       return () => window.clearTimeout(id);
     }
@@ -221,8 +216,21 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
     );
   }, [options, searchQuery]);
 
+  // Items-mode helpers
+  const allItemsChecked =
+    filteredOptions.length > 0 && filteredOptions.every((o) => value.includes(o.value));
+  const everythingSelected =
+    options.length > 0 && options.every((o) => value.includes(o.value));
+  const allRowChecked = itemsMode ? allItemsChecked : isAllSelected;
+
   const toggleOption = (optValue: string) => {
     if (isDisabled) return;
+    if (itemsMode) {
+      onChange(
+        value.includes(optValue) ? value.filter((v) => v !== optValue) : [...value, optValue]
+      );
+      return;
+    }
     if (isAllSelected) {
       // Coming from "All" → start a fresh specific selection with just this one
       onChange([optValue]);
@@ -241,18 +249,37 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
 
   const toggleAll = () => {
     if (isDisabled) return;
+    if (itemsMode) {
+      const ids = filteredOptions.map((o) => o.value);
+      if (allItemsChecked) {
+        const drop = new Set(ids);
+        onChange(value.filter((v) => !drop.has(v)));
+      } else {
+        onChange(Array.from(new Set([...value, ...ids])));
+      }
+      return;
+    }
     onChange([allValue]);
   };
 
   const clearAll = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDisabled) return;
-    onChange(hideAllOption ? [] : [allValue]);
+    onChange(itemsMode || hideAllOption ? [] : [allValue]);
   };
 
   const summaryText = (): string => {
     // Only show "Loading…" when actually loading — not when merely disabled
     if (loading) return "Loading…";
+    if (itemsMode) {
+      if (!value.length) return placeholder;
+      if (everythingSelected) return "All";
+      if (value.length === 1) {
+        const match = options.find((o) => o.value === value[0]);
+        return match ? match.label : value[0];
+      }
+      return `${value.length} selected`;
+    }
     if (!value.length || isAllSelected) return "All";
     if (value.length === 1) {
       const match = options.find((o) => o.value === value[0]);
@@ -260,6 +287,8 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
     }
     return `${value.length} selected`;
   };
+
+  const showClear = itemsMode ? value.length > 0 : !isAllSelected && value.length > 0;
 
   const panel =
     open && !isDisabled && panelRect ? (
@@ -336,6 +365,19 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
               letterSpacing: 0.4,
             }}
           >
+            {showCheck && (
+              <span style={{ width: 14, flexShrink: 0, display: "flex" }}>
+                {itemsMode && (
+                  <input
+                    type="checkbox"
+                    checked={allRowChecked}
+                    onChange={toggleAll}
+                    aria-label="Select all"
+                    style={{ ...checkboxStyle, accentColor: THEME }}
+                  />
+                )}
+              </span>
+            )}
             <span style={{ width: CODE_COL_WIDTH, flexShrink: 0 }}>{codeColumnLabel}</span>
             <span style={{ flex: 1 }}>{labelColumnLabel || label || "Description"}</span>
           </div>
@@ -346,34 +388,35 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
           {!hideAllOption && (
             <div
               role="option"
-              aria-selected={isAllSelected}
+              aria-selected={allRowChecked}
               onClick={toggleAll}
               style={{
                 ...optionRowBase,
                 fontWeight: 600,
                 color: "#111827",
-                background: isAllSelected ? "#eff6ff" : "transparent",
+                background: allRowChecked ? "#eff6ff" : "transparent",
               }}
               onMouseEnter={(e) => {
-                if (!isAllSelected) e.currentTarget.style.background = "#f9fafb";
+                if (!allRowChecked) e.currentTarget.style.background = "#f9fafb";
               }}
               onMouseLeave={(e) => {
-                if (!isAllSelected) e.currentTarget.style.background = "transparent";
+                if (!allRowChecked) e.currentTarget.style.background = "transparent";
               }}
             >
-              {hasCode ? (
-                <span style={{ width: CODE_COL_WIDTH, flexShrink: 0 }} />
-              ) : (
+              {showCheck && (
                 <input
                   type="checkbox"
-                  checked={isAllSelected}
+                  checked={allRowChecked}
                   onChange={toggleAll}
                   onClick={(e) => e.stopPropagation()}
                   style={{ ...checkboxStyle, accentColor: THEME }}
                 />
               )}
+              {hasCode && (
+                <span style={{ width: CODE_COL_WIDTH, flexShrink: 0 }}>{itemsMode ? "ALL" : ""}</span>
+              )}
               <span style={{ flex: 1 }}>All</span>
-              {hasCode && isAllSelected && <CheckmarkIcon />}
+              {hasCode && !showCheckboxes && isAllSelected && <CheckmarkIcon />}
             </div>
           )}
 
@@ -407,7 +450,16 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
                   if (!checked) e.currentTarget.style.background = "transparent";
                 }}
               >
-                {hasCode ? (
+                {showCheck && (
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleOption(opt.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ ...checkboxStyle, accentColor: THEME }}
+                  />
+                )}
+                {hasCode && (
                   <span
                     style={{
                       width: CODE_COL_WIDTH,
@@ -421,14 +473,6 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
                   >
                     {opt.code}
                   </span>
-                ) : (
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleOption(opt.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ ...checkboxStyle, accentColor: THEME }}
-                  />
                 )}
                 <span
                   style={{
@@ -441,7 +485,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
                 >
                   {opt.label}
                 </span>
-                {hasCode && checked && <CheckmarkIcon />}
+                {hasCode && !showCheckboxes && checked && <CheckmarkIcon />}
               </div>
             );
           })}
@@ -459,7 +503,9 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
           }}
         >
           <span style={{ fontSize: 11, color: "#6b7280" }}>
-            {filteredOptions.length} item{filteredOptions.length === 1 ? "" : "s"}
+            {itemsMode
+              ? `${value.length} of ${options.length} selected`
+              : `${filteredOptions.length} item${filteredOptions.length === 1 ? "" : "s"}`}
           </span>
           <button
             type="button"
@@ -482,7 +528,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
     ) : null;
 
   return (
-    <div style={{ marginBottom: 14 }} ref={rootRef}>
+    <div style={{ marginBottom: compact ? 0 : 14 }} ref={rootRef}>
       {label ? <label style={fieldLabelStyle}>{label}</label> : null}
 
       <div style={{ position: "relative" }}>
@@ -523,7 +569,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
           </span>
 
           <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            {!isAllSelected && value.length > 0 && !isDisabled && (
+            {showClear && !isDisabled && (
               <span
                 onClick={clearAll}
                 title="Clear selection"
@@ -568,7 +614,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
         {typeof document !== "undefined" && panel ? createPortal(panel, document.body) : null}
       </div>
 
-      {!open && (
+      {!open && !compact && (
         <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 3 }}>
           {loading ? "" : isDisabled ? "" : "Click to select multiple"}
         </div>
