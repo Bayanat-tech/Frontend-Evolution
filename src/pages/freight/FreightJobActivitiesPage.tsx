@@ -577,7 +577,7 @@ export function FreightJobActivitiesPage({
 
       <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
         {/* Finance Line Actions Header */}
-        <div className="finance-line-actions flex flex-nowrap items-center justify-between gap-1.5 px-2.5 py-1 bg-slate-50/90 border-b border-slate-200 overflow-x-auto min-w-0">
+        <div className="finance-line-actions flex flex-nowrap items-center justify-between gap-1.5 px-2 py-1 bg-slate-50/90 border-b border-slate-200 min-w-0 overflow-hidden">
           <div className="finance-line-actions-left flex items-center gap-1.5 min-w-0 shrink">
             <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded shrink-0">
               <List size={13} />
@@ -591,8 +591,8 @@ export function FreightJobActivitiesPage({
                 : `${lines.length} ${lines.length === 1 ? "line" : "lines"}`}
             </span>
 
-            {/* Inline KPI Strip */}
-            <div className="hidden lg:flex items-center gap-1 ml-1 text-[10px] whitespace-nowrap shrink-0">
+            {/* Inline KPI Strip (wide screens only to prevent wrapping) */}
+            <div className="hidden xl:flex items-center gap-1 ml-1 text-[10px] whitespace-nowrap shrink-0">
               <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-medium text-blue-900">
                 <span className="text-blue-700 font-bold">Rev:</span> {money(totals.revenue)} {baseCurrency}
               </span>
@@ -614,12 +614,12 @@ export function FreightJobActivitiesPage({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto flex-nowrap">
             {/* Search Filter input */}
             <div className="bisc-table-search relative flex items-center shrink-0">
               <Search size={12} className="bisc-table-search-icon absolute left-2 text-slate-400" />
               <input
-                className="bisc-search-input h-7 pl-6 pr-5 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-28 sm:w-36 md:w-40"
+                className="bisc-search-input h-7 pl-6 pr-5 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-28 sm:w-32 md:w-36 transition-all"
                 type="text"
                 value={lineSearch}
                 onChange={(e) => setLineSearch(e.target.value)}
@@ -658,7 +658,7 @@ export function FreightJobActivitiesPage({
               size="sm"
               onClick={addLine}
               disabled={isLineLocked}
-              className="h-7 px-2.5 text-[11px] font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer whitespace-nowrap shrink-0"
+              className="h-7 px-2 text-[11px] font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer whitespace-nowrap shrink-0"
               title="Add activity line (Alt + A)"
             >
               <Plus size={12} className="mr-1 shrink-0" /> Add Line
@@ -2485,7 +2485,7 @@ function calculateTotals(lines: ActivityLine[]) {
 }
 
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") {
-  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map(normalizeLookupRow);
+  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 1000 })).map(normalizeLookupRow);
 }
 
 function normalizeLookupRow(row: LookupRow) {

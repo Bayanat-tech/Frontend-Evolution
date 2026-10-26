@@ -7,7 +7,7 @@ import {
   saveFyPeriod,
   SaveFyPeriodPayload
 } from "../../api/transactions";
-import { getMasterLookup } from "../../api/lookups";
+import { getDynamicLookup } from "../../api/lookups";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -88,7 +88,7 @@ export function CompanyFinanceSetupPage() {
       setLoading(true);
       const [res, currMaster] = await Promise.all([
         getCompanyFinanceSetup(companyCode),
-        getMasterLookup("wms", "currency").catch(() => []),
+        getDynamicLookup({ parameter: "DROP_DOWN_CURRENCY" }).catch(() => []),
       ]);
 
       if (Array.isArray(currMaster) && currMaster.length > 0) {
@@ -158,17 +158,35 @@ export function CompanyFinanceSetupPage() {
     return Array.from(unique.values()).sort((a, b) => (a.SORT_ORDER || 0) - (b.SORT_ORDER || 0));
   }, [data?.fy_periods]);
 
-  // Deduplicated currency list
+  // Deduplicated currency list with guaranteed fallbacks
   const currencyList = useMemo(() => {
-    const list = currencyMasterList.length > 0 ? currencyMasterList : data?.currencies || [];
+    const fallbackCurrencies = [
+      { CURR_CODE: "OMR", CURR_NAME: "OMANI RIAL" },
+      { CURR_CODE: "SAR", CURR_NAME: "SAUDI RIYAL" },
+      { CURR_CODE: "USD", CURR_NAME: "US DOLLAR" },
+      { CURR_CODE: "AED", CURR_NAME: "UAE DIRHAM" },
+      { CURR_CODE: "EUR", CURR_NAME: "EURO" },
+      { CURR_CODE: "GBP", CURR_NAME: "BRITISH POUND" },
+      { CURR_CODE: "INR", CURR_NAME: "INDIAN RUPEE" },
+      { CURR_CODE: "QAR", CURR_NAME: "QATARI RIYAL" },
+      { CURR_CODE: "KWD", CURR_NAME: "KUWAITI DINAR" },
+      { CURR_CODE: "BHD", CURR_NAME: "BAHRAINI DINAR" },
+    ];
+    const sourceList = currencyMasterList.length > 0 ? currencyMasterList : (data?.currencies && data.currencies.length > 0 ? data.currencies : fallbackCurrencies);
     const unique = new Map<string, { CURR_CODE: string; CURR_NAME: string }>();
-    for (const c of list) {
+    for (const c of sourceList) {
       const code = String(c.CURR_CODE || "").trim().toUpperCase();
       if (code && !unique.has(code)) {
         unique.set(code, {
           CURR_CODE: code,
-          CURR_NAME: String(c.CURR_NAME || "").trim(),
+          CURR_NAME: String(c.CURR_NAME || "").trim() || code,
         });
+      }
+    }
+    // Also include fallbacks if not already present
+    for (const fb of fallbackCurrencies) {
+      if (!unique.has(fb.CURR_CODE)) {
+        unique.set(fb.CURR_CODE, fb);
       }
     }
     return Array.from(unique.values()).sort((a, b) => a.CURR_CODE.localeCompare(b.CURR_CODE));
@@ -178,17 +196,26 @@ export function CompanyFinanceSetupPage() {
     return validPeriods.find((p) => p.FY_PERIOD === form.ac_fy_period);
   }, [validPeriods, form.ac_fy_period]);
 
-  // Opening Financial Period must belong to the active fiscal year
+  // Opening Financial Period must belong strictly to the active fiscal year
   const validOpeningPeriods = useMemo(() => {
     if (!form.ac_fy_period || !activePeriodObj) return validPeriods;
-    const activeYearStart = activePeriodObj.DATE_FROM ? new Date(activePeriodObj.DATE_FROM).getFullYear() : null;
+    const activeYear = activePeriodObj.DATE_FROM ? activePeriodObj.DATE_FROM.substring(0, 4) : "";
     return validPeriods.filter((p) => {
       if (p.FY_PERIOD === form.ac_fy_period) return true;
-      if (!p.DATE_FROM || !activeYearStart) return false;
-      const periodYear = new Date(p.DATE_FROM).getFullYear();
-      return periodYear === activeYearStart;
+      if (!p.DATE_FROM || !activeYear) return false;
+      return p.DATE_FROM.substring(0, 4) === activeYear;
     });
   }, [validPeriods, form.ac_fy_period, activePeriodObj]);
+
+  // Auto-align Opening Period if current value doesn't belong to valid opening periods
+  useEffect(() => {
+    if (validOpeningPeriods.length > 0 && !validOpeningPeriods.some((p) => p.FY_PERIOD === form.opn_fy_period)) {
+      setForm((prev) => ({
+        ...prev,
+        opn_fy_period: form.ac_fy_period || validOpeningPeriods[0].FY_PERIOD,
+      }));
+    }
+  }, [validOpeningPeriods, form.ac_fy_period, form.opn_fy_period]);
 
   const handleActivePeriodChange = (selectedPeriod: string) => {
     const periodObj = validPeriods.find((p) => p.FY_PERIOD === selectedPeriod);
@@ -708,7 +735,7 @@ export function CompanyFinanceSetupPage() {
                 <label className={labelClass}>
                   Base Currency <span className="text-rose-500">*</span>
                 </label>
-                {currencyList.length > 0 ? (
+                {true ? (
                   <select
                     value={form.base_curr_code}
                     onChange={(e) => setForm((prev) => ({ ...prev, base_curr_code: e.target.value }))}

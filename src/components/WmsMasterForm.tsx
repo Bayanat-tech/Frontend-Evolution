@@ -1,10 +1,30 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
-import { CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Save } from "lucide-react";
+import {
+  Anchor,
+  Building2,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+  FileText,
+  MapPin,
+  MapPinned,
+  Network,
+  PackageCheck,
+  Phone,
+  Plane,
+  Save,
+  Settings,
+  ShieldCheck,
+  Truck,
+  X,
+} from "lucide-react";
 import { getDynamicLookup, getLookupValue } from "../api/lookups";
 import { LookupField } from "./ui/LookupField";
 import { Input } from "./ui/Input";
 import { Textarea } from "./ui/Textarea";
+import { Button } from "./ui/Button";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
 import type { LookupRow } from "../api/lookups";
 import type { UserProfile } from "../types/auth";
@@ -37,15 +57,38 @@ type Props = {
 
 type FieldError = Record<string, string>;
 
-const inputClass =
-  "h-7 w-full rounded-md border bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed";
-const inputOk = "border-slate-200 focus:border-[#00378C] focus:ring-[#00378C]/30";
-const inputBad = "border-red-400 focus:border-red-500 focus:ring-red-300";
-
-const COL_SPAN: Record<number, string> = { 2: "lg:col-span-2", 3: "lg:col-span-3", 4: "lg:col-span-4" };
-
 function isEmpty(value: unknown) {
   return value === "" || value === null || value === undefined || (typeof value === "string" && !value.trim());
+}
+
+function getSectionIcon(sectionName: string) {
+  const s = sectionName.toLowerCase();
+  if (s.includes("route") || s.includes("airline") || s.includes("flight")) return Plane;
+  if (s.includes("port") || s.includes("vessel") || s.includes("sea")) return Anchor;
+  if (s.includes("address") || s.includes("location") || s.includes("territory") || s.includes("destination") || s.includes("source")) return MapPinned;
+  if (s.includes("contact") || s.includes("phone") || s.includes("email") || s.includes("person")) return Phone;
+  if (s.includes("finance") || s.includes("tax") || s.includes("account") || s.includes("credit") || s.includes("billing") || s.includes("currency") || s.includes("pricing") || s.includes("tariff") || s.includes("cost")) return Coins;
+  if (s.includes("custom") || s.includes("license") || s.includes("legal") || s.includes("reg") || s.includes("security")) return ShieldCheck;
+  if (s.includes("org") || s.includes("division") || s.includes("dept") || s.includes("network")) return Network;
+  if (s.includes("pick") || s.includes("storage") || s.includes("cargo") || s.includes("product") || s.includes("shipment") || s.includes("pack") || s.includes("warehouse") || s.includes("item")) return PackageCheck;
+  if (s.includes("setting") || s.includes("rule") || s.includes("config") || s.includes("param") || s.includes("general")) return Settings;
+  if (s.includes("transporter") || s.includes("fleet") || s.includes("truck")) return Truck;
+  if (s.includes("company") || s.includes("identity") || s.includes("basic") || s.includes("partner") || s.includes("broker") || s.includes("forwarder") || s.includes("principal")) return Building2;
+  return FileText;
+}
+
+function getGridColsClass(fields: WmsMasterField[]) {
+  const hasSpans = fields.some((f) => f.colSpan && f.colSpan > 1);
+  if (!hasSpans && fields.length === 4) {
+    return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5";
+  }
+  if (!hasSpans && fields.length === 3) {
+    return "grid grid-cols-1 sm:grid-cols-3 gap-2.5";
+  }
+  if (!hasSpans && fields.length === 2) {
+    return "grid grid-cols-1 sm:grid-cols-2 gap-2.5";
+  }
+  return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5";
 }
 
 export function WmsMasterForm({
@@ -54,13 +97,13 @@ export function WmsMasterForm({
   tabs,
   title = "Master",
   formId = "wms-master-form",
-  fieldsPerRow = 4,
   form,
   editMode,
   saving,
   user,
   onChange,
   onSave,
+  onCancel,
 }: Props) {
   const TextControl = characterLimitCards ? Input : "input";
   const MultilineControl = characterLimitCards ? Textarea : "textarea";
@@ -75,8 +118,12 @@ export function WmsMasterForm({
 
   useEffect(() => {
     fields.forEach((field) => {
-      if (field.dropdownParam && form[field.name] !== undefined && form[field.name] !== "" && form[field.name] !== null && !dropdownCache[field.name]) {
-        loadDropdownOptions(field);
+      if (field.dropdownParam) {
+        const depKey = getFieldDependencyKey(field, form);
+        const cacheKey = `${field.name}__${depKey}`;
+        if (!dropdownCache[cacheKey]) {
+          loadDropdownOptions(field, cacheKey);
+        }
       }
     });
   }, [fields, form]);
@@ -120,6 +167,7 @@ export function WmsMasterForm({
     const list = tabFields(tabKey);
     const errs: FieldError = {};
     list.forEach((field) => {
+      if (field.autoGenerated && !editMode) return;
       const value = form[field.name];
       if (field.required && field.type !== "checkbox" && isEmpty(value)) {
         errs[field.name] = `${field.label} is required`;
@@ -187,7 +235,7 @@ export function WmsMasterForm({
 
   /* ---------------- lookups ---------------- */
 
-  const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOption[]> => {
+  const loadDropdownOptions = async (field: WmsMasterField, customKey?: string): Promise<DropdownOption[]> => {
     if (!field.dropdownParam) return [];
     try {
       const params: Record<string, unknown> = { parameter: field.dropdownParam };
@@ -197,13 +245,20 @@ export function WmsMasterForm({
       if (companyCode) params.code1 = companyCode;
 
       if (field.dropdownCodeMap) {
-        let codeIndex = 2;
-        for (const [fieldName] of Object.entries(field.dropdownCodeMap)) {
-          if (fieldName === "company_code") continue;
+        for (const [fieldName, paramKey] of Object.entries(field.dropdownCodeMap)) {
           const value = form[fieldName];
-          if (value) params[`code${codeIndex}`] = value;
-          codeIndex++;
+          if (paramKey) {
+            params[paramKey] = value || "";
+          } else if (fieldName !== "company_code") {
+            params.code2 = value || "";
+          }
         }
+      }
+
+      if (field.dropdownParam === "DROP_DOWN_CITY" || field.name.includes("city")) {
+        const countryVal = String(form.country_code || form.tax_country_code || "").trim();
+        params.country_code = countryVal;
+        params.code1 = countryVal;
       }
 
       const results = await getDynamicLookup(params as any);
@@ -238,15 +293,20 @@ export function WmsMasterForm({
         };
       });
 
-      setDropdownCache((prev) => {
-        const prevOpts = prev[field.name];
-        if (prevOpts && prevOpts.length === options.length) {
-          const isSame = prevOpts.every((p, i) => p.value === options[i]?.value && p.label === options[i]?.label);
-          if (isSame) return prev;
+      const deduplicated: DropdownOption[] = [];
+      const seenVals = new Set<string>();
+      for (const opt of options) {
+        if (!opt.value) continue;
+        if (!seenVals.has(opt.value)) {
+          seenVals.add(opt.value);
+          deduplicated.push(opt);
         }
-        return { ...prev, [field.name]: options };
+      }
+      const cacheKey = customKey || field.name;
+      setDropdownCache((prev) => {
+        return { ...prev, [cacheKey]: deduplicated, [field.name]: deduplicated };
       });
-      return options;
+      return deduplicated;
     } catch (error) {
       console.error(`Error loading dropdown for ${field.name}:`, error);
       return [];
@@ -256,30 +316,40 @@ export function WmsMasterForm({
   /* ---------------- field rendering ---------------- */
 
   const renderField = (field: WmsMasterField) => {
-    const value = form[field.name];
-    const disabled = Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form));
-    const error = fieldErrors[field.name];
-    const border = error ? inputBad : inputOk;
+    const rawValue = form[field.name];
+    const isAuto = Boolean(field.autoGenerated && !editMode);
+    const value = isAuto ? (rawValue || "Auto Generated") : rawValue;
+    const disabled = isAuto || Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form));
+    const error = isAuto ? null : fieldErrors[field.name];
 
-    const spanClass =
-      field.type === "textarea"
-        ? "col-span-full"
-        : field.colSpan && COL_SPAN[field.colSpan]
-          ? COL_SPAN[field.colSpan]
-          : "";
+    let spanClass = "col-span-1";
+    if (field.type === "textarea") {
+      if (field.colSpan === 2) spanClass = "col-span-1 sm:col-span-2 lg:col-span-2 xl:col-span-2";
+      else if (field.colSpan === 3) spanClass = "col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-3";
+      else if (field.colSpan && field.colSpan >= 4) spanClass = "col-span-1 sm:col-span-2 lg:col-span-4 xl:col-span-4";
+      else spanClass = "col-span-1 sm:col-span-2 lg:col-span-2 xl:col-span-2";
+    } else if (field.colSpan === 2) {
+      spanClass = "col-span-1 sm:col-span-2 lg:col-span-2 xl:col-span-2";
+    } else if (field.colSpan === 3) {
+      spanClass = "col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-3";
+    } else if (field.colSpan && field.colSpan >= 4) {
+      spanClass = "col-span-1 sm:col-span-2 lg:col-span-4 xl:col-span-4";
+    }
 
     const errorText = error ? <span className="mt-0.5 text-[10px] font-medium text-red-600">{error}</span> : null;
+    const isGlAccount = field.name === "broker_acref" || field.name === "ac_code" || field.name === "prin_acref";
 
-    // Shared label used by all field types (including LookupField) so labels are always visible
-    // and styled consistently.
     const label = (
-      <div className="mb-0.5 flex items-center justify-between">
-        <label className="block text-[11px] font-medium text-slate-600 text-left">
-          {field.label}
-          {field.required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
-        </label>
-        {field.maxLength && typeof value === "string" && (
-          <span className={`text-[10px] font-medium ${value.length > field.maxLength ? "text-red-600" : "text-slate-400"}`}>
+      <div className="freight-master-label">
+        <span className="truncate">{field.label}</span>
+        {isGlAccount && (
+          <span className="text-[10px] text-emerald-600 font-normal lowercase tracking-normal ml-1">
+            (auto-created if blank)
+          </span>
+        )}
+        {field.required && !isAuto && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+        {field.maxLength && typeof value === "string" && !isAuto && (
+          <span className={`ml-auto text-[10px] font-medium lowercase ${value.length > field.maxLength ? "text-red-600 font-bold" : "text-slate-400"}`}>
             {value.length}/{field.maxLength}
           </span>
         )}
@@ -289,8 +359,9 @@ export function WmsMasterForm({
     if (field.type === "checkbox") {
       const checked = value === true || value === "true" || value === "Y";
       return (
-        <div key={field.name} className={`flex flex-col justify-end ${spanClass}`}>
-          <label className="inline-flex h-7 cursor-pointer select-none items-center gap-2">
+        <div key={field.name} className={`freight-master-field flex flex-col justify-end ${spanClass}`}>
+          <div className="freight-master-label select-none opacity-0" aria-hidden>&nbsp;</div>
+          <label className="flex h-[32px] cursor-pointer select-none items-center gap-2 rounded-md border border-slate-200 bg-[#f8f9fb] px-2.5 transition-colors hover:bg-white hover:border-[#00378C]/40">
             <input
               type="checkbox"
               checked={checked}
@@ -298,7 +369,7 @@ export function WmsMasterForm({
               onChange={(e) => handleFieldChange(field.name, e.target.checked)}
               className="h-3.5 w-3.5 rounded border-slate-300 accent-[#00378C] disabled:opacity-50"
             />
-            <span className="text-sm text-slate-900">
+            <span className="text-xs font-semibold text-slate-700 truncate">
               {field.label}
               {field.required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
             </span>
@@ -308,16 +379,18 @@ export function WmsMasterForm({
       );
     }
 
+    
+
     if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
       if (!field.asyncOptions && !field.dropdownParam && field.options) {
         return (
-          <div key={field.name} className={`flex flex-col ${spanClass}`}>
+          <div key={field.name} className={`freight-master-field flex flex-col ${spanClass}`}>
             {label}
             <select
               disabled={disabled}
               value={String(value ?? "")}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
-              className={`${inputClass} ${border}`}
+              className={`freight-master-select ${error ? "border-red-400 focus:border-red-500" : ""}`}
             >
               <option value="">Select {field.label}</option>
               {field.options.map((option) => (
@@ -336,20 +409,25 @@ export function WmsMasterForm({
         (opt) => String(opt.value).trim() === stringVal
       );
 
-      // Lookup / async dropdown: render the same outer label as other fields so it is always
-      // visible. Do not pass a label into LookupField when compact, to avoid a second (or
-      // missing) label inside the component.
       return (
-        <div key={field.name} className={`flex flex-col ${spanClass}`}>
+        <div key={field.name} className={`freight-master-field flex flex-col ${spanClass}`}>
           {label}
           <LookupField
             key={`${field.name}__${getFieldDependencyKey(field, form)}`}
             value={stringVal}
             displayValue={cachedOption ? cachedOption.label : undefined}
-            columns={[
-              { field: "value", header: "Code", width: 100 },
-              { field: "label", header: "Description" },
-            ]}
+            columns={
+              field.dropdownParam === "DROP_DOWN_CITY" || field.name.includes("city")
+                ? [
+                    { field: "label", header: "City Name" },
+                    { field: "city_code", header: "Code", width: 90 },
+                  ]
+                : [
+                    { field: "value", header: "Code", width: 100 },
+                    { field: "label", header: "Description" },
+                  ]
+            }
+            allowCustomValue={Boolean(field.dropdownParam === "DROP_DOWN_CITY" || field.name.includes("city") || field.type === "combobox")}
             valueField="value"
             displayFields={["label"]}
             loadOptions={async () => {
@@ -369,9 +447,23 @@ export function WmsMasterForm({
               }
             }}
             disabled={disabled}
-            placeholder={`Search ${field.label}…`}
+            placeholder={isGlAccount ? "Auto-creates in Chart of Accounts if blank..." : `Search ${field.label}…`}
             compact
           />
+          {isGlAccount && (
+            <span className="mt-0.5 text-[9px] font-medium text-emerald-700">
+              {stringVal
+                ? `🔗 Linked to GL Account: ${cachedOption ? cachedOption.label : stringVal}`
+                : "💡 Leave blank to auto-create under Chart of Accounts L4 (20206)"}
+            </span>
+          )}
+          {(field.dropdownParam === "DROP_DOWN_CITY" || field.name.includes("city")) && (
+            <span className="mt-0.5 text-[9px] font-medium text-slate-500">
+              {form.country_code
+                ? `💡 Cities for ${form.country_code} (or search / enter custom)`
+                : "💡 Select Country to filter cities (or search / enter custom)"}
+            </span>
+          )}
           {errorText}
         </div>
       );
@@ -386,7 +478,7 @@ export function WmsMasterForm({
           maxLength={field.maxLength}
           value={String(value ?? "")}
           onChange={(e) => handleFieldChange(field.name, e.target.value)}
-          className={`w-full h-[52px] resize-none rounded-md border bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 disabled:bg-slate-50 disabled:text-slate-500 ${border}`}
+          className={`freight-master-input min-h-[60px] h-[60px] py-1.5 resize-none ${error ? "border-red-400 focus:border-red-500" : ""}`}
         />
       );
     } else {
@@ -410,7 +502,9 @@ export function WmsMasterForm({
               : "text"
           }
           value={String(value ?? "")}
+          placeholder={isAuto ? "Auto Generated" : field.placeholder}
           onChange={(e) => {
+            if (isAuto) return;
             const rawVal = e.target.value;
             const finalVal = isPhone
               ? sanitizePhoneNumber(rawVal)
@@ -419,13 +513,13 @@ export function WmsMasterForm({
               : rawVal;
             handleFieldChange(field.name, finalVal);
           }}
-          className={`${inputClass} ${tooLong ? inputBad : border}`}
+          className={`freight-master-input ${field.type === "number" ? "numeric" : ""} ${isAuto ? "bg-slate-100 text-slate-500 font-medium italic cursor-not-allowed select-none" : ""} ${tooLong || error ? "border-red-400 focus:border-red-500" : ""}`}
         />
       );
     }
 
     return (
-      <div key={field.name} className={`flex flex-col ${spanClass}`}>
+      <div key={field.name} className={`freight-master-field flex flex-col ${spanClass}`}>
         {label}
         {control}
         {errorText}
@@ -435,38 +529,42 @@ export function WmsMasterForm({
 
   const renderSections = (tabKey?: string) => {
     const list = tabFields(tabKey ?? "__default");
-    const sections: Record<string, WmsMasterField[]> = {};
+    const sectionMap = new Map<string, WmsMasterField[]>();
     list.forEach((field) => {
       const key = field.section || "__default";
-      (sections[key] ||= []).push(field);
+      if (!sectionMap.has(key)) {
+        sectionMap.set(key, []);
+      }
+      sectionMap.get(key)!.push(field);
     });
 
     const defaultTitle = hasTabs ? tabs!.find((t) => t.key === tabKey)?.label ?? "Details" : `${title} Details`;
-    const fieldsStyle = { "--cols": fieldsPerRow } as CSSProperties;
-    const fieldsCls =
-      fieldsPerRow > 1
-        ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(var(--cols),minmax(0,1fr))] gap-x-3 gap-y-2.5"
-        : "grid grid-cols-1 gap-y-2.5";
 
     return (
-      <div className="grid grid-cols-1 gap-2">
-        {Object.entries(sections).map(([sectionKey, sectionFields]) => (
-          <div key={sectionKey} className="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center gap-2 rounded-t-lg border-b border-slate-100 bg-slate-50/70 px-3 py-1.5">
-              <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
-                <FileText size={12} />
+      <div className="flex flex-col gap-2.5">
+        {Array.from(sectionMap.entries()).map(([sectionKey, sectionFields]) => {
+          const SectionIcon = getSectionIcon(sectionKey === "__default" ? defaultTitle : sectionKey);
+          return (
+            <div key={sectionKey} className="freight-master-form-card">
+              <div className="freight-master-form-header">
+                <h3>
+                  <span className="freight-section-icon">
+                    <SectionIcon size={16} />
+                  </span>
+                  <span>{sectionKey === "__default" ? defaultTitle : sectionKey}</span>
+                </h3>
+                <span className="freight-master-form-subtitle">
+                  {sectionFields.length} {sectionFields.length === 1 ? "field" : "fields"}
+                </span>
               </div>
-              <h3 className="m-0 text-xs font-semibold text-slate-800">
-                {sectionKey === "__default" ? defaultTitle : sectionKey}
-              </h3>
-            </div>
-            <div className="p-3">
-              <div className={fieldsCls} style={fieldsStyle}>
-                {sectionFields.map(renderField)}
+              <div className="freight-master-form-body">
+                <div className={getGridColsClass(sectionFields)}>
+                  {sectionFields.map(renderField)}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -474,10 +572,10 @@ export function WmsMasterForm({
   /* ---------------- layout ---------------- */
 
   return (
-    <form id={formId} className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
+    <form id={formId} className="wms-master-form-container flex flex-col gap-2.5" onSubmit={handleSubmit} noValidate autoComplete="off">
       {/* ---------- Step strip (only when tabs are provided) ---------- */}
       {hasTabs && (
-        <div className="flex items-center gap-0 overflow-x-auto rounded-lg border border-slate-200 bg-white px-2 shadow-sm">
+        <div className="flex items-center gap-0 overflow-x-auto rounded-lg border border-slate-200 bg-white px-2 shadow-xs">
           {tabs!.map((tab, index) => {
             const completed = isTabCompleted(tab.key);
             const errored = !completed && hasTabErrors(tab.key);
@@ -489,7 +587,7 @@ export function WmsMasterForm({
                   onClick={() => goToTab(index)}
                   className={`relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-medium transition-colors ${
                     current
-                      ? "text-[#00378C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t-full after:bg-[#00378C]"
+                      ? "text-[#00378C] font-semibold after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t-full after:bg-[#00378C]"
                       : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
@@ -517,20 +615,19 @@ export function WmsMasterForm({
 
       {renderSections(hasTabs ? activeTab : undefined)}
 
-      {/* ---------- Back / Next (only when tabs are provided).
-          Save lives in the page header (formId), so the last step has no bottom Save/Submit. */}
+      {/* ---------- Back / Next (only when tabs are provided) ---------- */}
       {hasTabs && (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
           <button
             type="button"
             disabled={activeTabIndex === 0 || saving}
             onClick={() => goToTab(activeTabIndex - 1)}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ChevronLeft size={13} /> Back
           </button>
 
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[11px] font-medium text-slate-500">
             Step {activeTabIndex + 1} of {tabs!.length}
           </span>
 
@@ -538,16 +635,17 @@ export function WmsMasterForm({
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex h-7 items-center gap-1 rounded-md bg-[#00378C] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[#002d72] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-8 items-center gap-1 rounded-md bg-[#00378C] px-4 text-xs font-semibold text-white shadow-xs hover:bg-[#002d72] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Next <ChevronRight size={13} />
             </button>
           ) : (
-            // Keep layout balanced on the last step; header Save is the only submit control.
             <div className="w-[72px]" aria-hidden />
           )}
         </div>
       )}
+
+
     </form>
   );
 }
@@ -562,5 +660,8 @@ function getFieldDependencyKey(field: WmsMasterField, form: Record<string, unkno
     }
   }
   if (field.asyncOptions?.dependsOn) deps.push(String(form[field.asyncOptions.dependsOn] ?? ""));
+  if ((field.dropdownParam === "DROP_DOWN_CITY" || field.name.includes("city")) && (form.country_code || form.tax_country_code)) {
+    deps.push(`country_${form.country_code || form.tax_country_code}`);
+  }
   return deps.length > 0 ? deps.join("__") : "static";
 }
