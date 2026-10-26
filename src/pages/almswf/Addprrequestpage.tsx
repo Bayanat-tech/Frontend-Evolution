@@ -337,11 +337,11 @@ const AddPRRequestPage = ({
   const itemsLoadedRef = useRef(false);
   const lastLoadedRequestRef = useRef<string | undefined>(undefined);
   const headerLoadedRef = useRef<string | null>(null);
-
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [localComments, setLocalComments] = useState<any[]>([]);
   const commentsListRef = useRef<HTMLDivElement>(null);
+
 
   const { data: historyList = [], refetch: refetchHistory } = useQuery<any[]>({
     queryKey: ["pr-history", requestNumber, companyCode],
@@ -827,19 +827,20 @@ const AddPRRequestPage = ({
       String(r.SUPPLIER || "").toLowerCase().includes(q)
     );
   }, [items, lineSearch]);
+  const canDeleteLines = !disabled && !userLevelLoading && userApprovalLevel < 2;
 
   const colWidths = useMemo(() => {
-    const qtyGroup = [60, 50, 60, 65];
-    const w: number[] = [30, 240, 55, ...qtyGroup, ...qtyGroup];
-    if (isSupplierUser) w.push(380);
-    w.push(80, 105, 65, 70, 108, 60, 70, 108);
-    if (showAllColumns) {
-      w.push(200, 100, 260, 270, 160, 210);
-    }
-    w.push(90);
-    w.push(70);
-    return w;
-  }, [showAllColumns, isSupplierUser]);
+  const qtyGroup = [60, 50, 60, 65];
+  const w: number[] = [30, 240, 55, ...qtyGroup, ...qtyGroup];
+  if (isSupplierUser) w.push(380);
+  w.push(80, 105, 65, 70, 108, 60, 70, 108);
+  if (showAllColumns) {
+    w.push(200, 100, 260, 270, 160, 210);
+  }
+  w.push(90); // CAPEX
+  if (canDeleteLines) w.push(70); // ACTION — sirf level 1
+  return w;
+}, [showAllColumns, isSupplierUser, canDeleteLines]);
 
   const tableMinWidth = colWidths.reduce((a, b) => a + b, 0);
   const itemsColSpan = colWidths.length;
@@ -1866,8 +1867,9 @@ const AddPRRequestPage = ({
                             {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">LCURR AMOUNT AFTER TAX</th>}
 
                             <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">CAPEX</th>
-                            <th rowSpan={2} className="finance-action-col-head px-0 py-1.5 text-center align-middle">ACTION</th>
-                          </tr>
+{canDeleteLines && (
+  <th rowSpan={2} className="finance-action-col-head px-0 py-1.5 text-center align-middle">ACTION</th>
+)}                          </tr>
                           <tr>
                             <th className="px-1 py-1 text-center align-middle text-[9px]">PQTY</th>
                             <th className="px-1 py-1 text-center align-middle text-[9px]">LUOM</th>
@@ -2074,11 +2076,13 @@ const AddPRRequestPage = ({
                                   </Select>
                                 </td>
 
-                                <td className="finance-action-col px-1 py-1 text-center">
-                                  <button type="button" disabled={disabled} title="Delete row" className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeItem(itemId)}>
-                                    <Trash2 size={13} />
-                                  </button>
-                                </td>
+                                {canDeleteLines && (
+  <td className="finance-action-col px-1 py-1 text-center">
+    <button type="button" disabled={disabled} title="Delete row" className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeItem(itemId)}>
+      <Trash2 size={13} />
+    </button>
+  </td>
+)}
                               </tr>
                             );
                           })}
