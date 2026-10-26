@@ -423,8 +423,11 @@ export type TAssetRow = {
   asset_brand_code: string;
   asset_brand_name: string;
   asset_ac_code: string;
+  asset_ac_name: string;
   dprc_ac_code: string;
+  dprc_ac_name: string;
   accudprc_ac_code: string;
+  accudprc_ac_name: string;
   dprc_percentage: string;
   dprc_commence_date: string;
   doc_type: string;
@@ -568,7 +571,7 @@ const EMPTY: TFullAssetForm = {
   company_code: "", asset_id: "", asset_name: "", site_code: "", site_name: "",
   div_code: "", div_name: "", asset_group_code: "", asset_group_name: "",
   asset_subgroup_code: "", asset_subgroup_name: "", asset_brand_code: "", asset_brand_name: "",
-  asset_ac_code: "", dprc_ac_code: "", accudprc_ac_code: "", dprc_percentage: "0.000",
+  asset_ac_code: "", asset_ac_name: "", dprc_ac_code: "", dprc_ac_name: "", accudprc_ac_code: "", accudprc_ac_name: "", dprc_percentage: "0.000",
   dprc_commence_date: "", doc_type: "", doc_no: "", asset_properties: "", purchase_date: "",
   quantity: "1.000", price: "0.000", amount: "0.000", supplier_name: "",
   supplier_ac_code: "", supp_code: "", status: "Y",
@@ -596,7 +599,9 @@ function mapAsset(row: LookupRow): TAssetRow {
     asset_group_code: g("asset_group_code"), asset_group_name: g("asset_group_name"),
     asset_subgroup_code: g("asset_subgroup_code"), asset_subgroup_name: g("asset_subgroup_name"),
     asset_brand_code: g("asset_brand_code"), asset_brand_name: g("asset_brand_name"),
-    asset_ac_code: g("asset_ac_code"), dprc_ac_code: g("dprc_ac_code"), accudprc_ac_code: g("accudprc_ac_code"),
+    asset_ac_code: g("asset_ac_code"), asset_ac_name: g("asset_ac_name"),
+    dprc_ac_code: g("dprc_ac_code"), dprc_ac_name: g("dprc_ac_name"),
+    accudprc_ac_code: g("accudprc_ac_code"), accudprc_ac_name: g("accudprc_ac_name"),
     dprc_percentage: money(getLookupValue(row, "dprc_percentage")),
     dprc_commence_date: dateInput(getLookupValue(row, "dprc_commence_date")),
     doc_type: g("doc_type"), doc_no: g("doc_no"), asset_properties: g("asset_properties"),
@@ -825,10 +830,20 @@ export function AssetRegisterPage() {
       ),
     },
     { accessorKey: "asset_name", header: "Asset Name", size: 280 },
-    { accessorKey: "asset_group_code", header: "Group", size: 100 },
+    {
+      accessorKey: "asset_group_code",
+      header: "Group",
+      size: 140,
+      cell: ({ row }) => display(row.original.asset_group_code, row.original.asset_group_name),
+    },
     { accessorKey: "asset_subgroup_code", header: "Subgroup", size: 110 },
     { accessorKey: "asset_brand_code", header: "Brand", size: 100 },
-    { accessorKey: "asset_ac_code", header: "Asset A/C", size: 120 },
+    {
+      accessorKey: "asset_ac_code",
+      header: "Asset A/C",
+      size: 160,
+      cell: ({ row }) => display(row.original.asset_ac_code, row.original.asset_ac_name),
+    },
     {
       accessorKey: "purchase_date",
       header: () => <div className="text-center w-full font-bold">Purchase</div>,
@@ -1045,18 +1060,70 @@ function AssetEditor({
         const h = res.find((row) => String(getLookupValue(row, "asset_id") || "") === String(asset_id));
         if (!h || !mounted) return;
         const g = (field: string) => String(getLookupValue(h, field) || "");
+
+        const assetAcCode = g("asset_ac_code");
+        const dprcAcCode = g("dprc_ac_code");
+        const accudprcAcCode = g("accudprc_ac_code");
+        let assetAcName = g("asset_ac_name");
+        let dprcAcName = g("dprc_ac_name");
+        let accudprcAcName = g("accudprc_ac_name");
+        let empName = g("emp_name");
+        let groupName = g("asset_group_name");
+        let siteName = g("site_name");
+        let expSubDesc = g("exp_subtype_description");
+        let expDesc = g("exp_description");
+
+        // Fallback auto-resolve account names if not returned by procedure
+        if ((assetAcCode && !assetAcName) || (dprcAcCode && !dprcAcName) || (accudprcAcCode && !accudprcAcName)) {
+          try {
+            const accList = await loader("AC_ASSETS_DEPRECIATION_ACCOUNT_CODE_LIST")();
+            if (accList && accList.length) {
+              const findName = (code: string) => {
+                if (!code) return "";
+                const matched = accList.find((r) => String(getLookupValue(r, "ac_code") || "") === String(code));
+                return matched ? String(getLookupValue(matched, "ac_name") || "") : "";
+              };
+              if (!assetAcName) assetAcName = findName(assetAcCode);
+              if (!dprcAcName) dprcAcName = findName(dprcAcCode);
+              if (!accudprcAcName) accudprcAcName = findName(accudprcAcCode);
+            }
+          } catch {}
+        }
+
+        if (g("emp_id") && !empName) {
+          try {
+            const empList = await loader("AC_ASSETS_Emp_Id")();
+            const matched = empList.find((r) => String(getLookupValue(r, "emp_id") || "") === String(g("emp_id")));
+            if (matched) empName = String(getLookupValue(matched, "emp_name") || "");
+          } catch {}
+        }
+        if (g("asset_group_code") && !groupName) {
+          try {
+            const grpList = await loader("AC_ASSETS_group_code")();
+            const matched = grpList.find((r) => String(getLookupValue(r, "asset_group_code") || "") === String(g("asset_group_code")));
+            if (matched) groupName = String(getLookupValue(matched, "asset_group_name") || "");
+          } catch {}
+        }
+        if (g("site_code") && !siteName) {
+          try {
+            const siteList = await loader("AC_ASSETS_site_code")();
+            const matched = siteList.find((r) => String(getLookupValue(r, "site_code") || "") === String(g("site_code")));
+            if (matched) siteName = String(getLookupValue(matched, "site_name") || "");
+          } catch {}
+        }
+
         setForm({
           ...EMPTY,
           company_code: g("company_code") || companyCode,
           asset_id: g("asset_id"),
           asset_name: g("asset_name"),
-          site_code: g("site_code"), site_name: g("site_name"),
+          site_code: g("site_code"), site_name: siteName,
           div_code: g("div_code") || div_code, div_name: g("div_name") || div_name,
-          asset_group_code: g("asset_group_code"), asset_group_name: g("asset_group_name"),
+          asset_group_code: g("asset_group_code"), asset_group_name: groupName,
           asset_subgroup_code: g("asset_subgroup_code"), asset_subgroup_name: g("asset_subgroup_name"),
           asset_brand_code: g("asset_brand_code"), asset_brand_name: g("asset_brand_name"),
           bar_code: g("bar_code"),
-          emp_id: g("emp_id"), emp_name: g("emp_name"),
+          emp_id: g("emp_id"), emp_name: empName,
           reg_no: g("reg_no"),
           parent_asset: g("parent_asset"),
           doc_serial_no: g("doc_serial_no"),
@@ -1073,11 +1140,11 @@ function AssetEditor({
           supplier_ac_code: g("supplier_ac_code"),
           supp_code: g("supp_code"), supp_name: g("supp_name"),
           transporter_code: g("transporter_code"), transporter_name: g("transporter_name"),
-          exp_subtype_code: g("exp_subtype_code"), exp_subtype_description: g("exp_subtype_description"),
-          ac_exp_code: g("ac_exp_code"), exp_description: g("exp_description"),
-          asset_ac_code: g("asset_ac_code"),
-          dprc_ac_code: g("dprc_ac_code"),
-          accudprc_ac_code: g("accudprc_ac_code"),
+          exp_subtype_code: g("exp_subtype_code"), exp_subtype_description: expSubDesc,
+          ac_exp_code: g("ac_exp_code"), exp_description: expDesc,
+          asset_ac_code: assetAcCode, asset_ac_name: assetAcName,
+          dprc_ac_code: dprcAcCode, dprc_ac_name: dprcAcName,
+          accudprc_ac_code: accudprcAcCode, accudprc_ac_name: accudprcAcName,
           dprc_percentage: money(getLookupValue(h, "dprc_percentage")),
           dprc_commence_date: dateInput(g("dprc_commence_date")),
           last_dprc_date: dateInput(g("last_dprc_date")),
@@ -1516,12 +1583,15 @@ function AssetEditor({
                 <LookupField
                   compact
                   value={form.asset_ac_code}
-                  displayValue={form.asset_ac_code}
+                  displayValue={display(form.asset_ac_code, form.asset_ac_name)}
                   columns={[{ field: "ac_code", header: "A/C Code" }, { field: "ac_name", header: "A/C Name" }]}
                   valueField="ac_code" displayFields={["ac_code", "ac_name"]}
                   disabled={isReadOnly}
                   loadOptions={loader("AC_ASSETS_DEPRECIATION_ACCOUNT_CODE_LIST")}
-                  onChange={(value) => set("asset_ac_code", value)}
+                  onChange={(value, row) => {
+                    set("asset_ac_code", value);
+                    set("asset_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+                  }}
                 />
               </LookupBlock>
 
@@ -1533,12 +1603,15 @@ function AssetEditor({
                 <LookupField
                   compact
                   value={form.dprc_ac_code}
-                  displayValue={form.dprc_ac_code}
+                  displayValue={display(form.dprc_ac_code, form.dprc_ac_name)}
                   columns={[{ field: "ac_code", header: "A/C Code" }, { field: "ac_name", header: "A/C Name" }]}
                   valueField="ac_code" displayFields={["ac_code", "ac_name"]}
                   disabled={isReadOnly}
                   loadOptions={loader("AC_ASSETS_DEPRECIATION_ACCOUNT_CODE_LIST")}
-                  onChange={(value) => set("dprc_ac_code", value)}
+                  onChange={(value, row) => {
+                    set("dprc_ac_code", value);
+                    set("dprc_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+                  }}
                 />
               </LookupBlock>
 
@@ -1550,12 +1623,15 @@ function AssetEditor({
                 <LookupField
                   compact
                   value={form.accudprc_ac_code}
-                  displayValue={form.accudprc_ac_code}
+                  displayValue={display(form.accudprc_ac_code, form.accudprc_ac_name)}
                   columns={[{ field: "ac_code", header: "A/C Code" }, { field: "ac_name", header: "A/C Name" }]}
                   valueField="ac_code" displayFields={["ac_code", "ac_name"]}
                   disabled={isReadOnly}
                   loadOptions={loader("AC_ASSETS_DEPRECIATION_ACCOUNT_CODE_LIST")}
-                  onChange={(value) => set("accudprc_ac_code", value)}
+                  onChange={(value, row) => {
+                    set("accudprc_ac_code", value);
+                    set("accudprc_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+                  }}
                 />
               </LookupBlock>
 

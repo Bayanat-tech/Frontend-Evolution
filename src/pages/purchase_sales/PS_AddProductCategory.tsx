@@ -1,8 +1,7 @@
-import { Search, IdCard } from "lucide-react";
+import { IdCard } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { executeDynamicMutation, getDynamicLookupaccount } from "../../api/lookups";
+import { executeDynamicMutation } from "../../api/lookups";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
-import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../state/AuthContext";
 import type { LucideIcon } from "lucide-react";
@@ -84,14 +83,10 @@ export function AddProductCategoryForm({ mode, existingData, onClose, onSavingCh
   const { user } = useAuth();
   const readonly = mode === "view";
   const isEdit = mode === "edit";
-  // Code is the primary key: editable only while adding
-  const codeEditable = mode === "add";
 
   const [form, setForm] = useState<TProductCategory>({ ...EMPTY });
   const [errors, setErrors] = useState<Partial<Record<keyof TProductCategory, string>>>({});
   const [apiError, setApiError] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [duplicateWarning, setDuplicateWarning] = useState("");
 
   useEffect(() => {
     if ((isEdit || readonly) && existingData) {
@@ -109,43 +104,8 @@ export function AddProductCategoryForm({ mode, existingData, onClose, onSavingCh
   const set = (field: keyof TProductCategory, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  const checkDuplicate = async () => {
-    if (!form.prodcat_code?.trim() || !user?.company_code) return;
-    setChecking(true);
-    setDuplicateWarning("");
-    try {
-      const response = await getDynamicLookupaccount({
-        parameter: "PURCHASE_SALE_MSE_PRODCATEGORY",
-        loginid: user?.loginid ?? "",
-        code1: user?.company_code ?? "",
-        code2: form.prodcat_code.trim(),
-        code3: "NULL",
-        code4: "NULL",
-        number1: 0,
-        number2: 0,
-        number3: 0,
-        number4: 0,
-        date1: null,
-        date2: null,
-        date3: null,
-        date4: null,
-      });
-      const list = Array.isArray(response) ? response : [];
-      const exists = list.some((r: any) => {
-        const code = r.prodcat_code ?? r.PRODCAT_CODE ?? r.category_code ?? r.CATEGORY_CODE ?? "";
-        return String(code) === form.prodcat_code;
-      });
-      setDuplicateWarning(exists ? "This Prod Category Code already exists." : "Code is available.");
-    } catch (error) {
-      console.error("Failed to check product category code:", error);
-    } finally {
-      setChecking(false);
-    }
-  };
-
   const validate = (): boolean => {
     const next: Partial<Record<keyof TProductCategory, string>> = {};
-    if (!form.prodcat_code?.trim()) next.prodcat_code = "Prod Category Code is required";
     if (!form.prodcat_name?.trim()) next.prodcat_name = "Prod Category Name is required";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -163,7 +123,8 @@ export function AddProductCategoryForm({ mode, existingData, onClose, onSavingCh
       await executeDynamicMutation({
         parameter: "PURCHASE_SALE_MSE_PRODCATEGORY",
         loginid: user?.loginid ?? "",
-        val1s1: form.prodcat_code ?? "",
+        // empty on add → backend auto-generates; on edit the existing code is sent
+        val1s1: form.prodcat_code ? String(form.prodcat_code) : undefined,
         val1s2: user?.company_code ?? "",
         val1s3: form.prodcat_name ?? "",
         val1s4: user?.loginid ?? "",
@@ -183,48 +144,18 @@ export function AddProductCategoryForm({ mode, existingData, onClose, onSavingCh
         onClose={() => setApiError("")}
       />
 
-      <SectionPanel title="Basic Information" icon={IdCard}>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          
-          <Field label="Prod Category Code" required>
-            <div className="flex min-w-0 items-center gap-1">
-              <div className="min-w-0 flex-1">
-                <Input
-                  disabled={!codeEditable}
-                  value={form.prodcat_code ?? ""}
-                  onChange={(e) => {
-                    set("prodcat_code", e.target.value);
-                    setDuplicateWarning("");
-                  }}
-                  className={errors.prodcat_code ? "border-destructive focus-visible:ring-destructive" : ""}
-                />
-              </div>
-              {codeEditable && (
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  title="Check code availability"
-                  disabled={checking || !form.prodcat_code?.trim()}
-                  onClick={checkDuplicate}
-                  className="h-9 w-9 shrink-0"
-                >
-                  <Search size={14} className={checking ? "animate-pulse" : ""} />
-                </Button>
-              )}
-            </div>
-            {errors.prodcat_code && <span className="mt-0.5 text-[10px] font-medium text-destructive">{errors.prodcat_code}</span>}
-            {!errors.prodcat_code && duplicateWarning && (
-              <span
-                className={`mt-0.5 text-[10px] font-medium ${
-                  duplicateWarning.includes("already exists") ? "text-destructive" : "text-emerald-600"
-                }`}
-              >
-                {duplicateWarning}
-              </span>
-            )}
-          </Field>
+      {/* ── Code badge (move this to the parent header next to "Draft" if you prefer) ── */}
+      <div>
+        <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
+          Product Category Code:
+          <strong className="font-semibold">
+            {isEdit || readonly ? String(form.prodcat_code || "") : "Auto-generated"}
+          </strong>
+        </span>
+      </div>
 
+      <SectionPanel title="Basic Information" icon={IdCard}>
+        <div className="grid grid-cols-1 gap-3">
           <Field label="Prod Category Name" required>
             <Input
               disabled={readonly}
@@ -232,9 +163,10 @@ export function AddProductCategoryForm({ mode, existingData, onClose, onSavingCh
               onChange={(e) => set("prodcat_name", e.target.value)}
               className={errors.prodcat_name ? "border-destructive focus-visible:ring-destructive" : ""}
             />
-            {errors.prodcat_name && <span className="mt-0.5 text-[10px] font-medium text-destructive">{errors.prodcat_name}</span>}
+            {errors.prodcat_name && (
+              <span className="mt-0.5 text-[10px] font-medium text-destructive">{errors.prodcat_name}</span>
+            )}
           </Field>
-
         </div>
       </SectionPanel>
     </form>

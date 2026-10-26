@@ -22,16 +22,6 @@ const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Ap
 
 const QUERY_ROOT = "purchase-request-page";
 
-// Level field returned by PS_PREQUEST_ENTRY_UserFlowCode (from ms_flow_levels / VW_GLOBAL_APPROVER_LEVELS)
-const LEVEL_FIELD_CANDIDATES = [
-  "USER_LEVEL", "user_level",
-  "LEVEL", "level",
-  "FLOW_LEVEL", "flow_level",
-  "APPROVAL_LEVEL", "approval_level",
-  "LEVEL_ID", "level_id",
-  "LEVEL_NO", "level_no",
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(val: unknown): string {
   const raw = String(val || "");
@@ -93,20 +83,6 @@ function pick(obj: any, ...keys: string[]): string {
   return "";
 }
 
-/** Read numeric level (1..5) from a user-flow row (ms_flow_levels row). */
-function pickLevelFromRow(row: Record<string, unknown> | null | undefined): number | null {
-  if (!row) return null;
-  for (const k of LEVEL_FIELD_CANDIDATES) {
-    const v = (row as any)[k];
-    if (v === null || v === undefined) continue;
-    const m = String(v).match(/\d+/);
-    if (!m) continue;
-    const n = Number(m[0]);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return null;
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const { user } = useAuth();
@@ -128,11 +104,14 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     };
 
     const preview = openPurchaseReport(`Purchase Request - ${requestNumber}`);
-
     try {
-      const html = await getPrRegisterFormReportHtml(params);
+      const [html, htmlPortrait] = await Promise.all([
+        getPrRegisterFormReportHtml({ ...params, orientation: "landscape" }),
+        getPrRegisterFormReportHtml({ ...params, orientation: "portrait" }),
+      ]);
       preview.ready({
         html,
+        htmlPortrait,
         filename: `purchase_request_${requestNumber}`,
         orientation: "landscape",
         onExcel: async () => {
@@ -197,50 +176,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
   const isPendingTab = activeCode3 === "PENDING";
 
-  // ── Level-1 detection from PS_PREQUEST_ENTRY_UserFlowCode (USER_LEVEL column) ─
-  // Rule:
-  //   USER_LEVEL === 1 (kisi bhi flow me) → button dikhe
-  //   USER_LEVEL 2, 3, 4, 5 (aur level 1 kisi flow me nahi) → button chhupe
-  //   USER_LEVEL field hi nahi aayi (backend patch nahi hua) → fail-safe: chhupe
-  const userFlowsQuery = useQuery({
-    queryKey: [QUERY_ROOT, "user-admin-flows", loginid, companyCode],
-    queryFn: () =>
-      almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
-        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
-      }),
-    enabled: !!loginid && !!companyCode,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { isLevel1User, levelSummary } = useMemo(() => {
-    const rows = (Array.isArray(userFlowsQuery.data) ? userFlowsQuery.data : []) as Record<string, unknown>[];
-    if (rows.length === 0) {
-      return { isLevel1User: false, levelSummary: { rows: 0, levels: [] as number[] } };
-    }
-    const levels: number[] = [];
-    for (const row of rows) {
-      const lvl = pickLevelFromRow(row);
-      if (lvl !== null) levels.push(lvl);
-    }
-    return {
-      isLevel1User: levels.includes(1),
-      levelSummary: { rows: rows.length, levels },
-    };
-  }, [userFlowsQuery.data]);
-
-  // Dev aid — remove later if you want
-  useEffect(() => {
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.info("[PurchaseRequest] level check →", { loginid, ...levelSummary, isLevel1User });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [levelSummary.rows, isLevel1User, loginid]);
-
-  // Show Add PR only when: Pending tab + Level-1 confirmed + data loaded
-  const canAddPR = isPendingTab && isLevel1User && !userFlowsQuery.isLoading;
-
   // ── Active tab data ────────────────────────────────────────────────────────
   const prQuery = useQuery({
     queryKey: [QUERY_ROOT, loginid, companyCode, activeCode3, "pr"],
@@ -261,6 +196,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       }),
     enabled: !!loginid && !!companyCode && isPoGeneratedTab,
   });
+
 
   const tabCountQueries = useQueries({
     queries: TAB_CODE3.map((code) => {
@@ -334,6 +270,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     });
   };
 
+
   const continueWithDivision = (div: { code: string; name: string }, allFlows: FlowRow[]) => {
     const code = div.code.trim().toUpperCase();
     const matched = code ? allFlows.filter((f) => String(f.divCode || "").trim().toUpperCase() === code) : [];
@@ -349,32 +286,20 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   };
 
   const openAddPopup = async () => {
-    if (!isLevel1User) {
-      setNotice({ type: "error", message: "Only Level-1 users can create PR." });
-      return;
-    }
-
     setFlowFetching(true);
     setNotice(null);
     try {
-      // Reuse level-check response; filter to level-1 flows only
-      const rawRows = (Array.isArray(userFlowsQuery.data) ? userFlowsQuery.data : []) as Record<string, unknown>[];
-      const level1Rows = rawRows.filter((r) => pickLevelFromRow(r) === 1);
-
-      if (level1Rows.length === 0) {
-        setNotice({
-          type: "error",
-          message: "No Level-1 approval flow assigned to you. Please contact admin.",
-        });
-        return;
-      }
+      const rawRows = (await almsCommonSelect<Record<string, unknown>>({
+        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
+        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
+      })) as unknown as Record<string, unknown>[];
 
       const divisionsRaw = (await almsCommonSelect<Record<string, unknown>>({
         parameter: "PS_PREQUEST_ENTRY_DIVISION",
         loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
       })) as unknown as Record<string, unknown>[];
 
-      const flowRows: FlowRow[] = level1Rows
+      const flowRows: FlowRow[] = (rawRows || [])
         .map((row) => {
           const flowCode = pick(row, "FLOW_CODE", "flow_code");
           const flowDivCode = pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
@@ -400,6 +325,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return;
       }
 
+
       let divisions: Division[] = (divisionsRaw || [])
         .map((d) => ({
           div_code: pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code"),
@@ -423,11 +349,13 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return;
       }
 
+
       if (divisions.length === 1) {
         const only = divisions[0] as any;
         continueWithDivision({ code: String(only.div_code), name: String(only.div_name || "") }, flowRows);
         return;
       }
+
 
       setDivisionPicker({ open: true, divisions, allFlows: flowRows });
     } catch (err) {
@@ -471,6 +399,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       },
     });
   };
+
 
   const closePopup = useCallback(
     (refresh?: boolean) => {
@@ -799,7 +728,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           data={filteredRows}
 
           subtitle={
-            canAddPR ? (
+            isPendingTab ? (
               <button
                 type="button"
                 onClick={() => void openAddPopup()}
