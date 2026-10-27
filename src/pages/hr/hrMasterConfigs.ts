@@ -833,12 +833,12 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     fields: [
       { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280 },
-      { name: "labour_desg_short_name", label: "Short Name", required: true, width: 140 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
+      { name: "labour_desg_short_name", label: "Short Name",   width: 140 },
+      { name: "status", label: "Status", type: "select", required: true, options: activeInactive, width: 120 },
       { name: "remarks", label: "Remarks", width: 260 },
     ],
     defaults: { status: "A" },
-    deleteMode: "gm",
+    deleteMode: "master",
   },
 
   leavetype: {

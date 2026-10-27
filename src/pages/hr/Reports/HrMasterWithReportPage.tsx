@@ -2,7 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, Edit2, FileText, Loader2, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
-import { deleteHrGm, saveHrGm, getHrMaster } from "../../../api/hr"; // 👈 Added getHrMaster
+import { deleteHrMaster, saveHrGm, getHrMaster } from "../../../api/hr";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useToast } from "../../../components/ui/AlertToast";
 import { Button } from "../../../components/ui/Button";
@@ -21,6 +21,7 @@ export type MasterReportConfig = {
   keyField: string;
   source: "dynamic" | "gm";
   gmEndpoint?: string;
+  enableDelete?: boolean;
   fields: { name: string; label: string; required?: boolean; disabledOnEdit?: boolean; disabledOnAdd?: boolean; width?: number; type?: "text" | "select"; options?: { label: string; value: string }[] }[];
   defaults?: Record<string, unknown>;
 };
@@ -124,6 +125,21 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
     }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget || !config.enableDelete) return;
+    setSaving(true);
+    try {
+      await deleteHrMaster(config.gmEndpoint!, [deleteTarget[config.keyField]]);
+      toast.success(`${config.title} deleted successfully`);
+      setDeleteTarget(null);
+      await loadRows();
+    } catch (error: any) {
+      toast.error(error.message || `Unable to delete ${config.title}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDownloadPdf = () => {
     if (!reportHtml) return;
     let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement;
@@ -204,6 +220,31 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
         error={reportPreviewError}
         onDownloadPdf={handleDownloadPdf}
       />
+
+      <Dialog
+        open={config.enableDelete === true && Boolean(deleteTarget)}
+        title={`Delete ${config.title}`}
+        description="This will remove the selected HR master record."
+        compact
+        tone="danger"
+        onClose={() => {
+          if (!saving) setDeleteTarget(null);
+        }}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={saving}>
+              {saving ? "Deleting..." : "Delete"}
+            </Button>
+          </>
+        }
+      >
+        <p className="m-0 text-sm text-muted-foreground">
+          Confirm delete for <strong>{String(deleteTarget?.[config.keyField] ?? "")}</strong>.
+        </p>
+      </Dialog>
     </section>
   );
 }

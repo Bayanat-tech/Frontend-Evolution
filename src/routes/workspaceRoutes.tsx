@@ -52,7 +52,7 @@
   import { PamsAppraisalViewPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton } from "../pages/pams/PamsPages";
   import { HrMasterPage } from "../pages/hr/HrMasterPage";
   import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
-  import { MasterWithReportPage } from "../pages/hr/Reports/SectionMasterMainPage";  import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+  import { MasterWithReportPage } from "../pages/hr/Reports/HrMasterWithReportPage";  import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
   import { ApplicationProgressPage } from "../pages/applicationProgress/ApplicationProgressPage";
   import {
     OxAssetInventoryPage,
@@ -1671,6 +1671,7 @@ import { useAuth } from "../state/AuthContext";
           keyField: "labour_desg_code",
           source: "gm",
           gmEndpoint: "formaldesignation",
+          enableDelete: true,
           fields: [
             { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true },
             { name: "labour_desg_name", label: "Formal Designation", required: true },
