@@ -272,7 +272,7 @@ export function DocumentSetupPage() {
   ], []);
 
   return (
-    <section className="finance-list-page grid gap-0.1">
+    <section className="finance-list-page document-setup-page grid gap-0.1">
      <div className="finance-list-heading sticky top-0 z-20 bg-background flex items-center justify-between gap-1">
       <div className="finance-list-title flex items-center gap-2">
          <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">Document Setup</h1>
@@ -288,7 +288,7 @@ export function DocumentSetupPage() {
       <form id="document-setup-form" onSubmit={(event) => void saveChanges(event)} />
 
       {/* <div className="grid gap-4"> */}
-      <div className="grid gap-4 mt-3">
+      <div className="grid gap-4 ">
         {/* <DataTable
           columns={docColumns}
           data={filteredDocs}

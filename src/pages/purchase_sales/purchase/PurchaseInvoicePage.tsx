@@ -284,7 +284,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
     { accessorKey: "doc_date", header: "Doc Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "div_code", header: "Div" },
     { accessorKey: "ac_code", header: "A/c Code" },
-    { accessorKey: "ac_name", header: "A/c Name" },
+    { accessorKey: "party_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
     { accessorKey: "amount", header: "Purchase Order Amount" },
     {

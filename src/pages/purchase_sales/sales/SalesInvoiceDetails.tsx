@@ -509,7 +509,7 @@ export function SalesInvoiceLinesTable({
                       value={row.sorder_tx_compnt_1_expmt || "N"}
                       onChange={(event) => {
                         const taxType = event.target.value;
-                        const taxPerc = taxType === "S" ? 5 : 0;
+                        const taxPerc = taxType === "S" ? Number(row.sorder_tx_compnt_perc_1 || 5) : 0;
                         // Tax should be calculated on the sales order amount (lineAmount), not regular amount
                         const taxAmt = taxType === "S" ? (Number(lineAmount(row)) || 0) * (taxPerc / 100) : 0;
                         updateRow(row.id, {

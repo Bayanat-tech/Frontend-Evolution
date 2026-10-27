@@ -786,7 +786,7 @@ function PaymentDocumentEditor({
           }
           return d;
         }
-        const effectiveRate = dynamicRate > 0 ? dynamicRate : (Number(d.tx_compnt_perc_1) > 0 ? Number(d.tx_compnt_perc_1) : 5);
+        const effectiveRate = dynamicRate > 0 ? dynamicRate : (Number(d.tx_compnt_perc_1) > 0 ? Number(d.tx_compnt_perc_1) : 0);
         const taxAmt = Number(((Number(d.amount) || 0) * (effectiveRate / 100)).toFixed(3));
         if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === effectiveRate && d.tx_compnt_1_expmt === "S") {
           return d;

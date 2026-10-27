@@ -515,10 +515,18 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
           payload = data;
         }
 
+        const savePayload: Record<string, unknown> = {
+          ...payload,
+          ...(config.gmEndpoint === "formaldesignation" ? {} : { company_code: form.company_code || companyCode }),
+        };
+        const finalPayload = { ...savePayload };
+        delete finalPayload._edit_key;
+
         await saveHrGm(
           config.gmEndpoint,
-          cleanPayload({ ...payload, company_code: data.company_code || companyCode }),
+          cleanPayload(finalPayload),
           editMode ? "put" : "post",
+          config.gmEndpoint === "formaldesignation" ? { omitUser: true } : undefined,
         );
       }
       toast.success(`${config.title} ${editMode ? "updated" : "created"} successfully`);
@@ -534,10 +542,14 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
 
   /* ── Delete ── */
   const confirmDelete = async () => {
+    console.log("1. Delete clicked!");
     if (!deleteTarget || config.deleteMode === "disabled") return;
     setSaving(true);
     try {
+      console.log("2. Target row:", deleteTarget);
       const id = deleteTarget[config.keyField];
+      console.log("3. Extracted ID:", id, "KeyField was:", config.keyField);
+      console.log("Delete ID being sent:", config.master, id);
       if ((config.source === "dynamic" || config.source === "finance") && config.buildDelete) {
         await executeDynamicDelete(config.buildDelete(deleteTarget, buildContext()));
       } else if (config.deleteMode === "gm") await deleteHrGm(config.gmEndpoint, [id]);
