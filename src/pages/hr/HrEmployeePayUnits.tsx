@@ -66,15 +66,12 @@ const SECTION_COLUMNS = [
 const EMPLOYEE_COLUMNS = [
   { field: "employee_code", header: "Employee Code" },
   { field: "rpt_name", header: "Employee Name" },
-  { field: "div_name", header: "Division" },
-  { field: "dept_name", header: "Department" },
-  { field: "section_name", header: "Section" },
 ];
 
-const P_DIVISION = "MST_HR_ACCOUNT_DIVISION";
-const P_DEPARTMENT = "MST_HR_MS_HR_DEPARTMENT";
-const P_SECTION = "MST_HR_MS_HR_SECTION_DDL";
-const P_EMPLOYEE = "MST_HR_VW_HR_EMP_MASTER_DDL";
+const P_DIVISION = "HR_DROPDOWN_MS_DIVISION";
+const P_DEPARTMENT = "HR_DROPDOWN_MS_DEPARTMENT";
+const P_SECTION = "HR_DROPDOWN_MS_SECTION";
+const P_EMPLOYEE = "HR_DROPDOWN_MS_HR_EMPLOYEE";
 const P_RETRIEVE = "MST_HR_EMPLOYEE_PAY_UNITS_SELECT";
 
 /* ================= HELPERS ================= */
@@ -125,25 +122,25 @@ export function HrEmployeePayUnits() {
 
   /* ── Lookups ── */
   const loadLookupRows = useCallback(
-    async (parameter: string, code1: string, code2 = "NULL", code3 = "NULL"): Promise<LookupRow[]> => {
+    async (parameter: string, code1: string, code2 = "", code3 = "", code4 = ""): Promise<LookupRow[]> => {
       const response = await getDynamicLookup({
-        parameter, loginid, code1, code2, ...NULLS, code3,
+        parameter, loginid, code1, code2, ...NULLS, code3,code4,
       });
       return Array.isArray(response) ? (response as LookupRow[]) : [];
     },
     [loginid],
   );
 
-  const loadEmployeeOptions = useCallback(async () => {
-    const all = await loadLookupRows(P_EMPLOYEE, companyCode);
-    return all.filter((row) => {
-      const r = row as Record<string, unknown>;
-      if (header.div_code && r.div_code !== header.div_code) return false;
-      if (header.dept_code && r.dept_code !== header.dept_code) return false;
-      if (header.section_code && r.section_code !== header.section_code) return false;
-      return true;
-    });
-  }, [loadLookupRows, companyCode, header.div_code, header.dept_code, header.section_code]);
+  // const loadEmployeeOptions = useCallback(async () => {
+  //   const all = await loadLookupRows(P_EMPLOYEE, companyCode);
+  //   return all.filter((row) => {
+  //     const r = row as Record<string, unknown>;
+  //     if (header.div_code && r.div_code !== header.div_code) return false;
+  //     if (header.dept_code && r.dept_code !== header.dept_code) return false;
+  //     if (header.section_code && r.section_code !== header.section_code) return false;
+  //     return true;
+  //   });
+  // }, [loadLookupRows, companyCode, header.div_code, header.dept_code, header.section_code]);
 
   /* ── Retrieve ── */
   const handleRetrieve = useCallback(async () => {
@@ -430,7 +427,7 @@ export function HrEmployeePayUnits() {
 
       {/* Employee selection */}
       <SectionPanel title="Employee Selection" icon={Users}>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <Field label="Division" required>
             <LookupField
               compact
@@ -450,7 +447,6 @@ export function HrEmployeePayUnits() {
           <Field label="Department" required>
             <LookupField
               compact
-              disabled={!header.div_code}
               value={header.dept_code}
               columns={DEPARTMENT_COLUMNS}
               valueField="dept_code"
@@ -464,7 +460,6 @@ export function HrEmployeePayUnits() {
           <Field label="Section" required>
             <LookupField
               compact
-              disabled={!header.dept_code}
               value={header.section_code}
               columns={SECTION_COLUMNS}
               valueField="section_code"
@@ -475,7 +470,7 @@ export function HrEmployeePayUnits() {
             />
           </Field>
 
-          <Field label="Employee" required className="md:col-span-3">
+          <Field label="Employee" required>
             <LookupField
               compact
               disabled={!companyCode}
@@ -483,7 +478,7 @@ export function HrEmployeePayUnits() {
               columns={EMPLOYEE_COLUMNS}
               valueField="employee_id"
               displayFields={["employee_code", "rpt_name"]}
-              loadOptions={loadEmployeeOptions}
+              loadOptions={() => loadLookupRows(P_EMPLOYEE,companyCode,header.div_code, header.dept_code ,header.section_code)}
               onChange={(value) => patchHeader({ employee_id: value })}
               placeholder="Employee code or name"
             />

@@ -11,6 +11,7 @@ import { computeQuantity, formatAmount, isSameUom, LcurrDisAmount, lineAmount, l
 import { PODocType, PurchaseOrderLineRow } from "../purchase/Purchaseordertypes";
 import { amountBeforeDiscPrice, TotalDiscAmount } from "../purchase/Purchaseorderutils";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -147,6 +148,7 @@ export function SalesInvoiceLinesTable({
   // All Columns   = compact columns + Div, Lcurr Before Tax, Tax Type/Cat/Code, Tax Lcurr, Lcurr After Tax, Req Date, Remarks
   const tableColSpan = showAllColumns ? 26 : 17;
    const [defaultZone, setDefaultZone] = useState("");
+     const [uppTip, setUppTip] = useState<{ value: number; x: number; y: number } | null>(null);
   
     useEffect(() => {
       let alive = true;
@@ -332,7 +334,12 @@ export function SalesInvoiceLinesTable({
                     />
                   </td>
 
-                  <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20" style={stickyStyle("product", showAllColumns)}>
+                  <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20" style={stickyStyle("product", showAllColumns)}
+                    onMouseEnter={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setUppTip({ value: numberOrZero(row.uppp), x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+                    }}
+                    onMouseLeave={() => setUppTip(null)}>
                     <LookupField
                       label=""
                       value={row.prod_code || ""}
@@ -362,9 +369,9 @@ export function SalesInvoiceLinesTable({
                         updateRow(row.id, patch);
                       }}
                     />
-                    <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                    {/* <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                       Unit Per Primary: {row.uppp}
-                    </span>
+                    </span> */}
                   </td>
 
                   {/* Primary: Qty */}
@@ -502,7 +509,7 @@ export function SalesInvoiceLinesTable({
                       value={row.sorder_tx_compnt_1_expmt || "N"}
                       onChange={(event) => {
                         const taxType = event.target.value;
-                        const taxPerc = taxType === "S" ? 5 : 0;
+                        const taxPerc = taxType === "S" ? Number(row.sorder_tx_compnt_perc_1 || 5) : 0;
                         // Tax should be calculated on the sales order amount (lineAmount), not regular amount
                         const taxAmt = taxType === "S" ? (Number(lineAmount(row)) || 0) * (taxPerc / 100) : 0;
                         updateRow(row.id, {
@@ -654,6 +661,22 @@ export function SalesInvoiceLinesTable({
           <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
         </div>
       </div>
+          {uppTip &&
+        createPortal(
+          <div
+            className="pointer-events-none whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg"
+            style={{
+              position: "fixed",
+              top: uppTip.y,
+              left: uppTip.x,
+              transform: "translateX(-50%)",
+              zIndex: 9999,
+            }}
+          >
+            Unit Per Primary: {uppTip.value}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

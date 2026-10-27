@@ -104,7 +104,7 @@ export default function MseProdGroup() {
   const [rows, setRows] = useState<ProductGroupRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  
+
   // View state
   const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
@@ -138,7 +138,7 @@ export default function MseProdGroup() {
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((row) => 
+    return rows.filter((row) =>
       Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term))
     );
   }, [rows, query]);
@@ -178,7 +178,8 @@ export default function MseProdGroup() {
 
     try {
       setSaving(true);
-      
+
+      // empty on create → backend auto-generates
       const groupCode = editMode && original?.group_code
         ? String(original.group_code)
         : form.group_code
@@ -285,7 +286,7 @@ export default function MseProdGroup() {
   if (view === "editor") {
     return (
       <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-        
+
         {/* Freight-style transaction header */}
         <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -299,6 +300,12 @@ export default function MseProdGroup() {
                 </h1>
                 <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
                   {editMode ? "Editing" : "Draft"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
+                  Product Group Code:
+                  <strong className="font-semibold">
+                    {editMode && form.group_code ? String(form.group_code) : "Auto-generated"}
+                  </strong>
                 </span>
               </div>
             </div>
@@ -319,7 +326,7 @@ export default function MseProdGroup() {
 
         {/* Form Content wrapped in freight-tabs-shell for the border/shadow look */}
         <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-          
+
           {error && (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
               {error}
@@ -328,16 +335,9 @@ export default function MseProdGroup() {
 
           <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
             <div className="p-3 grid gap-3">
-              
+
               <SectionPanel title="Product Group Details" icon={Building2}>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Field label="Product Group Code">
-                    <Input
-                      value={form.group_code ?? ""}
-                      disabled={editMode}
-                      onChange={(e) => setField("group_code", e.target.value)}
-                    />
-                  </Field>
                   <Field label="Product Group Name" required>
                     <Input
                       value={form.group_name ?? ""}
@@ -349,6 +349,28 @@ export default function MseProdGroup() {
 
               <SectionPanel title="Goods in Transit / Inventory A/C" icon={LayoutGrid}>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                    <Field label="GIT-IN A/C Code" required>
+                    <LookupField
+                      label=""
+                      value={form.gitin_ac_code ?? ""}
+                      valueField="ac_code"
+                      displayFields={["ac_code", "ac_name"]}
+                      columns={[
+                        { field: "ac_code", header: "Code" },
+                        { field: "ac_name", header: "Name" },
+                      ]}
+                      loadOptions={async () => {
+                        return await getDynamicLookup({
+                          parameter: "PURCHASE_SALES_MSE_PROD_GROUP_DROP_DOWN_GITIN_ACCOUNT",
+                          loginid: loginId,
+                          code1: companyCode,
+                        }) || [];
+                      }}
+                      onChange={(value) => setField("gitin_ac_code", value)}
+                      compact
+                    />
+                  </Field>
+                  
                   <Field label="Inventory A/C Code">
                     <LookupField
                       label=""
@@ -370,7 +392,7 @@ export default function MseProdGroup() {
                       compact
                     />
                   </Field>
-                  
+
                   <Field label="Sales A/C Code">
                     <LookupField
                       label=""
@@ -437,27 +459,7 @@ export default function MseProdGroup() {
                     />
                   </Field>
 
-                  <Field label="GIT-IN A/C Code">
-                    <LookupField
-                      label=""
-                      value={form.gitin_ac_code ?? ""}
-                      valueField="ac_code"
-                      displayFields={["ac_code", "ac_name"]}
-                      columns={[
-                        { field: "ac_code", header: "Code" },
-                        { field: "ac_name", header: "Name" },
-                      ]}
-                      loadOptions={async () => {
-                        return await getDynamicLookup({
-                          parameter: "PURCHASE_SALES_MSE_PROD_GROUP_DROP_DOWN_GITIN_ACCOUNT",
-                          loginid: loginId,
-                          code1: companyCode,
-                        }) || [];
-                      }}
-                      onChange={(value) => setField("gitin_ac_code", value)}
-                      compact
-                    />
-                  </Field>
+
 
                   <Field label="GIT-OUT A/C Code">
                     <LookupField
@@ -483,10 +485,10 @@ export default function MseProdGroup() {
 
                 </div>
               </SectionPanel>
-              
+
             </div>
           </div>
-          
+
         </div>
       </section>
     );

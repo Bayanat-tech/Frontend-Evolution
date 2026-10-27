@@ -476,6 +476,23 @@ export function MateriaLReturnEditor({
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.MRT, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Material Return saved as draft");
@@ -506,18 +523,28 @@ export function MateriaLReturnEditor({
     if (invalidRow) {
       return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
     }
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-    setShowSubmitConfirm(true);
+    return confirmSubmit();
   };
 
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
+    // setShowSubmitConfirm(false);
     if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
       return setError("Line item discount cannot exceed line item amount");
     }
@@ -729,19 +756,18 @@ export function MateriaLReturnEditor({
                 </div>
                 {form.doc_no && (
                   <>
-                    {/* <Button type="button" variant="secondary" onClick={handlePrint}>
+                    <Button type="button" title="coming soon" variant="secondary" onClick={handlePrint}>
                     <Printer size={15} /> Print
-                  </Button> */}
+                  </Button>
                     <Button
                       aria-label="Excel"
-                      title="Excel"
                       type="button"
                       variant="secondary"
-                      size="icon"
+                       title="coming soon" 
                       onClick={() => void handleReportPreviewExcel()}
                       disabled={reportPreviewExporting}
                     >
-                      <Download size={15} />
+                       <Download size={15} /> Export
                     </Button>
                   </>
                 )}
@@ -940,6 +966,7 @@ export function MateriaLReturnEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
+        readOnly={!isPendingTab || isCancelled}
       />
 
 

@@ -22,6 +22,7 @@ export interface SelectedFreightExpense {
   tx_cat_code?: string;
   tx_compntcat_code_1?: string;
   tx_compnt_perc_1?: number;
+  tx_compnt_1_expmt?: string;
   booked_pi_no?: string;
   isBooked?: boolean;
 }
@@ -60,12 +61,53 @@ export function FreightJobActivitySelectorDialog({
 
   // PowerBuilder Filters
   const [filterBySupplier, setFilterBySupplier] = useState<boolean>(Boolean(supplierCode));
-  const [hideAlreadyBooked, setHideAlreadyBooked] = useState<boolean>(true); // PB default: do not show booked
+  const [statusFilter, setStatusFilter] = useState<"unbooked" | "booked" | "all">("unbooked"); // PB default: unbooked only
   const [hideFullyBookedJobs, setHideFullyBookedJobs] = useState<boolean>(true); // PB default: do not show fully booked jobs
   const [expenseSearch, setExpenseSearch] = useState("");
 
   // Map of selected items: key -> SelectedFreightExpense
   const [selectedMap, setSelectedMap] = useState<Map<string, SelectedFreightExpense>>(new Map());
+
+  const fetchJobs = useCallback(
+    async (query: string, supplierOverride?: string | null) => {
+      if (!companyCode) return;
+      setLoadingJobs(true);
+      try {
+        const suppToUse =
+          supplierOverride !== undefined
+            ? supplierOverride
+            : filterBySupplier && supplierCode
+            ? supplierCode.trim()
+            : null;
+
+        const response = await api.post<{ success?: boolean; data?: any[] }>(
+          "/api/freight/job-activities/jobs",
+          {
+            company_code: companyCode,
+            search: query || "",
+            supplier_code: suppToUse || undefined,
+          }
+        );
+        const data = response.data?.data || [];
+        const jobList = Array.isArray(data) ? data : [];
+        setJobs(jobList);
+        if (jobList.length > 0) {
+          void handleSelectJob(jobList[0]);
+        } else {
+          setSelectedJob(null);
+          setActivities([]);
+        }
+      } catch (err) {
+        console.error("Failed to load freight jobs:", err);
+        setJobs([]);
+        setSelectedJob(null);
+        setActivities([]);
+      } finally {
+        setLoadingJobs(false);
+      }
+    },
+    [companyCode, filterBySupplier, supplierCode]
+  );
 
   // Reset or load jobs when dialog opens
   useEffect(() => {
@@ -74,30 +116,13 @@ export function FreightJobActivitySelectorDialog({
       setSelectedJob(null);
       setActivities([]);
       setBookedPIList([]);
-      setFilterBySupplier(Boolean(supplierCode));
-      setHideAlreadyBooked(true);
+      const shouldFilter = Boolean(supplierCode);
+      setFilterBySupplier(shouldFilter);
+      setStatusFilter("unbooked");
       setHideFullyBookedJobs(true);
-      void fetchJobs("");
+      void fetchJobs("", shouldFilter ? supplierCode.trim() : null);
     }
   }, [open, companyCode, supplierCode]);
-
-  const fetchJobs = useCallback(async (query: string) => {
-    if (!companyCode) return;
-    setLoadingJobs(true);
-    try {
-      const response = await api.post<{ success?: boolean; data?: any[] }>("/api/freight/job-activities/jobs", {
-        company_code: companyCode,
-        search: query || "",
-      });
-      const data = response.data?.data || [];
-      setJobs(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Failed to load freight jobs:", err);
-      setJobs([]);
-    } finally {
-      setLoadingJobs(false);
-    }
-  }, [companyCode]);
 
   const handleSelectJob = async (job: any) => {
     setSelectedJob(job);
@@ -138,15 +163,22 @@ export function FreightJobActivitySelectorDialog({
       if (!bookedPIList.length) return undefined;
       const match = bookedPIList.find((pi: any) => {
         const rem = String(pi.REMARKS || "").toUpperCase();
+        const jNo = String(pi.JOB_NO || "").trim().toUpperCase();
+        if (jNo && jNo !== jobNo.toUpperCase()) return false;
+
         const typeMatch =
           costType === "Agent Cost"
             ? rem.includes("AGENT") || rem.includes("BROKER")
             : costType === "Transporter Cost"
             ? rem.includes("TRANS")
             : rem.includes("OTHER") || rem.includes("ACTUAL");
+        if (!typeMatch) return false;
+
         const actMatch = rem.includes(actCode.toUpperCase());
+        if (!actMatch) return false;
+
         const amtMatch = Math.abs(Number(pi.AMOUNT) - amount) < 0.001;
-        return (typeMatch && actMatch) || (typeMatch && amtMatch);
+        return amtMatch;
       });
       return match ? String(match.DOC_NO) : undefined;
     };
@@ -154,7 +186,8 @@ export function FreightJobActivitySelectorDialog({
     activities.forEach((act: any, idx: number) => {
       const srno = String(act.srno || act.SRNO || idx + 1);
       const actCode = String(act.act_code || act.ACT_CODE || "");
-      const activityDesc = String(act.activity || act.ACTIVITY || actCode);
+      const activityDesc = String(act.activity || act.ACTIVITY || act.other_services || act.OTHER_SERVICES || actCode);
+      const directPiNo = String(act.pi_no || act.PI_NO || "").trim();
 
       const actualCost = Number(act.actual_cost || act.ACTUAL_COST || 0);
       const partnerPrice = Number(act.partners_price || act.PARTNERS_PRICE || 0);
@@ -162,17 +195,26 @@ export function FreightJobActivitySelectorDialog({
 
       const brokerCode = String(act.broker_code || act.BROKER_CODE || "").trim();
       const brokerName = String(act.broker_name || act.BROKER_NAME || act.agent_name || "");
+      const brokerAcref = String(act.broker_acref || act.BROKER_ACREF || "").trim();
       const transporterCode = String(act.transporter_code || act.TRANSPORTER_CODE || "").trim();
       const transporterName = String(act.transporter_name || act.TRANSPORTER_NAME || "");
+      const transporterAcCode = String(
+        act.transporter_ac_code || act.TRANSPORTER_AC_CODE || act.ac_code || act.AC_CODE || ""
+      ).trim();
       const vehicleNo = String(act.vehicle_no || act.VEHICLE_NO || "");
 
       const txCat = String(act.tx_cat_code_cost || act.tx_cat_code || "");
       const txCompntCat = String(act.tx_compntcat_code_1_cost || act.tx_compntcat_code_1 || "");
       const txPerc = Number(act.tx_compnt_perc_1_cost || act.tx_compnt_perc_1 || 0);
+      const txExpmt = String(act.tx_compnt_1_expmt_cost || act.tx_compnt_1_expmt || (txPerc > 0 ? "S" : "N"));
 
       // 1. Agent Cost line
       if (partnerPrice > 0) {
-        const isMatch = Boolean(cleanSupplier && brokerCode.toUpperCase() === cleanSupplier);
+        const isMatch = Boolean(
+          cleanSupplier &&
+            (brokerCode.toUpperCase() === cleanSupplier ||
+              (brokerAcref && brokerAcref.toUpperCase() === cleanSupplier))
+        );
         const curr = String(act.partner_curr_code || "");
         const ex = Number(act.partner_ex_rate || 1);
         const bookedDoc = findBookedPI("Agent Cost", actCode, partnerPrice);
@@ -188,12 +230,13 @@ export function FreightJobActivitySelectorDialog({
           curr_code: curr,
           ex_rate: ex,
           lcur_amount: partnerPrice * ex,
-          vendor_code: brokerCode,
+          vendor_code: brokerAcref || brokerCode,
           vendor_name: brokerName || "Agent / Partner",
           isSupplierMatch: isMatch,
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          tx_compnt_1_expmt: txExpmt,
           booked_pi_no: bookedDoc,
           isBooked: Boolean(bookedDoc),
         });
@@ -201,7 +244,11 @@ export function FreightJobActivitySelectorDialog({
 
       // 2. Transporter Cost line
       if (transportPrice > 0) {
-        const isMatch = Boolean(cleanSupplier && transporterCode.toUpperCase() === cleanSupplier);
+        const isMatch = Boolean(
+          cleanSupplier &&
+            (transporterCode.toUpperCase() === cleanSupplier ||
+              (transporterAcCode && transporterAcCode.toUpperCase() === cleanSupplier))
+        );
         const curr = String(act.tp_curr_code || "");
         const ex = Number(act.tp_ex_rate || 1);
         const bookedDoc = findBookedPI("Transporter Cost", actCode, transportPrice);
@@ -217,21 +264,27 @@ export function FreightJobActivitySelectorDialog({
           curr_code: curr,
           ex_rate: ex,
           lcur_amount: transportPrice * ex,
-          vendor_code: transporterCode,
+          vendor_code: transporterAcCode || transporterCode,
           vendor_name: transporterName || "Transporter",
           vehicle_no: vehicleNo,
           isSupplierMatch: isMatch,
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          tx_compnt_1_expmt: txExpmt,
           booked_pi_no: bookedDoc,
           isBooked: Boolean(bookedDoc),
         });
       }
 
-      // 3. Other Cost line
+      // 3. Other Cost line (PowerBuilder dw_3 supplier_type = 'ACTUAL', SUPPLIER_ACC = '2020100000')
+      // Other cost is an internal/direct job expense and does NOT belong to the Agent/Broker
       if (actualCost > 0) {
-        const isMatch = Boolean(cleanSupplier && brokerCode && brokerCode.toUpperCase() === cleanSupplier);
+        const otherAcCode = "2020100000";
+        const isMatch = Boolean(
+          cleanSupplier &&
+            (cleanSupplier === otherAcCode || cleanSupplier.includes("202010"))
+        );
         const curr = String(act.ac_curr_code || "");
         const ex = Number(act.ac_ex_rate || 1);
         const bookedDoc = findBookedPI("Other Cost", actCode, actualCost);
@@ -247,12 +300,13 @@ export function FreightJobActivitySelectorDialog({
           curr_code: curr,
           ex_rate: ex,
           lcur_amount: actualCost * ex,
-          vendor_code: brokerCode,
-          vendor_name: brokerName || "Direct / Other Cost",
+          vendor_code: otherAcCode,
+          vendor_name: "Direct / Provision Cost",
           isSupplierMatch: isMatch,
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          tx_compnt_1_expmt: txExpmt,
           booked_pi_no: bookedDoc,
           isBooked: Boolean(bookedDoc),
         });
@@ -276,8 +330,10 @@ export function FreightJobActivitySelectorDialog({
   // Filtered expenses (PowerBuilder logic: hide booked by default)
   const visibleExpenses = useMemo(() => {
     let list = flattenedExpenses;
-    if (hideAlreadyBooked) {
+    if (statusFilter === "unbooked") {
       list = list.filter((item) => !item.isBooked);
+    } else if (statusFilter === "booked") {
+      list = list.filter((item) => item.isBooked);
     }
     if (filterBySupplier && supplierCode) {
       list = list.filter((item) => item.isSupplierMatch);
@@ -296,7 +352,7 @@ export function FreightJobActivitySelectorDialog({
       );
     }
     return list;
-  }, [flattenedExpenses, hideAlreadyBooked, filterBySupplier, supplierCode, expenseSearch]);
+  }, [flattenedExpenses, statusFilter, filterBySupplier, supplierCode, expenseSearch]);
 
   const allExpensesCount = flattenedExpenses.length;
   const bookedExpensesCount = useMemo(() => flattenedExpenses.filter((e) => e.isBooked).length, [flattenedExpenses]);
@@ -358,7 +414,6 @@ export function FreightJobActivitySelectorDialog({
       open={open}
       onClose={onClose}
       title="Load Freight Job Activities (Purchase Booking)"
-      description="Select freight cost and activity lines to auto-populate into Purchase Invoice"
       wide
       footer={
         <div className="flex w-full items-center justify-between gap-3">
@@ -405,7 +460,11 @@ export function FreightJobActivitySelectorDialog({
                 <input
                   type="checkbox"
                   checked={filterBySupplier}
-                  onChange={(e) => setFilterBySupplier(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFilterBySupplier(checked);
+                    void fetchJobs(jobSearch, checked && supplierCode ? supplierCode.trim() : null);
+                  }}
                   className="rounded border-slate-300 text-[#00378C] focus:ring-[#00378C]"
                 />
                 <span>Filter activities matching this Supplier</span>
@@ -422,7 +481,7 @@ export function FreightJobActivitySelectorDialog({
         {/* Master / Detail Split Grid */}
         <div className="grid grid-cols-12 gap-3 min-h-0 flex-1 overflow-hidden">
           {/* Left Column: Freight Jobs List (col-span-4) */}
-          <div className="col-span-4 flex flex-col rounded-md border border-slate-200 bg-white shadow-2xs overflow-hidden">
+          <div className="col-span-12 md:col-span-3 flex flex-col rounded-md border border-slate-200 bg-white shadow-2xs overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-50 p-2 flex flex-col gap-1.5 shrink-0">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
@@ -460,7 +519,7 @@ export function FreightJobActivitySelectorDialog({
                     onChange={(e) => setHideFullyBookedJobs(e.target.checked)}
                     className="rounded border-slate-300 text-[#00378C]"
                   />
-                  <span>Hide fully booked jobs (PB Mode)</span>
+                  <span>Hide fully booked jobs</span>
                 </label>
                 <span className="text-slate-400 font-mono">
                   {visibleJobs.length}/{jobs.length}
@@ -536,7 +595,7 @@ export function FreightJobActivitySelectorDialog({
           </div>
 
           {/* Right Column: Activities & Expenses (col-span-8) */}
-          <div className="col-span-8 flex flex-col rounded-md border border-slate-200 bg-white shadow-2xs overflow-hidden">
+          <div className="col-span-12 md:col-span-9 flex flex-col rounded-md border border-slate-200 bg-white shadow-2xs overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-50 p-2 flex items-center justify-between shrink-0 gap-2">
               <div className="flex items-center gap-2">
                 <Truck size={14} className="text-[#00378C]" />
@@ -560,15 +619,18 @@ export function FreightJobActivitySelectorDialog({
               {selectedJob && (
                 <div className="flex items-center gap-2">
                   {/* PB Mode toggle: Hide already booked lines */}
-                  <label className="flex items-center gap-1 cursor-pointer select-none text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs">
-                    <input
-                      type="checkbox"
-                      checked={hideAlreadyBooked}
-                      onChange={(e) => setHideAlreadyBooked(e.target.checked)}
-                      className="rounded border-slate-300 text-[#00378C]"
-                    />
-                    <span>Hide already booked (PB Mode)</span>
-                  </label>
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded px-2 py-0.5 shadow-2xs">
+                    <span className="text-[11px] font-semibold text-slate-600">Filter:</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as any)}
+                      className="h-5.5 text-[11px] font-bold rounded border-0 bg-transparent py-0 pl-1 pr-5 text-[#00378C] focus:ring-0 cursor-pointer"
+                    >
+                      <option value="unbooked">Unbooked Only (Default)</option>
+                      <option value="booked">Already Booked in PI</option>
+                      <option value="all">All Expenses (Booked & Unbooked)</option>
+                    </select>
+                  </div>
 
                   {visibleExpenses.length > 0 && (
                     <>
@@ -610,42 +672,49 @@ export function FreightJobActivitySelectorDialog({
                 <div className="flex h-full items-center justify-center p-8 text-slate-500 text-xs">
                   <RefreshCw size={16} className="animate-spin mr-2 text-[#00378C]" /> Loading activities...
                 </div>
-              ) : allExpensesBooked && hideAlreadyBooked ? (
-                /* Pure PowerBuilder View: When all expenses are already booked in PI, they are NOT shown! */
+              ) : allExpensesBooked && statusFilter === "unbooked" ? (
+                /* Attractive PowerBuilder View: When all expenses are already booked in PI */
                 <div className="flex h-full flex-col items-center justify-center p-8 text-center text-slate-600">
-                  <div className="rounded-full bg-emerald-100 p-3 text-emerald-600 mb-3">
-                    <CheckCircle2 size={36} />
+                  <div className="rounded-full bg-emerald-100 p-3 text-emerald-600 mb-3 border border-emerald-200 shadow-xs">
+                    <CheckCircle2 size={38} />
                   </div>
                   <h4 className="text-sm font-bold text-slate-800">
-                    All Expenses Already Booked in Purchase Invoice
+                    All Expenses for this Job are Already Booked
                   </h4>
-                  <p className="text-xs text-slate-500 mt-1 max-w-md">
-                    All supplier and agent costs for Job{" "}
+                  <p className="text-xs text-slate-600 mt-1.5 max-w-md">
+                    All supplier and agent expenses for Job{" "}
                     <strong className="text-[#00378C] font-mono">
                       {selectedJob.job_no || selectedJob.JOB_NO}
                     </strong>{" "}
-                    have already been booked into Purchase Invoice:
+                    have already been booked into Purchase Invoice(s):
                   </p>
-                  <div className="mt-2.5 flex items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                     {Array.from(new Set(flattenedExpenses.map((e) => e.booked_pi_no).filter(Boolean))).map((pi) => (
                       <span
                         key={pi}
-                        className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 font-mono font-bold text-emerald-800 text-xs shadow-2xs"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 font-mono font-bold text-emerald-800 text-xs shadow-2xs"
                       >
+                        <CheckCircle2 size={13} className="text-emerald-600" />
                         {pi}
                       </span>
                     ))}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-3">
-                    Per PowerBuilder ERP rules, already-booked expenses are hidden to prevent duplicate bookings.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setHideAlreadyBooked(false)}
-                    className="mt-2 text-xs font-semibold text-[#00378C] hover:underline cursor-pointer"
-                  >
-                    View already booked lines with [Booked in PI] badge
-                  </button>
+                  <div className="mt-4 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("booked")}
+                      className="rounded-md bg-[#00378C] hover:bg-[#002d72] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs transition-colors cursor-pointer"
+                    >
+                      View Booked Lines in History
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("all")}
+                      className="rounded-md border border-slate-300 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition-colors cursor-pointer"
+                    >
+                      Show All Lines
+                    </button>
+                  </div>
                 </div>
               ) : visibleExpenses.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center p-8 text-center text-slate-400">

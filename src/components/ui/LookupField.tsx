@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react";
 import { CSSProperties, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
@@ -34,6 +34,7 @@ type LookupFieldProps = {
   popoverWidth?: number;
   className?: string;
   forceOpenDown?: boolean;
+  allowCustomValue?: boolean;
 };
 
 export function LookupField({
@@ -61,6 +62,7 @@ export function LookupField({
   popoverWidth,
   className,
   forceOpenDown = false,
+  allowCustomValue = false,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -197,7 +199,17 @@ export function LookupField({
     setHighlightedIndex(0);
     lastFetchedQueryRef.current = query;
     try {
-      setRows(await loadOptionsRef.current(query));
+      const raw = await loadOptionsRef.current(query);
+      const unique = [];
+      const seen = new Set();
+      for (const r of raw) {
+        const val = String(getLookupValue(r, valueField) ?? JSON.stringify(r));
+        if (!seen.has(val)) {
+          seen.add(val);
+          unique.push(r);
+        }
+      }
+      setRows(unique);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load lookup");
     } finally {
@@ -218,7 +230,17 @@ export function LookupField({
       setError("");
       lastFetchedQueryRef.current = query;
       try {
-        setRows(await loadOptionsRef.current(query));
+        const raw = await loadOptionsRef.current(query);
+      const unique = [];
+      const seen = new Set();
+      for (const r of raw) {
+        const val = String(getLookupValue(r, valueField) ?? JSON.stringify(r));
+        if (!seen.has(val)) {
+          seen.add(val);
+          unique.push(r);
+        }
+      }
+      setRows(unique);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load lookup");
       } finally {
@@ -323,6 +345,10 @@ export function LookupField({
               ref={validityRef}
               tabIndex={-1}
               aria-hidden="true"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-form-type="other"
+              name="hidden_validity_no_autofill"
               className="pointer-events-none absolute inset-0 -z-10 h-0 w-0 border-0 bg-transparent p-0 text-transparent opacity-0"
               style={{ opacity: 0, color: "transparent", width: 0, height: 0, pointerEvents: "none" }}
               value={value}
@@ -400,6 +426,10 @@ export function LookupField({
                 <input
                   ref={searchInputRef}
                   autoFocus
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  name="lookup_query_no_autofill"
                   className="lookup-search-input w-full h-8.5 min-h-[34px] pl-8 pr-7 rounded-lg border border-slate-300 focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/20 bg-white text-slate-800 text-[11.5px] placeholder:text-slate-400 focus:outline-none transition-all shadow-xs"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -419,6 +449,24 @@ export function LookupField({
             </div>
 
             {error && <div className="m-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-200">{error}</div>}
+            {allowCustomValue && query.trim() && (
+              <div className="flex items-center justify-between px-3 py-1.5 bg-blue-50/90 border-b border-blue-200 text-xs shrink-0">
+                <span className="text-slate-700 text-[11px] truncate mr-2">
+                  Use custom entry: <strong className="text-[#00378C]">"{query.trim()}"</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const customVal = query.trim();
+                    onChange(customVal, { [valueField]: customVal, label: customVal, value: customVal });
+                    setOpen(false);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-white bg-[#00378C] hover:bg-[#002b6d] rounded-md transition-colors shadow-2xs shrink-0 cursor-pointer"
+                >
+                  <Plus size={12} /> Select "{query.trim()}"
+                </button>
+              </div>
+            )}
 
             {/* Scrollable table body with custom scrollbar */}
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto select-none bg-white">

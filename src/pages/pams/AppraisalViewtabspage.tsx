@@ -330,11 +330,11 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
       <span style={{ fontSize: "0.72rem", fontWeight: 700, color: meta.labelColor, borderLeft: "1px solid rgba(8,42,137,0.20)", paddingLeft: "8px", letterSpacing: "0.02em" }}>
         {meta.label}
       </span>
-      <span style={{ fontSize: "0.62rem", color: "#082A89", opacity: 0.55, borderLeft: "1px solid rgba(8,42,137,0.15)", paddingLeft: "8px" }}>
+      {/* <span style={{ fontSize: "0.62rem", color: "#082A89", opacity: 0.55, borderLeft: "1px solid rgba(8,42,137,0.15)", paddingLeft: "8px" }}>
         {weightageConfig.isHrDefined
           ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}% / G${weightageConfig.goalPct}% / S${weightageConfig.skillPct}%`
           : ""}
-      </span>
+      </span> */}
     </div>
   );
 };
