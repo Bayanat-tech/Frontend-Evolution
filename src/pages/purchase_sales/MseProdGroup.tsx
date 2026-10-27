@@ -437,7 +437,7 @@ export default function MseProdGroup() {
                     />
                   </Field>
 
-                  <Field label="GIT-IN A/C Code">
+                  <Field label="GIT-IN A/C Code" required>
                     <LookupField
                       label=""
                       value={form.gitin_ac_code ?? ""}
