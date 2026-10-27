@@ -109,7 +109,7 @@
 
   import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
-  import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
+ 
 
   import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";
   import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
@@ -248,6 +248,7 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
   import HrEmployeeWiseCostReport from "../pages/hr/Reports/HrEmployeeWiseCostReport";
 import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 import { useAuth } from "../state/AuthContext";
+import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 
   type WorkspaceRouteContext = {
     pathname: string;
@@ -2105,7 +2106,7 @@ import { useAuth } from "../state/AuthContext";
   }
   function isPurchaseGRNSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return (normalized.includes("purchase_sales/purchase/purchase_grn"))
+    return (normalized.includes("/ims/ims/purchase/goods_receipt_note"))
   }
   function isPurchaseReturnSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
@@ -2137,7 +2138,7 @@ import { useAuth } from "../state/AuthContext";
   }
   function isSalesDNSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return (normalized.includes("purchase_sales/sales/sales_dn"))
+    return (normalized.includes("/ims/ims/sales/sales_delivery_note"))
   }
   function isStocksTransferSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
@@ -2560,7 +2561,7 @@ import { useAuth } from "../state/AuthContext";
   function isHrAccuralAccountSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return normalized.includes(
-      "/workspace/hcm/hcm/pay%20components/accural%20account%20setup"
+      "/workspace/hcm/hcm/pay%20components/accrual%20account%20setup"
     );
   }
 

@@ -200,6 +200,7 @@ export function EmployeeMasterPage() {
   /* ── Columns ── */
   const columns = useMemo<ColumnDef<TEmployeeHr>[]>(
     () => [
+      { accessorKey: "employee_code", header: "Employee code", size: 60 },
       { accessorKey: "rpt_name", header: "Employee Name", size: 270 },
       { accessorKey: "desg_code", header: "Designation", size: 80 },
       { accessorKey: "join_date", header: "Join Date", size: 100, cell: ({ getValue }) => formatDate(getValue()) },
