@@ -27,6 +27,7 @@ import {
 import { SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -156,6 +157,7 @@ export function MaterialDetailsTable({
   const discountScope = form.discount_scoope || "ITEM";
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [uppTip, setUppTip] = useState<{ value: number; x: number; y: number } | null>(null);
   const filteredRows = useMemo(() => {
     const q = lineSearch.trim().toLowerCase();
     if (!q) return rows;
@@ -229,7 +231,7 @@ export function MaterialDetailsTable({
             title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
           >
             <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-           <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
+            <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
           </button>
 
           <div className="bisc-table-search">
@@ -264,7 +266,7 @@ export function MaterialDetailsTable({
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#dbeafe")}>Primary</th>
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#e2e8f0")}>Lowest</th>
               <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
-                
+
               <th style={plainHeaderStyle(undefined, 0)}></th>
               <th style={plainHeaderStyle(undefined, 0)}></th>
               <th style={plainHeaderStyle(undefined, 0)}></th>
@@ -285,9 +287,9 @@ export function MaterialDetailsTable({
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}> Net Quantity</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110, GROUP_ROW_HEIGHT)}>Unit Price</th>
 
-       
+
               <th className="px-2 py-2 text-center" style={plainHeaderStyle(150, GROUP_ROW_HEIGHT)}>Req Date</th>
-            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160, GROUP_ROW_HEIGHT)}>Remarks</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160, GROUP_ROW_HEIGHT)}>Remarks</th>
               <th className="finance-sticky-col-right px-2 py-2 text-center" style={plainHeaderStyle(60, GROUP_ROW_HEIGHT)}>Action</th>
             </tr>
           </thead>
@@ -331,7 +333,12 @@ export function MaterialDetailsTable({
                     />
                   </td>
 
-                  <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20" style={stickyStyle("product", docType, showAllColumns)}>
+                  <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20" style={stickyStyle("product", docType, showAllColumns)}
+                    onMouseEnter={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setUppTip({ value: numberOrZero(row.uppp), x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+                    }}
+                    onMouseLeave={() => setUppTip(null)}>
                     <LookupField
                       label=""
                       value={row.prod_code || ""}
@@ -361,9 +368,9 @@ export function MaterialDetailsTable({
                         updateRow(row.id, patch);
                       }}
                     />
-                    <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                    {/* <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                       Unit Per Primary: {row.uppp}
-                    </span>
+                    </span> */}
                   </td>
 
                   {/* Primary: Qty */}
@@ -462,21 +469,21 @@ export function MaterialDetailsTable({
                       }
                     />
                   </td>
-                 
-          
-              
-        
-       
+
+
+
+
+
 
                   {/* ---------- All Columns view only ---------- */}
-              
-                
-    
-              
-                 <td className="w-32 px-2 py-1">
+
+
+
+
+                  <td className="w-32 px-2 py-1">
                     <Input className={INPUT_BG} type="date" disabled={headerAndLineDisabled} value={row.required_dt} onChange={(event) => updateRow(row.id, { required_dt: event.target.value })} />
                   </td>
-                <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
+                  <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
                     <textarea className="bg-white disabled:bg-slate-100 disabled:text-slate-500" disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
                   </td>
 
@@ -537,6 +544,23 @@ export function MaterialDetailsTable({
           <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
         </div>
       </div>
+
+      {uppTip &&
+        createPortal(
+          <div
+            className="pointer-events-none whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg"
+            style={{
+              position: "fixed",
+              top: uppTip.y,
+              left: uppTip.x,
+              transform: "translateX(-50%)",
+              zIndex: 9999,
+            }}
+          >
+            Unit Per Primary: {uppTip.value}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -615,6 +615,7 @@ footer={
           </Button>
         )}
 
+        {requestNumber &&(
         <Button
           type="button"
           onClick={() => void save("SUBMITTED")}
@@ -624,6 +625,7 @@ footer={
           {savingAction === "SUBMITTED" ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
           <span>{permissions.mode === 'resumption' ? 'Approve Resumption' : isCreator ? "Submit" : "Approve"}</span>
         </Button>
+      )}
 
         {!createMode && (
           <>
