@@ -1731,7 +1731,8 @@ export function FreightJobActivitiesPage({
         onClose={() => setCostBookingModalOpen(false)}
         title="Cost Bookings & Vouchers (PowerBuilder dw_3)"
         description="Detailed vendor and provision cost allocations from dw_service_activities_costbooking"
-        size="5xl"
+        wide
+        contentClassName="max-w-5xl"
         footer={
           <div className="flex items-center justify-between w-full">
             <span className="text-xs text-slate-500">
