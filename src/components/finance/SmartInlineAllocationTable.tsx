@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Briefcase, CheckCircle2, ChevronUp, FileText, Plus, Receipt, RefreshCw, Trash2, Zap } from "lucide-react";
 import { TransactionChildRow, TransactionDetail } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue } from "../../api/lookups";
@@ -128,7 +129,7 @@ export function SmartInlineAllocationTable({
   const totalTableWidth = colConfigs.reduce((sum, col) => sum + col.width, 0);
 
   return (
-    <div className="finance-allocation-panel my-0.5 w-fit min-w-[520px] max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
+    <div style={{ "--allocation-panel-width": `${totalTableWidth}px`, flex: "0 0 auto" } as CSSProperties} className="finance-allocation-panel my-0.5 w-fit min-w-[520px] max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
       {/* Sub-toolbar: Ultra-compact, no unwanted verbose titles */}
       <div className="finance-allocation-toolbar flex items-center justify-between gap-2 border-b px-2 py-1 text-xs">
         <div className="flex items-center gap-1.5 shrink-0">

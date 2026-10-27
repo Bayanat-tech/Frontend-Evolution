@@ -1790,3 +1790,8 @@ form.commercial-document-workbench {
   overflow-y: auto !important;
   overflow-x: hidden !important;
 }
+/* Keep empty and populated allocation panels aligned to their column widths. */
+.finance-document-editor .finance-allocation-branch > .finance-allocation-panel {
+  width: var(--allocation-panel-width, max-content) !important;
+  max-width: 100% !important;
+}
