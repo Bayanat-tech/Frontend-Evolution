@@ -39,8 +39,22 @@ export async function getHrMaster(master: string, options: Record<string, unknow
   return response.data.data || { tableData: [], count: 0 };
 }
 
-export async function saveHrGm(endpoint: string, payload: Record<string, unknown>, method: "post" | "put" = "post") {
-  const response = await withHrFallback((prefix) => api[method]<ApiResponse<unknown>>(`${prefix}/gm/${endpoint}`, payload));
+export async function saveHrGm(
+  endpoint: string,
+  payload: Record<string, unknown>,
+  method: "post" | "put" = "post",
+  options: { omitUser?: boolean } = {},
+) {
+  let requestPayload = payload;
+  if (options.omitUser) {
+    requestPayload = { ...payload };
+    delete requestPayload.user_id;
+    delete requestPayload.user_dt;
+    delete requestPayload.loginid;
+    delete requestPayload._edit_key;
+  }
+
+  const response = await withHrFallback((prefix) => api[method]<ApiResponse<unknown>>(`${prefix}/gm/${endpoint}`, requestPayload));
   if (!response.data.success) throw new Error(response.data.message || `Unable to save ${endpoint}`);
   return response.data;
 }
