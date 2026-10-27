@@ -23,18 +23,14 @@ function extractApiErrorMessage(error: unknown, fallback: string) {
 
 export async function getLeaveFlowBucket(args: {
   companyCode: string;
-  loginId: string;     // workflow login id (loginid1 first), used to filter rows
-  userLoginId: string; // the user's original login (LOGINID); the procedure uses it to detect legacy
-  bucket: string; // Pg_Leave_flow, Pg_leave_flow_InProgress, ...
-  isMhdl: boolean;     // fallback only, same regex the page already uses
+  loginId: string;   // workflow login id (loginid1 first)
+  parameter: string; // LEAVE_FLOW_PENDING | _INPROGRESS | _CLOSED | _REJECTED | _SENTBACK | _CANCELLED
 }): Promise<LeaveFlowRow[]> {
   const params: DynamicQueryParams = {
-    parameter: "LEAVE_FLOW_LIST",
-    loginid: args.userLoginId,
+    parameter: args.parameter,
+    loginid: args.loginId,
     code1: args.companyCode,
     code2: args.loginId,
-    code3: args.bucket,
-    code4: args.isMhdl ? "MHDL" : "ALMS",
   };
 
   try {
@@ -56,6 +52,7 @@ export async function getLeaveFlowBucket(args: {
   }
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////
+
 export type LeaveTabKey = LeaveFlowKey | "all";
 
 type TabDefinition = {
@@ -73,13 +70,14 @@ const statusTabs: TabDefinition[] = [
   { key: "all", label: "All" },
 ];
 
+// Procedure parameter for each tab (PROC_BUILD_DYNAMIC_SQL_GET_LEAVE_FLOW)
 const tabEndpoints: Record<LeaveFlowKey, string> = {
-  request: "Pg_Leave_flow",
-  inProgress: "Pg_leave_flow_InProgress",
-  closed: "Pg_leave_flow_close",
-  sentBack: "Pg_leave_flow_SentBack",
-  cancelled: "Pg_leave_flow_cancel",
-  rejected: "Pg_leave_flow_Rejected",
+  request: "LEAVE_FLOW_PENDING",
+  inProgress: "LEAVE_FLOW_INPROGRESS",
+  closed: "LEAVE_FLOW_CLOSED",
+  sentBack: "LEAVE_FLOW_SENTBACK",
+  cancelled: "LEAVE_FLOW_CANCELLED",
+  rejected: "LEAVE_FLOW_REJECTED",
 };
 
 type Row = Record<string, unknown>;
@@ -95,7 +93,6 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
   const { user } = useAuth();
   const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
   const isMhdl = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || ''));
-  const userLoginId = String(user?.LOGINID || user?.loginid || "");
   const companyCode =String(user?.company_code || "");
 
   const [activeTab, setActiveTab] = useState<LeaveTabKey>(initialTab);
@@ -137,7 +134,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     try {
       const keys: LeaveFlowKey[] = isMhdl ? ["request", "inProgress", "closed", "cancelled", "rejected"] : ["request", "inProgress", "closed", "sentBack", "cancelled", "rejected"];
       const results = await Promise.allSettled(
-        keys.map((key) => getLeaveFlowBucket({ companyCode, loginId, userLoginId, bucket: tabEndpoints[key], isMhdl }))
+        keys.map((key) => getLeaveFlowBucket({ companyCode, loginId, parameter: tabEndpoints[key] }))
       );
 
       const nextData: Record<LeaveFlowKey, Row[]> = {
@@ -184,7 +181,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     } finally {
       setLoading(false);
     }
-  }, [loginId, userLoginId, companyCode, isMhdl]);
+  }, [loginId, companyCode, isMhdl]);
 
   useEffect(() => {
     void loadAllData(false);
