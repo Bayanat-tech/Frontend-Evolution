@@ -179,6 +179,8 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     ],
     deleteMode: "master",
   },
+
+  // ── Main Bank ──────────────────────────────────────────────────────────────
   bank: {
     title: "Bank Master",
     subtitle: "Maintain HR bank code, address, contact, company account and remarks.",
@@ -233,29 +235,30 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "main_bank_code"),
     }),
     fields: [
-      { name: "main_bank_name", label: "Bank Name", required: true, width: 280 },
-      { name: "main_bank_code", label: "Bank Code", required: true, width: 140 },
+      { name: "main_bank_name", label: "Bank Name", required: true, width: 280, limit: 50 },
+      { name: "main_bank_code", label: "Bank Code", required: true, width: 140, limit: 10 },
       { name: "main_bank_short_name", label: "Short Name", width: 150, limit: 4 },
 
       { name: "payer_bk_short_name", label: "Bank Short Name", table: false, limit: 4 },
-      { name: "payer_ac_iban", label: "Bank IBAN", table: false },
-      { name: "bk_bic_swift", label: "Bank BIC/Swift", table: false },
+      { name: "payer_ac_iban", label: "Bank IBAN", table: false, limit: 34 },
+      { name: "bk_bic_swift", label: "Bank BIC/Swift", table: false, limit: 11 },
 
-      { name: "main_bank_addr1", label: "Address", required: true, table: false },
-      { name: "main_bank_addr2", label: "Address 2", table: false },
-      { name: "main_bank_addr3", label: "Address 3", table: false },
+      { name: "main_bank_addr1", label: "Address", required: true, table: false, limit: 100 },
+      { name: "main_bank_addr2", label: "Address 2", table: false, limit: 100 },
+      { name: "main_bank_addr3", label: "Address 3", table: false, limit: 100 },
       { name: "country_code", label: "Country Code", lookup: countryLookup, required: true, table: false },
-      { name: "phone", label: "Phone", table: false },
-      { name: "fax", label: "Fax", table: false },
-      { name: "email", label: "Email", type: "email", table: false },
+      { name: "phone", label: "Phone", table: false, limit: 20 },
+      { name: "fax", label: "Fax", table: false, limit: 20 },
+      { name: "email", label: "Email", type: "email", table: false, limit: 100 },
 
-      { name: "remarks", label: "Remarks", table: false },
+      { name: "remarks", label: "Remarks", table: false, limit: 200 },
       { name: "status", label: "Status", type: "select", options: activeInactive, required: true, table: false },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
   },
 
+  // ── Bank ───────────────────────────────────────────────────────────────────
   hrbank: {
     title: "Bank",
     subtitle: "Maintain HR bank code, address, contact and remarks.",
@@ -310,19 +313,19 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     }),
     fields: [
       { name: "bank_code", label: "Bank Code", hideOnAdd: true, disabledOnEdit: true, width: 140 },
-      { name: "bank_name", label: "Bank Name", required: true, width: 280 },
-      { name: "bank_short_name", label: "Short Name", width: 150 },
+      { name: "bank_name", label: "Bank Name", required: true, width: 280, limit: 50 },
+      { name: "bank_short_name", label: "Short Name", width: 150, limit: 10 },
       { name: "main_bank_code", label: "Main Bank Code", width: 160, table: false, required: true, lookup: mainBankLookup },
       { name: "company_flag", label: "Company Branch", type: "select", options: yesNo, width: 150, table: false },
 
-      { name: "bank_addr1", label: "Address", required: true, table: false },
-      { name: "bank_addr2", label: "Address 2", table: false },
-      { name: "bank_addr3", label: "Address 3", table: false },
+      { name: "bank_addr1", label: "Address", required: true, table: false, limit: 100 },
+      { name: "bank_addr2", label: "Address 2", table: false, limit: 100 },
+      { name: "bank_addr3", label: "Address 3", table: false, limit: 100 },
       { name: "country_code", label: "Country Code", lookup: countryLookup, required: true, table: false },
-      { name: "phone", label: "Phone", table: false },
-      { name: "fax", label: "Fax", table: false },
-      { name: "email", label: "Email", type: "email", table: false },
-      { name: "remarks", label: "Remarks", table: false },
+      { name: "phone", label: "Phone", table: false, limit: 20 },
+      { name: "fax", label: "Fax", table: false, limit: 20 },
+      { name: "email", label: "Email", type: "email", table: false, limit: 100 },
+      { name: "remarks", label: "Remarks", table: false, limit: 200 },
       { name: "status", label: "Status", type: "select", options: activeInactive, required: true, table: false },
     ],
     defaults: { status: "A", company_flag: "N" },
@@ -567,7 +570,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "edu_level_code"),
     }),
     fields: [
-      { name: "edu_level_code", label: "Level Code", required: true, disabledOnEdit: true, width: 140 },
+      { name: "edu_level_code", label: "Level Code", required: true, disabledOnAdd: true, disabledOnEdit: true, width: 140 },
       { name: "edu_level_desc", label: "Level Description", required: true, width: 280 },
       { name: "edu_level_short_desc", label: "Short Description", width: 170 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
@@ -605,7 +608,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "edu_disc_code"),
     }),
     fields: [
-      { name: "edu_disc_code", label: "Discipline Code", required: true, disabledOnEdit: true, width: 160 },
+      { name: "edu_disc_code", label: "Discipline Code", required: true, disabledOnAdd: true, disabledOnEdit: true, width: 160 },
       { name: "edu_disc_desc", label: "Discipline Description", required: true, width: 300 },
       { name: "edu_disc_short_desc", label: "Short Description", width: 170 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
@@ -769,7 +772,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     }),
     buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CATEGORY", loginid: context.loginid, code1: context.companyCode, code2: text(row, "category_code") }),
     fields: [
-      { name: "category_code", label: "Category Code", required: true, disabledOnEdit: true, width: 160 },
+      { name: "category_code", label: "Category Code", required: true,disabledOnAdd : true, disabledOnEdit: true, width: 160 },
       { name: "category_name", label: "Category Name", required: true, width: 260 },
       { name: "category_short_name", label: "Short Name", width: 140 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },

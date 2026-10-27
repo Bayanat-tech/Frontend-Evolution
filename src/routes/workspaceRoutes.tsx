@@ -109,7 +109,7 @@
 
   import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
-  import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
+ 
 
   import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";
   import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
@@ -245,6 +245,7 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
   import HrEmployeeWiseCostReport from "../pages/hr/Reports/HrEmployeeWiseCostReport";
 import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 import { useAuth } from "../state/AuthContext";
+import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 
   type WorkspaceRouteContext = {
     pathname: string;
@@ -2522,7 +2523,7 @@ import { useAuth } from "../state/AuthContext";
   function isHrAccuralAccountSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return normalized.includes(
-      "/workspace/hcm/hcm/pay%20components/accural%20account%20setup"
+      "/workspace/hcm/hcm/pay%20components/accrual%20account%20setup"
     );
   }
 

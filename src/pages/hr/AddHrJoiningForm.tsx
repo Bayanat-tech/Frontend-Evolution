@@ -3,18 +3,30 @@
 // HR Joining form — Freight-style:
 //  • forwardRef + useImperativeHandle → parent header "Save" button calls save()
 //  • SectionPanel / Field from shared Formblocks
+//  • Dropdowns use MultiSelectField (same UI as Employee Ticket Eligibility),
+//    behaving as single-select
 //  • toast for validation / API feedback (no inline notice banners)
 //  • No bottom Cancel/Submit row — Close / Save live in the page header
 
 import { Briefcase, FileText, ListChecks, Plus, Trash2, X } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import { getDynamicLookup } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, SectionPanel } from "../../components/ui/Formblocks";
 import { Input } from "../../components/ui/Input";
-import { Select } from "../../components/ui/Select";
+import {
+  MultiSelectField,
+  type MultiSelectOption,
+} from "../../components/ui/MultiSelectField";
 import { useAuth } from "../../state/AuthContext";
 import hrJoinServiceInstance from "./insUpdHrJoinRpt";
 
@@ -64,6 +76,8 @@ type PayCompOption = { pay_comp_id: string; pay_comp_desc: string; pay_comp_shor
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+const ALL_SENTINEL = "__ALL__";
+
 function toDate(value: unknown): string {
   if (!value) return "";
   const date = new Date(String(value).trim());
@@ -104,6 +118,41 @@ const makeRowId = () => `row_${Date.now()}_${Math.random().toString(36).slice(2)
 const fmtAmount = (n: number) =>
   n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** "CODE - Name" option, same label format as Ticket Eligibility. */
+const toOption = (code: unknown, name: unknown): MultiSelectOption | null => {
+  const c = String(code ?? "").trim();
+  const n = String(name ?? "").trim();
+  if (!c) return null;
+  return { value: c, label: n ? `${c} - ${n}` : c };
+};
+
+const dedupe = (opts: (MultiSelectOption | null)[]): MultiSelectOption[] => {
+  const seen = new Set<string>();
+  const out: MultiSelectOption[] = [];
+  for (const o of opts) {
+    if (!o || seen.has(o.value)) continue;
+    seen.add(o.value);
+    out.push(o);
+  }
+  return out;
+};
+
+/**
+ * MultiSelectField is multi-select; the joining form stores ONE value.
+ * Picking a new item replaces the old one, clicking the selected one clears it.
+ */
+const pickSingle = (prev: string, next: string[]): string => {
+  const cleaned = next.filter((v) => v !== ALL_SENTINEL);
+  if (cleaned.length === 0) return "";
+  return cleaned.find((v) => v !== prev) ?? prev;
+};
+
+/** Read-only text for a selected option (used in view mode). */
+const labelOf = (options: MultiSelectOption[], value?: string): string => {
+  if (!value) return "";
+  return options.find((o) => o.value === value)?.label ?? value;
+};
+
 // ── Add Pay Component Modal ───────────────────────────────────────────────────
 
 function AddPayComponentModal({
@@ -130,6 +179,11 @@ function AddPayComponentModal({
       setErrors({});
     }
   }, [open]);
+
+  const selectOptions = useMemo(
+    () => dedupe(options.map((o) => toOption(o.pay_comp_id, o.pay_comp_desc))),
+    [options],
+  );
 
   const validate = () => {
     const errs: typeof errors = {};
@@ -170,21 +224,17 @@ function AddPayComponentModal({
     >
       <div className="grid gap-3">
         <Field label="Pay Component" required error={errors.pay_comp_id}>
-          <Select
-            value={selectedId}
-            disabled={loading}
-            onChange={(e) => {
-              setSelectedId(e.target.value);
+          <MultiSelectField
+            className="freight-report-multi-select"
+            label=""
+            options={selectOptions}
+            loading={loading}
+            value={selectedId ? [selectedId] : []}
+            onChange={(v) => {
+              setSelectedId((prev) => pickSingle(prev, v));
               setErrors((p) => ({ ...p, pay_comp_id: undefined }));
             }}
-          >
-            <option value="">{loading ? "Loading..." : "Select pay component"}</option>
-            {options.map((opt) => (
-              <option key={opt.pay_comp_id} value={opt.pay_comp_id}>
-                {opt.pay_comp_desc} ({opt.pay_comp_id})
-              </option>
-            ))}
-          </Select>
+          />
         </Field>
         <Field label="Amount" required error={errors.pay_comp_amt}>
           <Input
@@ -265,9 +315,9 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
           getDynamicLookup(baseParams("MST_HR_MS_HR_DESIGNATION_LIST")),
           getDynamicLookup(baseParams("PAY_COMPONENT_PAYUNIT_DependPayUnit")),
         ]);
-        setDivOptions(divs as DivisionOption[]);
-        setDesigOptions(desigs as DesigOption[]);
-        setPayCompOptions(payComps as PayCompOption[]);
+        setDivOptions(Array.isArray(divs) ? (divs as DivisionOption[]) : []);
+        setDesigOptions(Array.isArray(desigs) ? (desigs as DesigOption[]) : []);
+        setPayCompOptions(Array.isArray(payComps) ? (payComps as PayCompOption[]) : []);
       } catch {
         // silent — dropdowns degrade gracefully
       } finally {
@@ -278,6 +328,16 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
     };
     void fetchAll();
   }, [baseParams]);
+
+  // MultiSelect options ("CODE - Name")
+  const divSelectOptions = useMemo(
+    () => dedupe(divOptions.map((d) => toOption(d.div_code, d.div_name))),
+    [divOptions],
+  );
+  const desigSelectOptions = useMemo(
+    () => dedupe(desigOptions.map((d) => toOption(d.desg_code, d.desg_name))),
+    [desigOptions],
+  );
 
   const set = (field: keyof THrJoining, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -383,32 +443,32 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
       <SectionPanel title="Employment & Bank Details" icon={Briefcase}>
         <div className="grid gap-3 md:grid-cols-4">
           <Field label="Division">
-            <Select
-              disabled={readonly || divLoading}
-              value={form.division ?? ""}
-              onChange={(e) => set("division", e.target.value)}
-            >
-              <option value="">{divLoading ? "Loading..." : "Select Division"}</option>
-              {divOptions.map((d) => (
-                <option key={d.div_code} value={d.div_code}>
-                  {d.div_name}
-                </option>
-              ))}
-            </Select>
+            {readonly ? (
+              <Input disabled value={labelOf(divSelectOptions, form.division)} />
+            ) : (
+              <MultiSelectField
+                className="freight-report-multi-select"
+                label=""
+                options={divSelectOptions}
+                loading={divLoading}
+                value={form.division ? [form.division] : []}
+                onChange={(v) => set("division", pickSingle(form.division ?? "", v))}
+              />
+            )}
           </Field>
           <Field label="Designation">
-            <Select
-              disabled={readonly || desigLoading}
-              value={form.desig ?? ""}
-              onChange={(e) => set("desig", e.target.value)}
-            >
-              <option value="">{desigLoading ? "Loading..." : "Select Designation"}</option>
-              {desigOptions.map((d) => (
-                <option key={d.desg_code} value={d.desg_code}>
-                  {d.desg_name}
-                </option>
-              ))}
-            </Select>
+            {readonly ? (
+              <Input disabled value={labelOf(desigSelectOptions, form.desig)} />
+            ) : (
+              <MultiSelectField
+                className="freight-report-multi-select"
+                label=""
+                options={desigSelectOptions}
+                loading={desigLoading}
+                value={form.desig ? [form.desig] : []}
+                onChange={(v) => set("desig", pickSingle(form.desig ?? "", v))}
+              />
+            )}
           </Field>
           <Field label="Joining Date">
             <Input {...text("join_date", "date")} />
