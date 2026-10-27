@@ -2068,7 +2068,7 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
   }
   function isPurchaseGRNSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return (normalized.includes("purchase_sales/purchase/purchase_grn"))
+    return (normalized.includes("/ims/ims/purchase/goods_receipt_note"))
   }
   function isPurchaseReturnSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
@@ -2100,7 +2100,7 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
   }
   function isSalesDNSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return (normalized.includes("purchase_sales/sales/sales_dn"))
+    return (normalized.includes("/ims/ims/sales/sales_delivery_note"))
   }
   function isStocksTransferSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
