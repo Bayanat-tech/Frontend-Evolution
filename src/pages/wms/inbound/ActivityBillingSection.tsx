@@ -19,6 +19,9 @@ function sqlEscape(str: string) {
   return str.replace(/'/g, "''");
 }
 
+// Allows only digits with an optional single decimal point (e.g. "", "1", "1.", "1.5", ".5")
+const DECIMAL_INPUT_REGEX = /^\d*\.?\d*$/;
+
 // In the component props, keep using ActivityRow — it's now just WmsRow
 export function ActivityBillingSection({
   companyCode,
@@ -59,6 +62,9 @@ export function ActivityBillingSection({
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
+
+  // Raw text for the Bill Rate input so decimals like "12." or "12.50" can be typed freely
+  const [billRateText, setBillRateText] = useState<string>("0");
 
   // ── Queries (unchanged) ──
   const { data: activityData = [] } = useQuery({
@@ -229,12 +235,14 @@ export function ActivityBillingSection({
   const openAddDialog = () => {
     setEditIndex(null);
     setFormRow(emptyForm());
+    setBillRateText("0");
     setDialogOpen(true);
   };
 
   const openEditDialog = useCallback((index: number) => {
     setEditIndex(index);
     setFormRow({ ...activityRows[index] });
+    setBillRateText(String(value(activityRows[index], "bill_rate") ?? 0));
     setDialogOpen(true);
   }, [activityRows]);
 
@@ -248,6 +256,14 @@ export function ActivityBillingSection({
     });
     setActivityRows((cur) => cur.filter((_, i) => i !== index));
   }, [activityRows, setActivityRows, setActivityEdited]);
+
+  const handleBillRateInput = (text: string) => {
+    // Ignore anything that isn't a valid in-progress decimal number
+    if (!DECIMAL_INPUT_REGEX.test(text)) return;
+    setBillRateText(text);
+    const num = parseFloat(text);
+    setFormRow((r) => recalcRow({ ...r, bill_rate: Number.isFinite(num) ? num : 0 }));
+  };
 
   const commitFormRow = () => {
     const final = recalcRow(formRow);
@@ -620,15 +636,21 @@ export function ActivityBillingSection({
                 />
               </div>
 
-              {/* Bill Rate */}
+              {/* Bill Rate — text input w/ decimal keypad so "12." and "12.50" can be typed */}
               <div className="grid gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Bill Rate</label>
                 <Input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={String(value(formRow, "bill_rate") ?? 0)}
-                  onChange={(e: any) => setFormRow((r) => recalcRow({ ...r, bill_rate: Number(e.target.value) || 0 }))}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={billRateText}
+                  onChange={(e: any) => handleBillRateInput(e.target.value)}
+                  onFocus={(e: any) => e.target.select()}
+                  onBlur={() => {
+                    // Tidy up on blur: "" -> "0", "12." -> "12", ".5" -> "0.5"
+                    const num = parseFloat(billRateText);
+                    setBillRateText(Number.isFinite(num) ? String(num) : "0");
+                  }}
                 />
               </div>
 

@@ -125,6 +125,36 @@ type TxnType = "E" | "D" | "ALL";
 /* API                                                                        */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Sync employee pay components before salary is processed.
+ * Runs PROC_SYNC_HR_EMP_COMPONENTS through the dynamic SQL common proc
+ * (same getDynamicLookup path as the other lookups on this page).
+ *   code1 = company code                    (P_CODE1)
+ *   code2 = employee ids, comma separated   (P_CODE2)  e.g. "101,102,103"
+ */
+async function syncEmpComponents(
+  companyCode: string,
+  employeeIds: string,
+  loginId: string
+): Promise<void> {
+  const queryParams: DynamicQueryParams = {
+    parameter: "PROC_SYNC_HR_EMP_COMPONENTS",
+    loginid: loginId || "",
+    code1: companyCode || "",
+    code2: employeeIds,
+  };
+
+  try {
+    await getDynamicLookup(queryParams);
+  } catch (e: any) {
+    // surface the backend's message (axios hides it inside e.response)
+    const d = e?.response?.data;
+    throw new Error(
+      d?.details || d?.message || e?.message || "Failed to sync employee components"
+    );
+  }
+}
+
 async function processBulkSalary(
   companyCode: string,
   employeeIds: string,
@@ -925,13 +955,16 @@ export default function PayrollProcessingPage() {
         .filter(Boolean)
         .join(",");
 
-      // 2. Call the bulk process procedure
+      // 2. Sync employee pay components (company code + comma-separated employee IDs)
+      await syncEmpComponents(companyCode, employeeIdsStr, loginid);
+
+      // 3. Call the bulk process procedure
       await processBulkSalary(companyCode, employeeIdsStr, divCode, loginid);
 
-      // 3. Adjust Pay COLA for the company
+      // 4. Adjust Pay COLA for the company
       await adjustPayColaForCompany(companyCode, loginid);
 
-      // 4. Update local state
+      // 5. Update local state
       setRows((prev) =>
         prev.map((r) =>
           selectedRows.some(
