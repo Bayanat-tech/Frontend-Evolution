@@ -349,6 +349,28 @@ export default function MseProdGroup() {
 
               <SectionPanel title="Goods in Transit / Inventory A/C" icon={LayoutGrid}>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                    <Field label="GIT-IN A/C Code" required>
+                    <LookupField
+                      label=""
+                      value={form.gitin_ac_code ?? ""}
+                      valueField="ac_code"
+                      displayFields={["ac_code", "ac_name"]}
+                      columns={[
+                        { field: "ac_code", header: "Code" },
+                        { field: "ac_name", header: "Name" },
+                      ]}
+                      loadOptions={async () => {
+                        return await getDynamicLookup({
+                          parameter: "PURCHASE_SALES_MSE_PROD_GROUP_DROP_DOWN_GITIN_ACCOUNT",
+                          loginid: loginId,
+                          code1: companyCode,
+                        }) || [];
+                      }}
+                      onChange={(value) => setField("gitin_ac_code", value)}
+                      compact
+                    />
+                  </Field>
+                  
                   <Field label="Inventory A/C Code">
                     <LookupField
                       label=""
@@ -437,27 +459,7 @@ export default function MseProdGroup() {
                     />
                   </Field>
 
-                  <Field label="GIT-IN A/C Code" required>
-                    <LookupField
-                      label=""
-                      value={form.gitin_ac_code ?? ""}
-                      valueField="ac_code"
-                      displayFields={["ac_code", "ac_name"]}
-                      columns={[
-                        { field: "ac_code", header: "Code" },
-                        { field: "ac_name", header: "Name" },
-                      ]}
-                      loadOptions={async () => {
-                        return await getDynamicLookup({
-                          parameter: "PURCHASE_SALES_MSE_PROD_GROUP_DROP_DOWN_GITIN_ACCOUNT",
-                          loginid: loginId,
-                          code1: companyCode,
-                        }) || [];
-                      }}
-                      onChange={(value) => setField("gitin_ac_code", value)}
-                      compact
-                    />
-                  </Field>
+
 
                   <Field label="GIT-OUT A/C Code">
                     <LookupField
