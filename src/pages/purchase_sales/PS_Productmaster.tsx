@@ -1,4 +1,4 @@
-import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, Building2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote } from "lucide-react";
+import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, Wallet } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
@@ -10,7 +10,7 @@ import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
 import { Input } from "../../components/ui/Input";
-import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 /* ------------------------------------------------------------------ */
 /*  Types & field definitions                                          */
@@ -43,57 +43,66 @@ const makeEmpty = (): ProductRow => ({
   reorder_qty: 0, tx_compt_1: "N", tx_compt_2: "N", tx_compt_3: "N", tx_compt_4: "N",
 });
 
-/* Compact input styling — applied on every Input in the editor */
-const INPUT_CLS = "!h-7 !text-[11px] !px-2 !py-0";
+/* Input sizing — same as Employee Master */
+const CTL = "h-7 text-xs";
 
-/* ─────────────────────────────────────────────────────────────
-   SectionPanel — compact
-   ───────────────────────────────────────────────────────────── */
-function SectionPanel({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <div className="freight-panel-title flex items-center justify-start border-b bg-muted/35 px-2 py-1">
-        <div className="flex min-w-0 items-center justify-start gap-1.5">
-          <span className="freight-section-icon">
-            <Icon size={11} />
-          </span>
-          <h3 className="m-0 truncate text-left text-[10.5px] font-semibold text-foreground">{title}</h3>
-        </div>
-      </div>
-      <div className="freight-panel-body px-2 py-1.5">{children}</div>
-    </section>
-  );
-}
+/* ─────────────── UI building blocks (Employee Master style) ─────────────── */
 
-/* ─────────────────────────────────────────────────────────────
-   Field — compact label
-   ───────────────────────────────────────────────────────────── */
-function Field({
+function HeaderBlock({
   label,
-  required,
+  icon,
   children,
-  className,
+  gridCols = "grid-cols-2",
+  bodyClass,
+  className = "",
 }: {
   label: string;
-  required?: boolean;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+  bodyClass?: string;
   className?: string;
 }) {
   return (
-    <label className={`freight-field-label group flex flex-col gap-0.5 min-w-0 ${className ?? ""}`}>
-      <span className="truncate text-[10px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
+    <div className={`overflow-hidden rounded-md border border-[#cbd5e1] bg-card ${className}`}>
+      <div className="flex items-center gap-2 border-b border-[#cbd5e1] bg-slate-50 px-2.5 py-1">
+        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
+          {icon}
+        </span>
+        <span className="text-xs font-bold text-[#00378C]">{label}</span>
+      </div>
+      <div
+        className={
+          bodyClass ?? `grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CField({
+  label,
+  required,
+  error,
+  className = "",
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
         {label}
-        {required && <strong className="text-destructive ml-0.5 font-bold">*</strong>}
+        {required && <span className="ml-1 text-destructive">*</span>}
       </span>
       {children}
+      {error && <span className="text-[10px] text-destructive">{error}</span>}
     </label>
   );
 }
@@ -338,9 +347,9 @@ const ProductPurchaseSales = () => {
     [],
   );
 
-  /* Helper to render a compact UOM lookup (wrapped in .pd-lookup for sizing) */
+  /* Helper to render a compact UOM lookup */
   const renderUomLookup = (key: "p_uom" | "l_uom") => (
-    <div className="pd-lookup w-full min-w-0">
+    <div className="w-full min-w-0">
       <LookupField
         label=""
         value={form[key] ?? ""}
@@ -365,7 +374,7 @@ const ProductPurchaseSales = () => {
     </div>
   );
 
-  /* Helper to render a compact code/name lookup (wrapped in .pd-lookup for sizing) */
+  /* Helper to render a compact code/name lookup */
   const renderLookup = (
     key: string,
     parameter: string,
@@ -374,7 +383,7 @@ const ProductPurchaseSales = () => {
     codeHeader = "Code",
     nameHeader = "Name",
   ) => (
-    <div className="pd-lookup w-full min-w-0">
+    <div className="w-full min-w-0">
       <LookupField
         label=""
         value={form[key] ?? ""}
@@ -399,26 +408,43 @@ const ProductPurchaseSales = () => {
     </div>
   );
 
+  /* Helpers for plain text / number inputs */
+  const textInput = (key: string) => (
+    <Input
+      className={CTL}
+      value={form[key] ?? ""}
+      onChange={(e) => setField(key, e.target.value)}
+    />
+  );
+  const numInput = (key: string) => (
+    <Input
+      className={CTL}
+      type="number"
+      value={form[key] ?? 0}
+      onChange={(e) => setField(key, Number(e.target.value))}
+    />
+  );
+
   /* ─────────────────────────────────────────────────────────
-     EDITOR — single compact view, no tabs, no scroll
+     EDITOR — Employee Master style layout
      ───────────────────────────────────────────────────────── */
   if (view === "editor") {
     return (
-      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-1.5">
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
         {/* Header */}
-        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1 shadow-sm">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-              <FileText size={13} />
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-base font-semibold leading-tight text-foreground">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
                 {editMode ? "Edit Product" : "New Product"}
               </h1>
-              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] leading-tight font-medium text-amber-700">
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
                 {editMode ? "Editing" : "Draft"}
               </span>
-              <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0 text-[10px] leading-tight font-medium text-[#00378C]">
+              <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
                 Product Code:
                 <strong className="font-semibold">
                   {editMode && form.prod_code ? String(form.prod_code) : "Auto-generated"}
@@ -429,263 +455,177 @@ const ProductPurchaseSales = () => {
 
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor}>
-              <List size={13} /> List
+              <List size={14} /> List
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
-              <X size={13} /> Close
+              <X size={14} /> Close
             </Button>
             <Button type="button" size="sm" onClick={() => handleSubmit()} disabled={saving}>
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {saving ? "Saving" : "Save"}
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {saving ? "Saving" : "Save"}
             </Button>
           </div>
         </div>
 
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700">
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
             {error}
           </div>
         )}
 
-        {/* Form body — everything visible at once */}
-        <div className="pd-compact grid gap-1.5">
-          <style>{`
-            .pd-compact .freight-panel-title { justify-content: flex-start !important; padding: 3px 8px !important; min-height: 0 !important; }
-            .pd-compact .freight-panel-title > div { display: flex !important; align-items: center !important; justify-content: flex-start !important; gap: 6px !important; }
-            .pd-compact .freight-section-icon { width: 18px !important; height: 18px !important; min-width: 18px !important; border-radius: 4px !important; display: inline-grid !important; place-items: center !important; }
-            .pd-compact .freight-section-icon svg { width: 11px !important; height: 11px !important; }
-            .pd-compact .freight-panel-title h3 { font-size: 10.5px !important; text-align: left !important; margin: 0 !important; }
-            .pd-compact .freight-panel-body { padding: 5px 8px 6px !important; }
-            .pd-compact .freight-field-label { gap: 2px !important; }
-            .pd-compact .freight-field-label > span { font-size: 9.5px !important; line-height: 1.1 !important; font-weight: 500 !important; letter-spacing: 0.02em !important; opacity: 0.85; }
-            .pd-compact input:not([type="checkbox"]),
-            .pd-compact select,
-            .pd-compact button { height: 24px !important; min-height: 24px !important; font-size: 11px !important; padding-top: 0 !important; padding-bottom: 0 !important; padding-left: 7px !important; border-radius: 4px !important; }
-            .pd-compact button svg { width: 12px !important; height: 12px !important; }
+        {/* Form body */}
+        <div style={{ zoom: 0.8 }} className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-1.5">
 
-            /* Lookup (dropdown) fields — LookupField's trigger is a div.lookup-field-trigger (h-7 = 28px).
-               Shrink it to 24px to match the inputs, and keep its inner buttons (text / clear / chevron) intact. */
-            .pd-compact .lookup-field-trigger { height: 24px !important; min-height: 24px !important; max-height: 24px !important; border-radius: 4px !important; }
-            .pd-compact .lookup-field-trigger > button { height: 100% !important; min-height: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; border-radius: 0 !important; }
-            .pd-compact .lookup-field-trigger > button:first-of-type { padding-left: 7px !important; }
-            .pd-compact .lookup-field-trigger > button:not(:first-of-type) { width: 18px !important; padding-left: 0 !important; padding-right: 0 !important; }
-            .pd-compact .lookup-field-trigger svg { width: 11px !important; height: 11px !important; }
-          `}</style>
-          {/* 1. Identification */}
-          <SectionPanel title="Identification" icon={IdCard}>
-            <div className="grid gap-x-2 gap-y-1.5 grid-cols-2 md:grid-cols-6">
-              <Field label="Product Name" required className="col-span-2">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.prod_name ?? ""}
-                  onChange={(e) => setField("prod_name", e.target.value)}
-                />
-              </Field>
-              <Field label="Model #">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.model_number ?? ""}
-                  onChange={(e) => setField("model_number", e.target.value)}
-                />
-              </Field>
-              <Field label="Variant / Season">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.season_code ?? form.variant_code ?? ""}
-                  onChange={(e) => setField("season_code", e.target.value)}
-                />
-              </Field>
-              <Field label="Barcode">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.barcode ?? ""}
-                  onChange={(e) => setField("barcode", e.target.value)}
-                />
-              </Field>
-              <Field label="Size Code">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.size_code ?? ""}
-                  onChange={(e) => setField("size_code", e.target.value)}
-                />
-              </Field>
-            </div>
-          </SectionPanel>
-
-                    <SectionPanel title="Unit of Measure & Manufacture" icon={Box}>
-            <div className="grid gap-x-2 gap-y-1.5 grid-cols-2 md:grid-cols-6">
-              <Field label="Primary UOM" required>
-                {renderUomLookup("p_uom")}
-              </Field>
-              <Field label="Lower UOM" required>
-                {renderUomLookup("l_uom")}
-              </Field>
-              <Field label="UPPP" required>
-                <Input
-                  className={INPUT_CLS}
-                  type="number"
-                  disabled={sameUom}
-                  value={sameUom ? 1 : form.uppp ?? 0}
-                  onChange={(e) => setField("uppp", Number(e.target.value))}
-                />
-              </Field>
-              <Field label="Manufacturer Code">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.manu_code ?? ""}
-                  onChange={(e) => setField("manu_code", e.target.value)}
-                />
-              </Field>
-              <Field label="Origin Country">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.origin_country ?? ""}
-                  onChange={(e) => setField("origin_country", e.target.value)}
-                />
-              </Field>
-              <Field label="Alternate Product">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.alt_prod_code ?? ""}
-                  onChange={(e) => setField("alt_prod_code", e.target.value)}
-                />
-              </Field>
-            </div>
-          </SectionPanel>
-
-          {/* 2. Classification */}
-          <SectionPanel title="Classification" icon={LayoutGrid}>
-            <div className="grid gap-x-2 gap-y-1.5 grid-cols-2 md:grid-cols-6">
-              <Field label="Group Code" required>
-                {renderLookup("group_code", "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP", "group_code", "group_name", "Group Code", "Group Name")}
-              </Field>
-              <Field label="Brand Code" required>
-                {renderLookup("brand_code", "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND", "brand_code", "brand_name", "Brand Code", "Brand Name")}
-              </Field>
-              <Field label="Category Code">
-                {renderLookup("category_code", "PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY", "category_code", "category_name")}
-              </Field>
-              <Field label="Product Type Code">
-                {renderLookup("prodtype_code", "PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE", "prodtype_code", "prodtype_name")}
-              </Field>
-              <Field label="Division Code">
-                {renderLookup("div_code", "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION", "div_code", "div_name")}
-              </Field>
-              <Field label="Color Code">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.color_code ?? ""}
-                  onChange={(e) => setField("color_code", e.target.value)}
-                />
-              </Field>
-            </div>
-          </SectionPanel>
-
-          {/* 3. UOM + Manufacture */}
-
-
-          {/* 4. Dimensions & Weight — ONE LINE */}
-          <SectionPanel title="Dimensions & Weight" icon={Ruler}>
-            <div className="grid gap-x-2 gap-y-1.5 grid-cols-3 md:grid-cols-6">
-              {[
-                { label: "Length", key: "length" },
-                { label: "Breadth", key: "breadth" },
-                { label: "Height", key: "height" },
-                { label: "Volume", key: "volume" },
-                { label: "Gross Weight", key: "gross_wt" },
-                { label: "Net Weight", key: "net_wt" },
-              ].map(({ label, key }) => (
-                <Field label={label} key={key}>
+          {/* ══════════ TOP HALF ══════════ */}
+          <div className="grid items-start gap-1.5 xl:grid-cols-3">
+            {/* Identification (spans 2 cols) */}
+            <div className="xl:col-span-2">
+              <HeaderBlock label="Identification" icon={<IdCard size={11} />} gridCols="grid-cols-1 sm:grid-cols-4">
+                <CField label="Product Name" required className="sm:col-span-2">
+                  {textInput("prod_name")}
+                </CField>
+                <CField label="Model #">
+                  {textInput("model_number")}
+                </CField>
+                <CField label="Variant / Season">
                   <Input
-                    className={INPUT_CLS}
+                    className={CTL}
+                    value={form.season_code ?? form.variant_code ?? ""}
+                    onChange={(e) => setField("season_code", e.target.value)}
+                  />
+                </CField>
+                <CField label="Barcode">
+                  {textInput("barcode")}
+                </CField>
+                <CField label="Size Code">
+                  {textInput("size_code")}
+                </CField>
+                <CField label="Color Code">
+                  {textInput("color_code")}
+                </CField>
+                <CField label="Product Stage">
+                  {textInput("product_stage")}
+                </CField>
+              </HeaderBlock>
+            </div>
+
+            {/* Classification (1 col) */}
+            <div>
+              <HeaderBlock label="Classification" icon={<LayoutGrid size={11} />} gridCols="grid-cols-2">
+                <CField label="Group Code" required>
+                  {renderLookup("group_code", "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP", "group_code", "group_name", "Group Code", "Group Name")}
+                </CField>
+                <CField label="Brand Code" required>
+                  {renderLookup("brand_code", "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND", "brand_code", "brand_name", "Brand Code", "Brand Name")}
+                </CField>
+                <CField label="Category Code">
+                  {renderLookup("category_code", "PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY", "category_code", "category_name")}
+                </CField>
+                <CField label="Product Type Code">
+                  {renderLookup("prodtype_code", "PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE", "prodtype_code", "prodtype_name")}
+                </CField>
+                <CField label="Division Code" className="col-span-2">
+                  {renderLookup("div_code", "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION", "div_code", "div_name")}
+                </CField>
+              </HeaderBlock>
+            </div>
+          </div>
+
+          {/* ══════════ BOTTOM HALF (4 Columns) ══════════ */}
+          <div className="grid gap-1.5 xl:grid-cols-4">
+
+            {/* Column 1: UOM & Manufacture */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Unit of Measure & Manufacture" icon={<Box size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Primary UOM" required>
+                  {renderUomLookup("p_uom")}
+                </CField>
+                <CField label="Lower UOM" required>
+                  {renderUomLookup("l_uom")}
+                </CField>
+                <CField label="UPPP" required>
+                  <Input
+                    className={CTL}
                     type="number"
-                    value={form[key] ?? 0}
-                    onChange={(e) => setField(key, Number(e.target.value))}
+                    disabled={sameUom}
+                    value={sameUom ? 1 : form.uppp ?? 0}
+                    onChange={(e) => setField("uppp", Number(e.target.value))}
                   />
-                </Field>
-              ))}
+                </CField>
+                <CField label="Manufacturer Code">
+                  {textInput("manu_code")}
+                </CField>
+                <CField label="Origin Country">
+                  {textInput("origin_country")}
+                </CField>
+                <CField label="Alternate Product">
+                  {textInput("alt_prod_code")}
+                </CField>
+              </HeaderBlock>
             </div>
-          </SectionPanel>
 
-          {/* 5. Pricing & Tax */}
-          <SectionPanel title="Pricing, Reorder & Tax" icon={ShieldCheck}>
-            <div className="grid gap-x-2 gap-y-1.5 grid-cols-4 md:grid-cols-8">
-              <Field label="Cost Rate Unit">
-                <Input
-                  className={INPUT_CLS}
-                  type="number"
-                  value={form.cost_rate ?? 0}
-                  onChange={(e) => setField("cost_rate", Number(e.target.value))}
-                />
-              </Field>
-              <Field label="Retail Price">
-                <Input
-                  className={INPUT_CLS}
-                  type="number"
-                  value={form.retail_rate ?? 0}
-                  onChange={(e) => setField("retail_rate", Number(e.target.value))}
-                />
-              </Field>
-              <Field label="Sales Rate">
-                <Input
-                  className={INPUT_CLS}
-                  type="number"
-                  value={form.sales_rate ?? 0}
-                  onChange={(e) => setField("sales_rate", Number(e.target.value))}
-                />
-              </Field>
-              <Field label="Reorder Qty">
-                <Input
-                  className={INPUT_CLS}
-                  type="number"
-                  value={form.reorder_qty ?? 0}
-                  onChange={(e) => setField("reorder_qty", Number(e.target.value))}
-                />
-              </Field>
-              {[1, 2, 3, 4].map((num) => (
-                <Field label={`Tax Comp ${num}`} key={`tx_${num}`}>
-                  <Input
-                    className={INPUT_CLS}
-                    value={form[`tx_compt_${num}`] ?? ""}
-                    onChange={(e) => setField(`tx_compt_${num}`, e.target.value)}
+            {/* Column 2: Dimensions & Weight */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Dimensions & Weight" icon={<Ruler size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                {[
+                  { label: "Length", key: "length" },
+                  { label: "Breadth", key: "breadth" },
+                  { label: "Height", key: "height" },
+                  { label: "Volume", key: "volume" },
+                  { label: "Gross Weight", key: "gross_wt" },
+                  { label: "Net Weight", key: "net_wt" },
+                ].map(({ label, key }) => (
+                  <CField label={label} key={key}>
+                    {numInput(key)}
+                  </CField>
+                ))}
+              </HeaderBlock>
+            </div>
+
+            {/* Column 3: Pricing + Tax */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock label="Pricing & Reorder" icon={<Wallet size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Cost Rate Unit">
+                  {numInput("cost_rate")}
+                </CField>
+                <CField label="Retail Price">
+                  {numInput("retail_rate")}
+                </CField>
+                <CField label="Sales Rate">
+                  {numInput("sales_rate")}
+                </CField>
+                <CField label="Reorder Qty">
+                  {numInput("reorder_qty")}
+                </CField>
+              </HeaderBlock>
+
+              <HeaderBlock className="flex-1" label="Tax Components" icon={<ShieldCheck size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <CField label={`Tax Comp ${n}`} key={`tx_${n}`}>
+                    {textInput(`tx_compt_${n}`)}
+                  </CField>
+                ))}
+              </HeaderBlock>
+            </div>
+
+            {/* Column 4: Attributes & Notes */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Attributes & Notes" icon={<StickyNote size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Active">
+                  <CheckboxField
+                    checked={form.active === "Y" || form.active === true}
+                    onChange={(v) => setField("active", v ? "Y" : "N")}
+                    label="Yes/No"
                   />
-                </Field>
-              ))}
+                </CField>
+                <CField label="Co Packing">
+                  {textInput("co_packing")}
+                </CField>
+                <CField label="Remarks" className="sm:col-span-2">
+                  {textInput("remarks")}
+                </CField>
+              </HeaderBlock>
             </div>
-          </SectionPanel>
-
-          {/* 6. Other / Notes */}
-          <SectionPanel title="Attributes & Notes" icon={StickyNote}>
-            <div className="grid gap-x-2 gap-y-1.5 grid-cols-2 md:grid-cols-6">
-              <Field label="Active">
-                <CheckboxField
-                  checked={form.active === "Y" || form.active === true}
-                  onChange={(v) => setField("active", v ? "Y" : "N")}
-                  label="Yes/No"
-                />
-              </Field>
-              <Field label="Co Packing">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.co_packing ?? ""}
-                  onChange={(e) => setField("co_packing", e.target.value)}
-                />
-              </Field>
-              <Field label="Product Stage">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.product_stage ?? ""}
-                  onChange={(e) => setField("product_stage", e.target.value)}
-                />
-              </Field>
-              <Field label="Remarks" className="col-span-2 md:col-span-3">
-                <Input
-                  className={INPUT_CLS}
-                  value={form.remarks ?? ""}
-                  onChange={(e) => setField("remarks", e.target.value)}
-                />
-              </Field>
-            </div>
-          </SectionPanel>
+          </div>
         </div>
       </section>
     );

@@ -144,18 +144,8 @@ export function AddProductCategoryForm({ mode, existingData, onClose, onSavingCh
         onClose={() => setApiError("")}
       />
 
-      {/* ── Code badge (move this to the parent header next to "Draft" if you prefer) ── */}
-      <div>
-        <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
-          Product Category Code:
-          <strong className="font-semibold">
-            {isEdit || readonly ? String(form.prodcat_code || "") : "Auto-generated"}
-          </strong>
-        </span>
-      </div>
-
       <SectionPanel title="Basic Information" icon={IdCard}>
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field label="Prod Category Name" required>
             <Input
               disabled={readonly}

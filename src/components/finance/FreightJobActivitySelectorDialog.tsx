@@ -22,6 +22,7 @@ export interface SelectedFreightExpense {
   tx_cat_code?: string;
   tx_compntcat_code_1?: string;
   tx_compnt_perc_1?: number;
+  tx_compnt_1_expmt?: string;
   booked_pi_no?: string;
   isBooked?: boolean;
 }
@@ -205,6 +206,7 @@ export function FreightJobActivitySelectorDialog({
       const txCat = String(act.tx_cat_code_cost || act.tx_cat_code || "");
       const txCompntCat = String(act.tx_compntcat_code_1_cost || act.tx_compntcat_code_1 || "");
       const txPerc = Number(act.tx_compnt_perc_1_cost || act.tx_compnt_perc_1 || 0);
+      const txExpmt = String(act.tx_compnt_1_expmt_cost || act.tx_compnt_1_expmt || (txPerc > 0 ? "S" : "N"));
 
       // 1. Agent Cost line
       if (partnerPrice > 0) {
@@ -234,6 +236,7 @@ export function FreightJobActivitySelectorDialog({
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          tx_compnt_1_expmt: txExpmt,
           booked_pi_no: bookedDoc,
           isBooked: Boolean(bookedDoc),
         });
@@ -268,17 +271,19 @@ export function FreightJobActivitySelectorDialog({
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          tx_compnt_1_expmt: txExpmt,
           booked_pi_no: bookedDoc,
           isBooked: Boolean(bookedDoc),
         });
       }
 
-      // 3. Other Cost line
+      // 3. Other Cost line (PowerBuilder dw_3 supplier_type = 'ACTUAL', SUPPLIER_ACC = '2020100000')
+      // Other cost is an internal/direct job expense and does NOT belong to the Agent/Broker
       if (actualCost > 0) {
+        const otherAcCode = "2020100000";
         const isMatch = Boolean(
           cleanSupplier &&
-            (brokerCode.toUpperCase() === cleanSupplier ||
-              (brokerAcref && brokerAcref.toUpperCase() === cleanSupplier))
+            (cleanSupplier === otherAcCode || cleanSupplier.includes("202010"))
         );
         const curr = String(act.ac_curr_code || "");
         const ex = Number(act.ac_ex_rate || 1);
@@ -295,12 +300,13 @@ export function FreightJobActivitySelectorDialog({
           curr_code: curr,
           ex_rate: ex,
           lcur_amount: actualCost * ex,
-          vendor_code: brokerAcref || brokerCode,
-          vendor_name: brokerName || "Direct / Other Cost",
+          vendor_code: otherAcCode,
+          vendor_name: "Direct / Provision Cost",
           isSupplierMatch: isMatch,
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          tx_compnt_1_expmt: txExpmt,
           booked_pi_no: bookedDoc,
           isBooked: Boolean(bookedDoc),
         });
