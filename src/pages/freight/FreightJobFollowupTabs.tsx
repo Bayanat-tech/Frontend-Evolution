@@ -135,7 +135,13 @@ export function FreightJobFollowupTab({
     setSaving(true);
     try {
       const bodyKey = kind === "documents" ? "docs" : "lines";
-      await api.post(`/api/freight/${cfg.endpoint}/save`, { ...identity, user_id: userId, [bodyKey]: rows });
+      await api.post(`/api/freight/${cfg.endpoint}/save`, {
+        ...identity,
+        user_id: userId,
+        op_type: jobType === "EXP" ? "EXP" : "IMP",
+        op_mode: mode,
+        [bodyKey]: rows,
+      });
       await loadRows(job);
       notify({ type: "success", text: `${cfg.title} saved and reloaded.` });
     } catch (error: any) {
@@ -286,7 +292,7 @@ export function FreightJobFollowupTab({
       </div>}
       {kind === "documents" && <DocumentsGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={setDocAttachmentRow} onInit={initRows} saving={saving} readOnly={readOnly} userId={userId} />}
       {kind === "instructions" && <InstructionGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} companyCode={companyCode} opType={jobType} opMode={mode} />}
-      {kind === "alerts" && <AlertGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} />}
+      {kind === "alerts" && <AlertGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} companyCode={companyCode} opType={jobType} opMode={mode} />}
       {kind === "deposits" && <DepositGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} />}
 
       <FreightAttachmentDialog
@@ -390,20 +396,59 @@ function InstructionGrid({ rows, setRows, deleteRow, onInit, saving, readOnly, c
   );
 }
 
-function AlertGrid({ rows, setRows, deleteRow, onInit, saving, readOnly }: GridProps & { onInit?: () => void; saving?: boolean }) {
+function AlertGrid({
+  rows,
+  setRows,
+  deleteRow,
+  onInit,
+  saving,
+  readOnly,
+  companyCode,
+  opType,
+  opMode,
+}: GridProps & {
+  onInit?: () => void;
+  saving?: boolean;
+  companyCode?: string;
+  opType?: string;
+  opMode?: string;
+}) {
   return (
     <EditableGrid
       title="Job Operational Alerts"
       icon={Bell}
-      columns={["op_desc", "op_date", "op_yesno", "remarks"]}
+      columns={["op_code", "op_desc", "op_date", "op_yesno", "remarks"]}
       rows={rows}
       setRows={setRows}
       deleteRow={deleteRow}
       onInit={onInit}
       saving={saving}
       readOnly={readOnly}
-      addFactory={() => ({ OP_DESC: "", OP_DATE: new Date().toISOString().slice(0, 10), OP_YESNO: "Y", REMARKS: "" })}
-      labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks" }}
+      addFactory={() => ({
+        OP_CODE: "",
+        OP_DESC: "",
+        OP_DATE: new Date().toISOString().slice(0, 10),
+        OP_YESNO: "Y",
+        OP_TYPE: opType || "IMP",
+        REMARKS: "",
+      })}
+      labels={{
+        op_code: "Alert Code",
+        op_desc: "Alert Description",
+        op_date: "Alert Date",
+        op_yesno: "Completed (Y/N)",
+        remarks: "Remarks",
+      }}
+      instructionLookup={{
+        load: async () => {
+          const response = await api.post<{ data?: LookupRow[] }>("/api/freight/job-alerts/codes", {
+            company_code: companyCode,
+            op_type: opType,
+            op_mode: opMode,
+          });
+          return (response.data.data || []).map(normalizeLookupRow);
+        },
+      }}
     />
   );
 }
