@@ -589,7 +589,8 @@ export function SalesInvoiceHeaderForm({
                             <CField label="Tax Type">
                                 <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
-                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
+                                    const perc = taxType === "S" ? (Number(form.tx_compnt_perc_1) > 0 ? Number(form.tx_compnt_perc_1) : 5) : 0;
+                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_perc_1: perc }));
                                 }}>
                                     <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
                                 </Select>
