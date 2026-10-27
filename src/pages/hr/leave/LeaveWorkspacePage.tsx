@@ -23,14 +23,20 @@ function extractApiErrorMessage(error: unknown, fallback: string) {
 
 export async function getLeaveFlowBucket(args: {
   companyCode: string;
-  loginId: string;   // workflow login id (loginid1 first)
-  parameter: string; // LEAVE_FLOW_PENDING | _INPROGRESS | _CLOSED | _REJECTED | _SENTBACK | _CANCELLED
+  loginId: string;
+  parameter: string;
+  legacy: boolean;
+  offset?: number;
+  limit?: number;
 }): Promise<LeaveFlowRow[]> {
   const params: DynamicQueryParams = {
     parameter: args.parameter,
     loginid: args.loginId,
     code1: args.companyCode,
     code2: args.loginId,
+    code3: args.legacy ? "Y" : "N",
+    number1: args.offset ?? 0,
+    number2: args.limit ?? 1000,
   };
 
   try {
@@ -91,7 +97,8 @@ function canReviewLeave(row: Row, tabKey: string): boolean {
 
 export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: LeaveFlowKey }) {
   const { user } = useAuth();
-  const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
+  const loginId = String(user?.loginid1 || user?.LOGINID1 || "");
+  console.log("LeaveWorkspacePage: user loginId:", loginId, "company_code:", user?.company_code);
   const isMhdl = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || ''));
   const companyCode =String(user?.company_code || "");
 
@@ -134,8 +141,8 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     try {
       const keys: LeaveFlowKey[] = isMhdl ? ["request", "inProgress", "closed", "cancelled", "rejected"] : ["request", "inProgress", "closed", "sentBack", "cancelled", "rejected"];
       const results = await Promise.allSettled(
-        keys.map((key) => getLeaveFlowBucket({ companyCode, loginId, parameter: tabEndpoints[key] }))
-      );
+        keys.map((key) => getLeaveFlowBucket({ companyCode, loginId, parameter: tabEndpoints[key], legacy: isMhdl })
+      ));
 
       const nextData: Record<LeaveFlowKey, Row[]> = {
         request: [],
