@@ -22,8 +22,11 @@ type AssetSaleRow = {
   asset_id: string;
   asset_name: string;
   asset_ac_code: string;
+  asset_ac_name?: string;
   dprc_ac_code: string;
+  dprc_ac_name?: string;
   accudprc_ac_code: string;
+  accudprc_ac_name?: string;
   dprc_percentage: string;
   dprc_commence_date: string;
   doc_type: string;
@@ -42,6 +45,7 @@ type AssetSaleRow = {
   salvage_value: string;
   customer_name: string;
   customer_ac_code: string;
+  customer_ac_name?: string;
   status: string;
   exp_code: string;
   exp_code_name: string;
@@ -49,7 +53,9 @@ type AssetSaleRow = {
   exp_subtype_name: string;
   sold: string;
   fa_disposal_ac: string;
+  fa_disposal_ac_name?: string;
   pl_fa_disposal_ac: string;
+  pl_fa_disposal_ac_name?: string;
 };
 
 type EditorState =
@@ -67,8 +73,11 @@ const EMPTY_SALE: AssetSaleRow = {
   asset_id: "",
   asset_name: "",
   asset_ac_code: "",
+  asset_ac_name: "",
   dprc_ac_code: "",
+  dprc_ac_name: "",
   accudprc_ac_code: "",
+  accudprc_ac_name: "",
   dprc_percentage: "0.000",
   dprc_commence_date: "",
   doc_type: "",
@@ -87,6 +96,7 @@ const EMPTY_SALE: AssetSaleRow = {
   salvage_value: "0.000",
   customer_name: "",
   customer_ac_code: "",
+  customer_ac_name: "",
   status: "Y",
   exp_code: "",
   exp_code_name: "",
@@ -94,7 +104,9 @@ const EMPTY_SALE: AssetSaleRow = {
   exp_subtype_name: "",
   sold: "Y",
   fa_disposal_ac: "",
+  fa_disposal_ac_name: "",
   pl_fa_disposal_ac: "",
+  pl_fa_disposal_ac_name: "",
 };
 
 // ===================== MAIN PAGE =====================
@@ -298,7 +310,6 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
 }
 
 // INLINE EDITOR 
-
 function AssetSaleEditor({
   editor,
   title,
@@ -349,15 +360,46 @@ const loadAssetDetails = async (assetId: string, assetName: string) => {
     const h = res.find((r) => String(getLookupValue(r, "asset_id") || "") === assetId);
     if (!h) { setError(`Asset ${assetId} not found`); return; }
     const g = (k: string) => String(getLookupValue(h, k) || "");
+
+    const assetAcCode = g("asset_ac_code");
+    const dprcAcCode = g("dprc_ac_code");
+    const accudprcAcCode = g("accudprc_ac_code");
+    let assetAcName = g("asset_ac_name");
+    let dprcAcName = g("dprc_ac_name");
+    let accudprcAcName = g("accudprc_ac_name");
+
+    if ((assetAcCode && !assetAcName) || (dprcAcCode && !dprcAcName) || (accudprcAcCode && !accudprcAcName)) {
+      try {
+        const accList = await getDynamicLookup({
+          parameter: "AC_ASSETS_DEPRECIATION_ACCOUNT_CODE_LIST",
+          loginid: loginId,
+          code1: companyCode,
+        });
+        const findName = (code: string) => {
+          if (!code) return "";
+          const m = accList.find((r) => String(getLookupValue(r, "ac_code") || "") === String(code));
+          return m ? String(getLookupValue(m, "ac_name") || "") : "";
+        };
+        if (!assetAcName) assetAcName = findName(assetAcCode);
+        if (!dprcAcName) dprcAcName = findName(dprcAcCode);
+        if (!accudprcAcName) accudprcAcName = findName(accudprcAcCode);
+      } catch {}
+    }
+
     setForm((p) => ({
       ...p,
       asset_name: g("asset_name") || assetName,
       asset_properties: g("asset_properties"),
-      asset_ac_code: g("asset_ac_code"),
-      dprc_ac_code: g("dprc_ac_code"),
-      accudprc_ac_code: g("accudprc_ac_code"),
+      asset_ac_code: assetAcCode,
+      asset_ac_name: assetAcName,
+      dprc_ac_code: dprcAcCode,
+      dprc_ac_name: dprcAcName,
+      accudprc_ac_code: accudprcAcCode,
+      accudprc_ac_name: accudprcAcName,
       exp_subtype_code: g("exp_subtype_code"),
+      exp_subtype_name: g("exp_subtype_description"),
       exp_code: g("ac_exp_code"),
+      exp_code_name: g("exp_description"),
       dprc_percentage: money(g("dprc_percentage")),
       dprc_commence_date: dateInput(g("dprc_commence_date")),
       asset_amount: money(g("amount")),
@@ -643,7 +685,8 @@ const loadAssetDetails = async (assetId: string, assetName: string) => {
           </div>
         </div> */}
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 items-start">
+        {/* <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 items-start"> */}
+     <div className="grid grid-cols-1 xl:grid-cols-[2fr_3fr] gap-2 items-start">
   {/* ===== LEFT: DOCUMENT DETAILS ===== */}
   <div className="freight-master-form-card">
     <div className="freight-master-form-header">
@@ -699,16 +742,56 @@ const loadAssetDetails = async (assetId: string, assetName: string) => {
       <h3><span className="freight-section-icon"><Landmark size={16} /></span>Accounts</h3>
     </div>
     <div className="freight-master-form-body">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-         <Field className="col-span-1 sm:col-span-1" label="Customer Name" value={form.customer_name}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+         {/* <Field className="col-span-1 sm:col-span-1" label="Customer Name" value={form.customer_name}
           maxLength={SALE_LIMITS.customer_name!.max} error={fieldErrors.customer_name}
-          onChange={(v) => setField("customer_name", v)} disabled={readOnly} />
+          onChange={(v) => setField("customer_name", v)} disabled={readOnly} /> */}
         {/* read-only, auto-filled from the asset (legacy: Depreciation Details) */}
-        <Field label="Asset A/C" value={form.asset_ac_code} onChange={() => {}} disabled />
-        <Field label="Dprc A/C" value={form.dprc_ac_code} onChange={() => {}} disabled />
-        <Field label="Accudprc A/C" value={form.accudprc_ac_code} onChange={() => {}} disabled />
-        <Field label="Exp Sub Type" value={form.exp_subtype_code} onChange={() => {}} disabled />
-        <Field label="Exp Code" value={form.exp_code} onChange={() => {}} disabled />
+         {/* ===== editable: Sales Details ===== */}
+        <div className="freight-master-field">
+  <label className="freight-master-label"><span>Customer A/C</span></label>
+  <LookupField compact value={form.customer_ac_code}
+    displayValue={display(form.customer_ac_code, form.customer_ac_name || "")}
+    columns={accountColumns} valueField="ac_code" displayFields={["ac_code", "ac_name"]}
+    disabled={readOnly}
+    loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: loginId, code1: companyCode, code2: "", code3: "", code4: "", number1: 0, number2: 0, number3: 0, number4: 0, date1: null, date2: null, date3: null, date4: null })}
+    onChange={(value, row) => {
+      setField("customer_ac_code", value);
+      setField("customer_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+    }} />
+</div>
+
+<div className="freight-master-field">
+  <label className="freight-master-label"><span>FA Disposal A/C</span><span style={{ color: "#E24B4A" }} className="font-bold ml-0.5">*</span></label>
+  <LookupField compact value={form.fa_disposal_ac}
+    displayValue={display(form.fa_disposal_ac, form.fa_disposal_ac_name || "")}
+    columns={accountColumns} valueField="ac_code" displayFields={["ac_code", "ac_name"]}
+    disabled={readOnly}
+    loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: loginId, code1: companyCode, code2: "", code3: "", code4: "", number1: 0, number2: 0, number3: 0, number4: 0, date1: null, date2: null, date3: null, date4: null })}
+    onChange={(value, row) => {
+      setField("fa_disposal_ac", value);
+      setField("fa_disposal_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+    }} />
+  {fieldErrors.fa_disposal_ac && <span data-error="true" className="text-[10px] text-destructive mt-0.5">{fieldErrors.fa_disposal_ac}</span>}
+</div>
+
+<div className="freight-master-field">
+  <label className="freight-master-label"><span>P/L Disposal A/C</span></label>
+  <LookupField compact value={form.pl_fa_disposal_ac}
+    displayValue={display(form.pl_fa_disposal_ac, form.pl_fa_disposal_ac_name || "")}
+    columns={accountColumns} valueField="ac_code" displayFields={["ac_code", "ac_name"]}
+    disabled={readOnly}
+    loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: loginId, code1: companyCode, code2: "", code3: "", code4: "", number1: 0, number2: 0, number3: 0, number4: 0, date1: null, date2: null, date3: null, date4: null })}
+    onChange={(value, row) => {
+      setField("pl_fa_disposal_ac", value);
+      setField("pl_fa_disposal_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+    }} />
+</div>
+        <Field label="Asset A/C" value={display(form.asset_ac_code, form.asset_ac_name || "")} onChange={() => {}} disabled />
+        <Field label="Dprc A/C" value={display(form.dprc_ac_code, form.dprc_ac_name || "")} onChange={() => {}} disabled />
+        <Field label="Accudprc A/C" value={display(form.accudprc_ac_code, form.accudprc_ac_name || "")} onChange={() => {}} disabled />
+        <Field label="Exp Sub Type" value={display(form.exp_subtype_code, form.exp_subtype_name || "")} onChange={() => {}} disabled />
+        <Field label="Exp Code" value={display(form.exp_code, form.exp_code_name || "")} onChange={() => {}} disabled />
 
         {/* editable: Sales Details */}
         {/* keep your existing LookupFields here, unchanged: Customer A/C, FA Disposal A/C, P/L Disposal A/C */}
@@ -802,7 +885,6 @@ const accountColumns = [
 ];
 
 // HELPERS
-
 function mapAssetSale(row: LookupRow): AssetSaleRow {
   return {
     ...EMPTY_SALE,
@@ -814,8 +896,11 @@ function mapAssetSale(row: LookupRow): AssetSaleRow {
     asset_id: String(getLookupValue(row, "asset_id") || ""),
     asset_name: String(getLookupValue(row, "asset_name") || ""),
     asset_ac_code: String(getLookupValue(row, "asset_ac_code") || ""),
+    asset_ac_name: String(getLookupValue(row, "asset_ac_name") || ""),
     dprc_ac_code: String(getLookupValue(row, "dprc_ac_code") || ""),
+    dprc_ac_name: String(getLookupValue(row, "dprc_ac_name") || ""),
     accudprc_ac_code: String(getLookupValue(row, "accudprc_ac_code") || ""),
+    accudprc_ac_name: String(getLookupValue(row, "accudprc_ac_name") || ""),
     dprc_percentage: money(getLookupValue(row, "dprc_percentage")),
     dprc_commence_date: dateInput(getLookupValue(row, "dprc_commence_date")),
     doc_type: String(getLookupValue(row, "doc_type") || ""),
@@ -831,12 +916,15 @@ function mapAssetSale(row: LookupRow): AssetSaleRow {
     salvage_value: money(getLookupValue(row, "salvage_value")),
     customer_name: String(getLookupValue(row, "customer_name") || ""),
     customer_ac_code: String(getLookupValue(row, "customer_ac_code") || ""),
+    customer_ac_name: String(getLookupValue(row, "customer_ac_name") || ""),
     status: String(getLookupValue(row, "status") || "Y"),
     exp_code: String(getLookupValue(row, "ac_exp_code") || getLookupValue(row, "exp_code") || ""),
     exp_subtype_code: String(getLookupValue(row, "exp_subtype_code") || ""),
     sold: String(getLookupValue(row, "sold") || "Y"),
     fa_disposal_ac: String(getLookupValue(row, "fa_disposal_ac") || ""),
+    fa_disposal_ac_name: String(getLookupValue(row, "fa_disposal_ac_name") || ""),
     pl_fa_disposal_ac: String(getLookupValue(row, "pl_fa_disposal_ac") || ""),
+    pl_fa_disposal_ac_name: String(getLookupValue(row, "pl_fa_disposal_ac_name") || ""),
   };
 }
 

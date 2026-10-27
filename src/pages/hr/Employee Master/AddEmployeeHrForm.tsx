@@ -205,7 +205,8 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
         toast.warning("Please fill all required fields");
         return;
       }
-      try {
+      try { 
+        console.log('employee payload',form);
         const response = await insUpdHrEmployee(form);
         if (response) {
           toast.success(isEditMode ? "Employee updated successfully" : "Employee added successfully");
@@ -232,13 +233,13 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
             >
               {/* Row 1 */}
               <CField label="Division" required error={errors.div_code}>
-                <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_DIVISION" valueField="div_code" descField="div_name" descHeader="Division" value={form.div_code} onChange={(v) => patch({ div_code: v, dept_code: "", section_code: "" })} />
+                <ParamLookup parameter="HR_DROPDOWN_MS_DIVISION" valueField="div_code" descField="div_name" descHeader="Division" value={form.div_code} onChange={(v) => patch({ div_code: v, dept_code: "", section_code: "" })} />
               </CField>
               <CField label="Department" required error={errors.dept_code}>
-                <ParamLookup key={form.div_code} parameter="MS_EMP_HR_EMPLOYEE_DEPARTMENT" code2={form.div_code ?? ""} valueField="dept_code" descField="dept_name" descHeader="Department" value={form.dept_code} disabled={!form.div_code} onChange={(v) => patch({ dept_code: v, section_code: "" })} />
+                <ParamLookup key={form.div_code} parameter="HR_DROPDOWN_MS_DEPARTMENT" code2={form.div_code ?? ""} valueField="dept_code" descField="dept_name" descHeader="Department" value={form.dept_code} disabled={!form.div_code} onChange={(v) => patch({ dept_code: v, section_code: "" })} />
               </CField>
               <CField label="Section" required error={errors.section_code}>
-                <ParamLookup key={form.dept_code} parameter="MS_EMP_HR_EMPLOYEE_SECTION" code2={form.dept_code ?? ""} valueField="section_code" descField="section_name" descHeader="Section" value={form.section_code} disabled={!form.dept_code} onChange={pick("section_code")} />
+                <ParamLookup key={form.dept_code} parameter="HR_DROPDOWN_MS_SECTION" code2={form.div_code ?? ""}  code3={form.dept_code ?? ""} valueField="section_code" descField="section_name" descHeader="Section" value={form.section_code} disabled={!form.dept_code} onChange={pick("section_code")} />
               </CField>
               <CField label="Employee Code">
                 <Input className={CTL} value={form.employee_code || (isEditMode ? "" : "Auto")} disabled readOnly />
@@ -280,7 +281,7 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
                 <Input className={CTL} {...date("probation_confirm_date")} />
               </CField>
               <CField label="Employment Status" required error={errors.emp_status}>
-                <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_STATUS" valueField="empstatus_code" descField="empstatus_name" descHeader="Status" value={form.emp_status} onChange={pick("emp_status")} />
+                <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_STATUS" valueField="VALUE_CODE" descField="VALUE_DESC" descHeader="Status" value={form.emp_status} onChange={pick("emp_status")} />
               </CField>
               <CField label="Country" required error={errors.country_code}>
                 <MasterLookup master="country" value={form.country_code} onChange={pick("country_code")} />
@@ -324,12 +325,12 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
           {/* Column 1: Payroll */}
           <div className="flex h-full flex-col gap-1.5">
             <HeaderBlock className="flex-1" label="Payroll Information" icon={<Wallet size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
-              <CField label="Include In Payment" required error={errors.include_in_payroll}><ParamLookup parameter="MS_EMP_HR_INCLUDE_PAYROLL" valueField="value_code" descField="value_desc" value={form.include_in_payroll} onChange={pick("include_in_payroll")} /></CField>
+              <CField label="Include In Payroll" required error={errors.include_in_payroll}><ParamLookup parameter="MS_EMP_HR_INCLUDE_PAYROLL" valueField="value_code" descField="value_desc" value={form.include_in_payroll} onChange={pick("include_in_payroll")} /></CField>
               <CField label="Payroll Start Date"><Input className={CTL} {...date("payroll_start_date")} /></CField>
               <CField label="Mode Of Payment"><ParamLookup parameter="MS_EMP_HR_PAYMENT_MODE" valueField="value_code" descField="value_desc" value={form.payment_mode} onChange={pick("payment_mode")} /></CField>
               <CField label="Paying Bank"><ParamLookup parameter="MS_EMP_HR_EMPLOYEE_BANK" valueField="bank_code" descField="bank_name" descHeader="Bank" value={form.company_bank_code} onChange={pick("company_bank_code")} /></CField>
               <CField label="Employee Bank"><ParamLookup parameter="MS_EMP_HR_EMPLOYEE_BANK" valueField="bank_code" descField="bank_name" descHeader="Bank" value={form.salary_bank_code} onChange={pick("salary_bank_code")} /></CField>
-              <CField label="Bank Account No."><Input className={CTL} {...text("salary_acct_no")} /></CField>
+              <CField label="Bank Ac No."><Input className={CTL} {...text("salary_acct_no")} /></CField>
               <CField label="Bank IBAN No." className="sm:col-span-2"><Input className={CTL} {...text("emp_iban_no")} /></CField>
               <div className="sm:col-span-2 grid grid-cols-[1fr_5rem] gap-2">
                 <CField label="Currency"><MasterLookup master="currency" value={form.currency_id} onChange={pick("currency_id")} /></CField>

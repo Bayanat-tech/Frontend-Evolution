@@ -1,4 +1,4 @@
-import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, Building2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, ChevronRight } from "lucide-react";
+import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, Wallet } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
@@ -10,7 +10,7 @@ import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
 import { Input } from "../../components/ui/Input";
-import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 /* ------------------------------------------------------------------ */
 /*  Types & field definitions                                          */
@@ -32,8 +32,6 @@ const LIST_COLUMNS: { key: string; label: string; width?: number }[] = [
 
 type Notice = { type: "success" | "error"; message: string } | null;
 
-const STEPS = ["Product Details", "UOM & Volume", "Manufacture & Validation", "Category & Product"];
-
 const makeEmpty = (): ProductRow => ({
   prod_code: "", prod_name: "", prin_code: "", brand_code: "", group_code: "",
   model_number: "", variant_code: "", p_uom: "", l_uom: "", uppp: 0, upp: 0,
@@ -45,56 +43,66 @@ const makeEmpty = (): ProductRow => ({
   reorder_qty: 0, tx_compt_1: "N", tx_compt_2: "N", tx_compt_3: "N", tx_compt_4: "N",
 });
 
-/* ─────────────────────────────────────────────────────────────
-   SectionPanel — EXACT Freight structure (from WMS)
-   ───────────────────────────────────────────────────────────── */
-function SectionPanel({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={16} />
-          </span>
-          <div className="min-w-0">
-            <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="freight-panel-body p-3">{children}</div>
-    </section>
-  );
-}
+/* Input sizing — same as Employee Master */
+const CTL = "h-7 text-xs";
 
-/* ─────────────────────────────────────────────────────────────
-   Field — matches WmsMasterForm / Freight label styling
-   ───────────────────────────────────────────────────────────── */
-function Field({
+/* ─────────────── UI building blocks (Employee Master style) ─────────────── */
+
+function HeaderBlock({
   label,
-  required,
+  icon,
   children,
-  className,
+  gridCols = "grid-cols-2",
+  bodyClass,
+  className = "",
 }: {
   label: string;
-  required?: boolean;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+  bodyClass?: string;
   className?: string;
 }) {
   return (
-    <label className={`freight-field-label group flex flex-col gap-0.5 ${className ?? ""}`}>
-      <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
+    <div className={`overflow-hidden rounded-md border border-[#cbd5e1] bg-card ${className}`}>
+      <div className="flex items-center gap-2 border-b border-[#cbd5e1] bg-slate-50 px-2.5 py-1">
+        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
+          {icon}
+        </span>
+        <span className="text-xs font-bold text-[#00378C]">{label}</span>
+      </div>
+      <div
+        className={
+          bodyClass ?? `grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CField({
+  label,
+  required,
+  error,
+  className = "",
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
         {label}
-        {required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
+        {required && <span className="ml-1 text-destructive">*</span>}
       </span>
       {children}
+      {error && <span className="text-[10px] text-destructive">{error}</span>}
     </label>
   );
 }
@@ -114,19 +122,19 @@ function CheckboxField({
   disabled?: boolean;
 }) {
   return (
-    <div className="inline-flex items-center gap-2 select-none h-9">
+    <div className="inline-flex items-center gap-1.5 select-none h-7">
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        style={{ accentColor: "#00378C", width: "15px", height: "15px" }}
+        style={{ accentColor: "#00378C", width: "13px", height: "13px" }}
         className="shrink-0 cursor-pointer rounded border border-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00378C]/25 disabled:cursor-not-allowed disabled:opacity-50"
       />
       {label && (
         <span
           onClick={() => !disabled && onChange(!checked)}
-          className={`text-[11.5px] font-medium text-slate-700 leading-none transition-colors ${
+          className={`text-[10.5px] font-medium text-slate-700 leading-none transition-colors ${
             disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:text-slate-900"
           }`}
         >
@@ -136,6 +144,9 @@ function CheckboxField({
     </div>
   );
 }
+
+/* Reusable lookup config for the simple code/name dropdowns */
+const UOM_PARAM = "PURCHASE_SALES_DD_ONLY_COMPANY_UOM";
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -150,16 +161,18 @@ const ProductPurchaseSales = () => {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
-  
+
   // View state
   const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [original, setOriginal] = useState<ProductRow | null>(null);
   const [form, setForm] = useState<ProductRow>(() => makeEmpty());
   const [saving, setSaving] = useState(false);
-  const [step, setStep] = useState(0);
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
+
+  // Both UOMs picked and identical → UPPP is locked to 1
+  const sameUom = Boolean(form.p_uom) && Boolean(form.l_uom) && form.p_uom === form.l_uom;
 
   const loadRows = async (clearNotice = true) => {
     setLoading(true);
@@ -192,7 +205,6 @@ const ProductPurchaseSales = () => {
     setEditMode(false);
     setOriginal(null);
     setForm(makeEmpty());
-    setStep(0);
     setError("");
     setNotice(null);
     setView("editor");
@@ -202,7 +214,6 @@ const ProductPurchaseSales = () => {
     setEditMode(true);
     setOriginal(row);
     setForm({ ...makeEmpty(), ...row });
-    setStep(0);
     setError("");
     setNotice(null);
     setView("editor");
@@ -218,10 +229,25 @@ const ProductPurchaseSales = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  /* ---- UOM change: auto UPPP = 1 when both UOMs are same, derive uom_count ---- */
+  const setUom = (key: "p_uom" | "l_uom", value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      const wasSame = Boolean(prev.p_uom) && Boolean(prev.l_uom) && prev.p_uom === prev.l_uom;
+      const isSame = Boolean(next.p_uom) && Boolean(next.l_uom) && next.p_uom === next.l_uom;
+
+      if (isSame) next.uppp = 1;
+      else if (wasSame) next.uppp = 0; // was auto-locked, unlock with clean value
+
+      next.uom_count = next.p_uom && next.l_uom ? (isSame ? 1 : 2) : next.p_uom || next.l_uom ? 1 : 0;
+      return next;
+    });
+  };
+
   const handleSubmit = async (event?: FormEvent) => {
     if (event) event.preventDefault();
     setError("");
-    
+
     if (!form.prod_name?.trim()) {
       setError("Product Name is required");
       return;
@@ -237,7 +263,11 @@ const ProductPurchaseSales = () => {
 
     try {
       setSaving(true);
-      const data: ProductRow = editMode ? { ...(original || {}), ...form } : form;
+      const data: ProductRow = editMode ? { ...(original || {}), ...form } : { ...form };
+      if (sameUom) {
+        data.uppp = 1;
+        data.uom_count = 1;
+      }
       await saveProduct(data, loginId, companyCode);
       setNotice({ type: "success", message: editMode ? "Successfully updated" : "Successfully created" });
       handleCloseEditor();
@@ -317,27 +347,109 @@ const ProductPurchaseSales = () => {
     [],
   );
 
+  /* Helper to render a compact UOM lookup */
+  const renderUomLookup = (key: "p_uom" | "l_uom") => (
+    <div className="w-full min-w-0">
+      <LookupField
+        label=""
+        value={form[key] ?? ""}
+        valueField="uom_code"
+        displayFields={["uom_code", "uom_name"]}
+        columns={[
+          { field: "uom_code", header: "Code" },
+          { field: "uom_name", header: "Name" },
+        ]}
+        loadOptions={async () => {
+          return (
+            (await getDynamicLookup({
+              parameter: UOM_PARAM,
+              loginid: loginId,
+              code1: companyCode,
+            })) || []
+          );
+        }}
+        onChange={(value) => setUom(key, value)}
+        compact
+      />
+    </div>
+  );
+
+  /* Helper to render a compact code/name lookup */
+  const renderLookup = (
+    key: string,
+    parameter: string,
+    codeField: string,
+    nameField: string,
+    codeHeader = "Code",
+    nameHeader = "Name",
+  ) => (
+    <div className="w-full min-w-0">
+      <LookupField
+        label=""
+        value={form[key] ?? ""}
+        valueField={codeField}
+        displayFields={[codeField, nameField]}
+        columns={[
+          { field: codeField, header: codeHeader },
+          { field: nameField, header: nameHeader },
+        ]}
+        loadOptions={async () => {
+          return (
+            (await getDynamicLookup({
+              parameter,
+              loginid: loginId,
+              code1: companyCode,
+            })) || []
+          );
+        }}
+        onChange={(value) => setField(key, value)}
+        compact
+      />
+    </div>
+  );
+
+  /* Helpers for plain text / number inputs */
+  const textInput = (key: string) => (
+    <Input
+      className={CTL}
+      value={form[key] ?? ""}
+      onChange={(e) => setField(key, e.target.value)}
+    />
+  );
+  const numInput = (key: string) => (
+    <Input
+      className={CTL}
+      type="number"
+      value={form[key] ?? 0}
+      onChange={(e) => setField(key, Number(e.target.value))}
+    />
+  );
+
   /* ─────────────────────────────────────────────────────────
-     EDITOR — Full-page, Freight-style header (with Save button)
+     EDITOR — Employee Master style layout
      ───────────────────────────────────────────────────────── */
   if (view === "editor") {
     return (
       <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-        {/* Freight-style transaction header */}
+        {/* Header */}
         <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
               <FileText size={15} />
             </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                  {editMode ? "Edit Product" : "New Product"}
-                </h1>
-                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                  {editMode ? "Editing" : "Draft"}
-                </span>
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                {editMode ? "Edit Product" : "New Product"}
+              </h1>
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                {editMode ? "Editing" : "Draft"}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
+                Product Code:
+                <strong className="font-semibold">
+                  {editMode && form.prod_code ? String(form.prod_code) : "Auto-generated"}
+                </strong>
+              </span>
             </div>
           </div>
 
@@ -354,449 +466,164 @@ const ProductPurchaseSales = () => {
           </div>
         </div>
 
-        {/* Form content */}
-        <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-          
-          {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-              {error}
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
+            {error}
+          </div>
+        )}
+
+        {/* Form body */}
+        <div style={{ zoom: 0.8 }} className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-1.5">
+
+          {/* ══════════ TOP HALF ══════════ */}
+          <div className="grid items-start gap-1.5 xl:grid-cols-3">
+            {/* Identification (spans 2 cols) */}
+            <div className="xl:col-span-2">
+              <HeaderBlock label="Identification" icon={<IdCard size={11} />} gridCols="grid-cols-1 sm:grid-cols-4">
+                <CField label="Product Name" required className="sm:col-span-2">
+                  {textInput("prod_name")}
+                </CField>
+                <CField label="Model #">
+                  {textInput("model_number")}
+                </CField>
+                <CField label="Variant / Season">
+                  <Input
+                    className={CTL}
+                    value={form.season_code ?? form.variant_code ?? ""}
+                    onChange={(e) => setField("season_code", e.target.value)}
+                  />
+                </CField>
+                <CField label="Barcode">
+                  {textInput("barcode")}
+                </CField>
+                <CField label="Size Code">
+                  {textInput("size_code")}
+                </CField>
+                <CField label="Color Code">
+                  {textInput("color_code")}
+                </CField>
+                <CField label="Product Stage">
+                  {textInput("product_stage")}
+                </CField>
+              </HeaderBlock>
             </div>
-          )}
 
-          {/* ── Tabs shell (Freight style) ── */}
-          <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
-            <div className="freight-tabs-list flex overflow-x-auto">
-              {STEPS.map((label, index) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setStep(index)}
-                  aria-pressed={step === index}
-                  className={`freight-workspace-tab ${step === index ? "active" : ""}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="freight-tabs-panel border-t p-3 grid gap-3">
-              {/* ══ STEP 0 — Product Details ══ */}
-              {step === 0 && (
-                <>
-                  <SectionPanel title="Classification" icon={Building2}>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Field label="Group Code" required>
-                        <LookupField
-                          label=""
-                          value={form.group_code ?? ""}
-                          valueField="group_code"
-                          displayFields={["group_code", "group_name"]}
-                          columns={[
-                            { field: "group_code", header: "Group Code" },
-                            { field: "group_name", header: "Group Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("group_code", value)}
-                          compact
-                        />
-                      </Field>
-                      <Field label="Brand Code" required>
-                        <LookupField
-                          label=""
-                          value={form.brand_code ?? ""}
-                          valueField="brand_code"
-                          displayFields={["brand_code", "brand_name"]}
-                          columns={[
-                            { field: "brand_code", header: "Brand Code" },
-                            { field: "brand_name", header: "Brand Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("brand_code", value)}
-                          compact
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-
-                  <SectionPanel title="Identification" icon={IdCard}>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <Field label="Product Code" required>
-                        <Input
-                          value={form.prod_code ?? ""}
-                          disabled={editMode}
-                          onChange={(e) => setField("prod_code", e.target.value)}
-                        />
-                      </Field>
-                      <Field label="Product Name" required className="md:col-span-2">
-                        <Input 
-                          value={form.prod_name ?? ""} 
-                          onChange={(e) => setField("prod_name", e.target.value)} 
-                        />
-                      </Field>
-                      <Field label="Model #">
-                        <Input 
-                          value={form.model_number ?? ""} 
-                          onChange={(e) => setField("model_number", e.target.value)} 
-                        />
-                      </Field>
-                      <Field label="Variant / Season">
-                        <Input 
-                          value={form.season_code ?? form.variant_code ?? ""} 
-                          onChange={(e) => setField("season_code", e.target.value)} 
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-                </>
-              )}
-
-              {/* ══ STEP 1 — UOM & Volume ══ */}
-              {step === 1 && (
-                <>
-                  <SectionPanel title="Unit of Measure" icon={Box}>
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <Field label="No. of UOMs">
-                        <Input disabled value={form.uom_count ?? 0} />
-                      </Field>
-                      <Field label="Primary UOM" required>
-                        <LookupField
-                          label=""
-                          value={form.p_uom ?? ""}
-                          valueField="uom_code"
-                          displayFields={["uom_code", "uom_name"]}
-                          columns={[
-                            { field: "uom_code", header: "Code" },
-                            { field: "uom_name", header: "Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("p_uom", value)}
-                          compact
-                        />
-                      </Field>
-                      <Field label="Lower UOM" required>
-                        <LookupField
-                          label=""
-                          value={form.l_uom ?? ""}
-                          valueField="uom_code"
-                          displayFields={["uom_code", "uom_name"]}
-                          columns={[
-                            { field: "uom_code", header: "Code" },
-                            { field: "uom_name", header: "Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("l_uom", value)}
-                          compact
-                        />
-                      </Field>
-                      <Field label="UPPP" required>
-                        <Input
-                          type="number"
-                          value={form.uppp ?? 0}
-                          onChange={(e) => setField("uppp", Number(e.target.value))}
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-
-                  <SectionPanel title="Dimensions & Weight" icon={Ruler}>
-                    <div className="grid gap-3 md:grid-cols-4">
-                      {[
-                        { label: "Length", key: "length" },
-                        { label: "Breadth", key: "breadth" },
-                        { label: "Height", key: "height" },
-                        { label: "Volume", key: "volume" },
-                        { label: "Gross Weight", key: "gross_wt" },
-                        { label: "Net Weight", key: "net_wt" },
-                      ].map(({ label, key }) => (
-                        <Field label={label} key={key}>
-                          <Input
-                            type="number"
-                            value={form[key] ?? 0}
-                            onChange={(e) => setField(key, Number(e.target.value))}
-                          />
-                        </Field>
-                      ))}
-                    </div>
-                  </SectionPanel>
-                </>
-              )}
-
-              {/* ══ STEP 2 — Manufacture & Validation ══ */}
-              {step === 2 && (
-                <>
-                  <SectionPanel title="Manufacture Details" icon={Building2}>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <Field label="Manufacturer Code">
-                        <Input 
-                          value={form.manu_code ?? ""} 
-                          onChange={(e) => setField("manu_code", e.target.value)} 
-                        />
-                      </Field>
-                      <Field label="Origin Country">
-                        <Input 
-                          value={form.origin_country ?? ""} 
-                          onChange={(e) => setField("origin_country", e.target.value)} 
-                        />
-                      </Field>
-                      <Field label="Alternate Product">
-                        <Input
-                          value={form.alt_prod_code ?? ""}
-                          onChange={(e) => setField("alt_prod_code", e.target.value)}
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-
-                  <SectionPanel title="Pricing & Reorder" icon={ShieldCheck}>
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <Field label="Cost Rate Unit">
-                        <Input
-                          type="number"
-                          value={form.cost_rate ?? 0}
-                          onChange={(e) => setField("cost_rate", Number(e.target.value))}
-                        />
-                      </Field>
-                      <Field label="Retail Price">
-                        <Input
-                          type="number"
-                          value={form.retail_rate ?? 0}
-                          onChange={(e) => setField("retail_rate", Number(e.target.value))}
-                        />
-                      </Field>
-                      <Field label="Sales Rate">
-                        <Input
-                          type="number"
-                          value={form.sales_rate ?? 0}
-                          onChange={(e) => setField("sales_rate", Number(e.target.value))}
-                        />
-                      </Field>
-                      <Field label="Reorder Qty">
-                        <Input
-                          type="number"
-                          value={form.reorder_qty ?? 0}
-                          onChange={(e) => setField("reorder_qty", Number(e.target.value))}
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-                  
-                  <SectionPanel title="Tax Component" icon={ShieldCheck}>
-                    <div className="grid gap-3 md:grid-cols-4">
-                      {[1, 2, 3, 4].map((num) => (
-                        <Field label={`Tax Component ${num}`} key={`tx_${num}`}>
-                          <Input
-                            value={form[`tx_compt_${num}`] ?? ""}
-                            onChange={(e) => setField(`tx_compt_${num}`, e.target.value)}
-                          />
-                        </Field>
-                      ))}
-                    </div>
-                  </SectionPanel>
-                </>
-              )}
-
-              {/* ══ STEP 3 — Category & Product ══ */}
-              {step === 3 && (
-                <>
-                  <SectionPanel title="Category & Division" icon={LayoutGrid}>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <Field label="Category Code">
-                        <LookupField
-                          label=""
-                          value={form.category_code ?? ""}
-                          valueField="category_code"
-                          displayFields={["category_code", "category_name"]}
-                          columns={[
-                            { field: "category_code", header: "Code" },
-                            { field: "category_name", header: "Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("category_code", value)}
-                          compact
-                        />
-                      </Field>
-                      <Field label="Product Type Code">
-                        <LookupField
-                          label=""
-                          value={form.prodtype_code ?? ""}
-                          valueField="prodtype_code"
-                          displayFields={["prodtype_code", "prodtype_name"]}
-                          columns={[
-                            { field: "prodtype_code", header: "Code" },
-                            { field: "prodtype_name", header: "Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("prodtype_code", value)}
-                          compact
-                        />
-                      </Field>
-                      <Field label="Division Code">
-                        <LookupField
-                          label=""
-                          value={form.div_code ?? ""}
-                          valueField="div_code"
-                          displayFields={["div_code", "div_name"]}
-                          columns={[
-                            { field: "div_code", header: "Code" },
-                            { field: "div_name", header: "Name" },
-                          ]}
-                          loadOptions={async () => {
-                            return await getDynamicLookup({
-                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION",
-                              loginid: loginId,
-                              code1: companyCode,
-                            }) || [];
-                          }}
-                          onChange={(value) => setField("div_code", value)}
-                          compact
-                        />
-                      </Field>
-                      <Field label="Color Code">
-                        <Input
-                          value={form.color_code ?? ""}
-                          onChange={(e) => setField("color_code", e.target.value)}
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-
-                  <SectionPanel title="Barcode & Attributes" icon={ShieldCheck}>
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <Field label="Barcode">
-                        <Input
-                          value={form.barcode ?? ""}
-                          onChange={(e) => setField("barcode", e.target.value)}
-                        />
-                      </Field>
-                      <Field label="Size Code">
-                        <Input
-                          value={form.size_code ?? ""}
-                          onChange={(e) => setField("size_code", e.target.value)}
-                        />
-                      </Field>
-                      <Field label="Active">
-                        <CheckboxField
-                          checked={form.active === "Y" || form.active === true}
-                          onChange={(v) => setField("active", v ? "Y" : "N")}
-                          label="Yes/No"
-                        />
-                      </Field>
-                      <Field label="Co Packing">
-                        <Input
-                          value={form.co_packing ?? ""}
-                          onChange={(e) => setField("co_packing", e.target.value)}
-                        />
-                      </Field>
-                      <Field label="Product Stage">
-                        <Input
-                          value={form.product_stage ?? ""}
-                          onChange={(e) => setField("product_stage", e.target.value)}
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-
-                  <SectionPanel title="Notes" icon={StickyNote}>
-                    <div className="grid gap-3 md:grid-cols-1">
-                      <Field label="Remarks">
-                        <Input
-                          value={form.remarks ?? ""}
-                          onChange={(e) => setField("remarks", e.target.value)}
-                        />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-                </>
-              )}
+            {/* Classification (1 col) */}
+            <div>
+              <HeaderBlock label="Classification" icon={<LayoutGrid size={11} />} gridCols="grid-cols-2">
+                <CField label="Group Code" required>
+                  {renderLookup("group_code", "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP", "group_code", "group_name", "Group Code", "Group Name")}
+                </CField>
+                <CField label="Brand Code" required>
+                  {renderLookup("brand_code", "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND", "brand_code", "brand_name", "Brand Code", "Brand Name")}
+                </CField>
+                <CField label="Category Code">
+                  {renderLookup("category_code", "PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY", "category_code", "category_name")}
+                </CField>
+                <CField label="Product Type Code">
+                  {renderLookup("prodtype_code", "PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE", "prodtype_code", "prodtype_name")}
+                </CField>
+                <CField label="Division Code" className="col-span-2">
+                  {renderLookup("div_code", "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION", "div_code", "div_name")}
+                </CField>
+              </HeaderBlock>
             </div>
           </div>
 
-          {/* ── Bottom action row (Freight style) ── */}
-          <div className="flex items-center justify-between gap-2 pt-0.5">
-            <button
-              type="button"
-              onClick={() => setStep((s) => s - 1)}
-              className={`inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-medium text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground transition-colors ${
-                step === 0 ? "invisible" : ""
-              }`}
-            >
-              <X size={11} /> Back
-            </button>
+          {/* ══════════ BOTTOM HALF (4 Columns) ══════════ */}
+          <div className="grid gap-1.5 xl:grid-cols-4">
 
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-muted-foreground">
-                Step {step + 1} of {STEPS.length}
-              </span>
+            {/* Column 1: UOM & Manufacture */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Unit of Measure & Manufacture" icon={<Box size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Primary UOM" required>
+                  {renderUomLookup("p_uom")}
+                </CField>
+                <CField label="Lower UOM" required>
+                  {renderUomLookup("l_uom")}
+                </CField>
+                <CField label="UPPP" required>
+                  <Input
+                    className={CTL}
+                    type="number"
+                    disabled={sameUom}
+                    value={sameUom ? 1 : form.uppp ?? 0}
+                    onChange={(e) => setField("uppp", Number(e.target.value))}
+                  />
+                </CField>
+                <CField label="Manufacturer Code">
+                  {textInput("manu_code")}
+                </CField>
+                <CField label="Origin Country">
+                  {textInput("origin_country")}
+                </CField>
+                <CField label="Alternate Product">
+                  {textInput("alt_prod_code")}
+                </CField>
+              </HeaderBlock>
+            </div>
 
-              {step < STEPS.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setStep((s) => s + 1)}
-                  className="inline-flex items-center gap-1 rounded-md px-4 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-semibold shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
-                >
-                  Next <ChevronRight size={11} className="ml-1" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => handleSubmit()}
-                  className={`inline-flex items-center gap-1 rounded-md px-4 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-semibold shadow-sm transition-all ${
-                    saving
-                      ? "bg-primary/60 text-primary-foreground cursor-not-allowed"
-                      : editMode
-                      ? "bg-amber-600 hover:bg-amber-700 text-white"
-                      : "bg-primary hover:bg-primary/90 text-primary-foreground"
-                  }`}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 size={11} className="animate-spin" /> Saving…
-                    </>
-                  ) : (
-                    <>
-                      {editMode ? "Update" : "Submit"}
-                      <Save size={11} className="ml-1" />
-                    </>
-                  )}
-                </button>
-              )}
+            {/* Column 2: Dimensions & Weight */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Dimensions & Weight" icon={<Ruler size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                {[
+                  { label: "Length", key: "length" },
+                  { label: "Breadth", key: "breadth" },
+                  { label: "Height", key: "height" },
+                  { label: "Volume", key: "volume" },
+                  { label: "Gross Weight", key: "gross_wt" },
+                  { label: "Net Weight", key: "net_wt" },
+                ].map(({ label, key }) => (
+                  <CField label={label} key={key}>
+                    {numInput(key)}
+                  </CField>
+                ))}
+              </HeaderBlock>
+            </div>
+
+            {/* Column 3: Pricing + Tax */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock label="Pricing & Reorder" icon={<Wallet size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Cost Rate Unit">
+                  {numInput("cost_rate")}
+                </CField>
+                <CField label="Retail Price">
+                  {numInput("retail_rate")}
+                </CField>
+                <CField label="Sales Rate">
+                  {numInput("sales_rate")}
+                </CField>
+                <CField label="Reorder Qty">
+                  {numInput("reorder_qty")}
+                </CField>
+              </HeaderBlock>
+
+              <HeaderBlock className="flex-1" label="Tax Components" icon={<ShieldCheck size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <CField label={`Tax Comp ${n}`} key={`tx_${n}`}>
+                    {textInput(`tx_compt_${n}`)}
+                  </CField>
+                ))}
+              </HeaderBlock>
+            </div>
+
+            {/* Column 4: Attributes & Notes */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Attributes & Notes" icon={<StickyNote size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Active">
+                  <CheckboxField
+                    checked={form.active === "Y" || form.active === true}
+                    onChange={(v) => setField("active", v ? "Y" : "N")}
+                    label="Yes/No"
+                  />
+                </CField>
+                <CField label="Co Packing">
+                  {textInput("co_packing")}
+                </CField>
+                <CField label="Remarks" className="sm:col-span-2">
+                  {textInput("remarks")}
+                </CField>
+              </HeaderBlock>
             </div>
           </div>
         </div>
@@ -906,7 +733,7 @@ async function saveProduct(form: ProductRow, loginid: string, companyCode: strin
     loginid,
 
     val1s1: companyCode,
-    val1s2: toStr(form.prod_code),
+    val1s2: toStr(form.prod_code), // empty on create → backend auto-generates
     val1s3: toStr(form.prod_name),
     val1s4: toStr(form.model_number),
     val1s5: toStr(form.barcode ?? form.bar_code),
