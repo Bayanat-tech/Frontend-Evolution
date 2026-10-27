@@ -337,7 +337,7 @@ export default function MseProdGroup() {
             <div className="p-3 grid gap-3">
 
               <SectionPanel title="Product Group Details" icon={Building2}>
-                <div className="grid gap-3">
+                <div className="grid gap-3 md:grid-cols-2">
                   <Field label="Product Group Name" required>
                     <Input
                       value={form.group_name ?? ""}
