@@ -48,7 +48,7 @@ export type TApplicantInfo = {
 
 type DeptOption = {
   dept_code: string;
-  dept_short_name: string;
+  dept_name: string;
 };
 
 export type FormMode = "add" | "edit" | "view";
@@ -145,7 +145,7 @@ export const AddApplicantForm = forwardRef<ApplicantFormHandle, Props>(function 
       setDeptList(
         list.map((d) => ({
           dept_code: String(d.DEPT_CODE ?? d.dept_code ?? ""),
-          dept_short_name: String(d.DEPT_SHORT_NAME ?? d.dept_short_name ?? ""),
+          dept_name: String(d.DEPT_NAME ?? d.dept_name ?? ""),
         })),
       );
     } catch {
@@ -274,7 +274,7 @@ export const AddApplicantForm = forwardRef<ApplicantFormHandle, Props>(function 
               <option value="">-- Select Department --</option>
               {deptList.map((d) => (
                 <option key={d.dept_code} value={d.dept_code}>
-                  {d.dept_code} - {d.dept_short_name}
+                  {d.dept_code} - {d.dept_name}
                 </option>
               ))}
             </Select>
