@@ -12,13 +12,14 @@ type Common = {
 type ParamProps = Common & {
   parameter: string;
   code2?: string;
+  code3?:string;
   valueField: string;
   descField: string;
   descHeader?: string;
 };
 
 /** Lookup backed by getDynamicLookup (company + login from the auth context). */
-export const ParamLookup = ({ parameter, code2, valueField, descField, descHeader = "Description", value, onChange, disabled }: ParamProps) => {
+export const ParamLookup = ({ parameter, code2, code3, valueField, descField, descHeader = "Description", value, onChange, disabled }: ParamProps) => {
   const { user } = useAuth();
   return (
     <LookupField
@@ -37,6 +38,7 @@ export const ParamLookup = ({ parameter, code2, valueField, descField, descHeade
           loginid: user?.loginid ?? "",
           code1: user?.company_code ?? "",
           ...(code2 !== undefined ? { code2 } : {}),
+          ...(code3 !== undefined ? { code3 } : {}),
         });
         return Array.isArray(res) ? res : [];
       }}
