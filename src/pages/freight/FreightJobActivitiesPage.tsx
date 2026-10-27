@@ -1729,7 +1729,7 @@ export function FreightJobActivitiesPage({
       <Dialog
         open={costBookingModalOpen}
         onClose={() => setCostBookingModalOpen(false)}
-        title="Cost Bookings & Vouchers (PowerBuilder dw_3)"
+        title="Cost Bookings & Vouchers"
         description="Detailed vendor and provision cost allocations from dw_service_activities_costbooking"
         wide
         contentClassName="max-w-5xl"
@@ -2340,16 +2340,25 @@ function AgentLookup({
   useEffect(() => {
     if (value && !cachedName && companyCode) {
       loadFreightLookup("freight_broker", companyCode, value).then((rows) => {
-        const found = rows.find((r) => lookupText(r, "broker_code") === value);
+        const valUpper = String(value).trim().toUpperCase();
+        const found = rows.find(
+          (r) =>
+            lookupText(r, "broker_code").toUpperCase() === valUpper ||
+            lookupText(r, "broker_name").toUpperCase() === valUpper
+        );
         if (found) {
-          const name = lookupText(found, "broker_name") || lookupText(found, "agent_name");
+          const name = lookupText(found, "broker_name") || lookupText(found, "agent_name") || lookupText(found, "broker_code");
           if (name) setCachedName(name);
+        } else if (value) {
+          setCachedName(String(value));
         }
-      }).catch(() => {});
+      }).catch(() => {
+        if (value) setCachedName(String(value));
+      });
     }
   }, [value, cachedName, companyCode]);
 
-  const fullName = cachedName || displayValue || "";
+  const fullName = cachedName || displayValue || value || "";
 
   return (
     <LookupField
