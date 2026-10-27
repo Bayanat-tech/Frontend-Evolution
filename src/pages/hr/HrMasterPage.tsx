@@ -27,6 +27,58 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 
+// ── Validation helpers ────────────────────────────────────────────────────────
+
+type FieldErrors = Record<string, string>;
+
+// local@domain.tld (tld kam se kam 2 letters)
+const EMAIL_STRICT = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+// local@domain (tld ki zaroorat nahi)
+const EMAIL_LOOSE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/;
+
+function isValidEmail(value: string, allowNoTld = false): boolean {
+  const v = value.trim();
+  if (!v || v.includes("..") || v.startsWith(".") || v.includes(".@")) return false;
+  return (allowNoTld ? EMAIL_LOOSE : EMAIL_STRICT).test(v);
+}
+
+/** Required + email format + max length. Har field ka sirf pehla error. */
+function validateFields(
+  fields: HrMasterField[],
+  form: Record<string, unknown>,
+  isEdit: boolean,
+  opts: { allowNoTld?: boolean } = {},
+): FieldErrors {
+  const errors: FieldErrors = {};
+  for (const f of fields) {
+    if (f.hideOnAdd && !isEdit) continue;
+    const value = String(form[f.name] ?? "");
+    const trimmed = value.trim();
+
+    if (f.required && !trimmed) {
+      errors[f.name] = `${f.label} is required.`;
+      continue;
+    }
+    if (!trimmed) continue;
+
+    if (f.type === "email" && !isValidEmail(trimmed, opts.allowNoTld)) {
+      errors[f.name] = "Please enter a valid email address (e.g. name@example.com).";
+      continue;
+    }
+    if (f.limit && value.length > f.limit) {
+      errors[f.name] = `${f.label} cannot exceed ${f.limit} characters (currently ${value.length}).`;
+    }
+  }
+  return errors;
+}
+
+/** DB "value too large" error ko friendly message mein badalta hai. */
+function friendlyDbError(message: string): string {
+  const m = message.match(/\(actual:\s*(\d+),\s*maximum:\s*(\d+)\)/i);
+  if (m) return `A field is too long (entered ${m[1]}, maximum ${m[2]} characters). Please shorten it.`;
+  return message || "Unable to save. Please check the entered values.";
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type HrMasterField = {
@@ -113,23 +165,33 @@ function Field({
   label,
   required,
   helperText,
+  error,
   children,
   className,
 }: {
   label: string;
   required?: boolean;
   helperText?: string;
+  error?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <label className={`freight-field-label group flex flex-col gap-0.5 ${className ?? ""}`}>
+    <label
+      className={`freight-field-label group flex flex-col gap-0.5 ${
+        error ? "[&_input]:!border-red-500 [&_select]:!border-red-500" : ""
+      } ${className ?? ""}`}
+    >
       <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
         {label}
-        {required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
+        {required && <strong className="text-red-600 ml-0.5 font-bold"> *</strong>}
       </span>
       {children}
-      {helperText && <span className="text-[10.5px] text-muted-foreground">{helperText}</span>}
+      {error ? (
+        <span className="text-[10.5px] font-medium text-red-600">{error}</span>
+      ) : (
+        helperText && <span className="text-[10.5px] text-muted-foreground">{helperText}</span>
+      )}
     </label>
   );
 }
@@ -158,6 +220,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const tableFields = useMemo(() => config.fields.filter((field) => field.table !== false), [config]);
   const loginid = user?.loginid || "ADMIN";
@@ -212,10 +275,12 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     setView("list");
     setEditMode(false);
     setForm({});
+    setFieldErrors({});
   }, [config.master]);
 
   /* ── Navigation handlers ── */
   const openAdd = () => {
+    setFieldErrors({});
     setEditMode(false);
     const empty = makeEmpty();
     if (config.autoGenerateKey) empty[config.keyField] = nextCode(rows, config.keyField);
@@ -224,6 +289,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   };
 
   const openEdit = (row: Record<string, unknown>) => {
+    setFieldErrors({});
     setEditMode(true);
     setForm({ ...makeEmpty(), ...row, _edit_key: row[config.keyField], company_code: row.company_code || companyCode });
     setView("editor");
@@ -349,6 +415,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   };
 
   const handleCloseEditor = () => {
+    setFieldErrors({});
     setView("list");
     setEditMode(false);
     setForm({});
@@ -408,47 +475,66 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const saveRecord = async (event?: FormEvent) => {
     event?.preventDefault();
 
-    const missing = config.fields.find(
-      (field) => field.required && !field.hideOnAdd && !String(form[field.name] ?? "").trim(),
-    );
-    if (missing) {
-      toast.warning(`${missing.label} is required`);
-      return;
+    // 1) Required + email + limit validation
+    const errors = validateFields(config.fields, form, editMode);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);                  // field red + message niche
+      toast.warning(Object.values(errors)[0]); // pehla error toast mein
+      return;                                  // API call nahi hogi
     }
+    setFieldErrors({});
+
+    // 2) Email fields ko trim karke bhejo
+    const data: Record<string, unknown> = { ...form };
+    config.fields
+      .filter((f) => f.type === "email")
+      .forEach((f) => {
+        data[f.name] = String(form[f.name] ?? "").trim();
+      });
+
     setSaving(true);
     try {
       if (config.source === "dynamic" && config.buildSave) {
-        const payload = config.buildSave(form, buildContext()) as DynamicMutationParams;
+        const payload = config.buildSave(data, buildContext()) as DynamicMutationParams;
         if (config.mutationMode === "column90") await executeDynamicMutationColumn90(payload);
         else await executeDynamicMutation(payload);
       } else if (config.source === "finance" && config.buildSave && config.financeSaveEndpoint) {
         await postFinance(
           config.financeSaveEndpoint,
-          cleanPayload(config.buildSave(form, buildContext()) as Record<string, unknown>),
+          cleanPayload(config.buildSave(data, buildContext()) as Record<string, unknown>),
         );
       } else {
         let payload: Record<string, unknown>;
 
         if (config.buildSave) {
-          payload = config.buildSave(form, buildContext()) as Record<string, unknown>;
+          payload = config.buildSave(data, buildContext()) as Record<string, unknown>;
         } else if (config.stripEditKeyOnSave) {
-          const { _edit_key, ...rest } = form;
+          const { _edit_key, ...rest } = data;
           payload = rest;
         } else {
-          payload = form;
+          payload = data;
         }
+
+        const savePayload: Record<string, unknown> = {
+          ...payload,
+          ...(config.gmEndpoint === "formaldesignation" ? {} : { company_code: form.company_code || companyCode }),
+        };
+        const finalPayload = { ...savePayload };
+        delete finalPayload._edit_key;
 
         await saveHrGm(
           config.gmEndpoint,
-          cleanPayload({ ...payload, company_code: form.company_code || companyCode }),
+          cleanPayload(finalPayload),
           editMode ? "put" : "post",
+          config.gmEndpoint === "formaldesignation" ? { omitUser: true } : undefined,
         );
       }
       toast.success(`${config.title} ${editMode ? "updated" : "created"} successfully`);
       handleCloseEditor();
       await loadRows(pageIndex, pageSize);
     } catch (error) {
-      toast.error(getErrorMessage(error, `Unable to save ${config.title}`));
+      // "Save Failed" ki jagah clear message
+      toast.error(friendlyDbError(getErrorMessage(error, `Unable to save ${config.title}`)));
     } finally {
       setSaving(false);
     }
@@ -456,10 +542,14 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
 
   /* ── Delete ── */
   const confirmDelete = async () => {
+    console.log("1. Delete clicked!");
     if (!deleteTarget || config.deleteMode === "disabled") return;
     setSaving(true);
     try {
+      console.log("2. Target row:", deleteTarget);
       const id = deleteTarget[config.keyField];
+      console.log("3. Extracted ID:", id, "KeyField was:", config.keyField);
+      console.log("Delete ID being sent:", config.master, id);
       if ((config.source === "dynamic" || config.source === "finance") && config.buildDelete) {
         await executeDynamicDelete(config.buildDelete(deleteTarget, buildContext()));
       } else if (config.deleteMode === "gm") await deleteHrGm(config.gmEndpoint, [id]);
@@ -515,8 +605,8 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
           </div>
         </div>
 
-        {/* Form content */}
-        <form onSubmit={saveRecord}>
+        {/* Form content — noValidate: browser ka native email popup band */}
+        <form onSubmit={saveRecord} noValidate>
           <SectionPanel title="Basic Information" icon={FileText}>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {config.fields.map((field) => {
@@ -532,6 +622,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
                     label={field.label}
                     required={field.required}
                     helperText={field.helperText}
+                    error={fieldErrors[field.name]}
                   >
                     {renderInput(
                       field,
@@ -539,7 +630,13 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
                       form[`${field.name}_name`],
                       disabled,
                       buildContext(),
-                      (value, row) =>
+                      (value, row) => {
+                        // user edit kare to is field ka error hata do
+                        setFieldErrors((prev) => {
+                          if (!prev[field.name]) return prev;
+                          const { [field.name]: _removed, ...rest } = prev;
+                          return rest;
+                        });
                         setForm((current) => {
                           if (!field.lookup) return { ...current, [field.name]: value };
                           return {
@@ -547,7 +644,8 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
                             [field.name]: value,
                             ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }),
                           };
-                        }),
+                        });
+                      },
                     )}
                   </Field>
                 );
@@ -673,27 +771,26 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
           </>
         }
       >
-
-       
         <p className="m-0 text-sm text-muted-foreground">
           Confirm delete for <strong>{String(deleteTarget?.[config.keyField] || "")}</strong>.
         </p>
       </Dialog>
-       <NewReportDialog
-          open={previewOpen}
-          onClose={closeReportPreview}
-          title={config.title}
-          htmlContent={reportHtml}
-          loading={reportLoading}
-          error={reportError || null}
-          meta={{
-            companyName: companyCode,
-            user: loginid,
-            period: "All",
-            generatedAt: new Date().toLocaleString(),
-          }}
-          onOpenInNewWindow={openReportInNewWindow}
-        />
+
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closeReportPreview}
+        title={config.title}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError || null}
+        meta={{
+          companyName: companyCode,
+          user: loginid,
+          period: "All",
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onOpenInNewWindow={openReportInNewWindow}
+      />
     </section>
   );
 }
@@ -740,17 +837,17 @@ function renderInput(
     );
   }
 
+  // NOTE: maxLength / slice jaan-bujhkar hata diya hai, taaki user limit se zyada
+  // type kar sake aur Save par proper "limit exceed" error dikhe.
   return (
     <Input
-      type={field.type || "text"}
+      type={field.type === "email" ? "text" : field.type || "text"}
       value={field.type === "date" ? toDateInputValue(value) : String(value ?? "")}
       disabled={disabled}
-      maxLength={field.limit}
       placeholder={field.Placeholder}
       onChange={(event) => {
         const raw = event.target.value;
-        const trimmed = field.limit ? raw.slice(0, field.limit) : raw;
-        onChange(field.type === "number" ? Number(trimmed || 0) : trimmed);
+        onChange(field.type === "number" ? Number(raw || 0) : raw);
       }}
     />
   );

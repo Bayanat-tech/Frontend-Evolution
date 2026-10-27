@@ -66,17 +66,20 @@ const SECTION_COLUMNS = [
 const EMPLOYEE_COLUMNS = [
   { field: "employee_code", header: "Employee Code" },
   { field: "rpt_name", header: "Employee Name" },
-  { field: "div_name", header: "Division" },
-  { field: "dept_name", header: "Department" },
-  { field: "section_name", header: "Section" },
 ];
 
-const P_DIVISION = "MST_HR_ACCOUNT_DIVISION";
-const P_DEPARTMENT = "MST_HR_MS_HR_DEPARTMENT";
-const P_SECTION = "MST_HR_MS_HR_SECTION_DDL";
-const P_EMPLOYEE = "MST_HR_VW_HR_EMP_MASTER_DDL";
+const PAY_UNIT_COLUMNS = [
+  { field: "PAY_COMP_ID", header: "Code" },
+  { field: "PAY_COMP_DESC", header: "Description" },
+];
+
+const P_DIVISION = "HR_DROPDOWN_MS_DIVISION";
+const P_DEPARTMENT = "HR_DROPDOWN_MS_DEPARTMENT";
+const P_SECTION = "HR_DROPDOWN_MS_SECTION";
+const P_EMPLOYEE = "HR_DROPDOWN_MS_HR_EMPLOYEE";
 const P_RETRIEVE = "MST_HR_EMPLOYEE_PAY_UNITS_SELECT";
 
+const P_PAY_UNIT = "MST_HR_CONSOLIDATE_PAY_UNIT";
 /* ================= HELPERS ================= */
 
 /** Accepts either a code ("P") or a label ("Pending") from the backend and returns the code. */
@@ -125,25 +128,37 @@ export function HrEmployeePayUnits() {
 
   /* ── Lookups ── */
   const loadLookupRows = useCallback(
-    async (parameter: string, code1: string, code2 = "NULL", code3 = "NULL"): Promise<LookupRow[]> => {
+    async (parameter: string, code1: string, code2 = "", code3 = "", code4 = ""): Promise<LookupRow[]> => {
       const response = await getDynamicLookup({
-        parameter, loginid, code1, code2, ...NULLS, code3,
+        parameter, loginid, code1, code2, ...NULLS, code3, code4,
       });
       return Array.isArray(response) ? (response as LookupRow[]) : [];
     },
     [loginid],
   );
 
-  const loadEmployeeOptions = useCallback(async () => {
-    const all = await loadLookupRows(P_EMPLOYEE, companyCode);
-    return all.filter((row) => {
+  const loadPayUnitOptions = useCallback(async (): Promise<LookupRow[]> => {
+    const data = await loadLookupRows(P_PAY_UNIT, companyCode);
+    return data.map((row) => {
       const r = row as Record<string, unknown>;
-      if (header.div_code && r.div_code !== header.div_code) return false;
-      if (header.dept_code && r.dept_code !== header.dept_code) return false;
-      if (header.section_code && r.section_code !== header.section_code) return false;
-      return true;
+      return {
+        ...r,
+        PAY_COMP_ID: String(r.PAY_COMP_ID ?? r.pay_comp_id ?? ""),
+        PAY_COMP_DESC: String(r.PAY_COMP_DESC ?? r.pay_comp_desc ?? ""),
+        PAY_COMP_SHORT_DESC: String(r.PAY_COMP_SHORT_DESC ?? r.pay_comp_short_desc ?? ""),
+      } as LookupRow;
     });
-  }, [loadLookupRows, companyCode, header.div_code, header.dept_code, header.section_code]);
+  }, [loadLookupRows, companyCode]);
+  // const loadEmployeeOptions = useCallback(async () => {
+  //   const all = await loadLookupRows(P_EMPLOYEE, companyCode);
+  //   return all.filter((row) => {
+  //     const r = row as Record<string, unknown>;
+  //     if (header.div_code && r.div_code !== header.div_code) return false;
+  //     if (header.dept_code && r.dept_code !== header.dept_code) return false;
+  //     if (header.section_code && r.section_code !== header.section_code) return false;
+  //     return true;
+  //   });
+  // }, [loadLookupRows, companyCode, header.div_code, header.dept_code, header.section_code]);
 
   /* ── Retrieve ── */
   const handleRetrieve = useCallback(async () => {
@@ -273,12 +288,25 @@ export function HrEmployeePayUnits() {
           return (
             <div className="flex items-center gap-1">
               {r.is_new ? (
-                <Input
-                  className="h-7 px-2 text-sm"
-                  value={r.pay_unit_code}
-                  placeholder="Pay unit code"
-                  onChange={(e) => updateRow(r.row_id, { pay_unit_code: e.target.value })}
-                />
+                <div className="min-w-[200px] flex-1">
+                  <LookupField
+                    compact
+                    label="Pay Unit"
+                    value={r.pay_unit_code}
+                    displayValue={r.pay_unit_code ? `${r.pay_unit_code} — ${r.pay_unit_name}` : ""}
+                    columns={PAY_UNIT_COLUMNS}
+                    valueField="PAY_COMP_ID"
+                    displayFields={["PAY_COMP_ID", "PAY_COMP_DESC"]}
+                    loadOptions={loadPayUnitOptions}
+                    onChange={(value, row) =>
+                      updateRow(r.row_id, {
+                        pay_unit_code: value,
+                        pay_unit_name: String(row?.PAY_COMP_DESC ?? ""),
+                      })
+                    }
+                    placeholder="Pay unit code or name"
+                  />
+                </div>
               ) : (
                 <span>
                   <span className="font-medium">{r.pay_unit_code}</span>
@@ -388,7 +416,7 @@ export function HrEmployeePayUnits() {
           ) : null,
       },
     ],
-    [updateRow, removeNewRow],
+    [updateRow, removeNewRow, loadPayUnitOptions],
   );
 
   /* ── UI ── */
@@ -430,7 +458,7 @@ export function HrEmployeePayUnits() {
 
       {/* Employee selection */}
       <SectionPanel title="Employee Selection" icon={Users}>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <Field label="Division" required>
             <LookupField
               compact
@@ -450,7 +478,6 @@ export function HrEmployeePayUnits() {
           <Field label="Department" required>
             <LookupField
               compact
-              disabled={!header.div_code}
               value={header.dept_code}
               columns={DEPARTMENT_COLUMNS}
               valueField="dept_code"
@@ -464,7 +491,6 @@ export function HrEmployeePayUnits() {
           <Field label="Section" required>
             <LookupField
               compact
-              disabled={!header.dept_code}
               value={header.section_code}
               columns={SECTION_COLUMNS}
               valueField="section_code"
@@ -475,7 +501,7 @@ export function HrEmployeePayUnits() {
             />
           </Field>
 
-          <Field label="Employee" required className="md:col-span-3">
+          <Field label="Employee" required>
             <LookupField
               compact
               disabled={!companyCode}
@@ -483,7 +509,7 @@ export function HrEmployeePayUnits() {
               columns={EMPLOYEE_COLUMNS}
               valueField="employee_id"
               displayFields={["employee_code", "rpt_name"]}
-              loadOptions={loadEmployeeOptions}
+              loadOptions={() => loadLookupRows(P_EMPLOYEE, companyCode, header.div_code, header.dept_code, header.section_code)}
               onChange={(value) => patchHeader({ employee_id: value })}
               placeholder="Employee code or name"
             />
