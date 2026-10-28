@@ -1881,7 +1881,7 @@ function PaymentDocumentEditor({
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[56vh] min-h-0 overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table finance-detail-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
@@ -1894,8 +1894,8 @@ function PaymentDocumentEditor({
                       <th className="px-2 py-2 text-center w-24">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
-                      {showAllColumns && <th className="finance-th-tax px-2 py-2 text-right text-amber-800 bg-amber-50/70 border-b-2 border-amber-300">Tax %</th>}
-                      {showAllColumns && <th className="finance-th-tax finance-amount-cell px-2 py-2 text-right text-amber-800 bg-amber-100/70 border-b-2 border-amber-400 font-bold">Tax Amt</th>}
+                      <th className="finance-th-tax px-2 py-2 text-right text-amber-800 bg-amber-50/70 border-b-2 border-amber-300">Tax %</th>
+                      <th className="finance-th-tax finance-amount-cell px-2 py-2 text-right text-amber-800 bg-amber-100/70 border-b-2 border-amber-400 font-bold">Tax Amt</th>
                       {/* {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>} */}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       {showAllColumns && <th className="finance-th-base-amt finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
@@ -1904,9 +1904,9 @@ function PaymentDocumentEditor({
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 14 : 7}>No detail lines yet — click "Add Line" to get started</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No detail lines yet — click "Add Line" to get started</td></tr>
                     ) : filteredDetail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 14 : 7}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
                     ) : filteredDetail.map((detail) => {
                       const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
                       const allocatedTotal = childRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
@@ -2183,8 +2183,7 @@ function PaymentDocumentEditor({
                             </td>
                           )}
 
-                          {showAllColumns && (
-                            <td className="w-16 min-w-[62px] px-1 py-1">
+                          <td className="w-16 min-w-[62px] px-1 py-1">
                             <Input
                               className="commercial-number-input commercial-tax-perc-input finance-money-input text-right font-semibold !bg-amber-50/50 !text-amber-800 !border-amber-200"
                               disabled={disabled}
@@ -2203,9 +2202,7 @@ function PaymentDocumentEditor({
                               }}
                             />
                           </td>
-                          )}
-                          {showAllColumns && (
-                            <td className="finance-amount-cell w-24 min-w-[80px] px-1 py-1">
+                          <td className="finance-amount-cell w-24 min-w-[80px] px-1 py-1">
                             <Input
                               className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-amber-900 !bg-amber-50/80 !border-amber-300 focus:!border-amber-500 focus:!ring-1 focus:!ring-amber-400/40 !text-xs md:!text-[13px] text-right shadow-xs"
                               disabled={disabled}
@@ -2224,7 +2221,6 @@ function PaymentDocumentEditor({
                               }}
                             />
                           </td>
-                          )}
 
                           {/* {showAllColumns && (
                             <td className="w-20 max-w-[80px] px-1 py-1">
@@ -2264,7 +2260,7 @@ function PaymentDocumentEditor({
 
                         {expandedRowIds[detail.id] && (
                           <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
-                            <td colSpan={showAllColumns ? 14 : 7} className="finance-allocation-cell">
+                            <td colSpan={showAllColumns ? 15 : 9} className="finance-allocation-cell">
                               <div className="finance-allocation-branch">
                                 <SmartInlineAllocationTable
                                   detail={detail}
