@@ -2855,7 +2855,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
 //     ...form,
 //     company_code: companyCode,
 function buildCommercialPayload(form: FormState, companyCode: string) {
-  const { tx_compntcat_name_1, ...formForSave } = form;
+  const { tx_compntcat_name_1, allocations, ...formForSave } = form;
   return {
     ...formForSave,
     company_code: companyCode,
@@ -3102,7 +3102,8 @@ function dateInput(value: unknown) {
 }
 // const today = () => localYmd(new Date());
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
   return value < 0 ? `(${amount})` : amount;
 }

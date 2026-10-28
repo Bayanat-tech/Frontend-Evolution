@@ -944,6 +944,7 @@ function PaymentDocumentEditor({
   };
   
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
+    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: false }));
     const acName = text(getLookupValue(row || {}, "ac_name"));
     updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
     if (docType === "BP") {
@@ -951,7 +952,6 @@ function PaymentDocumentEditor({
     }
     if (!value) return;
     setSelectedDetailId(detail.id);
-    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
     try {
       const child = await getChildTableName(value);
       const childTable = child?.table || "";
@@ -1171,7 +1171,6 @@ function PaymentDocumentEditor({
         }
       }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
-      setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load allocations");
     } finally {
@@ -2903,7 +2902,7 @@ function mapExistingDocument(
     ex_rate: Number(header.ex_rate || fallbackDetail.ex_rate || 1),
     div_code: text(header.div_code || fallbackDetail.div_code),
     div_name: text(fallbackNested(headerRaw, ["Division", "div_name"]) ?? fallbackNested(headerRaw, ["division", "div_name"]) ?? header.div_name ?? fallbackDetail.div_name),
-    remarks: text(header.remarks || fallbackDetail.remarks),
+    remarks: text(header.remarks ),
     cheque_no: text(header.cheque_no || fallbackDetail.cheque_no),
     cheque_date: dateInput(header.cheque_date || fallbackDetail.cheque_date),
     cheque_bank: text(header.cheque_bank || fallbackDetail.cheque_bank),
