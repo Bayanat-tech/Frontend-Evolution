@@ -1,3 +1,4 @@
+import { financeTaxAmounts } from "../../utils/financeTaxAmounts";
 import { AlignCenter, Ban, ChevronDown, ChevronUp, Columns3, Download, Edit2, List, Paperclip, Plus, Printer, RefreshCw, Save, Search, Trash2, X, FileText, Building2, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { FormEvent, Fragment, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
@@ -787,7 +788,7 @@ function PaymentDocumentEditor({
           return d;
         }
         const effectiveRate = dynamicRate > 0 ? dynamicRate : (Number(d.tx_compnt_perc_1) > 0 ? Number(d.tx_compnt_perc_1) : 0);
-        const taxAmt = Number(((Number(d.amount) || 0) * (effectiveRate / 100)).toFixed(3));
+        const taxAmt = Number(((Number(d.amount) || 0) * (effectiveRate / 100)).toFixed(4));
         if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === effectiveRate && d.tx_compnt_1_expmt === "S") {
           return d;
         }
@@ -863,19 +864,14 @@ function PaymentDocumentEditor({
       detail: current.detail.map((row) => {
         if (row.id !== id) return row;
         const merged = { ...row, ...patch };
-        if ("amount" in patch || "tx_compnt_perc_1" in patch || "tx_compnt_1_expmt" in patch || "tx_compntcat_code_1" in patch) {
+        if ("amount" in patch || "tx_compnt_perc_1" in patch || "tx_compnt_1_expmt" in patch || "tx_compntcat_code_1" in patch || "ex_rate" in patch) {
           const amt = Number(merged.amount) || 0;
           const dynamicRate = getTaxPercForCode(merged.tx_compntcat_code_1, merged.tx_compnt_perc_1);
           let taxType = merged.tx_compnt_1_expmt || (dynamicRate > 0 ? "S" : "N");
 
-          if (dynamicRate > 0 && taxType === "N") {
-            taxType = "S";
-            merged.tx_compnt_1_expmt = "S";
-          }
-
           if (taxType === "S") {
             merged.tx_compnt_perc_1 = dynamicRate;
-            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(3));
+            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(4));
           } else {
             merged.tx_compnt_perc_1 = 0;
             merged.tx_compnt_amt_1 = 0;
@@ -883,6 +879,12 @@ function PaymentDocumentEditor({
           if ("tx_compnt_amt_1" in patch) {
             merged.tx_compnt_amt_1 = Number(patch.tx_compnt_amt_1) || 0;
           }
+          if (merged.tx_compntcat_code_1) {
+            merged.tx_cat_code = String(merged.tx_compntcat_code_1).trim().slice(0, 2);
+          }
+          const lineExRate = Number(merged.ex_rate || current.ex_rate || 1);
+          merged.tx_compnt_lcuramt_1 = Number((merged.tx_compnt_amt_1 * lineExRate).toFixed(4));
+          merged.lcur_amount = Number((amt * lineExRate).toFixed(3));
         }
         return merged;
       }),
@@ -906,7 +908,7 @@ function PaymentDocumentEditor({
         return {
           tx_compnt_1_expmt: "S",
           tx_compnt_perc_1: dynamicRate,
-          tx_compnt_amt_1: Number(((amt * dynamicRate) / 100).toFixed(3)),
+          tx_compnt_amt_1: Number(((amt * dynamicRate) / 100).toFixed(4)),
         };
       };
 
@@ -1222,7 +1224,7 @@ function PaymentDocumentEditor({
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : null;
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
           const effectivePerc = perc != null ? perc : getTaxPercForCode(d.tx_compntcat_code_1 || "");
-          const taxAmt = isTaxable ? Number(((childTotal * effectivePerc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const taxAmt = isTaxable ? Number(((childTotal * effectivePerc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1258,7 +1260,7 @@ function PaymentDocumentEditor({
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : null;
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
           const effectivePerc = perc != null ? perc : getTaxPercForCode(d.tx_compntcat_code_1 || "");
-          const taxAmt = isTaxable ? Number(((childTotal * effectivePerc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const taxAmt = isTaxable ? Number(((childTotal * effectivePerc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1275,6 +1277,12 @@ function PaymentDocumentEditor({
      return setError(`Account period is locked prior to ${formatDate(companyInfo.doc_edit_from)}. Backdated entry is not allowed.`);
    }
     if (!form.div_code) return setError("Division is required");
+    for (const d of form.detail) {
+      const lineDiv = d.div_code || form.div_code;
+      if (lineDiv && form.div_code && lineDiv !== form.div_code) {
+        return setError(`Division in Header (${form.div_code}) and Detail (${lineDiv}) not matching on line #${d.serial_no || 1}.`);
+      }
+    }
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
@@ -1724,6 +1732,11 @@ function PaymentDocumentEditor({
                           loadOptions={() => getDocAccounts(form.doc_type, "H", form.div_code)}
                           disabled={disabled || !form.div_code}
                           onChange={async (value, row) => {
+                            const expTypeCode = text(getLookupValue(row || {}, "exp_type_code"));
+                            if (expTypeCode) {
+                              setError("A/c codes which have link with Exp. Type are not allowed in header!");
+                              return;
+                            }
                             const selectedCurrency = text(getLookupValue(row || {}, "curr_code"));
                             const selectedCurrName = text(getLookupValue(row || {}, "curr_name"));
                             const selectedExRate = Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || 0);
@@ -2137,17 +2150,22 @@ function PaymentDocumentEditor({
                                   }
 
                                   const lineAmt = Number(detail.amount) || 0;
-                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(4)) : 0;
 
                                   if (valStr && perc > 0) {
                                     setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
                                   }
 
+                                  const lineCatCode = valStr ? valStr.slice(0, 2) : "";
+                                  const lineExRate = Number(detail.ex_rate || form.ex_rate || 1);
+                                  const lcurTax = Number((taxAmt * lineExRate).toFixed(4));
                                   updateDetail(detail.id, {
                                     tx_compntcat_code_1: value,
+                                    tx_cat_code: lineCatCode,
                                     tx_compnt_1_expmt: determinedTaxType,
                                     tx_compnt_perc_1: perc,
                                     tx_compnt_amt_1: taxAmt,
+                                    tx_compnt_lcuramt_1: lcurTax,
                                   });
                                 }}
                               />
@@ -2167,7 +2185,7 @@ function PaymentDocumentEditor({
                                         ? detail.tx_compnt_perc_1
                                         : getTaxPercForCode(detail.tx_compntcat_code_1 || ""))
                                     : 0;
-                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(4)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,
@@ -2193,7 +2211,7 @@ function PaymentDocumentEditor({
                               onChange={(event) => {
                                 const perc = Number(event.target.value || 0);
                                 const lineAmt = Number(detail.amount) || 0;
-                                const taxAmt = Number(((lineAmt * perc) / 100).toFixed(3));
+                                const taxAmt = Number(((lineAmt * perc) / 100).toFixed(4));
                                 updateDetail(detail.id, {
                                   tx_compnt_perc_1: perc,
                                   tx_compnt_amt_1: taxAmt,
@@ -2922,8 +2940,8 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
     ex_rate: Number(form.ex_rate || 1),
     detail: form.detail.map((row, index) => {
       const rowCurr = row.curr_code || form.curr_code;
-      const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
-      const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || form.ex_rate || 1);
+
+      const effectiveExRate = Number(row.ex_rate || form.ex_rate || 1);
       const detail = {
         company_code: row.company_code || companyCode,
         doc_type: docType,
@@ -2992,8 +3010,8 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
 
   const details = originalForm.detail.map((row, index) => {
     const rowCurr = row.curr_code || originalForm.curr_code;
-    const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(originalForm.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(originalForm.curr_code).trim().toUpperCase());
-    const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || originalForm.ex_rate || 1);
+
+    const effectiveExRate = Number(row.ex_rate || originalForm.ex_rate || 1);
     const effectiveLcurAmt = Math.abs(Number(row.amount || 0)) * effectiveExRate * Number(row.sign_ind || 1);
     return {
       ...row,
@@ -3006,6 +3024,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
       curr_code: rowCurr,
       ex_rate: effectiveExRate,
       lcur_amount: effectiveLcurAmt,
+      ...financeTaxAmounts(row, effectiveExRate),
       div_code: row.div_code || originalForm.div_code,
     };
   });
@@ -3069,14 +3088,14 @@ function groupChildren(form: TransactionHeader) {
       if (table === "invoice") {
         cleaned.indicator_origin = "N";
         cleaned.curr_code = form.curr_code;
-        const isBaseCurr = String(form.curr_code).trim().toUpperCase() === "INR" || Number(form.ex_rate || 1) === 1;
-        cleaned.ex_rate = isBaseCurr ? 1 : Number(form.ex_rate || 1);
+
+        cleaned.ex_rate = Number(form.ex_rate || 1);
         cleaned.amount = Number(cleaned.amount || 0);
         cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
       } else {
         const rowCurr = cleaned.curr_code || form.curr_code;
-        const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
-        const effectiveExRate = isBaseCurr ? 1 : Number(cleaned.ex_rate || form.ex_rate || 1);
+
+        const effectiveExRate = Number(cleaned.ex_rate || form.ex_rate || 1);
         cleaned.curr_code = rowCurr;
         cleaned.ex_rate = effectiveExRate;
         cleaned.amount = Number(cleaned.amount || 0);

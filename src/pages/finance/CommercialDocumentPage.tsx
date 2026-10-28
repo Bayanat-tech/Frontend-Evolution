@@ -1,3 +1,4 @@
+import { roundFinanceTax } from "../../utils/financeTaxAmounts";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins, RotateCcw, Zap, CheckCircle2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
@@ -1789,7 +1790,7 @@ const limitProps = (f: keyof FormState) => ({
                               tx_compntcat_code_1: catCode || line.tx_compntcat_code_1,
                               tx_compnt_1_expmt:   v,
                               tx_compnt_perc_1:    perc,
-                              tx_compnt_amt_1:     (Number(line.amount || 0) * perc) / 100,
+                              tx_compnt_amt_1:     roundFinanceTax((Number(line.amount || 0) * perc) / 100),
                             }));
                             return {
                               ...c,
@@ -1843,7 +1844,7 @@ const limitProps = (f: keyof FormState) => ({
                               tx_compntcat_code_1: value || line.tx_compntcat_code_1,
                               tx_compnt_1_expmt:   resolvedExpmt,
                               tx_compnt_perc_1:    resolvedPerc,
-                              tx_compnt_amt_1:     (Number(line.amount || 0) * resolvedPerc) / 100,
+                              tx_compnt_amt_1:     roundFinanceTax((Number(line.amount || 0) * resolvedPerc) / 100),
                             }));
 
                             return {
@@ -2152,7 +2153,7 @@ const limitProps = (f: keyof FormState) => ({
                             onChange={(e) => {
                              const amount = Number(e.target.value || 0);
                              const taxperc   = Number(line.tx_compnt_perc_1 || 0);
-                            updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
+                            updateLine(line.id, { amount, tx_compnt_amt_1: roundFinanceTax((amount * taxperc) / 100) });
                           }} /></td>
                         {/* {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-24 min-w-[90px] px-1 py-1 text-center">
@@ -2193,7 +2194,7 @@ const limitProps = (f: keyof FormState) => ({
                           <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
   const v    = event.target.value;
   const perc = v === "S" ? (line.tx_compnt_perc_1 && line.tx_compnt_perc_1 > 0 ? line.tx_compnt_perc_1 : getTaxPercForCode(line.tx_compntcat_code_1 || form.tx_compntcat_code_1 || "")) : 0;
-  const taxAmt = (Number(line.amount || 0) * perc) / 100;
+  const taxAmt = roundFinanceTax((Number(line.amount || 0) * perc) / 100);
   updateLine(line.id, {
     tx_compnt_1_expmt:   v,
     tx_compnt_perc_1:    perc,
@@ -2873,7 +2874,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       const lineCurrCode = line.curr_code || form.curr_code || "";
       const lineExRate = Number(line.ex_rate || form.ex_rate || 1);
       const baseAmt = Math.abs(Number(line.amount || 0));
-      const taxAmt = baseAmt * Number(line.tx_compnt_perc_1 || 0) / 100;
+      const taxAmt = roundFinanceTax(baseAmt * Number(line.tx_compnt_perc_1 || 0) / 100);
       return {
         company_code: companyCode,
         doc_type: form.doc_type,
@@ -2897,7 +2898,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
         dept_code: line.dept_code || "",
         div_code: form.div_code,
         tx_compnt_amt_1: taxAmt,
-        tx_compnt_lcuramt_1: taxAmt * lineExRate,
+        tx_compnt_lcuramt_1: roundFinanceTax(taxAmt * lineExRate),
         lcur_amount: baseAmt * lineExRate,
         prod_code: line.prod_code || "",
         cost_code: line.cost_code || "", 
@@ -3056,7 +3057,7 @@ function recalc(line: Line): Partial<Line> {
   const price  = Number(line.price  || 0);
   const amount = qty * price;
   const perc   = Number(line.tx_compnt_perc_1 || 0);
-  const taxAmt = (amount * perc) / 100;
+  const taxAmt = roundFinanceTax((amount * perc) / 100);
   const exRate = Number(line.ex_rate || 1);
 
   return { qty: line.qty, price: line.price, amount, tx_compnt_amt_1: taxAmt, lcur_amount: Math.abs(amount) * exRate };

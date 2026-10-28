@@ -792,7 +792,7 @@ function JVDocument({
       detail: current.detail.map((d) => {
         if (d.tx_compnt_1_expmt !== "S") return d;
         const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
-        const taxAmt = Number((((Number(d.amount) || 0) * perc) / 100).toFixed(3));
+        const taxAmt = Number((((Number(d.amount) || 0) * perc) / 100).toFixed(4));
         return { ...d, tx_compnt_amt_1: taxAmt };
       }),
     }));
@@ -850,9 +850,9 @@ function JVDocument({
       detail: current.detail.map((row) => {
         if (row.id !== id) return row;
         const merged = { ...row, ...patch };
-        const isTaxable = merged.tx_compnt_1_expmt === "S" || (merged.tx_compnt_perc_1 != null && Number(merged.tx_compnt_perc_1) > 0);
+        const isTaxable = merged.tx_compnt_1_expmt ? merged.tx_compnt_1_expmt === "S" : Number(merged.tx_compnt_perc_1 || 0) > 0;
         const perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : getTaxPercForCode(merged.tx_compntcat_code_1 || "");
-        const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(3)) : (Number(merged.tx_compnt_amt_1) || 0);
+        const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(4)) : 0;
         const effectiveRate = Number(merged.ex_rate || current.ex_rate || 1);
         const lcurAmt = Math.abs(Number(merged.amount || 0)) * effectiveRate * Number(merged.sign_ind || 1);
         return { ...merged, tx_compnt_amt_1: taxAmt, lcur_amount: lcurAmt };
@@ -1096,7 +1096,7 @@ function JVDocument({
           if (d.id !== dId) return d;
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1119,7 +1119,7 @@ function JVDocument({
           if (d.id !== dId) return d;
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1819,7 +1819,7 @@ function JVDocument({
                                   const taxType = event.target.value;
                                   const lineAmt = Number(detail.amount) || 0;
                                   const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : getTaxPercForCode(detail.tx_compntcat_code_1 || "")) : 0;
-                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(4)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,

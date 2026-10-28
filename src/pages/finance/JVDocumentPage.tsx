@@ -1,3 +1,4 @@
+import { financeTaxAmounts } from "../../utils/financeTaxAmounts";
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { AlertCircle, Ban, Building2, CheckCircle2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
@@ -704,7 +705,7 @@ function JVDocument({
       detail: current.detail.map((d) => {
         if (d.tx_compnt_1_expmt !== "S") return d;
         const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
-        const taxAmt = Number((((Number(d.amount) || 0) * perc) / 100).toFixed(3));
+        const taxAmt = Number((((Number(d.amount) || 0) * perc) / 100).toFixed(4));
         return { ...d, tx_compnt_amt_1: taxAmt };
       }),
     }));
@@ -763,9 +764,9 @@ function JVDocument({
       detail: current.detail.map((row) => {
         if (row.id !== id) return row;
         const merged = { ...row, ...patch };
-        const isTaxable = merged.tx_compnt_1_expmt === "S" || (merged.tx_compnt_perc_1 != null && Number(merged.tx_compnt_perc_1) > 0);
+        const isTaxable = merged.tx_compnt_1_expmt ? merged.tx_compnt_1_expmt === "S" : Number(merged.tx_compnt_perc_1 || 0) > 0;
         const perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : getTaxPercForCode(merged.tx_compntcat_code_1 || "");
-        const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(3)) : (Number(merged.tx_compnt_amt_1) || 0);
+        const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(4)) : 0;
         const effectiveRate = Number(merged.ex_rate || current.ex_rate || 1);
         const lcurAmt = Math.abs(Number(merged.amount || 0)) * effectiveRate * Number(merged.sign_ind || 1);
         return { ...merged, tx_compnt_amt_1: taxAmt, lcur_amount: lcurAmt };
@@ -1011,7 +1012,7 @@ function JVDocument({
           if (d.id !== dId) return d;
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1034,7 +1035,7 @@ function JVDocument({
           if (d.id !== dId) return d;
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1719,7 +1720,7 @@ function JVDocument({
                                   const taxType = event.target.value;
                                   const lineAmt = Number(detail.amount) || 0;
                                   const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : getTaxPercForCode(detail.tx_compntcat_code_1 || "")) : 0;
-                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(4)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,
@@ -2475,8 +2476,8 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
 
   const details = originalForm.detail.map((row, index) => {
     const rowCurr = row.curr_code || originalForm.curr_code;
-    const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(originalForm.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(originalForm.curr_code).trim().toUpperCase());
-    const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || originalForm.ex_rate || 1);
+
+    const effectiveExRate = Number(row.ex_rate || originalForm.ex_rate || 1);
     const effectiveLcurAmt = Math.abs(Number(row.amount || 0)) * effectiveExRate * Number(row.sign_ind || 1);
     return {
       ...row,
@@ -2490,6 +2491,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
       curr_code: rowCurr,
       ex_rate: effectiveExRate,
       lcur_amount: effectiveLcurAmt,
+      ...financeTaxAmounts(row, effectiveExRate),
       div_code: row.div_code || originalForm.div_code,
     };
   });
@@ -2544,14 +2546,14 @@ function groupChildren(form: TransactionHeader) {
       if (table === "invoice") {
         cleaned.indicator_origin = "N";
         cleaned.curr_code = form.curr_code;
-        const isBaseCurr = String(form.curr_code).trim().toUpperCase() === "INR" || Number(form.ex_rate || 1) === 1;
-        cleaned.ex_rate = isBaseCurr ? 1 : Number(form.ex_rate || 1);
+
+        cleaned.ex_rate = Number(form.ex_rate || 1);
         cleaned.amount = Number(cleaned.amount || 0);
         cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
       } else {
         const rowCurr = cleaned.curr_code || form.curr_code;
-        const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
-        const effectiveExRate = isBaseCurr ? 1 : Number(cleaned.ex_rate || form.ex_rate || 1);
+
+        const effectiveExRate = Number(cleaned.ex_rate || form.ex_rate || 1);
         cleaned.curr_code = rowCurr;
         cleaned.ex_rate = effectiveExRate;
         cleaned.amount = Number(cleaned.amount || 0);

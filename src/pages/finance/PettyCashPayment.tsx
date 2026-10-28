@@ -652,7 +652,7 @@ function PettyCashPaymentDocument({
           }
           return d;
         }
-        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(3));
+        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(4));
         if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === dynamicRate && d.tx_compnt_1_expmt === "S") {
           return d;
         }
@@ -718,14 +718,9 @@ function PettyCashPaymentDocument({
           const dynamicRate = getTaxPercForCode(merged.tx_compntcat_code_1, merged.tx_compnt_perc_1);
           let taxType = merged.tx_compnt_1_expmt || (dynamicRate > 0 ? "S" : "N");
 
-          if (dynamicRate > 0 && taxType === "N") {
-            taxType = "S";
-            merged.tx_compnt_1_expmt = "S";
-          }
-
           if (taxType === "S") {
             merged.tx_compnt_perc_1 = dynamicRate;
-            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(3));
+            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(4));
           } else {
             merged.tx_compnt_perc_1 = 0;
             merged.tx_compnt_amt_1 = 0;
@@ -753,7 +748,7 @@ function PettyCashPaymentDocument({
       const dynamicRate = getTaxPercForCode(detail.tx_compntcat_code_1, detail.tx_compnt_perc_1);
       const isTaxable = detail.tx_compnt_1_expmt === "S";
       const taxPerc = isTaxable ? dynamicRate : 0;
-      const taxAmt = isTaxable ? Number(((newAmount * taxPerc) / 100).toFixed(3)) : 0;
+      const taxAmt = isTaxable ? Number(((newAmount * taxPerc) / 100).toFixed(4)) : 0;
       const taxPatch = {
         tx_compnt_1_expmt: isTaxable ? "S" : "N",
         tx_compnt_perc_1: isTaxable ? taxPerc : 0,
@@ -1020,7 +1015,7 @@ function PettyCashPaymentDocument({
           if (d.id !== dId) return d;
           const dynamicRate = getTaxPercForCode(d.tx_compntcat_code_1, d.tx_compnt_perc_1);
           const isTaxable = d.tx_compnt_1_expmt === "S";
-          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(4)) : 0;
           return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1043,7 +1038,7 @@ function PettyCashPaymentDocument({
           if (d.id !== dId) return d;
           const dynamicRate = getTaxPercForCode(d.tx_compntcat_code_1, d.tx_compnt_perc_1);
           const isTaxable = d.tx_compnt_1_expmt === "S";
-          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(4)) : 0;
           return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1789,7 +1784,7 @@ function PettyCashPaymentDocument({
                                   }
 
                                   const lineAmt = Number(detail.amount) || 0;
-                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(4)) : 0;
 
                                   if (valStr && perc > 0) {
                                     setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
@@ -1818,7 +1813,7 @@ function PettyCashPaymentDocument({
                                         ? detail.tx_compnt_perc_1
                                         : getTaxPercForCode(detail.tx_compntcat_code_1 || ""))
                                     : 0;
-                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(4)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,
