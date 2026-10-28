@@ -1795,3 +1795,14 @@ form.commercial-document-workbench {
   width: var(--allocation-panel-width, max-content) !important;
   max-width: 100% !important;
 }
+
+/* Document Setup: gap under title */
+.document-setup-page .finance-list-heading {
+  margin-bottom: 0 !important;
+  padding-bottom: 2px !important;
+}
+.document-setup-page .data-table-header {
+  margin-top: 0 !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}

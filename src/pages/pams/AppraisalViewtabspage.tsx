@@ -37,38 +37,21 @@ function num(val: unknown): number {
 }
 
 function calcFinalRating(
-  taskTotal: number,
-  charTotal: number,
-  goalTotal: number,
-  skillTotal: number,
-  cfg: WeightageConfig
-): number {
-  const t = Number(taskTotal || 0);
-  const c = Number(charTotal || 0);
-  const g = Number(goalTotal || 0);
-  const s = Number(skillTotal || 0);
+  taskTotal: number, charTotal: number, goalTotal: number, skillTotal: number,
+  cfg?: WeightageConfig
+): number | null {
+  const parts = [
+    { score: Number(taskTotal || 0),  pct: Number(cfg?.taskPct)  || 0 },
+    { score: Number(charTotal || 0),  pct: Number(cfg?.charPct)  || 0 },
+    { score: Number(goalTotal || 0),  pct: Number(cfg?.goalPct)  || 0 },
+    { score: Number(skillTotal || 0), pct: Number(cfg?.skillPct) || 0 },
+  ].filter((p) => p.score > 0);
 
-  if (t === 0 && c === 0 && g === 0 && s === 0) return 0;
-
-  const taskPct  = Number(cfg?.taskPct)  || 0;
-  const charPct  = Number(cfg?.charPct)  || 0;
-  const goalPct  = Number(cfg?.goalPct)  || 0;
-  const skillPct = Number(cfg?.skillPct) || 0;
-  const totalWt  = taskPct + charPct + goalPct + skillPct;
-
-  let raw: number;
-
-  if (totalWt > 0) {
-    const weightedSum =
-      (t * taskPct) + (c * charPct) + (g * goalPct) + (s * skillPct);
-    raw = weightedSum / totalWt;
-  } else {
-    const active = [t, c, g, s].filter((v) => v > 0);
-    if (active.length === 0) return 0;
-    raw = active.reduce((a, b) => a + b, 0) / active.length;
-  }
-
-  // ✅ Nearest integer: 2.40 → 2, 2.6 → 3
+  if (parts.length === 0) return null;
+  const totalWt = parts.reduce((a, p) => a + p.pct, 0);
+  const raw = totalWt > 0
+    ? parts.reduce((a, p) => a + p.score * p.pct, 0) / totalWt
+    : parts.reduce((a, p) => a + p.score, 0) / parts.length;
   return Math.round(raw);
 }
 
@@ -418,8 +401,7 @@ const AppraisalViewTabsPage: React.FC = () => {
     (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
 
   const finalRating = calcFinalRating(taskTotal, characterTotal, goalTotal, skillTotal, weightageConfig);
-  const showFinalRating =
-    taskTotal > 0 || characterTotal > 0 || goalTotal > 0 || skillTotal > 0;
+const showFinalRating = finalRating !== null;
 
   // ── Fetch ──
   useEffect(() => {
@@ -429,19 +411,17 @@ const AppraisalViewTabsPage: React.FC = () => {
       try {
         const periodNumber = prefetchedRow ? text(prefetchedRow.PERIOD_NUMBER) : "";
 
-        const [flowRes, levelRes, commentRes, historyRes, weightageRes] = await Promise.all([
-          pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
-          pamsSelect({ parameter: "sentback_levels", loginid, code1: docNo }),
-          pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
-          pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
+        const [flowRes, levelRes, commentRes, historyRes] = await Promise.all([
+  pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
+  pamsSelect({ parameter: "sentback_levels", loginid, code1: docNo }),
+  pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
+  pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
+]);
 
-          pamsSelect({
-            parameter: "Trn_weightage",
-            loginid,
-            code1: companyCode,
-            code2: periodNumber,
-          }),
-        ]);
+const docPeriod = text(flowRes[0]?.PERIOD_NUMBER) || periodNumber;
+const weightageRes = await pamsSelect({
+  parameter: "Trn_weightage", loginid, code1: companyCode, code2: docPeriod,
+});
 
         let currentFlowLevel = 0, nextActionBy = "";
         if (flowRes.length > 0) {
@@ -561,8 +541,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           await pamsSelect({ parameter: "save_appraisal_comment", loginid, code1: docNo, code2: employeeCode, code3: "0", code4: "APPRAISEE", code5: appraiseeText });
         }
       }
-      const ratingToSend = (action === "S" || action === "A" || action === "D") ? finalRating : 0;
-      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: action, code4: "", number1: ratingToSend });
+const ratingToSend = (action === "S" || action === "A" || action === "D") ? (finalRating ?? 0) : 0;      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: action, code4: "", number1: ratingToSend });
       const msg = action === "D" ? "Saved as draft" : action === "S" ? "Submitted successfully" : action === "A" ? "Approved successfully" : "Rejected successfully";
       setNotice({ type: "success", message: msg });
       setTimeout(() => navigate(-1), 900);
@@ -647,7 +626,7 @@ const AppraisalViewTabsPage: React.FC = () => {
 
           {showFinalRating && (
             <div style={S.ratingChipWrap}>
-              <RatingChip rating={finalRating} weightageConfig={weightageConfig} />
+              <RatingChip rating={finalRating ?? 0} weightageConfig={weightageConfig} />
             </div>
           )}
 
