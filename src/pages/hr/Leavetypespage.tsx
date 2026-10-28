@@ -13,7 +13,7 @@ const MST_HR_LEAVE_TYPE_LIST = "MST_HR_LEAVE_TYPE_LIST";
 const MST_HR_ATTENDANCE_TYPE_LIST = "MST_HR_ATTENDANCE_TYPE_LIST";
 const PAY_COMPONENT_LOOKUP = "PAY_COMPONENT_LOOKUP";
 
-const HR_MSE_LEAVE_TYPES = "HR_MSE_LEAVE_TYPES";
+const hr_mse_leave_types = "hr_mse_leave_types";
 
 type TLeaveType = {
   company_code?: string;
@@ -109,8 +109,8 @@ export function LeaveTypesPage() {
     setNotice(null);
     try {
       await executeDynamicMutationColumn90({
-        parameter: HR_MSE_LEAVE_TYPES,
-        loginid: user?.loginid ?? "ADMIN",
+        parameter: hr_mse_leave_types,
+        loginid: user?.loginid ?? "",
         val1s1: form.company_code ?? "",
         val1s2: form.leave_type?.trim() ?? "",
         val1s3: form.leave_type_desc?.trim() ?? "",
