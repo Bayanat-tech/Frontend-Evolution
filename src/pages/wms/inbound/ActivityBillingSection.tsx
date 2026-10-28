@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Button } from "../../../components/ui/Button";
-import { Plus, RefreshCw, Save, X, Pencil, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Save, X, Pencil, Trash2, Upload } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { DataTable } from "../../../components/ui/DataTable";
-import { type WmsRow, value } from "../../../utils/inboundHelpers"; // adjust path to match your project
+import { type WmsRow, value } from "../../../utils/inboundHelpers"; 
+import { ActivityImportDialog, type ImportedActivity } from "./ActivityImportDialog";
 
-type ActivityRow = WmsRow;   // <-- alias instead of redefining
+type ActivityRow = WmsRow;   
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 function deriveTaxPercentFromCategory(code: string): number {
@@ -19,7 +20,6 @@ function sqlEscape(str: string) {
   return str.replace(/'/g, "''");
 }
 
-// In the component props, keep using ActivityRow — it's now just WmsRow
 export function ActivityBillingSection({
   companyCode,
   prinCode,
@@ -54,13 +54,24 @@ export function ActivityBillingSection({
     totalCostAmount: number;
   };
   loadActivityBilling: () => void;
-  handleActivityBillingSubmit: () => void;
+  handleActivityBillingSubmit: () => void | Promise<void>;
   executeWmsInboundSql: (sql: string) => Promise<any>;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  
+  // ── Local Submit Lock (Prevents Double Submits using useRef) ──
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
-  // ── Queries (unchanged) ──
+  useEffect(() => {
+    if (!activitySaving) {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
+  }, [activitySaving]);
+
   const { data: activityData = [] } = useQuery({
     queryKey: ["activityBilling", companyCode, prinCode, jobNo],
     enabled: !!companyCode && !!prinCode && !!jobNo,
@@ -80,6 +91,17 @@ export function ActivityBillingSection({
       return Array.isArray(res) ? res : [];
     },
   });
+
+  const newUid = () =>
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `r_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  useEffect(() => {
+    if (activityRows.some((r) => !value(r, "_uid"))) {
+      setActivityRows((cur) => cur.map((r) => (value(r, "_uid") ? r : { ...r, _uid: newUid() })));
+    }
+  }, [activityRows, setActivityRows]);
 
   const { data: taxCategoryData = [], isLoading: taxCategoryLoading } = useQuery({
     queryKey: ["taxCategory", companyCode],
@@ -199,8 +221,6 @@ export function ActivityBillingSection({
 
   // ── Add / Edit Dialog State ──
   const emptyForm = (): ActivityRow => {
-    const noCompntcatMaster = !txCompntcatCode1Loading && txCompntcatCode1Data.length === 0;
-
     return {
       act_code: "",
       activity: "",
@@ -214,13 +234,12 @@ export function ActivityBillingSection({
       TX_COMPNT_LCURAMT_1: 0,
       TX_COMPNT_AMT_1_COST: 0,
       TX_COMPNT_LCURAMT_1_COST: 0,
-      // always present, just vary by legacy rule
-      TX_COMPNTCAT_CODE_1: noCompntcatMaster ? "11100" : "",
-      TX_COMPNTCAT_CODE_1_COST: noCompntcatMaster ? "11100" : "",
-      TX_COMPNT_PERC_1: noCompntcatMaster ? 5 : 0,
-      TX_COMPNT_PERC_1_COST: noCompntcatMaster ? 5 : 0,
-      TX_CAT_CODE: noCompntcatMaster ? "" : "00",
-      TX_CAT_CODE_COST: noCompntcatMaster ? "" : "00",
+      TX_COMPNTCAT_CODE_1: "0", 
+      TX_COMPNTCAT_CODE_1_COST: "0",
+      TX_COMPNT_PERC_1: 0,
+      TX_COMPNT_PERC_1_COST: 0,
+      TX_CAT_CODE: "0",
+      TX_CAT_CODE_COST: "0",
     };
   };
 
@@ -252,16 +271,36 @@ export function ActivityBillingSection({
   const commitFormRow = () => {
     const final = recalcRow(formRow);
     if (editIndex !== null) {
-      setActivityRows((cur) => {
-        const next = cur.map((r, i) => (i === editIndex ? final : r));
-        return next;
-      });
+      setActivityRows((cur) => cur.map((r, i) => (i === editIndex ? final : r)));
       markEdited(final, editIndex);
     } else {
-      setActivityRows((cur) => [...cur, final]);
+      const added = { ...final, _uid: newUid(), _isNew: true };
+      setActivityRows((cur) => [...cur, added]);
+      setActivityEdited((prev) => ({ ...prev, [added._uid]: added }));
     }
     setDialogOpen(false);
     setEditIndex(null);
+  };
+
+  const handleImportConfirm = (items: ImportedActivity[]) => {
+    const added = items.map((it) => {
+      const merged: ActivityRow = { ...emptyForm(), ...it };
+      if (it.TX_COMPNTCAT_CODE_1)
+        merged.TX_COMPNT_PERC_1 = deriveTaxPercentFromCategory(it.TX_COMPNTCAT_CODE_1);
+      if (it.TX_COMPNTCAT_CODE_1_COST)
+        merged.TX_COMPNT_PERC_1_COST = deriveTaxPercentFromCategory(it.TX_COMPNTCAT_CODE_1_COST);
+      return { ...recalcRow(merged), _uid: newUid(), _isNew: true };
+    });
+    
+    // We append the new rows. Since you confirmed 6 rows in the table before submit,
+    // this part is correct.
+    setActivityRows((cur) => [...cur, ...added]);
+    setActivityEdited((prev) => {
+      const next = { ...prev };
+      added.forEach((r) => (next[r._uid] = r));
+      return next;
+    });
+    setImportOpen(false);
   };
 
   const columns = useMemo(() => {
@@ -497,17 +536,34 @@ export function ActivityBillingSection({
     ];
   }, [openEditDialog, handleDelete]);
 
+  // ── Bulletproof Submit Lock using useRef ──
+  const handleSubmitClick = async () => {
+    if (submitLockRef.current || activitySaving) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+    
+    try {
+      await handleActivityBillingSubmit();
+    } finally {
+      // Fallback unlock in case activitySaving doesn't trigger
+      setTimeout(() => {
+        submitLockRef.current = false;
+        setIsSubmitting(false);
+      }, 1500);
+    }
+  };
+
   // ── Toolbar ──
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
       <Button size="sm" variant="outline" onClick={openAddDialog}>
         <Plus size={14} /> Add Activity
       </Button>
-      <Button size="sm" variant="outline" onClick={loadActivityBilling}>
-        <RefreshCw size={14} /> Refresh
+      <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+        <Upload size={14} /> Import Excel
       </Button>
-      <Button size="sm" onClick={handleActivityBillingSubmit} >
-        <Save size={14} /> {activitySaving ? "Saving..." : "Submit"}
+      <Button size="sm" onClick={handleSubmitClick} disabled={activitySaving || isSubmitting}>
+        <Save size={14} /> {activitySaving || isSubmitting ? "Saving..." : "Submit"}
       </Button>
     </div>
   );
@@ -852,6 +908,16 @@ export function ActivityBillingSection({
           </div>
         </div>
       )}
+      
+      <ActivityImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        activities={activityData}
+        taxCompCats={txCompntcatCode1Data}
+        taxCats={taxCategoryData}
+        masterLoading={txCompntcatCode1Loading || taxCategoryLoading}
+        onConfirm={handleImportConfirm}
+      />
     </section>
   );
 }
