@@ -243,6 +243,26 @@ export function FreightInvoicePage() {
     }
   }
 
+  const directPrintInvoice = useCallback(async (prinCode: string, invoiceNo: string) => {
+    if (!invoiceNo) return;
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      toast.error("Please allow pop-ups for this site to view the report.");
+      return;
+    }
+    reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Loading invoice report...</p>");
+    try {
+      const html = await getFreightInvoiceDetailReport(prinCode, invoiceNo, companyCode, "grouped");
+      if (reportWindow.closed) return;
+      reportWindow.document.open();
+      reportWindow.document.write(html);
+      reportWindow.document.close();
+    } catch {
+      reportWindow.close();
+      toast.error("Failed to load invoice report.");
+    }
+  }, [companyCode, toast]);
+
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     {
       accessorKey: "invoice_no",
@@ -278,14 +298,16 @@ export function FreightInvoicePage() {
     {
       id: "actions",
       header: "Actions",
-      size: 96,
+      size: 120,
       enableColumnFilter: false,
       cell: ({ row }) => {
         const invStatus = text(row.original.inv_status).toUpperCase();
         const isConfirmed = invStatus === "C" || invStatus === "CONFIRMED";
         const invNo = text(row.original.invoice_no);
+        const prinCode = text(row.original.prin_code);
         return (
           <div className="flex items-center gap-1">
+            <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print / Download invoice" onClick={() => void directPrintInvoice(prinCode, invNo)}><Printer size={13} /></Button>
             <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={13} /></Button>
             {!isConfirmed && (
               <>
@@ -297,7 +319,7 @@ export function FreightInvoicePage() {
         );
       },
     },
-  ], [companyCode, loginId, loadRows]);
+  ], [companyCode, loginId, loadRows, directPrintInvoice]);
 
   async function loadCandidateJobs(
   search = candidateSearch,
