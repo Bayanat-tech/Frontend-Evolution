@@ -43,38 +43,35 @@ function text(val: unknown): string {
 }
 
 // ─── Final Rating (weighted) ──────────────────────────────────────────────
+// Sirf wahi categories calculation me aati hain jinme rating hai (score > 0).
+// Rating nahi hai = N/A = weight/denominator se bahar.
+// Kuch bhi rated nahi hai to null return hota hai (UI me N/A).
 function calcFinalRating(
   taskTotal: number,
   charTotal: number,
   goalTotal: number,
   skillTotal: number,
   cfg?: WeightageConfig
-): number {
-  const t = Number(taskTotal || 0);
-  const c = Number(charTotal || 0);
-  const g = Number(goalTotal || 0);
-  const s = Number(skillTotal || 0);
+): number | null {
+  const parts = [
+    { score: Number(taskTotal || 0),  pct: Number(cfg?.taskPct)  || 0 },
+    { score: Number(charTotal || 0),  pct: Number(cfg?.charPct)  || 0 },
+    { score: Number(goalTotal || 0),  pct: Number(cfg?.goalPct)  || 0 },
+    { score: Number(skillTotal || 0), pct: Number(cfg?.skillPct) || 0 },
+  ].filter((p) => p.score > 0);
 
-  if (t === 0 && c === 0 && g === 0 && s === 0) return 0;
+  if (parts.length === 0) return null;
 
-  const taskPct  = Number(cfg?.taskPct)  || 0;
-  const charPct  = Number(cfg?.charPct)  || 0;
-  const goalPct  = Number(cfg?.goalPct)  || 0;
-  const skillPct = Number(cfg?.skillPct) || 0;
-  const totalWt  = taskPct + charPct + goalPct + skillPct;
+  const totalWt = parts.reduce((a, p) => a + p.pct, 0);
+  const raw =
+    totalWt > 0
+      ? parts.reduce((a, p) => a + p.score * p.pct, 0) / totalWt
+      : parts.reduce((a, p) => a + p.score, 0) / parts.length;
 
-  let raw: number;
-
-  if (totalWt > 0) {
-    raw = ((t * taskPct) + (c * charPct) + (g * goalPct) + (s * skillPct)) / totalWt;
-  } else {
-    const active = [t, c, g, s].filter((v) => v > 0);
-    if (active.length === 0) return 0;
-    raw = active.reduce((a, b) => a + b, 0) / active.length;
-  }
-
-  return Math.round(raw);   // ✅ integer
+  return Math.round(raw); // ✅ integer
 }
+
+const fmtScore = (v: unknown) => (Number(v || 0) > 0 ? Number(v).toFixed(2) : "N/A");
 
 // ─── Styles ───────────────────────────────────────────────────────────────
 const S = {
@@ -191,7 +188,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
     const docKey = `${docNo}|${employeeCode}`;
     const sameDoc = loadedKeyRef.current === docKey;
 
-   
+
     if (!sameDoc) {
       setAppraiserComment("");
       setAppraiseeComment("");
@@ -221,7 +218,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
           .sort((a, b) => new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime());
         const latestAppraiser = appraiserRows.length > 0 ? text(appraiserRows[0].COMMENT_TEXT) : "";
 
-        
+
         setAppraiseeComment(prev => (sameDoc && prev.trim() ? prev : latestAppraisee));
         setAppraiserComment(prev => (sameDoc && prev.trim() ? prev : latestAppraiser));
 
@@ -299,27 +296,29 @@ const AppraiserCommentsTab: React.FC<Props> = ({
       <div style={S.scoreRow}>
         <div style={S.scoreBox("#1976d2")}>
           <div style={S.scoreLabel}>Task Score ({weightageConfig?.taskPct ?? 0}%)</div>
-          <div style={S.scoreValue("#1976d2")}>{Number(taskTotal || 0).toFixed(2)}</div>
+          <div style={S.scoreValue("#1976d2")}>{fmtScore(taskTotal)}</div>
         </div>
 
         <div style={S.scoreBox("#9c27b0")}>
           <div style={S.scoreLabel}>Character Score ({weightageConfig?.charPct ?? 0}%)</div>
-          <div style={S.scoreValue("#9c27b0")}>{Number(characterTotal || 0).toFixed(2)}</div>
+          <div style={S.scoreValue("#9c27b0")}>{fmtScore(characterTotal)}</div>
         </div>
 
         <div style={S.scoreBox("#ef6c00")}>
           <div style={S.scoreLabel}>Goal Score ({weightageConfig?.goalPct ?? 0}%)</div>
-          <div style={S.scoreValue("#ef6c00")}>{Number(goalTotal || 0).toFixed(2)}</div>
+          <div style={S.scoreValue("#ef6c00")}>{fmtScore(goalTotal)}</div>
         </div>
 
         <div style={S.scoreBox("#00897b")}>
           <div style={S.scoreLabel}>Skill Score ({weightageConfig?.skillPct ?? 0}%)</div>
-          <div style={S.scoreValue("#00897b")}>{Number(skillTotal || 0).toFixed(2)}</div>
+          <div style={S.scoreValue("#00897b")}>{fmtScore(skillTotal)}</div>
         </div>
 
         <div style={S.scoreBox("#2e7d32")}>
           <div style={S.scoreLabel}>Final Rating</div>
-          <div style={S.scoreValue("#2e7d32")}>{finalRating.toFixed(2)}</div>
+          <div style={S.scoreValue("#2e7d32")}>
+            {finalRating === null ? "N/A" : finalRating.toFixed(2)}
+          </div>
         </div>
       </div>
 

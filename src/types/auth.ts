@@ -32,6 +32,18 @@ export type UserProfile = {
   tenant_name?: string;
   TENANT_NAME?: string;
   tenantName?: string;
+  decimals?: number;
+  DECIMALS?: number;
+  amount_decimal_nos?: number;
+  AMOUNT_DECIMAL_NOS?: number;
+  price_decimal_nos?: number;
+  PRICE_DECIMAL_NOS?: number;
+  lcur_decimal_nos?: number;
+  LCUR_DECIMAL_NOS?: number;
+  base_curr_code?: string;
+  BASE_CURR_CODE?: string;
+  currency?: string;
+  CURRENCY?: string;
   TENANTNAME?: string;
 };
 

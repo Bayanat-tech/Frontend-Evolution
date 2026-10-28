@@ -955,6 +955,7 @@ const limitProps = (f: keyof TransactionHeader) => ({
 
 
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
+    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: false }));
     const acName = text(getLookupValue(row || {}, "ac_name"));
     updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
     if (docType === "CN") {
@@ -969,15 +970,12 @@ const limitProps = (f: keyof TransactionHeader) => ({
       updateDetail(detail.id, { child_table: childTable, child_code: childCode });
 
       if (childTable === "invoice") {
-        setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
         await loadChildrenForDetail({
           ...detail,
           ac_code: value,
           child_table: childTable,
           child_code: childCode,
         });
-      } else if (childTable === "expense" || childTable === "job") {
-        setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
       }
 
       if (childTable === "expense" && childCode) {
@@ -1177,7 +1175,6 @@ const limitProps = (f: keyof TransactionHeader) => ({
         }
       }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
-      setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load allocations");
     } finally {
