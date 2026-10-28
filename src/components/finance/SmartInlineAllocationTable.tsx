@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Briefcase, CheckCircle2, ChevronUp, FileText, Plus, Receipt, RefreshCw, Trash2, Zap } from "lucide-react";
 import { TransactionChildRow, TransactionDetail } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue } from "../../api/lookups";
@@ -97,38 +98,38 @@ export function SmartInlineAllocationTable({
   const colConfigs =
     childTable === "invoice"
       ? [
-          { key: "sr", header: "#", width: 28, align: "center" },
-          { key: "inv_no", header: "Invoice No", width: 120, align: "left" },
-          { key: "ref_no", header: "Voucher No", width: 110, align: "left" },
-          { key: "inv_date", header: "Invoice Date", width: 118, align: "left" },
-          { key: "inv_amt", header: "Invoice Amount", width: 110, align: "right" },
-          { key: "outstanding", header: "Outstanding", width: 110, align: "right" },
-          { key: "allocated", header: "Allocated", width: 135, align: "right" },
-          { key: "action", header: "Action", width: 48, align: "center" },
+          { key: "sr", header: "#", width: 26, align: "center" },
+          { key: "inv_no", header: "Invoice No", width: 104, align: "left" },
+          { key: "ref_no", header: "Voucher No", width: 104, align: "left" },
+          { key: "inv_date", header: "Invoice Date", width: 120, align: "left" },
+          { key: "inv_amt", header: "Invoice Amount", width: 104, align: "right" },
+          { key: "outstanding", header: "Outstanding", width: 100, align: "right" },
+          { key: "allocated", header: "Allocated", width: 114, align: "right" },
+          { key: "action", header: "Action", width: 58, align: "center" },
         ]
       : childTable === "job"
         ? [
             { key: "sr", header: "#", width: 28, align: "center" },
-            { key: "job_no", header: "Job No", width: 135, align: "left" },
+            { key: "job_no", header: "Job No", width: 175, align: "left" },
             { key: "doc_refno", header: "Doc Ref", width: 115, align: "left" },
             { key: "doc_refno_2", header: "Doc Ref 2", width: 115, align: "left" },
             { key: "amount", header: "Amount", width: 110, align: "right" },
-            { key: "action", header: "Action", width: 48, align: "center" },
+            { key: "action", header: "Action", width: 58, align: "center" },
           ]
         : [
             { key: "sr", header: "#", width: 28, align: "center" },
-            { key: "exp_type", header: "Expense Type", width: 125, align: "left" },
-            { key: "exp_subtype", header: "Subtype", width: 125, align: "left" },
+            { key: "exp_type", header: "Expense Type", width: 175, align: "left" },
+            { key: "exp_subtype", header: "Subtype", width: 145, align: "left" },
             { key: "description", header: "Description", width: 135, align: "left" },
-            { key: "job_no", header: "Job No", width: 95, align: "left" },
+            { key: "job_no", header: "Job No", width: 175, align: "left" },
             { key: "amount", header: "Amount", width: 110, align: "right" },
-            { key: "action", header: "Action", width: 48, align: "center" },
+            { key: "action", header: "Action", width: 58, align: "center" },
           ];
 
   const totalTableWidth = colConfigs.reduce((sum, col) => sum + col.width, 0);
 
   return (
-    <div className="finance-allocation-panel my-0.5 w-fit min-w-[520px] max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
+    <div style={{ "--allocation-panel-width": `${totalTableWidth}px`, flex: "0 0 auto" } as CSSProperties} className="finance-allocation-panel my-0.5 w-fit min-w-[520px] max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
       {/* Sub-toolbar: Ultra-compact, no unwanted verbose titles */}
       <div className="finance-allocation-toolbar flex items-center justify-between gap-2 border-b px-2 py-1 text-xs">
         <div className="flex items-center gap-1.5 shrink-0">
@@ -241,7 +242,7 @@ export function SmartInlineAllocationTable({
       </div>
 
       {/* Compact child grid with a lighter header to distinguish it from accounting lines. */}
-      <div className="finance-allocation-grid max-h-[132px] overflow-auto">
+      <div className="finance-allocation-grid max-h-[132px] overflow-x-hidden overflow-y-auto">
         <table
           className="finance-allocation-table table-fixed border-collapse text-xs"
           style={{ width: `${totalTableWidth}px` }}
