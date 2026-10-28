@@ -1070,14 +1070,14 @@
 .finance-document-editor :is(.commercial-header-block-fields, .finance-payment-header-fields, .finance-payment-party-fields) :is(.field > span, label.field > span, .field > label, label > span:first-child) { font-size: 10.5px !important; font-weight:600 !important; color:#475569 !important; margin-bottom: 0 !important; line-height: 1.15 !important; }
 .finance-document-editor .finance-header-fields { flex:none; max-height:none !important; overflow:visible !important; }
 .finance-document-editor form[data-header-expanded="false"] .finance-header-fields { display:none !important; }
-.finance-document-editor .commercial-lines-card { display:flex !important; flex-direction:column; flex:1 1 0% !important; min-height:0 !important; max-height:none !important; overflow:hidden !important; margin:0 !important; border:1.5px solid #94a3b8 !important; border-radius:8px !important; background:#ffffff !important; box-shadow:0 1px 4px 0 rgba(15, 23, 42, 0.08) !important; }
-.finance-document-editor .commercial-lines-scroll { flex:1 1 0% !important; min-height:0 !important; max-height:none !important; overflow:auto !important; padding:0; }
+.finance-document-editor .commercial-lines-card { display:flex !important; flex-direction:column; flex:0 1 auto !important; min-height:0 !important; max-height:none !important; overflow:hidden !important; margin:0 !important; border:1.5px solid #94a3b8 !important; border-radius:8px !important; background:#ffffff !important; box-shadow:0 1px 4px 0 rgba(15, 23, 42, 0.08) !important; }
+.finance-document-editor .commercial-lines-scroll { flex:0 1 auto !important; min-height:0 !important; max-height:none !important; overflow:auto !important; padding:0; }
 .finance-document-editor .commercial-lines-card > div:not(.commercial-lines-scroll) { flex:none; }
 .finance-document-editor .commercial-line-totals { display:flex; justify-content:flex-end; gap:16px; padding:4px 10px !important; }
 .finance-document-editor .commercial-line-totals > div { display:flex; gap:6px; border:0; padding:0; margin:0; }
 .finance-document-editor .finance-lines-table { --finance-col-no:36px; --finance-col-account:230px; width:100% !important; }
 .finance-document-editor .finance-lines-table .finance-col-account { left: var(--finance-col-no, 38px) !important; }
-.finance-document-editor .finance-lines-table td:has(.commercial-line-description) { width:320px !important; min-width:260px !important; max-width:480px !important; }
+.finance-document-editor .finance-lines-table td:has(.commercial-line-description) { width:220px !important; min-width:140px !important; max-width:320px !important; }
 .finance-document-editor .finance-lines-table .finance-amount-cell { width:88px !important; min-width:82px !important; }
 .finance-document-editor .finance-money-input { min-width:0 !important; }
 .finance-document-editor .commercial-sticky-footer { padding:4px 10px !important; min-height:32px; }
@@ -1533,7 +1533,7 @@ button.commercial-add-line-btn:hover svg {
 .finance-document-editor .commercial-lines-scroll { container-type: inline-size; }
 .finance-document-editor .finance-allocation-panel {
   width: fit-content !important;
-  min-width: 520px !important;
+  min-width: 0 !important;
   max-width: 100% !important;
   border: 1.5px solid #9fcfc4 !important;
   border-radius: 8px !important;
@@ -1720,15 +1720,10 @@ form.commercial-document-workbench {
   min-width: 400px !important;
 }
 .finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-table {
-  width: 45% !important;
+  width: var(--allocation-panel-width, max-content) !important;
+  max-width: 100% !important;
 }
-.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(2) {
-  width: 180px !important;  /* JOB NO */
-}
-.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(3),
-.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(4) {
-  width: 230px !important;  /* DOC REF, DOC REF 2 */
-}
+
 
 /* ── Finance list pages: no page scroll, table scrolls inside ── */
 .workspace-content:has(.finance-list-page:not(.finance-document-editing)) {
