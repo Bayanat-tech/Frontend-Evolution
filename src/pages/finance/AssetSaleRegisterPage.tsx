@@ -310,7 +310,6 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
 }
 
 // INLINE EDITOR 
-
 function AssetSaleEditor({
   editor,
   title,
@@ -686,7 +685,8 @@ const loadAssetDetails = async (assetId: string, assetName: string) => {
           </div>
         </div> */}
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 items-start">
+        {/* <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 items-start"> */}
+     <div className="grid grid-cols-1 xl:grid-cols-[2fr_3fr] gap-2 items-start">
   {/* ===== LEFT: DOCUMENT DETAILS ===== */}
   <div className="freight-master-form-card">
     <div className="freight-master-form-header">
@@ -742,11 +742,51 @@ const loadAssetDetails = async (assetId: string, assetName: string) => {
       <h3><span className="freight-section-icon"><Landmark size={16} /></span>Accounts</h3>
     </div>
     <div className="freight-master-form-body">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-         <Field className="col-span-1 sm:col-span-1" label="Customer Name" value={form.customer_name}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+         {/* <Field className="col-span-1 sm:col-span-1" label="Customer Name" value={form.customer_name}
           maxLength={SALE_LIMITS.customer_name!.max} error={fieldErrors.customer_name}
-          onChange={(v) => setField("customer_name", v)} disabled={readOnly} />
+          onChange={(v) => setField("customer_name", v)} disabled={readOnly} /> */}
         {/* read-only, auto-filled from the asset (legacy: Depreciation Details) */}
+         {/* ===== editable: Sales Details ===== */}
+        <div className="freight-master-field">
+  <label className="freight-master-label"><span>Customer A/C</span></label>
+  <LookupField compact value={form.customer_ac_code}
+    displayValue={display(form.customer_ac_code, form.customer_ac_name || "")}
+    columns={accountColumns} valueField="ac_code" displayFields={["ac_code", "ac_name"]}
+    disabled={readOnly}
+    loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: loginId, code1: companyCode, code2: "", code3: "", code4: "", number1: 0, number2: 0, number3: 0, number4: 0, date1: null, date2: null, date3: null, date4: null })}
+    onChange={(value, row) => {
+      setField("customer_ac_code", value);
+      setField("customer_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+    }} />
+</div>
+
+<div className="freight-master-field">
+  <label className="freight-master-label"><span>FA Disposal A/C</span><span style={{ color: "#E24B4A" }} className="font-bold ml-0.5">*</span></label>
+  <LookupField compact value={form.fa_disposal_ac}
+    displayValue={display(form.fa_disposal_ac, form.fa_disposal_ac_name || "")}
+    columns={accountColumns} valueField="ac_code" displayFields={["ac_code", "ac_name"]}
+    disabled={readOnly}
+    loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: loginId, code1: companyCode, code2: "", code3: "", code4: "", number1: 0, number2: 0, number3: 0, number4: 0, date1: null, date2: null, date3: null, date4: null })}
+    onChange={(value, row) => {
+      setField("fa_disposal_ac", value);
+      setField("fa_disposal_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+    }} />
+  {fieldErrors.fa_disposal_ac && <span data-error="true" className="text-[10px] text-destructive mt-0.5">{fieldErrors.fa_disposal_ac}</span>}
+</div>
+
+<div className="freight-master-field">
+  <label className="freight-master-label"><span>P/L Disposal A/C</span></label>
+  <LookupField compact value={form.pl_fa_disposal_ac}
+    displayValue={display(form.pl_fa_disposal_ac, form.pl_fa_disposal_ac_name || "")}
+    columns={accountColumns} valueField="ac_code" displayFields={["ac_code", "ac_name"]}
+    disabled={readOnly}
+    loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: loginId, code1: companyCode, code2: "", code3: "", code4: "", number1: 0, number2: 0, number3: 0, number4: 0, date1: null, date2: null, date3: null, date4: null })}
+    onChange={(value, row) => {
+      setField("pl_fa_disposal_ac", value);
+      setField("pl_fa_disposal_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
+    }} />
+</div>
         <Field label="Asset A/C" value={display(form.asset_ac_code, form.asset_ac_name || "")} onChange={() => {}} disabled />
         <Field label="Dprc A/C" value={display(form.dprc_ac_code, form.dprc_ac_name || "")} onChange={() => {}} disabled />
         <Field label="Accudprc A/C" value={display(form.accudprc_ac_code, form.accudprc_ac_name || "")} onChange={() => {}} disabled />
@@ -845,7 +885,6 @@ const accountColumns = [
 ];
 
 // HELPERS
-
 function mapAssetSale(row: LookupRow): AssetSaleRow {
   return {
     ...EMPTY_SALE,

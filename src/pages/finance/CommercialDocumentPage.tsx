@@ -1086,17 +1086,20 @@ const limitProps = (f: keyof FormState) => ({
     if (isCancelled) return;
     setForm((current) => {
       const newLine = emptyLine(docType, current.detail.length + 1, current.curr_code, current.curr_name, current.ex_rate || 1);
-      const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "S";
-      const resolvedPerc = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
-        ? current.tx_compnt_perc_1
-        : resolvedExpmt === "S" ? 5 : 0;
+      const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "N";
+      const catCode = current.tx_compntcat_code_1 || "";
+      const dynamicPerc = getTaxPercForCode(catCode);
+      const resolvedPerc = resolvedExpmt === "S"
+        ? (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0 ? current.tx_compnt_perc_1 : dynamicPerc)
+        : 0;
 
       const withTax: Line = {
         ...newLine,
         curr_code: current.curr_code,
         curr_name: current.curr_name,
         ex_rate: current.ex_rate || 1,
-        tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
+        tx_cat_code: current.tx_cat_code || "",
+        tx_compntcat_code_1: catCode,
         tx_compnt_1_expmt: resolvedExpmt,
         tx_compnt_perc_1: resolvedPerc,
       };
@@ -2651,11 +2654,11 @@ const limitProps = (f: keyof FormState) => ({
                     ex_rate: docEx,
                     sign_ind: 1,
                     tx_cat_code: exp.tx_cat_code || current.tx_cat_code || "",
-                    tx_compntcat_code_1: exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "10100",
-                    tx_compnt_1_expmt: current.tx_compnt_1_expmt || "S",
-                    tx_compnt_perc_1: exp.tx_compnt_perc_1 != null && exp.tx_compnt_perc_1 !== 0
-                      ? exp.tx_compnt_perc_1
-                      : (current.tx_compnt_perc_1 || 5),
+                    tx_compntcat_code_1: exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "",
+                    tx_compnt_1_expmt: exp.tx_compnt_1_expmt || (Number(exp.tx_compnt_perc_1) > 0 ? "S" : (current.tx_compnt_1_expmt || "N")),
+                    tx_compnt_perc_1: exp.tx_compnt_perc_1 != null
+                      ? Number(exp.tx_compnt_perc_1)
+                      : (current.tx_compnt_1_expmt === "S" ? (Number(current.tx_compnt_perc_1) || getTaxPercForCode(exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "")) : 0),
                   };
                 });
                 return { ...current, detail: [...current.detail, ...newLines] };

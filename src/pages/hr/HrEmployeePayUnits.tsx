@@ -68,12 +68,18 @@ const EMPLOYEE_COLUMNS = [
   { field: "rpt_name", header: "Employee Name" },
 ];
 
+const PAY_UNIT_COLUMNS = [
+  { field: "PAY_COMP_ID", header: "Code" },
+  { field: "PAY_COMP_DESC", header: "Description" },
+];
+
 const P_DIVISION = "HR_DROPDOWN_MS_DIVISION";
 const P_DEPARTMENT = "HR_DROPDOWN_MS_DEPARTMENT";
 const P_SECTION = "HR_DROPDOWN_MS_SECTION";
 const P_EMPLOYEE = "HR_DROPDOWN_MS_HR_EMPLOYEE";
 const P_RETRIEVE = "MST_HR_EMPLOYEE_PAY_UNITS_SELECT";
 
+const P_PAY_UNIT = "MST_HR_CONSOLIDATE_PAY_UNIT";
 /* ================= HELPERS ================= */
 
 /** Accepts either a code ("P") or a label ("Pending") from the backend and returns the code. */
@@ -124,13 +130,25 @@ export function HrEmployeePayUnits() {
   const loadLookupRows = useCallback(
     async (parameter: string, code1: string, code2 = "", code3 = "", code4 = ""): Promise<LookupRow[]> => {
       const response = await getDynamicLookup({
-        parameter, loginid, code1, code2, ...NULLS, code3,code4,
+        parameter, loginid, code1, code2, ...NULLS, code3, code4,
       });
       return Array.isArray(response) ? (response as LookupRow[]) : [];
     },
     [loginid],
   );
 
+  const loadPayUnitOptions = useCallback(async (): Promise<LookupRow[]> => {
+    const data = await loadLookupRows(P_PAY_UNIT, companyCode);
+    return data.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        ...r,
+        PAY_COMP_ID: String(r.PAY_COMP_ID ?? r.pay_comp_id ?? ""),
+        PAY_COMP_DESC: String(r.PAY_COMP_DESC ?? r.pay_comp_desc ?? ""),
+        PAY_COMP_SHORT_DESC: String(r.PAY_COMP_SHORT_DESC ?? r.pay_comp_short_desc ?? ""),
+      } as LookupRow;
+    });
+  }, [loadLookupRows, companyCode]);
   // const loadEmployeeOptions = useCallback(async () => {
   //   const all = await loadLookupRows(P_EMPLOYEE, companyCode);
   //   return all.filter((row) => {
@@ -270,12 +288,25 @@ export function HrEmployeePayUnits() {
           return (
             <div className="flex items-center gap-1">
               {r.is_new ? (
-                <Input
-                  className="h-7 px-2 text-sm"
-                  value={r.pay_unit_code}
-                  placeholder="Pay unit code"
-                  onChange={(e) => updateRow(r.row_id, { pay_unit_code: e.target.value })}
-                />
+                <div className="min-w-[200px] flex-1">
+                  <LookupField
+                    compact
+                    label="Pay Unit"
+                    value={r.pay_unit_code}
+                    displayValue={r.pay_unit_code ? `${r.pay_unit_code} — ${r.pay_unit_name}` : ""}
+                    columns={PAY_UNIT_COLUMNS}
+                    valueField="PAY_COMP_ID"
+                    displayFields={["PAY_COMP_ID", "PAY_COMP_DESC"]}
+                    loadOptions={loadPayUnitOptions}
+                    onChange={(value, row) =>
+                      updateRow(r.row_id, {
+                        pay_unit_code: value,
+                        pay_unit_name: String(row?.PAY_COMP_DESC ?? ""),
+                      })
+                    }
+                    placeholder="Pay unit code or name"
+                  />
+                </div>
               ) : (
                 <span>
                   <span className="font-medium">{r.pay_unit_code}</span>
@@ -385,7 +416,7 @@ export function HrEmployeePayUnits() {
           ) : null,
       },
     ],
-    [updateRow, removeNewRow],
+    [updateRow, removeNewRow, loadPayUnitOptions],
   );
 
   /* ── UI ── */
@@ -478,7 +509,7 @@ export function HrEmployeePayUnits() {
               columns={EMPLOYEE_COLUMNS}
               valueField="employee_id"
               displayFields={["employee_code", "rpt_name"]}
-              loadOptions={() => loadLookupRows(P_EMPLOYEE,companyCode,header.div_code, header.dept_code ,header.section_code)}
+              loadOptions={() => loadLookupRows(P_EMPLOYEE, companyCode, header.div_code, header.dept_code, header.section_code)}
               onChange={(value) => patchHeader({ employee_id: value })}
               placeholder="Employee code or name"
             />

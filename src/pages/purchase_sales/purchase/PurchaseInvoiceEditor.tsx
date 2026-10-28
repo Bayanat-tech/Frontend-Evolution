@@ -391,7 +391,7 @@ export function PurchaseInvoiceEditor({
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_perc_1 ?? (form.tx_compnt_1_expmt === "S" ? 5 : 0),
+        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? Number(form.tx_compnt_perc_1 || 0) : 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
