@@ -205,7 +205,6 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
     // { accessorKey: "ac_name", header: "Account Name" },
     ...(docType === "CP" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "remarks", header: "Description" },
-    ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     {
       accessorKey: "amount",
