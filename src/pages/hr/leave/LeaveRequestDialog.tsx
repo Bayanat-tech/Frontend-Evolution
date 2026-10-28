@@ -1,11 +1,8 @@
-import { Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, UserRound, X, Undo2 } from "lucide-react";
+import { ArrowLeft, Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, Undo2, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  // getHrEmployees,
-  // getHrLeaveEntitlement,
   executeHrRawSql,
-  saveHrLeaveApproval,
   validateHrLeave,
   type HrEmployee,
   type HrLeaveEntitlement,
@@ -13,24 +10,37 @@ import {
   getRequestFlowUsers,
   getHrWorkflowIdentity,
   getHrWorkflowRequest,
-  saveHrWorkflowAction,
 } from "../../../api/hr";
 import { Button } from "../../../components/ui/Button";
 import { LmsDialog } from "../../../components/ui/LmsDialog";
 import { Input } from "../../../components/ui/Input";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
+import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
 import { HrLeaveAttachmentDialog } from "./HrLeaveAttachmentDialog";
 import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate";
-import { DynamicMutationParams, getDynamicLookupaccount } from "../../../api/lookups";
+import { getDynamicLookupaccount } from "../../../api/lookups";
 import { api } from "../../../api/client";
+
+/**
+ * TODO: set this to the table your HrLeaveAttachmentDialog stores files in.
+ * It must have a REQUEST_NUMBER column. It is used only to check that a
+ * sick-leave request has at least one attachment before it can be submitted.
+ */
+const LEAVE_ATTACHMENT_TABLE = "LEAVE_REQUEST_ATTACHMENT";
+
+const LEAVE_TYPES_SKIP_VALIDATION = new Set(["SL"]);
+
+type SaveAction = "SAVEASDRAFT" | "SUBMITTED" | "CANCEL" | "REJECTED" | "SENTBACK";
 
 type LeaveRequestDialogProps = {
   open: boolean;
   initialRow?: Record<string, unknown> | null;
   isEditMode?: boolean;
   readOnly?: boolean;
+  /** When true, renders as a full page section (like WMS master editor) instead of a modal. */
+  inline?: boolean;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -58,10 +68,10 @@ type LeaveForm = {
   supervisor: string;
   deptHead: string;
   hod: string;
-  resumedate: string,
-  resumework: string,
-  dutyresumedate: string,
-  actualresumedate: string,
+  resumedate: string;
+  resumework: string;
+  dutyresumedate: string;
+  actualresumedate: string;
 };
 
 type LeaveValidationResult = {
@@ -99,6 +109,7 @@ const initialForm: LeaveForm = {
   dutyresumedate: "",
   actualresumedate: "",
 };
+
 // ---------------------------------SAVE API PROCEDURE-----------------------------------//
 type ApiResponse<T> = {
   success: boolean;
@@ -117,7 +128,6 @@ function extractApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-// Same payload type as the old saveLeaveViaProc90, so existing callers keep compiling.
 export async function saveLeaveRequestFlow(
   payload: Record<string, unknown>,
   loginId: string
@@ -165,10 +175,7 @@ export async function saveLeaveRequestFlow(
   };
 
   try {
-    const response = await api.post<SaveLeaveResponse>(
-      "/api/hr/workflow/leaveRequestFlow",
-      body
-    );
+    const response = await api.post<SaveLeaveResponse>("/api/hr/workflow/leaveRequestFlow", body);
     if (!response.data.success) {
       throw new Error(response.data.details || response.data.message || "Unable to save record");
     }
@@ -179,25 +186,31 @@ export async function saveLeaveRequestFlow(
 }
 // -----------------------------------------------------------------------------------//
 
-export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = false, onClose, onSaved }: LeaveRequestDialogProps) {
- 
-  // console.log('leaveprops ', { open, initialRow, isEditMode, readOnly, onClose, onSaved });
+export function LeaveRequestDialog({
+  open,
+  initialRow,
+  readOnly = false,
+  inline = false,
+  onClose,
+  onSaved,
+}: LeaveRequestDialogProps) {
   const { user } = useAuth();
   const [form, setForm] = useState<LeaveForm>(initialForm);
   const [employees, setEmployees] = useState<HrEmployee[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<HrLeaveEntitlement[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [loadingLeaveTypes, setLoadingLeaveTypes] = useState(false);
-  const [savingAction, setSavingAction] = useState<"SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED"| "SENTBACK" | null>(null);
+  const [savingAction, setSavingAction] = useState<SaveAction | null>(null);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<LeaveValidationResult | null>(null);
   const [approverInfo, setApproverInfo] = useState<Record<string, unknown> | null>(null);
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [requestNumber, setRequestNumber] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
   const [notice, setNotice] = useState<ToastNotice>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof LeaveForm, string>>>({});
   const [fetchingLeaveDays, setFetchingLeaveDays] = useState(false);
-  const LEAVE_TYPES_SKIP_VALIDATION = new Set(["SL"]);
 
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -215,40 +228,106 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   const [userFlowData, setUserFlowData] = useState<{ LOGIN_ID: string; USERNAME: string }[]>([]);
   const [loadingFlowUsers, setLoadingFlowUsers] = useState(false);
   const [workflowRow, setWorkflowRow] = useState<Record<string, any> | null>(null);
-  const [workflowActor, setWorkflowActor] = useState('');
+  const [workflowActor, setWorkflowActor] = useState("");
   const [workflowLoading, setWorkflowLoading] = useState(false);
-  const [workflowError, setWorkflowError] = useState('');
+  const [workflowError, setWorkflowError] = useState("");
 
-  // const loginId = workflowActor || String(user?.LOGINID1 || user?.loginid1 || user?.loginid || user?.LOGINID || user?.username || "");
   const loginId = workflowActor || String(user?.LOGINID1 || user?.loginid1 || "");
   const companyCode = String(user?.company_code || user?.COMPANY_CODE || "BSG");
   const userRecord = (user || {}) as Record<string, unknown>;
-  const fallbackEmployeeName = String(userRecord.RPT_NAME || userRecord.rpt_name || user?.username || user?.USERNAME || loginId || "Current User");
-  const LOGINUSER = String(user?.LOGINID || user?.loginid || "")
+  const fallbackEmployeeName = String(
+    userRecord.RPT_NAME || userRecord.rpt_name || user?.username || user?.USERNAME || loginId || "Current User"
+  );
+  const LOGINUSER = String(user?.LOGINID || user?.loginid || "");
   const tenantName = /[A-Za-z]/.test(LOGINUSER.trim()) ? "MHDL" : "ALMS";
-  const isAlms = tenantName === 'ALMS';
-  const isCreator = isAlms ? !initialRow || String(workflowRow?.CREATED_BY || initialRow.CREATED_BY || '').trim() === loginId
-    : initialRow?.CREATED_BY === user?.loginid1 || initialRow?.CREATED_BY === undefined || initialRow?.CREATED_BY === null || initialRow?.CREATED_BY === '';
+  const isAlms = tenantName === "ALMS";
+  const isCreator = isAlms
+    ? !initialRow || String(workflowRow?.CREATED_BY || initialRow.CREATED_BY || "").trim() === loginId
+    : initialRow?.CREATED_BY === user?.loginid1 ||
+      initialRow?.CREATED_BY === undefined ||
+      initialRow?.CREATED_BY === null ||
+      initialRow?.CREATED_BY === "";
   const createMode = !requestNumber;
   const permissions = (isAlms ? workflowRow?.WORKFLOW_PERMISSIONS || {} : { canApprove: !isCreator }) as Record<string, any>;
   const canPrimary = !isAlms || Boolean(permissions.canSubmit || permissions.canApprove);
   const fieldsDisabled = readOnly || !isCreator || workflowLoading || Boolean(workflowError);
 
+  // Sick leave (e.g. "002 - SICK LEAVE") needs a supporting attachment before it can be submitted.
+  const isSickLeave = form.leaveType === "002" || (form.leaveTypeDesc || "").toUpperCase().includes("SICK");
+  const sickLeaveNeedsAttachment = isCreator && isSickLeave && (attachmentCount ?? 0) === 0;
+
+  const refreshAttachmentCount = async (reqNo: string = requestNumber): Promise<number> => {
+    if (!reqNo) {
+      setAttachmentCount(0);
+      return 0;
+    }
+    const count = await countLeaveAttachments(reqNo);
+    setAttachmentCount(count);
+    return count;
+  };
+
   useEffect(() => {
     if (!open) return;
-    if (!isAlms) { setWorkflowRow(null); setWorkflowActor(''); setWorkflowLoading(false); setWorkflowError(''); return; }
+    if (!isSickLeave) {
+      setAttachmentCount(null);
+      return;
+    }
+    if (!requestNumber) {
+      setAttachmentCount(0);
+      return;
+    }
+    let cancelled = false;
+    countLeaveAttachments(requestNumber)
+      .then((count) => {
+        if (!cancelled) setAttachmentCount(count);
+      })
+      .catch(() => {
+        if (!cancelled) setAttachmentCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, requestNumber, isSickLeave]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!isAlms) {
+      setWorkflowRow(null);
+      setWorkflowActor("");
+      setWorkflowLoading(false);
+      setWorkflowError("");
+      return;
+    }
     let current = true;
-    setWorkflowLoading(true); setWorkflowError(''); setWorkflowRow(null); setWorkflowActor('');
-    const request = getRowString(initialRow, 'REQUEST_NUMBER', 'requestNumber');
+    setWorkflowLoading(true);
+    setWorkflowError("");
+    setWorkflowRow(null);
+    setWorkflowActor("");
+    const request = getRowString(initialRow, "REQUEST_NUMBER", "requestNumber");
     Promise.all([getHrWorkflowIdentity(), request ? getHrWorkflowRequest(request) : Promise.resolve(null)])
-      .then(([actor, row]) => { if (current) { setWorkflowActor(actor); setWorkflowRow(row); if (row) setForm(formFromRow({ ...initialRow, ...row })); } })
-      .catch(error => { if (current) { const message = error instanceof Error ? error.message : 'Workflow verification failed.'; setWorkflowError(message); setNotice({ type: 'error', message }); } })
-      .finally(() => { if (current) setWorkflowLoading(false); });
-    return () => { current = false; };
+      .then(([actor, row]) => {
+        if (current) {
+          setWorkflowActor(actor);
+          setWorkflowRow(row);
+          if (row) setForm(formFromRow({ ...initialRow, ...row }));
+        }
+      })
+      .catch((error) => {
+        if (current) {
+          const message = error instanceof Error ? error.message : "Workflow verification failed.";
+          setWorkflowError(message);
+          setNotice({ type: "error", message });
+        }
+      })
+      .finally(() => {
+        if (current) setWorkflowLoading(false);
+      });
+    return () => {
+      current = false;
+    };
   }, [open, initialRow, isAlms]);
 
   useEffect(() => {
-    console.log('user',user);
     if (!open) return;
     const initialRequestNumber = getRowString(initialRow, "REQUEST_NUMBER", "requestNumber");
     setForm(initialRow ? formFromRow(initialRow) : { ...initialForm, requestDate: today() });
@@ -260,7 +339,9 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     setLoadingEmployees(true);
     loadEmployees(loginId, companyCode)
       .then((rows) => {
-        const safeRows = rows.length ? rows : [{ EMPLOYEE_ID: loginId, EMPLOYEE_CODE: loginId, RPT_NAME: fallbackEmployeeName }];
+        const safeRows = rows.length
+          ? rows
+          : [{ EMPLOYEE_ID: loginId, EMPLOYEE_CODE: loginId, RPT_NAME: fallbackEmployeeName }];
         setEmployees(safeRows);
         const rowEmployeeCode = getRowString(initialRow, "EMPLOYEE_CODE", "EMPLOYEE_ID", "employeeCode", "employeeId");
         const self = safeRows.find((employee) => getEmployeeCode(employee) === (rowEmployeeCode || loginId)) || safeRows[0];
@@ -272,23 +353,27 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
           setLoadingLeaveTypes(true);
           loadLeaveEntitlement(entitlementEmployee, companyCode, loginId)
             .then(setLeaveTypes)
-            .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load leave types" }))
+            .catch((error) =>
+              setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load leave types" })
+            )
             .finally(() => setLoadingLeaveTypes(false));
         }
       })
-      .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load employees" }))
+      .catch((error) =>
+        setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load employees" })
+      )
       .finally(() => setLoadingEmployees(false));
   }, [open, initialRow, loginId, fallbackEmployeeName, companyCode]);
 
   const selectedEmployee = useMemo(
     () => employees.find((employee) => getEmployeeCode(employee) === form.employeeCode),
-    [employees, form.employeeCode],
+    [employees, form.employeeCode]
   );
 
   const lastAction = getRowString(initialRow, "LAST_ACTION", "lastAction").toUpperCase();
 
   const sendBackRemark = getRowString(initialRow, "SENTBACK_HISTORY", "sendBackHistory");
-  const rejectRemark   = getRowString(
+  const rejectRemark = getRowString(
     initialRow,
     "CANCEL_REMARK",
     "REJECT_REMARKS",
@@ -296,11 +381,11 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     "REJECTED_REMARKS",
     "REJECTED_REMARK",
     "cancelRemark",
-    "rejectRemarks",
+    "rejectRemarks"
   );
 
   const showSendBackRemark = lastAction === "SENTBACK" && sendBackRemark.trim() !== "";
-  const showRejectRemark   = lastAction === "REJECTED" && rejectRemark.trim() !== "";
+  const showRejectRemark = lastAction === "REJECTED" && rejectRemark.trim() !== "";
 
   const uniqueLeaveTypes = useMemo(() => {
     const map = new Map<string, HrLeaveEntitlement>();
@@ -312,8 +397,15 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   }, [leaveTypes]);
 
   const update = (key: keyof LeaveForm, value: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     setForm((current) => {
       const next = { ...current, [key]: value };
+      // Local first guess of the days; the API result (below) then corrects the end date and days.
       if ((key === "leaveStartDate" || key === "leaveEndDate") && next.leaveStartDate && next.leaveEndDate) {
         next.leaveDays = String(calculateInclusiveDays(next.leaveStartDate, next.leaveEndDate));
       }
@@ -324,12 +416,10 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
       return next;
     });
     if (["leaveType", "leaveStartDate", "leaveEndDate", "leaveDays"].includes(key)) {
-    setValidationResult(null);
-    setShowValidationAlert(false);
+      setValidationResult(null);
+      setShowValidationAlert(false);
     }
   };
-
-  // console.log('initialRow',initialRow);
 
   useEffect(() => {
     if (!form.employeeCode) {
@@ -338,7 +428,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     }
     let cancelled = false;
     executeHrRawSql<Record<string, unknown>>(
-      `SELECT * FROM VW_HR_EMPLOYEE_NEW WHERE EMPLOYEE_ID = '${escapeSql(form.employeeCode)}'`,
+      `SELECT * FROM VW_HR_EMPLOYEE_NEW WHERE EMPLOYEE_ID = '${escapeSql(form.employeeCode)}'`
     )
       .then((rows) => {
         if (!cancelled) setApproverInfo(rows?.[0] ?? null);
@@ -351,51 +441,76 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     };
   }, [form.employeeCode]);
 
-  const supervisorName = getApproverDisplay2(approverInfo, "SUPERVISOR_NAME", form.supervisor);
-  const deptHeadName = getApproverDisplay2(approverInfo, "DEPT_HEAD_NAME", form.deptHead);
-  const hodName = getApproverDisplay2(approverInfo, "MANAGER_NAME", form.hod);
+  const supervisorName = getApproverDisplay(approverInfo, "SUPERVISOR_NAME", form.supervisor);
+  const deptHeadName = getApproverDisplay(approverInfo, "DEPT_HEAD_NAME", form.deptHead);
+  const hodName = getApproverDisplay(approverInfo, "MANAGER_NAME", form.hod);
 
-    useEffect(() => {
+  // Flow: user picks start date + end date -> API returns the leave days ->
+  // end date is recalculated as (start date + leave days) and shown in the Leave End Date field.
+  const syncedKeyRef = useRef("");
+  useEffect(() => {
     if (!open) return;
     if (!form.leaveStartDate || !form.leaveEndDate || !form.employeeCode || !form.leaveType) {
       return;
     }
+    // Skip when these exact values are what we last synced (prevents a call loop).
+    const key = [form.leaveStartDate, form.leaveEndDate, form.leaveType, form.employeeCode, form.halfDay].join("|");
+    if (key === syncedKeyRef.current) return;
 
-    let cancelled = false;setFetchingLeaveDays(true);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setFetchingLeaveDays(true);
+      getleavedaycount(
+        {
+          leaveStartDate: toBackendDate(form.leaveStartDate),
+          leaveEndDate: toBackendDate(form.leaveEndDate),
+          leaveType: form.leaveType,
+          company_code: companyCode,
+          employee_code: form.employeeCode,
+          half_day: form.halfDay,
+        },
+        tenantName
+      )
+        .then((response) => {
+          if (cancelled) return;
 
-    getleavedaycount(
-      {
-        leaveStartDate: toBackendDate(form.leaveStartDate),
-        leaveEndDate: toBackendDate(form.leaveEndDate),
-        leaveType: form.leaveType,
-        company_code: companyCode,
-        employee_code: form.employeeCode,
-        half_day: form.halfDay,
-      },
-      tenantName,
-    )
-      .then((response) => {
-        if (cancelled) return;
-        const days = extractLeaveDays(response);
-        if (days !== null) {
-          setForm((current) => ({ ...current, leaveDays: String(days) }));
-        }
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        console.warn("getleavedaycount failed, using local calculation", error);
-      })
-      .finally(() => {
-        if (!cancelled) setFetchingLeaveDays(false);
-      });
+          const apiDays = extractLeaveDays(response);
+
+          // End date = start date + leave days (from API). Day 1 is the start date itself,
+          // so N days end on start + (N - 1). Falls back to the API end date, then to the user's pick.
+          const endDate =
+            apiDays !== null && apiDays > 0
+              ? calculateEndDate(form.leaveStartDate, apiDays)
+              : extractLeaveEndDate(response) || form.leaveEndDate;
+
+          // Remember this combination so setting the new end date doesn't trigger the API again.
+          syncedKeyRef.current = [form.leaveStartDate, endDate, form.leaveType, form.employeeCode, form.halfDay].join("|");
+
+          setForm((current) => ({
+            ...current,
+            leaveEndDate: endDate,
+            leaveDays: apiDays !== null ? String(apiDays) : current.leaveDays,
+          }));
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          console.warn("getleavedaycount failed, using local calculation", error);
+        })
+        .finally(() => {
+          if (!cancelled) setFetchingLeaveDays(false);
+        });
+    }, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      setFetchingLeaveDays(false);
     };
-  }, [open,form.leaveStartDate,form.leaveEndDate,form.employeeCode, form.leaveType,form.halfDay,companyCode,tenantName,]);
+  }, [open, form.leaveStartDate, form.leaveEndDate, form.employeeCode, form.leaveType, form.halfDay, companyCode, tenantName]);
 
   const handleEmployeeChange = (employeeCode: string, sourceEmployees = employees) => {
     const employee = sourceEmployees.find((item) => getEmployeeCode(item) === employeeCode);
+    setFieldErrors((prev) => ({ ...prev, employeeCode: undefined, leaveType: undefined }));
     setValidationResult(null);
     setShowValidationAlert(false);
     setLeaveTypes([]);
@@ -414,7 +529,9 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     setLoadingLeaveTypes(true);
     loadLeaveEntitlement(employeeCode, companyCode, loginId)
       .then(setLeaveTypes)
-      .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load leave types" }))
+      .catch((error) =>
+        setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load leave types" })
+      )
       .finally(() => setLoadingLeaveTypes(false));
   };
 
@@ -431,7 +548,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
           leaveType: form.leaveType,
           leaveDays: requestedDays,
         },
-        tenantName,
+        tenantName
       );
 
       const record = (response || {}) as Record<string, unknown>;
@@ -455,57 +572,67 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     }
   };
 
-  const validate = async () => {
-      const errors = getValidationErrors(form);
-      if (errors.length) {
-        setNotice({ type: "error", message: errors[0] });
-        return false;
-      }
-
-      if (LEAVE_TYPES_SKIP_VALIDATION.has(form.leaveType)) {
-        setValidationResult({
-          isValid: true,
-          availableBalance: null,
-          message: "Validation skipped for this leave type",
-        });
-        setShowValidationAlert(true);
-        setNotice({ type: "info", message: "Validation skipped for this leave type" });
-        return true;
-      }
-
-      const result = await runLeaveValidation(Number(form.leaveDays || 0));
-      return result.isValid;
+  // Marks invalid fields in red and raises one alert. Returns true when something is invalid.
+  const flagErrors = (): boolean => {
+    const found = getFieldErrors(form);
+    setFieldErrors(found);
+    const messages = Object.values(found).filter(Boolean) as string[];
+    if (!messages.length) return false;
+    setNotice({
+      type: "error",
+      message: messages.length > 1 ? `${messages[0]} (and ${messages.length - 1} more field${messages.length > 2 ? "s" : ""})` : messages[0],
+    });
+    return true;
   };
 
-    useEffect(() => {
+  const validate = async () => {
+    if (flagErrors()) return false;
+
+    if (LEAVE_TYPES_SKIP_VALIDATION.has(form.leaveType)) {
+      setValidationResult({
+        isValid: true,
+        availableBalance: null,
+        message: "Validation skipped for this leave type",
+      });
+      setShowValidationAlert(true);
+      setNotice({ type: "info", message: "Validation skipped for this leave type" });
+      return true;
+    }
+
+    const result = await runLeaveValidation(Number(form.leaveDays || 0));
+    return result.isValid;
+  };
+
+  useEffect(() => {
     if (!sendBackOpen || !requestNumber) return;
     let cancelled = false;
 
     setLoadingFlowUsers(true);
 
-    getRequestFlowUsers(
-        {
-          doc_id: requestNumber, 
-          loginId: loginId,      
-        },
-      tenantName,
-    )
+    getRequestFlowUsers({ doc_id: requestNumber, loginId }, tenantName)
       .then((payload: any) => {
-          if (cancelled) return;
-          const rows =
-            Array.isArray(payload) ? payload :
-            Array.isArray(payload?.data) ? payload.data :
-            Array.isArray(payload?.rows) ? payload.rows :
-            payload?.data ? [payload.data] :
-            payload ? [payload] : [];
+        if (cancelled) return;
+        const rows = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.rows)
+          ? payload.rows
+          : payload?.data
+          ? [payload.data]
+          : payload
+          ? [payload]
+          : [];
 
-          setUserFlowData(
-            rows.map((r: any) => ({
+        setUserFlowData(
+          rows
+            .map((r: any) => ({
               LOGIN_ID: r.LOGIN_ID ?? r.login_id ?? r.LOGINID1 ?? "",
               USERNAME: r.USERNAME ?? r.username ?? "",
-            })).filter((u: any) => u.LOGIN_ID),
-          );
-        })
+            }))
+            .filter((u: any) => u.LOGIN_ID)
+        );
+      })
       .catch((err) => {
         if (cancelled) return;
         console.warn("getRequestFlowUsers failed", err);
@@ -518,79 +645,46 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     return () => {
       cancelled = true;
     };
-  }, [sendBackOpen, requestNumber, loginId, companyCode, tenantName]);
+  }, [sendBackOpen, requestNumber, loginId, tenantName]);
 
-  // console.log('save',form);
-  // Maps the leave payload onto the 90-column procedure (parameter 'hr_leave_request_flow_ins_upd').
-  // async function saveLeaveViaProc90(payload: Record<string, unknown>, loginId: string) {
-  //   const s = (v: unknown) => (v === null || v === undefined ? "" : String(v));
-  //   const strings: string[] = [
-  //     s(payload.COMPANY_CODE),                 // S1
-  //     s(payload.REQUEST_NUMBER),               // S2
-  //     s(payload.EMPLOYEE_CODE),                // S3
-  //     s(payload.EMPLOYEE_NAME),                // S4
-  //     s(payload.LEAVE_TYPE),                   // S5
-  //     s(payload.REQUEST_DATE),                 // S6
-  //     s(payload.LEAVE_START_DATE),             // S7
-  //     s(payload.LEAVE_END_DATE),               // S8
-  //     s(payload.REMARKS),                      // S9
-  //     s(payload.HALF_DAY),                     // S10
-  //     s(payload.LEAVE_ALLOWANCE),              // S11
-  //     s(payload.ADV_PAYMENT),                  // S12
-  //     s(payload.CAUSE_TYPE),                   // S13
-  //     s(payload.AIR_TICKET),                   // S14
-  //     s(payload.AIR_ROUTE),                    // S15
-  //     s(payload.TRAVEL_DATE),                  // S16
-  //     s(payload.TRAVEL_END_DATE),              // S17
-  //     s(payload.NAME_OF_REPLACEMENT),          // S18
-  //     s(payload.CONTACT_DETAILS_DURING_LEAVE), // S19
-  //     s(payload.DUTY_RESUME_DATE),             // S20
-  //     s(payload.ACTUAL_RESUME_DATE),           // S21
-  //     s(payload.HOD),                          // S22
-  //     s(payload.IMMEDIATE_SUPERVISOR),         // S23
-  //     s(payload.DEPT_HEAD),                    // S24
-  //     s(payload.LAST_ACTION),                  // S25
-  //     s(payload.CREATED_BY),                   // S26
-  //     s(payload.UUID),                         // S27
-  //     s(payload.FLOW_CODE),                    // S28
-  //     s(payload.NEXT_ACTION_BY),               // S29
-  //     s(payload.SENTBACK_HISTORY),             // S30
-  //     s(payload.CANCEL_REMARK),                // S31
-  //   ];
-
-  //   const params: Record<string, unknown> = {
-  //     parameter: "hr_leave_request_flow_ins_upd",
-  //     loginid: loginId,
-  //   };
-  //   strings.forEach((value, index) => { params[`val1s${index + 1}`] = value; });
-  //   const numbers = [Number(payload.LEAVE_DAYS || 0), 0, 0, 3]; // N1 days, N2/N3/N4 flow levels
-  //   numbers.forEach((value, index) => { params[`val1n${index + 1}`] = value; });
-
-  //   return saveLeaveRequestFlow(params, loginId);
-  // }
-
-  const save = async (action: "SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED" | "SENTBACK") => {
+  const save = async (action: SaveAction): Promise<string | undefined> => {
     if (isAlms && (workflowLoading || workflowError || !workflowActor || readOnly)) {
-      setNotice({ type: 'error', message: workflowError || 'Please wait for workflow verification before saving.' }); return;
+      setNotice({ type: "error", message: workflowError || "Please wait for workflow verification before saving." });
+      return;
     }
 
-    const errors = getValidationErrors(form);
+    if (flagErrors()) return;
+
+    // Sick leave cannot be submitted until at least one attachment is uploaded.
+    if (action === "SUBMITTED" && isCreator && isSickLeave) {
+      if (!requestNumber) {
+        setNotice({ type: "error", message: "Please attach a supporting document before submitting sick leave." });
+        return;
+      }
+      try {
+        const count = await refreshAttachmentCount();
+        if (count === 0) {
+          setNotice({ type: "error", message: "Please attach a supporting document before submitting sick leave." });
+          return;
+        }
+      } catch (error) {
+        setNotice({
+          type: "error",
+          message: error instanceof Error ? error.message : "Unable to verify attachments. Please try again.",
+        });
+        return;
+      }
+    }
 
     const isExemptFromValidation = LEAVE_TYPES_SKIP_VALIDATION.has(form.leaveType);
     const hasResumptionDates = Boolean(form.actualresumedate || form.dutyresumedate);
 
-    if (
-      !isExemptFromValidation &&
-      (action === "SAVEASDRAFT" || action === "SUBMITTED") &&
-      !hasResumptionDates
-    ) {
+    if (!isExemptFromValidation && (action === "SAVEASDRAFT" || action === "SUBMITTED") && !hasResumptionDates) {
       const requestedDays = Number(form.leaveDays || 0);
       if (requestedDays > 0) {
         const { isValid, availableBalance } = await runLeaveValidation(requestedDays);
         const hasInsufficientBalance =
-          availableBalance !== null &&
-          !Number.isNaN(availableBalance) &&
-          availableBalance < requestedDays;
+          availableBalance !== null && !Number.isNaN(availableBalance) && availableBalance < requestedDays;
 
         if (!isValid || hasInsufficientBalance) {
           return;
@@ -608,14 +702,9 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
       return;
     }
 
-    if (errors.length) {
-      setNotice({ type: "error", message: errors[0] });
-      return;
-    }
     setSavingAction(action);
     setNotice(null);
     try {
-      
       const payload: Record<string, unknown> = {
         COMPANY_CODE: companyCode,
         EMPLOYEE_NAME: form.employeeName,
@@ -654,18 +743,12 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
 
       if (action === "SENTBACK") {
         payload.SENTBACK_HISTORY = sentBackParams.SENTBACK_HISTORY;
-        payload.NEXT_ACTION_BY   = sentBackParams.LOGIN_ID;
+        payload.NEXT_ACTION_BY = sentBackParams.LOGIN_ID;
       }
 
       if (action === "REJECTED") {
         payload.CANCEL_REMARK = rejectParams.CANCEL_REMARK;
       }
-
-      // const saveResult = isAlms && requestNumber && ['SUBMITTED','REJECTED','SENTBACK'].includes(action)
-      //   ? await saveHrWorkflowAction(workflowRow || await getHrWorkflowRequest(requestNumber), action,
-      //       action === 'SENTBACK' ? sentBackParams.SENTBACK_HISTORY : rejectParams.CANCEL_REMARK,
-      //       sentBackParams.LOGIN_ID, payload)
-      //   : await saveHrLeaveApproval(payload as any, tenantName);
 
       const saveResult = await saveLeaveRequestFlow(payload, loginId);
 
@@ -673,15 +756,14 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
       // Procedure generates the number on insert; fall back to a lookup by the UUID of this save.
       if (!savedRequestNumber && !requestNumber) {
         const rows = await executeHrRawSql<Record<string, unknown>>(
-          `SELECT REQUEST_NUMBER FROM LEAVE_REQUEST_FLOW WHERE UUID = '${escapeSql(String(payload.UUID))}'`,
+          `SELECT REQUEST_NUMBER FROM LEAVE_REQUEST_FLOW WHERE UUID = '${escapeSql(String(payload.UUID))}'`
         );
         savedRequestNumber = String(rows?.[0]?.REQUEST_NUMBER ?? "");
       }
-      
-      // const savedRequestNumber = getSavedRequestNumber(saveResult);
+
       if (savedRequestNumber) {
         setRequestNumber(savedRequestNumber);
-        if (isAlms && action === 'SAVEASDRAFT') setWorkflowRow(await getHrWorkflowRequest(savedRequestNumber));
+        if (isAlms && action === "SAVEASDRAFT") setWorkflowRow(await getHrWorkflowRequest(savedRequestNumber));
       }
 
       if (action === "SAVEASDRAFT") {
@@ -692,11 +774,17 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
             : "Draft saved. Attachments will enable after request number is available.",
         });
         onSaved();
-        return;
+        return savedRequestNumber || requestNumber || undefined;
       }
 
-      if (action === "SENTBACK") { setSendBackOpen(false); setSentBackParams({ LOGIN_ID: "", USERNAME: "", SENTBACK_HISTORY: "" }); }
-      if (action === "REJECTED") { setRejectOpen(false); setRejectParams({ CANCEL_REMARK: "" }); }
+      if (action === "SENTBACK") {
+        setSendBackOpen(false);
+        setSentBackParams({ LOGIN_ID: "", USERNAME: "", SENTBACK_HISTORY: "" });
+      }
+      if (action === "REJECTED") {
+        setRejectOpen(false);
+        setRejectParams({ CANCEL_REMARK: "" });
+      }
 
       setNotice({ type: "success", message: "Leave request submitted" });
       onSaved();
@@ -708,238 +796,192 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     }
   };
 
-  const openAttachments = () => {
-    if (!requestNumber) {
-      setNotice({ type: "error", message: "Save as draft first. Attachments need a generated request number." });
-      return;
+  // Attachments can be added before the user clicks Save As Draft: if no request number exists yet,
+  // the form is saved as a draft automatically (this generates the number) and the dialog then opens.
+  const openAttachments = async () => {
+    let reqNo = requestNumber;
+    if (!reqNo) {
+      reqNo = (await save("SAVEASDRAFT")) || "";
+      if (!reqNo) return; // validation failed or save error; save() already showed the message
     }
     setAttachmentOpen(true);
   };
 
-  // const resetForm = () => {
-  //   setForm({ ...initialForm, requestDate: today() });
-  //   setRequestNumber("");
-  //   setValidationText("");
-  //   setNotice(null);
-  // };
+  /* ------------------------------------------------------------------ */
+  /*  Shared pieces (used by both the modal and the inline page layout)  */
+  /* ------------------------------------------------------------------ */
 
-  return (
-    <LmsDialog
-      open={open}
-      title={readOnly ? "View Leave Request" : initialRow ? "Edit Leave Request" : "Add Leave Request"}
-      wide
-      contentClassName={`leave-request-dialog${readOnly ? " is-readonly" : ""}`}
-      onClose={onClose}
-footer={
-  readOnly || (!createMode && !canPrimary) ? (
-    <div className="flex items-center justify-end p-4">
-      <Button type="button" variant="outline" onClick={openAttachments} disabled={!requestNumber}><Paperclip size={16} /><span>Attachments</span></Button>
-      <Button type="button" variant="outline" onClick={onClose}>
-        <X size={16} />
-        <span>Close</span>
-      </Button>
-    </div>
-  ) : (
-    <div className="flex w-full items-center justify-between gap-3 p-1">
-      <div className="flex items-center gap-2">
+  const dialogTitle = readOnly ? "View Leave Request" : initialRow ? "Edit Leave Request" : "Add Leave Request";
+  const pageTitle = readOnly ? "View Leave Request" : createMode ? "New Leave Request" : "Edit Leave Request";
+  const statusLabel = createMode ? "Draft" : getRowString(initialRow, "STATUS", "status") || lastAction || "Draft";
+
+  // Validation / info / error messages are shown with the shared alert component
+  const alertNotice = notice ? ({ ...notice, type: notice.type === "info" ? "success" : notice.type } as any) : null;
+
+  const actionBtn = "!w-auto shrink-0 whitespace-nowrap h-8 gap-1.5 text-xs font-semibold px-3 rounded-lg cursor-pointer";
+  const dangerBtn = `${actionBtn} !text-red-600 !border-red-200 hover:!bg-red-50`;
+
+  // All action buttons in one flat group (rendered in the page header, or in the modal footer)
+  const actionButtons =
+    readOnly || (!createMode && !canPrimary) ? (
+      <>
+        {requestNumber && isSickLeave && (
+          <Button type="button" variant="outline" onClick={() => void openAttachments()} className={actionBtn}>
+            <Paperclip size={14} />
+            <span>Attachments</span>
+          </Button>
+        )}
+        {!inline && (
+          <Button type="button" variant="outline" onClick={onClose} className={actionBtn}>
+            <X size={14} />
+            <span>Close</span>
+          </Button>
+        )}
+      </>
+    ) : (
+      <>
+        {/* Order: Save As Draft, Attachments, Submit/Approve, then the rest */}
         {(isCreator || createMode) && (
-          <Button 
+          <Button
             type="button"
             variant="outline"
             onClick={() => void save("SAVEASDRAFT")}
             disabled={Boolean(savingAction) || Boolean(requestNumber)}
-            className="!w-auto shrink-0 whitespace-nowrap"
+            title={requestNumber ? "Draft already saved" : undefined}
+            className={actionBtn}
           >
-            {savingAction === "SAVEASDRAFT" ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+            {savingAction === "SAVEASDRAFT" ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
             <span>Save As Draft</span>
           </Button>
         )}
 
-        {requestNumber &&(
-        <Button
-          type="button"
-          onClick={() => void save("SUBMITTED")}
-          disabled={Boolean(savingAction) || workflowLoading || Boolean(workflowError)}
-          className="!w-auto shrink-0 whitespace-nowrap"
-        >
-          {savingAction === "SUBMITTED" ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
-          <span>{permissions.mode === 'resumption' ? 'Approve Resumption' : isCreator ? "Submit" : "Approve"}</span>
-        </Button>
-      )}
+        {/* Before the first save only "Save As Draft" is shown. Once the request number exists:
+            - Attachments appears only for sick leave
+            - Submit/Approve appears for other leave types straight away, and for sick leave
+              only after at least one attachment has been uploaded */}
+        {requestNumber && isSickLeave && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void openAttachments()}
+            title="Attach files"
+            disabled={Boolean(savingAction) || workflowLoading || Boolean(workflowError)}
+            className={actionBtn}
+          >
+            <Paperclip size={14} />
+            <span>Attachments</span>
+          </Button>
+        )}
 
-        {!createMode && (
+        {requestNumber && !sickLeaveNeedsAttachment && (
+          <Button
+            type="button"
+            onClick={() => void save("SUBMITTED")}
+            disabled={Boolean(savingAction) || workflowLoading || Boolean(workflowError)}
+            className={`${actionBtn} bg-[#00378C] text-white hover:bg-[#002d72]`}
+          >
+            {savingAction === "SUBMITTED" ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+            <span>{permissions.mode === "resumption" ? "Approve Resumption" : isCreator ? "Submit" : "Approve"}</span>
+          </Button>
+        )}
+
+        {!createMode && isCreator && !hasActualResumeDate(initialRow) && (
+          <Button type="button" variant="outline" onClick={() => void save("CANCEL")} disabled={Boolean(savingAction)} className={dangerBtn}>
+            {savingAction === "CANCEL" ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+            <span>Cancel Request</span>
+          </Button>
+        )}
+
+        {!createMode && !isCreator && permissions.canApprove && (
           <>
-            {isCreator && !hasActualResumeDate(initialRow) && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void save("CANCEL")}
-                disabled={Boolean(savingAction)}
-                className="!w-auto shrink-0 whitespace-nowrap"
-              >
-                {savingAction === "CANCEL" ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                <span>Cancel</span>
-              </Button>
-            )}
-
-            {!isCreator && permissions.canApprove && (
-              <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setRejectOpen(true)}
-                disabled={Boolean(savingAction)}
-                className="!w-auto shrink-0 whitespace-nowrap"
-              >
-                <X size={16} />
-                <span>Reject</span>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setSendBackOpen(true)}
-                disabled={Boolean(savingAction) || !requestNumber}
-                className="!w-auto shrink-0 whitespace-nowrap"
-                title={!requestNumber ? "Save first to enable Send Back" : "Send Back"}
-              >
-                <Undo2 size={16} />
-                <span>Send Back</span>
-              </Button>
-            </>
-            )}
+            <Button type="button" variant="outline" onClick={() => setRejectOpen(true)} disabled={Boolean(savingAction)} className={dangerBtn}>
+              <X size={14} />
+              <span>Reject</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSendBackOpen(true)}
+              disabled={Boolean(savingAction) || !requestNumber}
+              className={actionBtn}
+              title="Send Back"
+            >
+              <Undo2 size={14} />
+              <span>Send Back</span>
+            </Button>
           </>
         )}
-      </div>
+      </>
+    );
 
-      <Button
-        type="button"
-        variant="outline"
-        onClick={openAttachments}
-        title={!requestNumber ? "Save Draft first to enable attachments" : "Attach files"}
-        disabled={!requestNumber || Boolean(savingAction)}
-        className="!w-auto shrink-0 whitespace-nowrap"
-      >
-        <Paperclip size={16} />
-        <span>Attachments</span>
-      </Button>
-    </div>
-  )
-}
-    >
-      <div className="leave-request-form">
-        <NoticeToast notice={notice} onClose={() => setNotice(null)} />
-        {workflowLoading && <p className="text-sm text-slate-500">Checking the current approver and available actions…</p>}
-        {!readOnly && permissions.mode === 'resumption' && <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">This request is waiting for your leave-resumption approval.</p>}
+  const footerNode = <div className="flex w-full flex-wrap items-center justify-end gap-2 p-2">{actionButtons}</div>;
 
-        <div className="leave-request-identity">
-          <div className="leave-request-profile-icon">
-            <UserRound size={22} />
-          </div>
-          <div className="min-w-0">
-            <h3>{form.employeeCode ? `${form.employeeCode} - ${form.employeeName || "Employee"}` : "Select employee"}</h3>
-            {requestNumber ? <p>Request No. {requestNumber}</p> : null}
-          </div>
+  /* ---------------- main (left) column: the form ---------------- */
+  const mainNode = (
+    <>
+      {/* Popup layout has no page header, so the request date is shown here; the page layout shows it in the header */}
+      {!inline && (
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-xs sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Request Date">
-            <Input type="date" value={form.requestDate} onChange={(event) => update("requestDate", event.target.value)} disabled={fieldsDisabled} />
+            <Input
+              value={formatDisplayDate(form.requestDate)}
+              disabled
+              readOnly
+              tabIndex={-1}
+              className="pointer-events-none select-none"
+            />
           </Field>
         </div>
+      )}
 
-        {hasActualResumeDate(initialRow) && (
-          <div className="mt-2 flex w-fit flex-col rounded-lg border-2 border-gray-200 p-3">
-            <h3 className="mb-2 text-sm font-medium text-gray-700">Leave Resumption Details</h3>
+      {workflowLoading && (
+        <p className="m-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          Checking the current approver and available actions…
+        </p>
+      )}
+      {!readOnly && permissions.mode === "resumption" && (
+        <p className="m-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
+          This request is waiting for your leave-resumption approval.
+        </p>
+      )}
+      {!readOnly && isCreator && isSickLeave && (attachmentCount ?? 0) === 0 && (
+        <p className="m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {requestNumber
+            ? "Sick leave requires a supporting attachment. Use Attachments to add one; Submit appears once it is uploaded."
+            : "Sick leave requires a supporting attachment. Save As Draft first, then use Attachments to add one."}
+        </p>
+      )}
+      {showSendBackRemark && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Sent back with remarks</p>
+          <p className="m-0 mt-0.5 text-sm text-amber-900">{sendBackRemark}</p>
+        </div>
+      )}
+      {showRejectRemark && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-red-800">Rejected with remarks</p>
+          <p className="m-0 mt-0.5 text-sm text-red-900">{rejectRemark}</p>
+        </div>
+      )}
 
-            <div
-              className={`grid grid-cols-1 items-end gap-y-4 ${
-                tenantName === "ALMS"
-                  ? "sm:grid-cols-[auto_200px_200px] sm:gap-x-10"
-                  : "sm:grid-cols-[auto_200px] sm:gap-x-10"
-              }`}
-            >
-              <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={form.actualresumedate ? true : form.resumework === "Y"}
-                  onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
-                  disabled={fieldsDisabled}
-                />
-                <span>Resume Work</span>
-              </label>
-
-              <div className="w-[200px]">
-                <Field label="Actual Resume Date">
-                  <Input
-                    type="date"
-                    value={form.actualresumedate}
-                    onChange={(event) => update("actualresumedate", event.target.value)}
-                    disabled={fieldsDisabled}
-                    className="!w-[200px]"
-                  />
-                </Field>
-              </div>
-
-              {tenantName === "ALMS" && (
-                <div className="w-[200px]">
-                  <Field label="Duty Resume Date">
-                    <Input
-                      type="date"
-                      value={form.dutyresumedate}
-                      onChange={(event) => update("dutyresumedate", event.target.value)}
-                      disabled={fieldsDisabled}
-                      className="!w-[200px]"
-                    />
-                  </Field>
-                </div>
-              )}
-            </div>
+      {/* Three columns side-by-side with bordered section cards */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        {/* ---------- Column 1: Leave Details ---------- */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Details</h3>
           </div>
-        )}
-
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-3 md:items-start">
-        {/* Leave Details */}
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-gray-800">Leave Details</h3>
-
-          {showValidationAlert && validationResult && (
-            <div
-              className={`rounded-lg border p-3 text-sm ${
-                validationResult.isValid
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-red-200 bg-red-50 text-red-800"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span>{validationResult.message}</span>
-                <button
-                  type="button"
-                  onClick={() => setShowValidationAlert(false)}
-                  className="shrink-0 opacity-60 hover:opacity-100"
-                  aria-label="Dismiss validation message"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              {validationResult.availableBalance !== null && (
-                <p className="mt-1 opacity-80">
-                  Available: {validationResult.availableBalance} day(s), Requested: {form.leaveDays || 0} day(s)
-                </p>
-              )}
-            </div>
-          )}
-
-            <Field label="Employee">
+          <div className="flex flex-col gap-2.5 p-3">
+            <Field label="Employee" error={fieldErrors.employeeCode}>
               <Select
                 value={form.employeeCode}
                 onChange={(event) => handleEmployeeChange(event.target.value)}
                 disabled={fieldsDisabled || loadingEmployees}
               >
-                <option value="">
-                  {loadingEmployees ? "Loading employees..." : "Select employee"}
-                </option>
+                <option value="">{loadingEmployees ? "Loading employees..." : "Select employee"}</option>
                 {employees.map((employee) => {
-                  console.log("employee keys:", Object.keys(employee), employee);
                   const code = getEmployeeCode(employee);
-                  const alternateId = employee.ALTERNATE_ID||employee.alternate_id;
+                  const alternateId = employee.ALTERNATE_ID || employee.alternate_id;
                   const name = getEmployeeName(employee);
                   return (
                     <option key={code} value={code}>
@@ -950,162 +992,254 @@ footer={
               </Select>
             </Field>
 
-          <Field label="Leave Type *">
-            <Select value={form.leaveType} onChange={(event) => update("leaveType", event.target.value)} disabled={fieldsDisabled || !form.employeeCode || loadingLeaveTypes}>
-              <option value="">{loadingLeaveTypes ? "Loading leave types..." : "Leave Type"}</option>
-              {uniqueLeaveTypes.map((leaveType) => {
-                const code = String(leaveType.LEAVE_TYPE || "");
-                return (
-                  <option key={code} value={code}>
-                    {getLeaveTypeLabel(leaveType)}
-                  </option>
-                );
-              })}
-            </Select>
-          </Field>
+            <Field label="Leave Type *" error={fieldErrors.leaveType}>
+              <Select
+                value={form.leaveType}
+                onChange={(event) => update("leaveType", event.target.value)}
+                disabled={fieldsDisabled || !form.employeeCode || loadingLeaveTypes}
+              >
+                <option value="">{loadingLeaveTypes ? "Loading..." : "Leave Type"}</option>
+                {uniqueLeaveTypes.map((leaveType) => {
+                  const code = String(leaveType.LEAVE_TYPE || "");
+                  return (
+                    <option key={code} value={code}>
+                      {getLeaveTypeLabel(leaveType)}
+                    </option>
+                  );
+                })}
+              </Select>
+            </Field>
 
-          <Field label="Leave Start Date *">
-            <Input type="date" value={form.leaveStartDate} onChange={(event) => update("leaveStartDate", event.target.value)} disabled={fieldsDisabled} />
-          </Field>
-
-          <Field label="Leave End Date *">
-            <Input type="date" value={form.leaveEndDate} onChange={(event) => update("leaveEndDate", event.target.value)} disabled={fieldsDisabled} />
-          </Field>
-          
-          { tenantName === 'MHDL'&&(
-          <Field label="Duty Resusssme Date*">
+            <Field label="Leave Start Date *" error={fieldErrors.leaveStartDate}>
               <Input
                 type="date"
-                value={form.dutyresumedate}
-                onChange={(event) => update("dutyresumedate", event.target.value)}
+                value={form.leaveStartDate}
+                onChange={(event) => update("leaveStartDate", event.target.value)}
                 disabled={fieldsDisabled}
               />
-          </Field>
-          )}
+            </Field>
 
-          <div className="flex items-end gap-3">
-            <Field label="Leave Days" className="flex-1">
-              <Input type="number" min="0" step="0.5" value={form.leaveDays} onChange={(event) => update("leaveDays", event.target.value)} className="!w-[100px]" disabled={fieldsDisabled} />
-            </Field>  
-            <label className="flex items-center gap-2 pb-2 text-sm text-gray-600">
-              <input type="checkbox" checked={form.halfDay === "Y"} onChange={(event) => update("halfDay", event.target.checked ? "Y" : "N")} disabled={fieldsDisabled} />
-              <span>Half Day</span>
-            </label>
-          </div>
+            <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+              <Field label={fetchingLeaveDays ? "Leave Days (calculating…)" : "Leave Days"} error={fieldErrors.leaveDays}>
+                <Input type="number" value={form.leaveDays} disabled readOnly tabIndex={-1} />
+              </Field>
+              <label
+                className={`mb-0 flex h-8 select-none items-center gap-2 text-xs font-medium text-slate-700 ${
+                  fieldsDisabled ? "opacity-60" : "cursor-pointer"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-[#00378C]"
+                  checked={form.halfDay === "Y"}
+                  onChange={(event) => update("halfDay", event.target.checked ? "Y" : "N")}
+                  disabled={fieldsDisabled}
+                />
+                Half Day
+              </label>
+            </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void validate()}
-            disabled={fieldsDisabled || validating || !selectedEmployee}
-            className="justify-center gap-2"
-          >
-            {validating ? <Loader2 className="animate-spin" size={15} /> : <ShieldCheck size={15} />}
-            {validating ? "Validating..." : "Validate"}
-          </Button>
-        </div>
-
-        {/* Request Notes */}
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-gray-800">Request Notes</h3>
-
-          <Field label="Leave Allowance">
-            <Select value={form.leaveAllowance} onChange={(event) => update("leaveAllowance", event.target.value as "N" | "Y" | "")} disabled={fieldsDisabled}>
-              <option value="">Leave Allowance</option>
-              <option value="Y">Yes</option>
-              <option value="N">No</option>
-            </Select>
-          </Field>
-
-          <Field label="Advance Payment">
-            <Select value={form.advancePayment} onChange={(event) => update("advancePayment", event.target.value as "N" | "Y" | "")} disabled={fieldsDisabled}>
-              <option value="">Advance Payment</option>
-              <option value="Y">Yes</option>
-              <option value="N">No</option>
-            </Select>
-          </Field>
-
-          <Field label="Cause Type">
-            <Input value={form.causeType} onChange={(event) => update("causeType", event.target.value)} disabled={fieldsDisabled} />
-          </Field>
-
-          <Field label="Remarks *">
-            <textarea className="w-full rounded-md border border-gray-300 p-2 text-sm" rows={3} value={form.remarks} onChange={(event) => update("remarks", event.target.value)} disabled={fieldsDisabled} />
-          </Field>
-
-          <Field label="Contact Details During Leave">
-            <textarea className="w-full rounded-md border border-gray-300 p-2 text-sm" rows={2} value={form.contactDuringLeave} onChange={(event) => update("contactDuringLeave", event.target.value)} disabled={fieldsDisabled} />
-          </Field>
-
-          {showSendBackRemark && (
-            <Field label="Send Back Remarks">
-              <textarea
-                className="w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-sm"
-                rows={2}
-                value={sendBackRemark}
-                readOnly
-                disabled
+            {/* User picks the end date; after the API call it is replaced by start date + leave days */}
+            <Field label="Leave End Date *" error={fieldErrors.leaveEndDate}>
+              <Input
+                type="date"
+                value={form.leaveEndDate}
+                min={form.leaveStartDate || undefined}
+                onChange={(event) => update("leaveEndDate", event.target.value)}
+                disabled={fieldsDisabled}
               />
             </Field>
-          )}
 
-          {showRejectRemark && (
-            <Field label="Reject Remarks">
-              <textarea
-                className="w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-sm"
-                rows={2}
-                value={rejectRemark}
-                readOnly
-                disabled
+            {tenantName === "MHDL" && (
+              <Field label="Duty Resume Date *">
+                <Input
+                  type="date"
+                  value={form.dutyresumedate}
+                  onChange={(event) => update("dutyresumedate", event.target.value)}
+                  disabled={fieldsDisabled}
+                />
+              </Field>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void validate()}
+              disabled={fieldsDisabled || validating || !selectedEmployee}
+              className="mt-1 h-9 w-full justify-center gap-2 rounded-full text-xs font-semibold"
+            >
+              {validating ? <Loader2 className="animate-spin" size={14} /> : <ShieldCheck size={14} />}
+              {validating ? "Checking..." : "Validate"}
+            </Button>
+          </div>
+        </div>
+
+        {/* ---------- Column 2: Request Notes ---------- */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Request Notes</h3>
+          </div>
+          <div className="flex flex-col gap-2.5 p-3">
+            <Field label="Leave Allowance">
+              <Select
+                value={form.leaveAllowance}
+                onChange={(event) => update("leaveAllowance", event.target.value as "N" | "Y" | "")}
+                disabled={fieldsDisabled}
+              >
+                <option value="">Leave Allowance</option>
+                <option value="Y">Yes</option>
+                <option value="N">No</option>
+              </Select>
+            </Field>
+
+            <Field label="Advance Payment">
+              <Select
+                value={form.advancePayment}
+                onChange={(event) => update("advancePayment", event.target.value as "N" | "Y" | "")}
+                disabled={fieldsDisabled}
+              >
+                <option value="">Advance Payment</option>
+                <option value="Y">Yes</option>
+                <option value="N">No</option>
+              </Select>
+            </Field>
+
+            <Field label="Cause Type">
+              <Input
+                value={form.causeType}
+                onChange={(event) => update("causeType", event.target.value)}
+                disabled={fieldsDisabled}
               />
             </Field>
-          )}
-        </div>
 
-        {/* Approver Details */}
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-gray-800">Approver Details</h3>
-
-          <Field label="Immediate Supervisor">
-            <Input value={supervisorName} disabled />
-          </Field>
-          <Field label="Department Head">
-            <Input value={deptHeadName} disabled />
-          </Field>
-          <Field label="HR. Head Of Department">
-            <Input value={hodName} disabled />
-          </Field>
-
-          <Field label="Air Ticket">
-            <Select value={form.airTicket} onChange={(event) => update("airTicket", event.target.value as "N" | "Y" | "")} disabled={fieldsDisabled}>
-              <option value="">Air Ticket</option>
-              <option value="Y">Yes</option>
-              <option value="N">No</option>
-            </Select>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Travel Start Date">
-              <Input type="date" value={form.travelDate} onChange={(event) => update("travelDate", event.target.value)} disabled={fieldsDisabled} />
+            <Field label="Remarks *" error={fieldErrors.remarks}>
+              <textarea
+                className="min-h-[72px] w-full resize-y rounded-md border border-gray-300 p-2 text-sm"
+                rows={3}
+                value={form.remarks}
+                onChange={(event) => update("remarks", event.target.value)}
+                disabled={fieldsDisabled}
+              />
             </Field>
-            <Field label="Travel End Date">
-              <Input type="date" value={form.travelEndDate} onChange={(event) => update("travelEndDate", event.target.value)} disabled={fieldsDisabled} />
+
+            <Field label="Contact Details During Leave">
+              <textarea
+                className="min-h-[72px] w-full resize-y rounded-md border border-gray-300 p-2 text-sm"
+                rows={3}
+                value={form.contactDuringLeave}
+                onChange={(event) => update("contactDuringLeave", event.target.value)}
+                disabled={fieldsDisabled}
+              />
             </Field>
           </div>
+        </div>
 
-          <Field label="Air Route">
-            <Input value={form.airRoute} onChange={(event) => update("airRoute", event.target.value)} disabled={fieldsDisabled} />
-          </Field>
-
-          {/* {statusRemark ? (
-            <Field label="Reject Remarks">
-              <textarea className="w-full rounded-md border border-gray-300 p-2 text-sm" rows={2} value={statusRemark} disabled />
+        {/* ---------- Column 3: Approver Details ---------- */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Approver Details</h3>
+          </div>
+          <div className="flex flex-col gap-2.5 p-3">
+            <Field label="Immediate Supervisor">
+              <Input value={supervisorName} disabled readOnly />
             </Field>
-          ) : null} */}
+
+            <Field label="Department Head">
+              <Input value={deptHeadName} disabled readOnly />
+            </Field>
+
+            <Field label="HR. Head Of Department">
+              <Input value={hodName} disabled readOnly />
+            </Field>
+
+            <Field label="Air Ticket">
+              <Select
+                value={form.airTicket}
+                onChange={(event) => update("airTicket", event.target.value as "N" | "Y" | "")}
+                disabled={fieldsDisabled}
+              >
+                <option value="">Air Ticket</option>
+                <option value="Y">Yes</option>
+                <option value="N">No</option>
+              </Select>
+            </Field>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Travel Start Date">
+                <Input
+                  type="date"
+                  value={form.travelDate}
+                  onChange={(event) => update("travelDate", event.target.value)}
+                  disabled={fieldsDisabled}
+                />
+              </Field>
+              <Field label="Travel End Date">
+                <Input
+                  type="date"
+                  value={form.travelEndDate}
+                  min={form.travelDate || undefined}
+                  onChange={(event) => update("travelEndDate", event.target.value)}
+                  disabled={fieldsDisabled}
+                />
+              </Field>
+            </div>
+
+            <Field label="Air Route">
+              <Input
+                value={form.airRoute}
+                onChange={(event) => update("airRoute", event.target.value)}
+                disabled={fieldsDisabled}
+              />
+            </Field>
+          </div>
         </div>
       </div>
-      </div>
 
+      {hasActualResumeDate(initialRow) && (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-col justify-end">
+              <label className="flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-[#f8f9fb] px-2.5 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-[#00378C]"
+                  checked={form.actualresumedate ? true : form.resumework === "Y"}
+                  onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
+                  disabled={fieldsDisabled}
+                />
+                Resume Work
+              </label>
+            </div>
+            <Field label="Actual Resume Date">
+              <Input
+                type="date"
+                value={form.actualresumedate}
+                onChange={(event) => update("actualresumedate", event.target.value)}
+                disabled={fieldsDisabled}
+              />
+            </Field>
+            {tenantName === "ALMS" && (
+              <Field label="Duty Resume Date">
+                <Input
+                  type="date"
+                  value={form.dutyresumedate}
+                  onChange={(event) => update("dutyresumedate", event.target.value)}
+                  disabled={fieldsDisabled}
+                />
+              </Field>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  // Send Back / Reject / Attachments stay as small popups on top of either layout.
+  const nestedDialogs = (
+    <>
       {/* -------------------- SEND BACK DIALOG -------------------- */}
       <LmsDialog
         open={sendBackOpen}
@@ -1119,9 +1253,7 @@ footer={
             <Button
               onClick={() => void save("SENTBACK")}
               disabled={
-                savingAction === "SENTBACK" ||
-                !sentBackParams.LOGIN_ID ||
-                !sentBackParams.SENTBACK_HISTORY.trim()
+                savingAction === "SENTBACK" || !sentBackParams.LOGIN_ID || !sentBackParams.SENTBACK_HISTORY.trim()
               }
               className="!w-auto shrink-0"
             >
@@ -1145,9 +1277,7 @@ footer={
               }}
               disabled={loadingFlowUsers}
             >
-              <option value="">
-                {loadingFlowUsers ? "Loading..." : "Select employee"}
-              </option>
+              <option value="">{loadingFlowUsers ? "Loading..." : "Select employee"}</option>
               {userFlowData.map((u) => (
                 <option key={u.LOGIN_ID} value={u.LOGIN_ID}>
                   {u.LOGIN_ID} - {u.USERNAME}
@@ -1161,9 +1291,7 @@ footer={
               className="w-full rounded-md border border-gray-300 p-2 text-sm"
               rows={3}
               value={sentBackParams.SENTBACK_HISTORY}
-              onChange={(e) =>
-                setSentBackParams((prev) => ({ ...prev, SENTBACK_HISTORY: e.target.value }))
-              }
+              onChange={(e) => setSentBackParams((prev) => ({ ...prev, SENTBACK_HISTORY: e.target.value }))}
             />
           </Field>
         </div>
@@ -1199,39 +1327,156 @@ footer={
           />
         </Field>
       </LmsDialog>
+
       <HrLeaveAttachmentDialog
         open={attachmentOpen}
         requestNumber={requestNumber}
         companyCode={companyCode}
         loginId={loginId}
-        onClose={() => setAttachmentOpen(false)}
+        onClose={() => {
+          setAttachmentOpen(false);
+          // Re-check after the attachment dialog closes so Submit enables for sick leave.
+          if (isSickLeave) void refreshAttachmentCount().catch(() => undefined);
+        }}
       />
+    </>
+  );
+
+  /* ------------------------------------------------------------------ */
+  /*  Layouts                                                            */
+  /* ------------------------------------------------------------------ */
+
+  // Page layout: fixed header, alert, scrollable form column.
+  // Sized to the window so the page itself never scrolls.
+  if (inline) {
+    if (!open) return null;
+    return (
+      <section className="leave-request-page flex h-[calc(100dvh-150px)] flex-col gap-2 overflow-hidden p-1">
+        <div className="shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="h-1 w-full bg-[#00378C]" />
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onClose}
+                disabled={Boolean(savingAction)}
+                aria-label="Back to list"
+                title="Back to list"
+                className="h-8 w-8 shrink-0 rounded-lg cursor-pointer"
+              >
+                <ArrowLeft size={15} />
+              </Button>
+              <h1 className="m-0 truncate text-sm font-semibold text-slate-900">{pageTitle}</h1>
+              {requestNumber && (
+                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{requestNumber}</span>
+              )}
+              <span className="select-none rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                Request Date: {formatDisplayDate(form.requestDate)}
+              </span>
+              <span className={statusBadgeTone(statusLabel)}>{statusLabel}</span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">{actionButtons}</div>
+          </div>
+        </div>
+
+        <AutoDismissAlert notice={alertNotice} onClose={() => setNotice(null)} />
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-0 flex-col gap-2.5 pr-1">{mainNode}</div>
+        </div>
+
+        {nestedDialogs}
+      </section>
+    );
+  }
+
+  // Modal layout (default behaviour)
+  return (
+    <LmsDialog
+      open={open}
+      title={dialogTitle}
+      wide
+      contentClassName={`leave-request-dialog${readOnly ? " is-readonly" : ""}`}
+      onClose={onClose}
+      footer={footerNode}
+    >
+      <div className="leave-request-form flex flex-col gap-2.5">
+        <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+        {mainNode}
+      </div>
+      {nestedDialogs}
     </LmsDialog>
   );
 }
 
-function Field({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
+function Field({
+  label,
+  className = "",
+  error,
+  children,
+}: {
+  label: string;
+  className?: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  const required = label.trim().endsWith("*");
+  const text = label.replace(/\s*\*$/, "");
+  const invalidClass = error
+    ? "[&_input]:!border-red-400 [&_select]:!border-red-400 [&_textarea]:!border-red-400"
+    : "";
   return (
-    <label className={`flex min-w-0 flex-col gap-1 text-sm text-gray-600 ${className}`}>
-      <span>{label}</span>
+    <label className={`flex min-w-0 flex-col gap-1 ${invalidClass} ${className}`}>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+        {text}
+        {required && <span className="ml-0.5 font-bold text-[#E24B4A]">*</span>}
+      </span>
       {children}
+      {error && <span className="text-[11px] font-medium text-red-600">{error}</span>}
     </label>
   );
+}
+
+function statusBadgeTone(label: string) {
+  const l = (label || "").toLowerCase();
+  const base = "rounded-md border px-2 py-0.5 text-[11px] font-medium";
+  if (l.includes("approv") || l.includes("close")) return `${base} border-emerald-200 bg-emerald-50 text-emerald-700`;
+  if (l.includes("reject")) return `${base} border-red-200 bg-red-50 text-red-700`;
+  if (l.includes("cancel") || l.includes("draft") || l.includes("saveasdraft")) return `${base} border-slate-200 bg-slate-50 text-slate-600`;
+  if (l.includes("progress")) return `${base} border-sky-200 bg-sky-50 text-sky-700`;
+  return `${base} border-amber-200 bg-amber-50 text-amber-700`;
+}
+
+function formatDisplayDate(value: string) {
+  if (!value) return "—";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function getFieldErrors(form: LeaveForm): Partial<Record<keyof LeaveForm, string>> {
+  const errors: Partial<Record<keyof LeaveForm, string>> = {};
+  if (!form.requestDate) errors.requestDate = "Request date is required";
+  if (!form.employeeCode) errors.employeeCode = "Employee is required";
+  if (!form.leaveType) errors.leaveType = "Leave type is required";
+  if (!form.leaveStartDate) errors.leaveStartDate = "Start date is required";
+  if (!form.leaveEndDate) errors.leaveEndDate = "End date is required";
+  else if (form.leaveStartDate && form.leaveEndDate < form.leaveStartDate) errors.leaveEndDate = "End date is before start date";
+  if (Number(form.leaveDays || 0) <= 0) errors.leaveDays = "Must be greater than zero";
+  if (!form.remarks.trim()) errors.remarks = "Remarks are required";
+  return errors;
 }
 
 function getEmployeeCode(employee: HrEmployee) {
   return String(employee.EMPLOYEE_ID || employee.EMPLOYEE_CODE || employee.ALTERNATE_ID || "");
 }
 
-function getAlternateId(employee: HrEmployee) {
-  return String(employee.ALTERNATE_ID || "");
-}
-
 function getEmployeeName(employee: HrEmployee) {
   return String(employee.RPT_NAME || employee.EMPLOYEE_NAME || employee.Employee_Name || employee.EMPLOYEE_ID || "");
 }
-
-
 
 function getLeaveTypeLabel(leaveType: HrLeaveEntitlement) {
   const code = String(leaveType.LEAVE_TYPE || "");
@@ -1239,20 +1484,6 @@ function getLeaveTypeLabel(leaveType: HrLeaveEntitlement) {
   return code && desc !== code ? `${code} - ${desc}` : desc;
 }
 
-// async function loadEmployees(loginId: string) {
-//   // let rows = await getHrEmployees(loginId);
-//    const rows = await executeHrRawSql<HrEmployee>(employeeTreeSql(loginId));
-//   // }
-//   return uniqueBy(rows, getEmployeeCode).sort((a, b) => getEmployeeName(a).localeCompare(getEmployeeName(b)));
-// }
-
-// async function loadLeaveEntitlement(employeeId: string) {
-//   // let rows = await getHrLeaveEntitlement(employeeId);
-//   // if (!rows.length) {
-//     const rows = await executeHrRawSql<HrLeaveEntitlement>(leaveEntitlementSql(employeeId));
-//   // }
-//   return uniqueBy(rows, (row) => String(row.LEAVE_TYPE || "")).filter((row) => row.LEAVE_TYPE);
-// }
 async function loadEmployees(loginId: string, companyCode: string) {
   const raw = await getDynamicLookupaccount({
     parameter: "LEAVE_FLOW_EMPLOYEE_LIST",
@@ -1261,9 +1492,7 @@ async function loadEmployees(loginId: string, companyCode: string) {
     code2: loginId,
   });
   const rows = upperKeys<HrEmployee>(raw);
-  return uniqueBy(rows, getEmployeeCode).sort((a, b) =>
-    getEmployeeName(a).localeCompare(getEmployeeName(b)),
-  );
+  return uniqueBy(rows, getEmployeeCode).sort((a, b) => getEmployeeName(a).localeCompare(getEmployeeName(b)));
 }
 
 async function loadLeaveEntitlement(employeeId: string, companyCode: string, loginId: string) {
@@ -1277,6 +1506,16 @@ async function loadLeaveEntitlement(employeeId: string, companyCode: string, log
   return uniqueBy(rows, (row) => String(row.LEAVE_TYPE || "")).filter((row) => row.LEAVE_TYPE);
 }
 
+// Counts the files attached to a leave request (used to gate sick-leave submission).
+async function countLeaveAttachments(requestNumber: string): Promise<number> {
+  const rows = await executeHrRawSql<Record<string, unknown>>(
+    `SELECT COUNT(*) AS CNT FROM ${LEAVE_ATTACHMENT_TABLE} WHERE REQUEST_NUMBER = '${escapeSql(requestNumber)}'`
+  );
+  const first = rows?.[0] ?? {};
+  const raw = first.CNT ?? first.cnt ?? first.COUNT ?? Object.values(first)[0] ?? 0;
+  const count = Number(raw);
+  return Number.isNaN(count) ? 0 : count;
+}
 
 function uniqueBy<T>(rows: T[], getKey: (row: T) => string) {
   const map = new Map<string, T>();
@@ -1286,43 +1525,15 @@ function uniqueBy<T>(rows: T[], getKey: (row: T) => string) {
   });
   return Array.from(map.values());
 }
+
 function upperKeys<T>(rows: unknown): T[] {
   if (!Array.isArray(rows)) return [];
   return rows.map(
     (row) =>
       Object.fromEntries(
-        Object.entries(row as Record<string, unknown>).map(([key, value]) => [key.toUpperCase(), value]),
-      ) as T,
+        Object.entries(row as Record<string, unknown>).map(([key, value]) => [key.toUpperCase(), value])
+      ) as T
   );
-}
-
-function employeeTreeSql(loginId: string) {
-  const safeLogin = escapeSql(loginId);
-  return `
-    SELECT DISTINCT *
-    FROM (
-      SELECT *
-      FROM VW_HR_EMPLOYEE_AWARE
-      WHERE EMP_STATUS <> 'S'
-      START WITH
-        EMPLOYEE_ID = '${safeLogin}'
-        OR SUPERVISOR_EMPID = '${safeLogin}'
-        OR DEPT_HEAD_EMPID = '${safeLogin}'
-        OR MANGR_EMPID = '${safeLogin}'
-      CONNECT BY NOCYCLE PRIOR EMPLOYEE_ID = SUPERVISOR_EMPID
-        OR PRIOR EMPLOYEE_ID = DEPT_HEAD_EMPID
-        OR PRIOR EMPLOYEE_ID = MANGR_EMPID
-    )
-  `;
-}
-
-function leaveEntitlementSql(employeeId: string) {
-  return `
-    SELECT DISTINCT LEAVE_TYPE, LEAVE_TYPE_DESC
-    FROM VW_HR_EMP_LEAVE_ENTITLE_AWARE
-    WHERE EMPLOYEE_ID = '${escapeSql(employeeId)}'
-      AND LEAVE_TYPE IS NOT NULL
-  `;
 }
 
 function escapeSql(value: string) {
@@ -1341,16 +1552,67 @@ function getSavedRequestNumber(response: unknown) {
   return "";
 }
 
-function getValidationErrors(form: LeaveForm) {
-  const errors: string[] = [];
-  if (!form.requestDate) errors.push("Request date is required");
-  if (!form.employeeCode) errors.push("Employee is required");
-  if (!form.leaveType) errors.push("Leave type is required");
-  if (!form.leaveStartDate) errors.push("Leave start date is required");
-  if (!form.leaveEndDate) errors.push("Leave end date is required");
-  if (Number(form.leaveDays || 0) <= 0) errors.push("Leave days must be greater than zero");
-  if (!form.remarks.trim()) errors.push("Remarks are required");
-  return errors;
+function addDaysIso(startValue: string, daysToAdd: number) {
+  const start = new Date(`${startValue}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return "";
+  start.setDate(start.getDate() + daysToAdd);
+  const y = start.getFullYear();
+  const m = String(start.getMonth() + 1).padStart(2, "0");
+  const d = String(start.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// End date = start date + leave days. The first leave day is the start date,
+// so N days end on start + (N - 1). A half day (0.5) ends on the start date.
+function calculateEndDate(startValue: string, leaveDays: number) {
+  if (!startValue || !(leaveDays > 0)) return "";
+  return addDaysIso(startValue, Math.max(Math.ceil(leaveDays) - 1, 0));
+}
+
+// API dates arrive as "dd-MM-yyyy" (e.g. "22-10-2026"); the date input needs "yyyy-MM-dd".
+function apiDateToInput(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const dmy = /^(\d{2})[-/](\d{2})[-/](\d{4})/.exec(text);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+  return "";
+}
+
+function extractLeaveEndDate(response: unknown): string {
+  if (!response || typeof response !== "object") return "";
+  const record = response as Record<string, unknown>;
+  const raw = record.leaveEndDate ?? record.LEAVE_END_DATE ?? record.leave_end_date ?? record.endDate;
+  if (raw !== null && raw !== undefined && typeof raw !== "object") return apiDateToInput(raw);
+  if (record.data && typeof record.data === "object") return extractLeaveEndDate(record.data);
+  return "";
+}
+
+function extractLeaveDays(response: unknown): number | null {
+  if (response === null || response === undefined) return null;
+  if (typeof response === "number") return Number.isFinite(response) ? response : null;
+  if (typeof response === "string") {
+    const parsed = Number(response);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof response === "object") {
+    const record = response as Record<string, unknown>;
+    const raw =
+      record.leaveDays ??
+      record.LEAVE_DAYS ??
+      record.leave_days ??
+      record.days ??
+      record.DAYS ??
+      record.count ??
+      record.COUNT ??
+      record.data;
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === "object") return extractLeaveDays(raw);
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
 }
 
 function calculateInclusiveDays(startValue: string, endValue: string) {
@@ -1384,10 +1646,10 @@ function formFromRow(row: Record<string, unknown>): LeaveForm {
     supervisor: getRowString(row, "IMMEDIATE_SUPERVISOR", "SUPERVISOR_EMPID", "immediateSupervisor"),
     deptHead: getRowString(row, "DEPT_HEAD", "DEPT_HEAD_EMPID", "deptHead"),
     hod: getRowString(row, "HOD", "MANGR_EMPID", "hod"),
-    resumework: getRowString(row ,"RESUME_WORK" ,'resume_work').toUpperCase() === "Y" ? "Y" : "N",
-    resumedate: toApiDateInput(getRowString(row,'RESUME_DATE' ,'resume_date')),    
-    dutyresumedate: toApiDateInput(getRowString(row, "DUTY_RESUME_DATE" ,"duty_resume_date")),
-    actualresumedate: toApiDateInput(getRowString(row, "ACTUAL_RESUME_DATE", 'actual_resume_date')),
+    resumework: getRowString(row, "RESUME_WORK", "resume_work").toUpperCase() === "Y" ? "Y" : "N",
+    resumedate: toApiDateInput(getRowString(row, "RESUME_DATE", "resume_date")),
+    dutyresumedate: toApiDateInput(getRowString(row, "DUTY_RESUME_DATE", "duty_resume_date")),
+    actualresumedate: toApiDateInput(getRowString(row, "ACTUAL_RESUME_DATE", "actual_resume_date")),
   };
 }
 
@@ -1400,108 +1662,20 @@ function getRowString(row: Record<string, unknown> | null | undefined, ...keys: 
   return "";
 }
 
-function getStatusRemark(row: Record<string, unknown> | null | undefined) {
-  return getRowString(
-    row,
-    "REJECT_REMARKS",
-    "REJECT_REMARK",
-    "REJECTED_REMARKS",
-    "REJECTED_REMARK",
-    "REJECTION_REMARKS",
-    "REJECTION_REMARK",
-    "CANCEL_REMARKS",
-    "CANCEL_REMARK",
-    "SENTBACK_REMARKS",
-    "SENT_BACK_REMARKS",
-    "APPROVAL_REMARKS",
-    "ACTION_REMARKS",
-    "STATUS_REMARKS",
-    "rejectRemarks",
-    "rejectRemark",
-    "rejectedRemarks",
-    "cancelRemarks",
-    "sentBackRemarks",
-    "approvalRemarks",
-    "actionRemarks",
-    "statusRemarks",
-  );
-}
-
-function extractLeaveDays(response: unknown): number | null {
-  if (response === null || response === undefined) return null;
-  if (typeof response === "number") return Number.isFinite(response) ? response : null;
-  if (typeof response === "string") {
-    const parsed = Number(response);
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-  if (typeof response === "object") {
-    const record = response as Record<string, unknown>;
-    const raw =
-      record.leaveDays ??
-      record.LEAVE_DAYS ??
-      record.leave_days ??
-      record.days ??
-      record.DAYS ??
-      record.count ??
-      record.COUNT ??
-      record.data;
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === "object") return extractLeaveDays(raw);
-    const parsed = Number(raw);
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-  return null;
-}
-
-// function getDateInputValue(value: string) {
-//   if (!value) return "";
-//   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
-//   const date = new Date(value);
-//   if (Number.isNaN(date.getTime())) return "";
-//   return date.toISOString().slice(0, 10);
-// }
-
 function getYesNoValue(value: string): "N" | "Y" | "" {
   const normalized = value.toUpperCase();
   return normalized === "Y" || normalized === "N" ? normalized : "";
 }
 
-// function getValidationToneClass(text: string) {
-//   const lower = text.toLowerCase();
-//   if (!text) return "";
-//   if (lower.includes("insufficient") || lower.includes("failed") || lower.includes("error")) return "is-error";
-//   return "is-success";
-// }
-
-  function getApproverDisplay2(row: Record<string, unknown> | null, nameKey: string, fallbackId: string) {
-    const name = row ? String(row[nameKey] || "").trim() : "";
-    if (name) return fallbackId ? `${name}` : name;
-    return fallbackId || "";
-  }
-
-// function parseValidationMessage(response: unknown) {
-//   if (typeof response === "string") return parseValidationString(response);
-//   if (response && typeof response === "object") {
-//     const record = response as Record<string, unknown>;
-//     const raw = record.validationResult ?? record.message ?? record.data;
-//     if (typeof raw === "string") return parseValidationString(raw);
-//     if (record.success === false) return String(record.message || "Leave validation failed");
-//   }
-//   return "Leave validation passed";
-// }
+function getApproverDisplay(row: Record<string, unknown> | null, nameKey: string, fallbackId: string) {
+  const name = row ? String(row[nameKey] || "").trim() : "";
+  return name || fallbackId || "";
+}
 
 function hasActualResumeDate(row: Record<string, unknown> | null | undefined) {
   const value = getRowString(row, "ACTUAL_RESUME_DATE", "actualResumeDate").trim();
   return Boolean(value) && value !== "0000-00-00";
 }
-
-// function parseValidationString(value: string) {
-//   if (value.includes("$$$")) {
-//     const [status, balance] = value.split("$$$");
-//     return status.toUpperCase().startsWith("S") ? `Available balance: ${balance} days` : `Leave validation failed: ${balance}`;
-//   }
-//   return value || "Leave validation passed";
-// }
 
 function getUuid() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
