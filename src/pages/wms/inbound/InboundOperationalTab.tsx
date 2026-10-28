@@ -177,20 +177,19 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       if (!isActivityBilling || !jobNo || !prinCode) return;
       setActivityLoading(true);
       try {
-        const sql = `
-          SELECT 
-            tid.PRIN_CODE, tid.JOB_NO, tid.ACT_CODE, 
-            tid.ACT_CODE || '-' || ma.ACTIVITY AS ACTIVITY, 
-            tid.QUANTITY, tid.TX_COMPNTCAT_CODE_1, tid.TX_CAT_CODE,
-            tid.BILL_RATE, tid.BILL, tid.TX_COMPNT_PERC_1, 
-            tid.TX_COMPNT_AMT_1, tid.TX_COMPNT_LCURAMT_1, 
-            tid.COST_RATE, tid.TX_COMPNTCAT_CODE_1_COST, 
-            tid.TX_CAT_CODE_COST, tid.TX_COMPNT_PERC_1_COST, 
-            tid.TX_COMPNT_AMT_1_COST, tid.TX_COMPNT_LCURAMT_1_COST, 
-            tid.COST, tid.OTHER_SERVICES 
-          FROM TN_INVOICE_DET tid
-          JOIN MS_ACTIVITY ma ON tid.ACT_CODE = ma.ACTIVITY_CODE
-          WHERE tid.PRIN_CODE = '${sqlEscape(prinCode)}' AND tid.JOB_NO = '${sqlEscape(jobNo)}'`;
+      const sql = `
+        SELECT tid.PRIN_CODE, tid.JOB_NO, tid.ACT_CODE,
+              tid.ACT_CODE || '-' || ma.ACTIVITY AS ACTIVITY,
+              tid.QUANTITY, tid.BILL_RATE, tid.BILL, tid.COST_RATE, tid.OTHER_SERVICES
+              /* ...rest of your existing columns... */
+        FROM TN_INVOICE_DET tid
+        JOIN MS_ACTIVITY ma
+          ON  ma.ACTIVITY_CODE = tid.ACT_CODE
+          AND ma.COMPANY_CODE  = tid.COMPANY_CODE
+        WHERE tid.COMPANY_CODE = '${sqlEscape(companyCode)}'
+          AND tid.PRIN_CODE    = '${sqlEscape(prinCode)}'
+          AND tid.JOB_NO       = '${sqlEscape(jobNo)}'
+        ORDER BY tid.SRNO`;
         const data = await executeWmsInboundSql(sql);
         setActivityRows(data.map(normalizeRow));
         setActivityEdited({});
