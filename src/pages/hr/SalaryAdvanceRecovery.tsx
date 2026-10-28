@@ -119,6 +119,12 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   SA: "Salary Advance", // legacy
 };
 
+/* ── Default letter signatory values ── */
+const DEFAULT_NAME_FROM          = "Abdullah Khalfan Al Fulaiti";
+const DEFAULT_ADDR_FROM          = "HR Manager";
+const DEFAULT_SIGNATORY_NAME     = "Abdullah Khalfan Al Fulaiti";
+const DEFAULT_SIGNATORY_POSITION = "HR Manager";
+
 const normalizeDocType = (dt: string | null | undefined): string => {
   if (!dt) return "ADV";
   if (dt === "SA") return "ADV"; // legacy → new code
@@ -251,8 +257,8 @@ const emptyHeader = (): Partial<MainRow> => {
     doc_type: "ADV",
     doc_date: new Date().toISOString().slice(0, 10),
     ref_no: "",
-    name_from: "",
-    addr_from: "",
+    name_from: DEFAULT_NAME_FROM,
+    addr_from: DEFAULT_ADDR_FROM,
     name_to: "",
     addr_to: "",
     lettr_subject: "Salary Advance",
@@ -264,8 +270,8 @@ const emptyHeader = (): Partial<MainRow> => {
     amount: 0,
     recover_from_dt: new Date().toISOString().slice(0, 10),
     recovery_period: 0,
-    signatory_name: "",
-    signatory_position: "",
+    signatory_name: DEFAULT_SIGNATORY_NAME,
+    signatory_position: DEFAULT_SIGNATORY_POSITION,
     employee_code: "",
     employee_id: "",
     employee_name: "",
@@ -594,6 +600,11 @@ export default function SalaryAdvanceRecoveryPage() {
       pay_comp_id: row.pay_comp_id ?? DOC_TYPE_PAY_COMP_MAP[dt] ?? "",
       doc_date: toInputDate(row.doc_date),
       recover_from_dt: toInputDate(row.recover_from_dt),
+      // fall back to defaults when stored values are blank
+      name_from: row.name_from?.trim() || DEFAULT_NAME_FROM,
+      addr_from: row.addr_from?.trim() || DEFAULT_ADDR_FROM,
+      signatory_name: row.signatory_name?.trim() || DEFAULT_SIGNATORY_NAME,
+      signatory_position: row.signatory_position?.trim() || DEFAULT_SIGNATORY_POSITION,
     });
     setShowHeader(true);
     setMode("edit");

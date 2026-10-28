@@ -337,11 +337,17 @@ const AddPRRequestPage = ({
   const itemsLoadedRef = useRef(false);
   const lastLoadedRequestRef = useRef<string | undefined>(undefined);
   const headerLoadedRef = useRef<string | null>(null);
-
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [localComments, setLocalComments] = useState<any[]>([]);
   const commentsListRef = useRef<HTMLDivElement>(null);
+  // ── Live snapshots for validation — avoids stale-closure submit errors ──
+const headerRef = useRef(header);
+const itemsRef = useRef(items);
+const termsRef = useRef(terms);
+useEffect(() => { headerRef.current = header; }, [header]);
+useEffect(() => { itemsRef.current = items; }, [items]);
+useEffect(() => { termsRef.current = terms; }, [terms]);
 
   const { data: historyList = [], refetch: refetchHistory } = useQuery<any[]>({
     queryKey: ["pr-history", requestNumber, companyCode],
@@ -540,7 +546,7 @@ const AddPRRequestPage = ({
   useEffect(() => {
     if (isEditMode || isViewMode) return;
 
-   
+
     if (divCode) {
       setHdr("DIV_CODE", divCode);
       setHdr("DIV_NAME", divName || "");
@@ -827,6 +833,7 @@ const AddPRRequestPage = ({
       String(r.SUPPLIER || "").toLowerCase().includes(q)
     );
   }, [items, lineSearch]);
+  const canDeleteLines = !disabled && !userLevelLoading && userApprovalLevel < 2;
 
   const colWidths = useMemo(() => {
     const qtyGroup = [60, 50, 60, 65];
@@ -836,36 +843,40 @@ const AddPRRequestPage = ({
     if (showAllColumns) {
       w.push(200, 100, 260, 270, 160, 210);
     }
-    w.push(90);
-    w.push(70);
+    w.push(90); // CAPEX
+    if (canDeleteLines) w.push(70); // ACTION — sirf level 1
     return w;
-  }, [showAllColumns, isSupplierUser]);
+  }, [showAllColumns, isSupplierUser, canDeleteLines]);
 
   const tableMinWidth = colWidths.reduce((a, b) => a + b, 0);
   const itemsColSpan = colWidths.length;
   const qtyColSpan = 4;
 
   const validateAndShowErrors = (): boolean => {
-    const { valid, errors } = validatePRForm(header, items, terms, userApprovalLevel, isSupplierUser);
-    if (!valid) {
-      // Agar saari errors sirf Terms ki hain, to Terms tab khol do
-      const onlyTermErrors = errors.every((e) => e.startsWith("Term "));
-      if (onlyTermErrors && shouldShowTermsTab()) {
-        setActiveTab("terms");
-      } else {
-        setActiveTab("items");
-      }
-      setNotice({
-        type: "error",
-        message: onlyTermErrors
-          ? `Please fill Terms & Conditions. ${errors.join(". ")}`
-          : errors.join(". "),
-      });
-      return false;
+  const { valid, errors } = validatePRForm(
+    headerRef.current,
+    itemsRef.current,
+    termsRef.current,
+    userApprovalLevel,
+    isSupplierUser
+  );
+  if (!valid) {
+    const onlyTermErrors = errors.every((e) => e.startsWith("Term "));
+    if (onlyTermErrors && shouldShowTermsTab()) {
+      setActiveTab("terms");
+    } else {
+      setActiveTab("items");
     }
-    return true;
-  };
-
+    setNotice({
+      type: "error",
+      message: onlyTermErrors
+        ? `Please fill Terms & Conditions. ${errors.join(". ")}`
+        : errors.join(". "),
+    });
+    return false;
+  }
+  return true;
+};
   const saveBulk = async (status: string, remark = "", overrides: Partial<Record<string, any>> = {}) => {
     const headerData: any = {
       REQUEST_NUMBER: requestNumber || null, COMPANY_CODE: companyCode,
@@ -1022,9 +1033,13 @@ const AddPRRequestPage = ({
     const preview = openPurchaseReport(`Purchase Request - ${requestNumber}`);
 
     try {
-      const html = await getPrRegisterFormReportHtml(params);
+      const [html, htmlPortrait] = await Promise.all([
+        getPrRegisterFormReportHtml({ ...params, orientation: "landscape" }),
+        getPrRegisterFormReportHtml({ ...params, orientation: "portrait" }),
+      ]);
       preview.ready({
         html,
+        htmlPortrait,
         filename: `purchase_request_${requestNumber}`,
         orientation: "landscape",
         onExcel: async () => {
@@ -1581,8 +1596,13 @@ const AddPRRequestPage = ({
                         <CField label="Ex Rate">
                           <Input className="h-7 text-xs text-right" type="number" step="0.0001" disabled={disabled} value={header.CURRENCY_RATE ?? ""} onChange={(e) => { const r = Number(e.target.value); setHdr("CURRENCY_RATE", r); updateAllItemsWithHeader({ CURRENCY_RATE: r }); }} />
                         </CField>
-                        <CField label="Flow">
-                          <Input className="h-7 text-xs" disabled type="text" value={header.FLOW_DESCRIPTION || ""} placeholder="—" />
+                        <CField label="Flow" className="col-span-2">
+                          <div
+                            className="flex min-h-7 w-full items-center rounded-md border border-input bg-slate-100 px-2 py-1 text-xs leading-snug text-slate-700"
+                            title={header.FLOW_DESCRIPTION || ""}
+                          >
+                            <span className="break-words">{header.FLOW_DESCRIPTION || "—"}</span>
+                          </div>
                         </CField>
                       </HeaderBlock>
                     </div>
@@ -1866,8 +1886,9 @@ const AddPRRequestPage = ({
                             {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">LCURR AMOUNT AFTER TAX</th>}
 
                             <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">CAPEX</th>
-                            <th rowSpan={2} className="finance-action-col-head px-0 py-1.5 text-center align-middle">ACTION</th>
-                          </tr>
+                            {canDeleteLines && (
+                              <th rowSpan={2} className="finance-action-col-head px-0 py-1.5 text-center align-middle">ACTION</th>
+                            )}                          </tr>
                           <tr>
                             <th className="px-1 py-1 text-center align-middle text-[9px]">PQTY</th>
                             <th className="px-1 py-1 text-center align-middle text-[9px]">LUOM</th>
@@ -1914,43 +1935,46 @@ const AddPRRequestPage = ({
                                 <td className="group sticky left-[30px] z-20 bg-card px-1 py-1 !overflow-visible hover:!z-[25]">
                                   <div className="w-full" title={productDisplay}>
                                     <LookupField
-                                      label="" compact placeholder="Search Product *"
-                                      value={item.ITEM_CODE || ""}
-                                      displayValue={productDisplay}
-                                      columns={productColumns}
-                                      valueField="PROD_CODE"
-                                      displayFields={["PROD_CODE", "PROD_NAME"]}
-                                      loadOptions={async () => {
-                                        const all = await almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" });
-                                        const sel = new Set(items.filter((it) => (it as any).id !== itemId).map((it) => String(it.ITEM_CODE || "").trim()).filter(Boolean));
-                                        return (all as any[]).filter((p: any) => !sel.has(String(p.PROD_CODE || "").trim()));
-                                      }}
-                                      onChange={(val, row) => {
-                                        if (row) {
-                                          setItems((prev) => prev.map((it) => {
-                                            if ((it as any).id !== itemId) return it;
-                                            const tr = String(val ?? "").trim().toUpperCase();
-                                            if (tr) {
-                                              const dup = prev.some((o) => (o as any).id !== itemId && String(o.ITEM_CODE || "").trim().toUpperCase() === tr);
-                                              if (dup) { toast.warning("This product is already added in another line.", 4000); return it; }
-                                            }
-                                            const updated: TPRItem = {
-                                              ...it,
-                                              ITEM_CODE: String(val ?? ""),
-                                              ITEM_DESP: String(row.PROD_NAME ?? ""),
-                                              P_UOM: String(row.P_UOM ?? ""),
-                                              L_UOM: String(row.L_UOM ?? ""),
-                                              UPPP: Number(row.UPPP) || 0,
-                                              ITEM_RATE: Number(row.BASE_PRICE) || 0,
-                                            };
-                                            updated.REQUEST_QUANTITY = computeQuantity(updated);
-                                            const ex = num(updated.CURRENCY_RATE) || 1;
-                                            return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, ex) : recalcItem(updated, ex);
-                                          }));
-                                        }
-                                      }}
-                                      disabled={disabled}
-                                    />
+  label="" compact placeholder="Search Product *"
+  value={item.ITEM_CODE || ""}
+  displayValue={productDisplay}
+  columns={productColumns}
+  valueField="PROD_CODE"
+  displayFields={["PROD_CODE", "PROD_NAME"]}
+  loadOptions={async () => {
+    const all = await almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" });
+    const sel = new Set(items.filter((it) => (it as any).id !== itemId).map((it) => String(it.ITEM_CODE || "").trim()).filter(Boolean));
+    return (all as any[]).filter((p: any) => !sel.has(String(p.PROD_CODE || "").trim()));
+  }}
+  onChange={(val, row) => {
+    // Approvers (level ≥ 2) cannot change product on a submitted PR.
+    if (userApprovalLevel >= 2) return;
+    if (row) {
+      setItems((prev) => prev.map((it) => {
+        if ((it as any).id !== itemId) return it;
+        const tr = String(val ?? "").trim().toUpperCase();
+        if (tr) {
+          const dup = prev.some((o) => (o as any).id !== itemId && String(o.ITEM_CODE || "").trim().toUpperCase() === tr);
+          if (dup) { toast.warning("This product is already added in another line.", 4000); return it; }
+        }
+        const updated: TPRItem = {
+          ...it,
+          ITEM_CODE: String(val ?? ""),
+          ITEM_DESP: String(row.PROD_NAME ?? ""),
+          P_UOM: String(row.P_UOM ?? ""),
+          L_UOM: String(row.L_UOM ?? ""),
+          UPPP: Number(row.UPPP) || 0,
+          ITEM_RATE: Number(row.BASE_PRICE) || 0,
+        };
+        updated.REQUEST_QUANTITY = computeQuantity(updated);
+        const ex = num(updated.CURRENCY_RATE) || 1;
+        return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, ex) : recalcItem(updated, ex);
+      }));
+    }
+  }}
+  // ← Product is locked for every approver (level ≥ 2) — only level 1 can change it.
+  disabled={disabled || userLevelLoading || userApprovalLevel >= 2}
+/>
                                   </div>
                                   <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Unit Per Primary: {item.UPPP || 0}</span>
                                 </td>
@@ -2074,11 +2098,13 @@ const AddPRRequestPage = ({
                                   </Select>
                                 </td>
 
-                                <td className="finance-action-col px-1 py-1 text-center">
-                                  <button type="button" disabled={disabled} title="Delete row" className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeItem(itemId)}>
-                                    <Trash2 size={13} />
-                                  </button>
-                                </td>
+                                {canDeleteLines && (
+                                  <td className="finance-action-col px-1 py-1 text-center">
+                                    <button type="button" disabled={disabled} title="Delete row" className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeItem(itemId)}>
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}

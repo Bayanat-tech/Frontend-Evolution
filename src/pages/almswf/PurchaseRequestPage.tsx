@@ -22,15 +22,8 @@ const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Ap
 
 const QUERY_ROOT = "purchase-request-page";
 
-// Level field returned by PS_PREQUEST_ENTRY_UserFlowCode (from ms_flow_levels / VW_GLOBAL_APPROVER_LEVELS)
-const LEVEL_FIELD_CANDIDATES = [
-  "USER_LEVEL", "user_level",
-  "LEVEL", "level",
-  "FLOW_LEVEL", "flow_level",
-  "APPROVAL_LEVEL", "approval_level",
-  "LEVEL_ID", "level_id",
-  "LEVEL_NO", "level_no",
-];
+// Employees who should always see the Add PR button (per sir's instruction).
+const HARDCODED_ADD_PR_EMPLOYEES = ["2019070493"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(val: unknown): string {
@@ -80,7 +73,13 @@ type TaskPopupData = {
   divName?: string;
 };
 
-type FlowRow = { flowCode: string; flowDescription: string; divCode: string; divName: string };
+type FlowRow = {
+  flowCode: string;
+  flowDescription: string;
+  divCode: string;
+  divName: string;
+  userLevel: number;
+};
 
 function pick(obj: any, ...keys: string[]): string {
   if (!obj) return "";
@@ -93,25 +92,13 @@ function pick(obj: any, ...keys: string[]): string {
   return "";
 }
 
-/** Read numeric level (1..5) from a user-flow row (ms_flow_levels row). */
-function pickLevelFromRow(row: Record<string, unknown> | null | undefined): number | null {
-  if (!row) return null;
-  for (const k of LEVEL_FIELD_CANDIDATES) {
-    const v = (row as any)[k];
-    if (v === null || v === undefined) continue;
-    const m = String(v).match(/\d+/);
-    if (!m) continue;
-    const n = Number(m[0]);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return null;
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const { user } = useAuth();
   const loginid = (user?.loginid || user?.username || "").trim();
   const companyCode = (user?.company_code || "").trim();
+
+  const isHardcodedAddPrUser = HARDCODED_ADD_PR_EMPLOYEES.includes(loginid);
 
   const { toast } = useToast();
 
@@ -128,11 +115,14 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     };
 
     const preview = openPurchaseReport(`Purchase Request - ${requestNumber}`);
-
     try {
-      const html = await getPrRegisterFormReportHtml(params);
+      const [html, htmlPortrait] = await Promise.all([
+        getPrRegisterFormReportHtml({ ...params, orientation: "landscape" }),
+        getPrRegisterFormReportHtml({ ...params, orientation: "portrait" }),
+      ]);
       preview.ready({
         html,
+        htmlPortrait,
         filename: `purchase_request_${requestNumber}`,
         orientation: "landscape",
         onExcel: async () => {
@@ -197,50 +187,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
   const isPendingTab = activeCode3 === "PENDING";
 
-  // ── Level-1 detection from PS_PREQUEST_ENTRY_UserFlowCode (USER_LEVEL column) ─
-  // Rule:
-  //   USER_LEVEL === 1 (kisi bhi flow me) → button dikhe
-  //   USER_LEVEL 2, 3, 4, 5 (aur level 1 kisi flow me nahi) → button chhupe
-  //   USER_LEVEL field hi nahi aayi (backend patch nahi hua) → fail-safe: chhupe
-  const userFlowsQuery = useQuery({
-    queryKey: [QUERY_ROOT, "user-admin-flows", loginid, companyCode],
-    queryFn: () =>
-      almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
-        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
-      }),
-    enabled: !!loginid && !!companyCode,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { isLevel1User, levelSummary } = useMemo(() => {
-    const rows = (Array.isArray(userFlowsQuery.data) ? userFlowsQuery.data : []) as Record<string, unknown>[];
-    if (rows.length === 0) {
-      return { isLevel1User: false, levelSummary: { rows: 0, levels: [] as number[] } };
-    }
-    const levels: number[] = [];
-    for (const row of rows) {
-      const lvl = pickLevelFromRow(row);
-      if (lvl !== null) levels.push(lvl);
-    }
-    return {
-      isLevel1User: levels.includes(1),
-      levelSummary: { rows: rows.length, levels },
-    };
-  }, [userFlowsQuery.data]);
-
-  // Dev aid — remove later if you want
-  useEffect(() => {
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.info("[PurchaseRequest] level check →", { loginid, ...levelSummary, isLevel1User });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [levelSummary.rows, isLevel1User, loginid]);
-
-  // Show Add PR only when: Pending tab + Level-1 confirmed + data loaded
-  const canAddPR = isPendingTab && isLevel1User && !userFlowsQuery.isLoading;
-
   // ── Active tab data ────────────────────────────────────────────────────────
   const prQuery = useQuery({
     queryKey: [QUERY_ROOT, loginid, companyCode, activeCode3, "pr"],
@@ -277,6 +223,48 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     }),
   });
   const tabCounts = tabCountQueries.map((q) => (Array.isArray(q.data) ? q.data.length : 0));
+
+  // ── User flows (source of truth for "can create PR?") ─────────────────────
+  // The API returns user_level per flow. If ANY flow has user_level === 1,
+  // the user can create a PR — regardless of what AuthContext.user contains.
+  const userFlowsQuery = useQuery({
+    queryKey: [QUERY_ROOT, loginid, companyCode, "user-flows"],
+    queryFn: () =>
+      almsCommonSelect<Record<string, unknown>>({
+        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
+        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
+      }),
+    enabled: !!loginid && !!companyCode && isPendingTab,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const allUserFlows = useMemo<FlowRow[]>(() => {
+    const raw = (userFlowsQuery.data as Record<string, unknown>[]) || [];
+    return raw
+      .map((row) => {
+        const levelRaw =
+          row.user_level ?? row.USER_LEVEL ?? row.userLevel ?? row.USERLEVEL ?? 0;
+        const levelNum = Number(levelRaw);
+        return {
+          flowCode: pick(row, "FLOW_CODE", "flow_code"),
+          flowDescription: pick(row, "FLOW_DESCRIPTION", "flow_description"),
+          divCode: pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code"),
+          divName: pick(row, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name"),
+          userLevel: Number.isFinite(levelNum) ? levelNum : 0,
+        };
+      })
+      .filter((r) => r.flowCode);
+  }, [userFlowsQuery.data]);
+
+  const selfFlows = useMemo(
+    () => allUserFlows.filter((f) => f.userLevel === 1),
+    [allUserFlows]
+  );
+
+  // Can this user create a PR?
+  // - Hardcoded employees: always (sir's exception)
+  // - Everyone else: only if the API returned at least one level-1 flow
+  const canCreatePR = isHardcodedAddPrUser || selfFlows.length > 0;
 
   const data = isPoGeneratedTab ? poQuery.data : prQuery.data;
   const isLoading = isPoGeneratedTab ? poQuery.isLoading : prQuery.isLoading;
@@ -349,56 +337,40 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   };
 
   const openAddPopup = async () => {
-    if (!isLevel1User) {
-      setNotice({ type: "error", message: "Only Level-1 users can create PR." });
+    // ── Gate ────────────────────────────────────────────────────────────────
+    if (!canCreatePR) {
+      setNotice({
+        type: "error",
+        message: "You do not have a creation-level (user_level 1) flow assigned.",
+      });
+      return;
+    }
+
+    if (userFlowsQuery.isLoading) {
+      toast.warning("Loading your flows, please wait...", 3000);
+      return;
+    }
+
+    // Usable flows for the picker:
+    // - Normal path: only level-1 (self) flows
+    // - Hardcoded user with no level-1 flow: fallback to all their flows
+    const usableFlows: FlowRow[] =
+      selfFlows.length > 0
+        ? selfFlows
+        : (isHardcodedAddPrUser ? allUserFlows : []);
+
+    if (usableFlows.length === 0) {
+      setNotice({ type: "error", message: "No approval flow found for this user." });
       return;
     }
 
     setFlowFetching(true);
     setNotice(null);
     try {
-      // Reuse level-check response; filter to level-1 flows only
-      const rawRows = (Array.isArray(userFlowsQuery.data) ? userFlowsQuery.data : []) as Record<string, unknown>[];
-      const level1Rows = rawRows.filter((r) => pickLevelFromRow(r) === 1);
-
-      if (level1Rows.length === 0) {
-        setNotice({
-          type: "error",
-          message: "No Level-1 approval flow assigned to you. Please contact admin.",
-        });
-        return;
-      }
-
       const divisionsRaw = (await almsCommonSelect<Record<string, unknown>>({
         parameter: "PS_PREQUEST_ENTRY_DIVISION",
         loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
       })) as unknown as Record<string, unknown>[];
-
-      const flowRows: FlowRow[] = level1Rows
-        .map((row) => {
-          const flowCode = pick(row, "FLOW_CODE", "flow_code");
-          const flowDivCode = pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
-          const inlineDivName = pick(row, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name");
-          const div = (divisionsRaw || []).find((d) => {
-            const dCode = pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
-            return dCode && dCode.toUpperCase() === flowDivCode.toUpperCase();
-          });
-          const divName =
-            (div && pick(div, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name")) ||
-            inlineDivName || flowDivCode;
-          return {
-            flowCode,
-            flowDescription: pick(row, "FLOW_DESCRIPTION", "flow_description"),
-            divCode: flowDivCode,
-            divName,
-          };
-        })
-        .filter((r) => r.flowCode);
-
-      if (flowRows.length === 0) {
-        setNotice({ type: "error", message: "No approval flow found for this user." });
-        return;
-      }
 
       let divisions: Division[] = (divisionsRaw || [])
         .map((d) => ({
@@ -409,31 +381,48 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
 
       if (divisions.length === 0) {
         const divMap = new Map<string, Division>();
-        for (const row of flowRows) {
+        for (const row of usableFlows) {
           const code = (row.divCode || "").toUpperCase();
           if (code && !divMap.has(code)) {
-            divMap.set(code, { div_code: row.divCode, div_name: row.divName || row.divCode } as unknown as Division);
+            divMap.set(code, {
+              div_code: row.divCode,
+              div_name: row.divName || row.divCode,
+            } as unknown as Division);
           }
         }
         divisions = Array.from(divMap.values());
       }
 
+      // API returns div_code = null → go straight to flow picker / editor
       if (divisions.length === 0) {
-        continueWithDivision({ code: "", name: "" }, flowRows);
+        if (usableFlows.length === 1) {
+          openPrEditor(usableFlows[0], { code: "", name: "" });
+        } else {
+          setFlowConfirm({
+            open: true,
+            loading: false,
+            rows: usableFlows,
+            selectedFlowCode: "",
+          });
+        }
         return;
       }
 
       if (divisions.length === 1) {
         const only = divisions[0] as any;
-        continueWithDivision({ code: String(only.div_code), name: String(only.div_name || "") }, flowRows);
+        continueWithDivision(
+          { code: String(only.div_code), name: String(only.div_name || "") },
+          usableFlows
+        );
         return;
       }
 
-      setDivisionPicker({ open: true, divisions, allFlows: flowRows });
+      setDivisionPicker({ open: true, divisions, allFlows: usableFlows });
     } catch (err) {
       setNotice({
         type: "error",
-        message: err instanceof Error ? err.message : "Unable to determine approval flow",
+        message:
+          err instanceof Error ? err.message : "Unable to determine approval flow",
       });
     } finally {
       setFlowFetching(false);
@@ -777,8 +766,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
                 setQuery("");
               }}
               className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${active
-                  ? "bg-[#00378C] font-semibold text-white shadow-sm"
-                  : "border border-border bg-card text-foreground hover:bg-secondary"
+                ? "bg-[#00378C] font-semibold text-white shadow-sm"
+                : "border border-border bg-card text-foreground hover:bg-secondary"
                 }`}
             >
               <span>{label}</span>
@@ -799,16 +788,20 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           data={filteredRows}
 
           subtitle={
-            canAddPR ? (
+            isPendingTab && canCreatePR ? (
               <button
                 type="button"
                 onClick={() => void openAddPopup()}
-                disabled={flowFetching}
+                disabled={flowFetching || userFlowsQuery.isLoading}
                 title="Add Purchase Request"
                 className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-wait disabled:opacity-70"
               >
-                {flowFetching ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                {flowFetching ? "Loading..." : "Add PR"}
+                {flowFetching || userFlowsQuery.isLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Plus size={14} />
+                )}
+                {flowFetching || userFlowsQuery.isLoading ? "Loading..." : "Add PR"}
               </button>
             ) : undefined
           }

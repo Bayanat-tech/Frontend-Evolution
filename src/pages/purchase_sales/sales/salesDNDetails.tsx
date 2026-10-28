@@ -10,6 +10,7 @@ import { Select } from "../../../components/ui/Select";
 import { PODocType } from "../purchase/Purchaseordertypes";
 import { computePoQuantity, computeQuantity, formatAmount, isSamePoUom, isSameUom, lineAmount, lineDiscPrice, lineLcurrAmount, lineTaxAmount, numberOrZero, taxLcurrAmount, text } from "./SalesOrderutils";
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 
 
@@ -97,6 +98,7 @@ export function SalesDnDetailsTable({
     const finalTotal = grandTotal + totalTaxAmount;
     const [lineSearch, setLineSearch] = useState("");
     const [showAllColumns, setShowAllColumns] = useState(false);
+    const [uppTip, setUppTip] = useState<{ value: number; x: number; y: number } | null>(null);
     const filteredRows = useMemo(() => {
         const q = lineSearch.trim().toLowerCase();
         if (!q) return rows;
@@ -230,7 +232,12 @@ export function SalesDnDetailsTable({
                                     </td>
 
 
-                                    <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20">
+                                    <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20"
+                                        onMouseEnter={(event) => {
+                                            const rect = event.currentTarget.getBoundingClientRect();
+                                            setUppTip({ value: numberOrZero(row.uppp), x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+                                        }}
+                                        onMouseLeave={() => setUppTip(null)}>
                                         {/* DISPLAY ONLY */}
                                         <LookupField
                                             label=""
@@ -243,9 +250,9 @@ export function SalesDnDetailsTable({
                                             disabled
                                             onChange={() => { }}
                                         />
-                                        <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                                        {/* <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                                             Unit Per Primary: {row.uppp}
-                                        </span>
+                                        </span> */}
                                     </td>
 
                                     {/* SO Primary: Qty — DISPLAY ONLY */}
@@ -407,6 +414,23 @@ export function SalesDnDetailsTable({
                     <strong className="text-base text-emerald-600">{formatAmount(finalTotal)}</strong>
                 </div>
             </div> */}
+
+            {uppTip &&
+                createPortal(
+                    <div
+                        className="pointer-events-none whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg"
+                        style={{
+                            position: "fixed",
+                            top: uppTip.y,
+                            left: uppTip.x,
+                            transform: "translateX(-50%)",
+                            zIndex: 9999,
+                        }}
+                    >
+                        Unit Per Primary: {uppTip.value}
+                    </div>,
+                    document.body
+                )}
         </div>
     );
 }

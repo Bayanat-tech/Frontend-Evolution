@@ -935,7 +935,7 @@ function updateForm(setForm: (updater: (current: TariffForm) => TariffForm) => v
 }
 
 async function loadLookup(parameter: string, companyCode: string, query = "") {
-  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map((row) => normalizeLookupRow(row));
+  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 1000 })).map((row) => normalizeLookupRow(row));
 }
 
 function normalizeLookupRow(row: LookupRow) {

@@ -23,6 +23,8 @@ import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
 import { HrLeaveAttachmentDialog } from "./HrLeaveAttachmentDialog";
 import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate";
+import { DynamicMutationParams } from "../../../api/lookups";
+import { api } from "../../../api/client";
 
 type LeaveRequestDialogProps = {
   open: boolean;
@@ -97,6 +99,85 @@ const initialForm: LeaveForm = {
   dutyresumedate: "",
   actualresumedate: "",
 };
+// ---------------------------------SAVE API PROCEDURE-----------------------------------//
+type ApiResponse<T> = {
+  success: boolean;
+  data?: T;
+  message?: string;
+  details?: string;
+};
+type SaveLeaveResponse = ApiResponse<unknown> & { requestNumber?: string };
+
+function extractApiErrorMessage(error: unknown, fallback: string) {
+  const anyErr = error as any;
+  const data = anyErr?.response?.data;
+  const backendMessage = data?.details || data?.message;
+  if (backendMessage && typeof backendMessage === "string") return backendMessage;
+  if (error instanceof Error) return error.message;
+  return fallback;
+}
+
+// Same payload type as the old saveLeaveViaProc90, so existing callers keep compiling.
+export async function saveLeaveRequestFlow(
+  payload: Record<string, unknown>,
+  loginId: string
+): Promise<SaveLeaveResponse> {
+  const s = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+
+  const body = {
+    loginId,
+    companyCode: s(payload.COMPANY_CODE),
+    requestNumber: s(payload.REQUEST_NUMBER),
+    employeeCode: s(payload.EMPLOYEE_CODE),
+    employeeName: s(payload.EMPLOYEE_NAME),
+    leaveType: s(payload.LEAVE_TYPE),
+    requestDate: s(payload.REQUEST_DATE),
+    leaveStartDate: s(payload.LEAVE_START_DATE),
+    leaveEndDate: s(payload.LEAVE_END_DATE),
+    remarks: s(payload.REMARKS),
+    halfDay: s(payload.HALF_DAY),
+    leaveAllowance: s(payload.LEAVE_ALLOWANCE),
+    advPayment: s(payload.ADV_PAYMENT),
+    causeType: s(payload.CAUSE_TYPE),
+    airTicket: s(payload.AIR_TICKET),
+    airRoute: s(payload.AIR_ROUTE),
+    travelDate: s(payload.TRAVEL_DATE),
+    travelEndDate: s(payload.TRAVEL_END_DATE),
+    nameOfReplacement: s(payload.NAME_OF_REPLACEMENT),
+    contactDetailsDuringLeave: s(payload.CONTACT_DETAILS_DURING_LEAVE),
+    dutyResumeDate: s(payload.DUTY_RESUME_DATE),
+    actualResumeDate: s(payload.ACTUAL_RESUME_DATE),
+    hod: s(payload.HOD),
+    immediateSupervisor: s(payload.IMMEDIATE_SUPERVISOR),
+    deptHead: s(payload.DEPT_HEAD),
+    lastAction: s(payload.LAST_ACTION),
+    createdBy: s(payload.CREATED_BY),
+    uuid: s(payload.UUID),
+    flowCode: s(payload.FLOW_CODE),
+    nextActionBy: s(payload.NEXT_ACTION_BY),
+    sentbackHistory: s(payload.SENTBACK_HISTORY),
+    cancelRemark: s(payload.CANCEL_REMARK),
+
+    leaveDays: Number(payload.LEAVE_DAYS || 0),
+    flowLevelInitial: Number(payload.FLOW_LEVEL_INITIAL ?? 0),
+    flowLevelRunning: Number(payload.FLOW_LEVEL_RUNNING ?? 0),
+    flowLevelFinal: Number(payload.FLOW_LEVEL_FINAL ?? 3),
+  };
+
+  try {
+    const response = await api.post<SaveLeaveResponse>(
+      "/api/hr/workflow/leaveRequestFlow",
+      body
+    );
+    if (!response.data.success) {
+      throw new Error(response.data.details || response.data.message || "Unable to save record");
+    }
+    return response.data;
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to save record"));
+  }
+}
+// -----------------------------------------------------------------------------------//
 
 export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = false, onClose, onSaved }: LeaveRequestDialogProps) {
  
@@ -439,6 +520,53 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   }, [sendBackOpen, requestNumber, loginId, companyCode, tenantName]);
 
   // console.log('save',form);
+  // Maps the leave payload onto the 90-column procedure (parameter 'hr_leave_request_flow_ins_upd').
+  // async function saveLeaveViaProc90(payload: Record<string, unknown>, loginId: string) {
+  //   const s = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+  //   const strings: string[] = [
+  //     s(payload.COMPANY_CODE),                 // S1
+  //     s(payload.REQUEST_NUMBER),               // S2
+  //     s(payload.EMPLOYEE_CODE),                // S3
+  //     s(payload.EMPLOYEE_NAME),                // S4
+  //     s(payload.LEAVE_TYPE),                   // S5
+  //     s(payload.REQUEST_DATE),                 // S6
+  //     s(payload.LEAVE_START_DATE),             // S7
+  //     s(payload.LEAVE_END_DATE),               // S8
+  //     s(payload.REMARKS),                      // S9
+  //     s(payload.HALF_DAY),                     // S10
+  //     s(payload.LEAVE_ALLOWANCE),              // S11
+  //     s(payload.ADV_PAYMENT),                  // S12
+  //     s(payload.CAUSE_TYPE),                   // S13
+  //     s(payload.AIR_TICKET),                   // S14
+  //     s(payload.AIR_ROUTE),                    // S15
+  //     s(payload.TRAVEL_DATE),                  // S16
+  //     s(payload.TRAVEL_END_DATE),              // S17
+  //     s(payload.NAME_OF_REPLACEMENT),          // S18
+  //     s(payload.CONTACT_DETAILS_DURING_LEAVE), // S19
+  //     s(payload.DUTY_RESUME_DATE),             // S20
+  //     s(payload.ACTUAL_RESUME_DATE),           // S21
+  //     s(payload.HOD),                          // S22
+  //     s(payload.IMMEDIATE_SUPERVISOR),         // S23
+  //     s(payload.DEPT_HEAD),                    // S24
+  //     s(payload.LAST_ACTION),                  // S25
+  //     s(payload.CREATED_BY),                   // S26
+  //     s(payload.UUID),                         // S27
+  //     s(payload.FLOW_CODE),                    // S28
+  //     s(payload.NEXT_ACTION_BY),               // S29
+  //     s(payload.SENTBACK_HISTORY),             // S30
+  //     s(payload.CANCEL_REMARK),                // S31
+  //   ];
+
+  //   const params: Record<string, unknown> = {
+  //     parameter: "hr_leave_request_flow_ins_upd",
+  //     loginid: loginId,
+  //   };
+  //   strings.forEach((value, index) => { params[`val1s${index + 1}`] = value; });
+  //   const numbers = [Number(payload.LEAVE_DAYS || 0), 0, 0, 3]; // N1 days, N2/N3/N4 flow levels
+  //   numbers.forEach((value, index) => { params[`val1n${index + 1}`] = value; });
+
+  //   return saveLeaveRequestFlow(params, loginId);
+  // }
 
   const save = async (action: "SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED" | "SENTBACK") => {
     if (isAlms && (workflowLoading || workflowError || !workflowActor || readOnly)) {
@@ -532,13 +660,24 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
         payload.CANCEL_REMARK = rejectParams.CANCEL_REMARK;
       }
 
-      const saveResult = isAlms && requestNumber && ['SUBMITTED','REJECTED','SENTBACK'].includes(action)
-        ? await saveHrWorkflowAction(workflowRow || await getHrWorkflowRequest(requestNumber), action,
-            action === 'SENTBACK' ? sentBackParams.SENTBACK_HISTORY : rejectParams.CANCEL_REMARK,
-            sentBackParams.LOGIN_ID, payload)
-        : await saveHrLeaveApproval(payload as any, tenantName);
+      // const saveResult = isAlms && requestNumber && ['SUBMITTED','REJECTED','SENTBACK'].includes(action)
+      //   ? await saveHrWorkflowAction(workflowRow || await getHrWorkflowRequest(requestNumber), action,
+      //       action === 'SENTBACK' ? sentBackParams.SENTBACK_HISTORY : rejectParams.CANCEL_REMARK,
+      //       sentBackParams.LOGIN_ID, payload)
+      //   : await saveHrLeaveApproval(payload as any, tenantName);
+
+      const saveResult = await saveLeaveRequestFlow(payload, loginId);
+
+      let savedRequestNumber = getSavedRequestNumber(saveResult);
+      // Procedure generates the number on insert; fall back to a lookup by the UUID of this save.
+      if (!savedRequestNumber && !requestNumber) {
+        const rows = await executeHrRawSql<Record<string, unknown>>(
+          `SELECT REQUEST_NUMBER FROM LEAVE_REQUEST_FLOW WHERE UUID = '${escapeSql(String(payload.UUID))}'`,
+        );
+        savedRequestNumber = String(rows?.[0]?.REQUEST_NUMBER ?? "");
+      }
       
-      const savedRequestNumber = getSavedRequestNumber(saveResult);
+      // const savedRequestNumber = getSavedRequestNumber(saveResult);
       if (savedRequestNumber) {
         setRequestNumber(savedRequestNumber);
         if (isAlms && action === 'SAVEASDRAFT') setWorkflowRow(await getHrWorkflowRequest(savedRequestNumber));
@@ -615,6 +754,7 @@ footer={
           </Button>
         )}
 
+        {requestNumber &&(
         <Button
           type="button"
           onClick={() => void save("SUBMITTED")}
@@ -624,6 +764,7 @@ footer={
           {savingAction === "SUBMITTED" ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
           <span>{permissions.mode === 'resumption' ? 'Approve Resumption' : isCreator ? "Submit" : "Approve"}</span>
         </Button>
+      )}
 
         {!createMode && (
           <>

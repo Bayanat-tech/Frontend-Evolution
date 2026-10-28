@@ -226,7 +226,7 @@ export function PurchaseOrderHeaderForm({
             </CField>
 
             {docTypeUpper === "LPO" && (
-              <div className="col-span-3">
+              <div className="col-span-4">
                 <LookupField
                   label="Reference No"
                   placeholder="Quotation No"
@@ -287,7 +287,7 @@ export function PurchaseOrderHeaderForm({
                       disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
                       disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
                       payment_terms: text(getLookupValue(row || {}, "payment_terms")).slice(0,250),
-                      credit_period: numberOrZero(getLookupValue(row || {}, "credit_period")),
+                      credit_period: numberOrZero(getLookupValue(row || {}, "credit_period") || accountRow?.credit_period ),
                       due_date: getLookupValue(row || {}, "due_date"),
                       party_name: text(getLookupValue(row || {}, "party_name")),
                       party_address: text(getLookupValue(row || {}, "party_address")),
@@ -295,7 +295,7 @@ export function PurchaseOrderHeaderForm({
                       address2: text(getLookupValue(row || {}, "address2") || accountRow?.address2),
                       address3: text(getLookupValue(row || {}, "address3") || accountRow?.address3),
                       e_mail: text(getLookupValue(row || {}, "e_mail") || accountRow?.e_mail),
-                      credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount")),
+                      credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount")  || accountRow?.credit_amount),
                       prin_name: text(getLookupValue(row || {}, "prin_name") || accountRow?.prin_name),
 
                       party_phone: text(getLookupValue(row || {}, "party_phone")),

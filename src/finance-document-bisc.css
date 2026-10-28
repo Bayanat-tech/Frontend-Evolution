@@ -1784,3 +1784,20 @@ form.commercial-document-workbench {
   top: 0;
   z-index: 2;
 }
+
+/* Document Setup: allow the page to scroll (overrides the finance-list-page overflow lock) */
+.workspace-content:has(.finance-list-page.document-setup-page:not(.finance-document-editing)) {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* Document Setup: gap under title */
+.document-setup-page .finance-list-heading {
+  margin-bottom: 0 !important;
+  padding-bottom: 2px !important;
+}
+.document-setup-page .data-table-header {
+  margin-top: 0 !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}

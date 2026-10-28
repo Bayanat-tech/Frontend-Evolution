@@ -53,7 +53,7 @@ export function ProductBrandPage() {
 
   const [rows, setRows] = useState<ProductBrandRow[]>([]);
   const [query, setQuery] = useState(""); // Added for controlled search
-  
+
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [popup, setPopup] = useState<PopupState>({ open: false, mode: "add", data: {} });
@@ -188,6 +188,12 @@ export function ProductBrandPage() {
                 </h1>
                 <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
                   {popup.mode === "view" ? "Viewing" : popup.mode === "edit" ? "Editing" : "Draft"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
+                  Brand Code:
+                  <strong className="font-semibold">
+                    {popup.mode === "add" ? "Auto-generated" : String(popup.data.brand_code ?? "")}
+                  </strong>
                 </span>
               </div>
             </div>
