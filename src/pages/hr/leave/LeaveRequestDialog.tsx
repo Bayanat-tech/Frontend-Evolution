@@ -23,7 +23,7 @@ import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
 import { HrLeaveAttachmentDialog } from "./HrLeaveAttachmentDialog";
 import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate";
-import { DynamicMutationParams } from "../../../api/lookups";
+import { DynamicMutationParams, getDynamicLookupaccount } from "../../../api/lookups";
 import { api } from "../../../api/client";
 
 type LeaveRequestDialogProps = {
@@ -219,7 +219,8 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   const [workflowLoading, setWorkflowLoading] = useState(false);
   const [workflowError, setWorkflowError] = useState('');
 
-  const loginId = workflowActor || String(user?.LOGINID1 || user?.loginid1 || user?.loginid || user?.LOGINID || user?.username || "");
+  // const loginId = workflowActor || String(user?.LOGINID1 || user?.loginid1 || user?.loginid || user?.LOGINID || user?.username || "");
+  const loginId = workflowActor || String(user?.LOGINID1 || user?.loginid1 || "");
   const companyCode = String(user?.company_code || user?.COMPANY_CODE || "BSG");
   const userRecord = (user || {}) as Record<string, unknown>;
   const fallbackEmployeeName = String(userRecord.RPT_NAME || userRecord.rpt_name || user?.username || user?.USERNAME || loginId || "Current User");
@@ -257,7 +258,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     setShowValidationAlert(false);
     setNotice(null);
     setLoadingEmployees(true);
-    loadEmployees(loginId)
+    loadEmployees(loginId, companyCode)
       .then((rows) => {
         const safeRows = rows.length ? rows : [{ EMPLOYEE_ID: loginId, EMPLOYEE_CODE: loginId, RPT_NAME: fallbackEmployeeName }];
         setEmployees(safeRows);
@@ -269,7 +270,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
         const entitlementEmployee = rowEmployeeCode || (self ? getEmployeeCode(self) : "");
         if (entitlementEmployee) {
           setLoadingLeaveTypes(true);
-          loadLeaveEntitlement(entitlementEmployee)
+          loadLeaveEntitlement(entitlementEmployee, companyCode, loginId)
             .then(setLeaveTypes)
             .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load leave types" }))
             .finally(() => setLoadingLeaveTypes(false));
@@ -277,7 +278,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
       })
       .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load employees" }))
       .finally(() => setLoadingEmployees(false));
-  }, [open, initialRow, loginId, fallbackEmployeeName]);
+  }, [open, initialRow, loginId, fallbackEmployeeName, companyCode]);
 
   const selectedEmployee = useMemo(
     () => employees.find((employee) => getEmployeeCode(employee) === form.employeeCode),
@@ -411,7 +412,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
 
     if (!employeeCode) return;
     setLoadingLeaveTypes(true);
-    loadLeaveEntitlement(employeeCode)
+    loadLeaveEntitlement(employeeCode, companyCode, loginId)
       .then(setLeaveTypes)
       .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load leave types" }))
       .finally(() => setLoadingLeaveTypes(false));
@@ -1238,21 +1239,43 @@ function getLeaveTypeLabel(leaveType: HrLeaveEntitlement) {
   return code && desc !== code ? `${code} - ${desc}` : desc;
 }
 
-async function loadEmployees(loginId: string) {
-  // let rows = await getHrEmployees(loginId);
-   const rows = await executeHrRawSql<HrEmployee>(employeeTreeSql(loginId));
-  // }
-  return uniqueBy(rows, getEmployeeCode).sort((a, b) => getEmployeeName(a).localeCompare(getEmployeeName(b)));
+// async function loadEmployees(loginId: string) {
+//   // let rows = await getHrEmployees(loginId);
+//    const rows = await executeHrRawSql<HrEmployee>(employeeTreeSql(loginId));
+//   // }
+//   return uniqueBy(rows, getEmployeeCode).sort((a, b) => getEmployeeName(a).localeCompare(getEmployeeName(b)));
+// }
+
+// async function loadLeaveEntitlement(employeeId: string) {
+//   // let rows = await getHrLeaveEntitlement(employeeId);
+//   // if (!rows.length) {
+//     const rows = await executeHrRawSql<HrLeaveEntitlement>(leaveEntitlementSql(employeeId));
+//   // }
+//   return uniqueBy(rows, (row) => String(row.LEAVE_TYPE || "")).filter((row) => row.LEAVE_TYPE);
+// }
+async function loadEmployees(loginId: string, companyCode: string) {
+  const raw = await getDynamicLookupaccount({
+    parameter: "LEAVE_FLOW_EMPLOYEE_LIST",
+    loginid: loginId,
+    code1: companyCode,
+    code2: loginId,
+  });
+  const rows = upperKeys<HrEmployee>(raw);
+  return uniqueBy(rows, getEmployeeCode).sort((a, b) =>
+    getEmployeeName(a).localeCompare(getEmployeeName(b)),
+  );
 }
 
-async function loadLeaveEntitlement(employeeId: string) {
-  // let rows = await getHrLeaveEntitlement(employeeId);
-  // if (!rows.length) {
-    const rows = await executeHrRawSql<HrLeaveEntitlement>(leaveEntitlementSql(employeeId));
-  // }
+async function loadLeaveEntitlement(employeeId: string, companyCode: string, loginId: string) {
+  const raw = await getDynamicLookupaccount({
+    parameter: "LEAVE_FLOW_TYPE_LIST",
+    loginid: loginId,
+    code1: companyCode,
+    code2: employeeId,
+  });
+  const rows = upperKeys<HrLeaveEntitlement>(raw);
   return uniqueBy(rows, (row) => String(row.LEAVE_TYPE || "")).filter((row) => row.LEAVE_TYPE);
 }
-
 
 
 function uniqueBy<T>(rows: T[], getKey: (row: T) => string) {
@@ -1262,6 +1285,15 @@ function uniqueBy<T>(rows: T[], getKey: (row: T) => string) {
     if (key && !map.has(key)) map.set(key, row);
   });
   return Array.from(map.values());
+}
+function upperKeys<T>(rows: unknown): T[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map(
+    (row) =>
+      Object.fromEntries(
+        Object.entries(row as Record<string, unknown>).map(([key, value]) => [key.toUpperCase(), value]),
+      ) as T,
+  );
 }
 
 function employeeTreeSql(loginId: string) {
