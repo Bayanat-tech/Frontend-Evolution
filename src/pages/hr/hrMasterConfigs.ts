@@ -188,6 +188,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     gmEndpoint: "bank",
     routeKeys: ["bank", "bank_master", "banks_master", "main_bank", "main_banks", "hrbank", "hr_bank"],
     keyField: "main_bank_code",
+    reportEndpoint: "/wms/bank/html",
     source: "dynamic",
     mutationMode: "column90",
     listQuery: (context) => ({
@@ -266,6 +267,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     gmEndpoint: "hrbank",
     routeKeys: ["hrbank", "hr_bank", "bank", "banks"],
     keyField: "bank_code",
+    reportEndpoint: "/wms/bank/html",
     source: "dynamic",
     mutationMode: "column90",
     listQuery: (context) => ({
