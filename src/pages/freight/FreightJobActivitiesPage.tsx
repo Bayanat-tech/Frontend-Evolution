@@ -600,7 +600,7 @@ export function FreightJobActivitiesPage({
 
       <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
         {/* Finance Line Actions Header */}
-        <div className="finance-line-actions flex flex-nowrap items-center justify-between gap-1.5 px-2 py-1 bg-slate-50/90 border-b border-slate-200 min-w-0 overflow-hidden">
+        <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-2.5 py-1.5 bg-slate-50/90 border-b border-slate-200 min-w-0">
           <div className="finance-line-actions-left flex items-center gap-1.5 min-w-0 shrink">
             <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded shrink-0">
               <List size={13} />
@@ -614,27 +614,7 @@ export function FreightJobActivitiesPage({
                 : `${lines.length} ${lines.length === 1 ? "line" : "lines"}`}
             </span>
 
-            {/* Inline KPI Strip (wide screens only to prevent wrapping) */}
-            <div className="hidden xl:flex items-center gap-1 ml-1 text-[10px] whitespace-nowrap shrink-0">
-              <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-medium text-blue-900">
-                <span className="text-blue-700 font-bold">Rev:</span> {money(totals.revenue)} {baseCurrency}
-              </span>
-              <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 font-medium text-emerald-900">
-                <span className="text-emerald-700 font-bold">Tax:</span> {money(totals.tax)} {baseCurrency}
-              </span>
-              <span className="inline-flex items-center gap-0.5 rounded bg-slate-100 border border-slate-200 px-1.5 py-0.5 font-medium text-slate-800">
-                <span className="text-slate-600 font-bold">Exp:</span> {money(totals.expense)} {baseCurrency}
-              </span>
-              <span
-                className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 font-bold ${
-                  totals.profit >= 0
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                    : "bg-rose-50 border-rose-300 text-rose-800"
-                }`}
-              >
-                <span>Profit:</span> {money(totals.profit)} {baseCurrency}
-              </span>
-            </div>
+
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0 ml-auto flex-nowrap">
@@ -642,7 +622,7 @@ export function FreightJobActivitiesPage({
             <div className="bisc-table-search relative flex items-center shrink-0">
               <Search size={12} className="bisc-table-search-icon absolute left-2 text-slate-400" />
               <input
-                className="bisc-search-input h-7 pl-6 pr-5 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-28 sm:w-32 md:w-36 transition-all"
+                className="bisc-search-input h-7 pl-6 pr-5 text-xs rounded-md border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-36 sm:w-44 md:w-52 transition-all"
                 type="text"
                 value={lineSearch}
                 onChange={(e) => setLineSearch(e.target.value)}
@@ -1729,23 +1709,11 @@ export function FreightJobActivitiesPage({
       <Dialog
         open={costBookingModalOpen}
         onClose={() => setCostBookingModalOpen(false)}
-        title="Cost Bookings & Vouchers (PowerBuilder dw_3)"
-        description="Detailed vendor and provision cost allocations from dw_service_activities_costbooking"
+        title="Cost Bookings & Vouchers"
         wide
         contentClassName="max-w-5xl"
         footer={
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs text-slate-500">
-              Corresponds to PowerBuilder dw_3 (dw_service_activities_costbooking)
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setCostBookingModalOpen(false)}
-            >
-              Close
-            </Button>
           </div>
         }
       >
@@ -2340,16 +2308,25 @@ function AgentLookup({
   useEffect(() => {
     if (value && !cachedName && companyCode) {
       loadFreightLookup("freight_broker", companyCode, value).then((rows) => {
-        const found = rows.find((r) => lookupText(r, "broker_code") === value);
+        const valUpper = String(value).trim().toUpperCase();
+        const found = rows.find(
+          (r) =>
+            lookupText(r, "broker_code").toUpperCase() === valUpper ||
+            lookupText(r, "broker_name").toUpperCase() === valUpper
+        );
         if (found) {
-          const name = lookupText(found, "broker_name") || lookupText(found, "agent_name");
+          const name = lookupText(found, "broker_name") || lookupText(found, "agent_name") || lookupText(found, "broker_code");
           if (name) setCachedName(name);
+        } else if (value) {
+          setCachedName(String(value));
         }
-      }).catch(() => {});
+      }).catch(() => {
+        if (value) setCachedName(String(value));
+      });
     }
   }, [value, cachedName, companyCode]);
 
-  const fullName = cachedName || displayValue || "";
+  const fullName = cachedName || displayValue || value || "";
 
   return (
     <LookupField
@@ -2357,7 +2334,7 @@ function AgentLookup({
       displayValue={fullName || ""}
       triggerClassName={value ? "border-indigo-300/80 bg-indigo-50/40 text-indigo-900" : ""}
       compact
-      placeholder="Select Broker..."
+      placeholder="Select Agent..."
       valueField="BROKER_CODE"
       displayFields={["BROKER_NAME"]}
       columns={[
@@ -2776,8 +2753,9 @@ function normalizeMoneyInput(value: string) {
   return `${sign}${whole}${decimal.length ? `.${decimal.join("")}` : ""}`;
 }
 
-function money(input: unknown) {
-  return numberValue(input).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function money(input: unknown, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  return numberValue(input).toLocaleString("en-US", { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
 }
 
 function formatDate(value: string) {

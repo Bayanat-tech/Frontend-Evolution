@@ -1,3 +1,6 @@
+import { executeDynamicMutation } from "../../api/lookups";
+import { executeWmsInboundSql } from "../../api/wms";
+import { yesNo } from "../wms/wmsMasterConfigs";
 import type { FreightMasterConfig } from "./FreightMasterPage";
 import { freightDelete, freightSave, freightSelect, type FreightProcedureParams } from "../../api/freight";
 
@@ -123,23 +126,26 @@ function buildDeleteParams(config: FreightMasterConfig, parameter: string, row: 
 }
 
 function withFreightProcedures(configKey: string, config: FreightMasterConfig): FreightMasterConfig {
+  if (config.customLoad && config.customSave) {
+    return config;
+  }
   const parameter = buildProcedureParameter(configKey);
   return {
     ...config,
-    customLoad: async (user) => {
+    customLoad: config.customLoad ?? (async (user) => {
       const tableData = await freightSelect<Record<string, unknown>>({
         parameter,
         loginid: getLoginId(user),
         code1: getCompanyCode(user),
       });
       return { tableData, count: tableData.length };
-    },
-    customSave: async (form, context) => {
+    }),
+    customSave: config.customSave ?? (async (form, context) => {
       await freightSave(buildSaveParams(config, parameter, form, context));
-    },
-    customDelete: async (row, user) => {
+    }),
+    customDelete: config.customDelete ?? (async (row, user) => {
       await freightDelete(buildDeleteParams(config, parameter, row, user));
-    },
+    }),
   };
 }
 
@@ -425,21 +431,134 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
     deleteConfig: disableDelete,
   },
 
+  activityGroup: {
+    fieldsPerRow: 4,
+    title: "Activity Group Master",
+    subtitle: "Maintain freight activity groups, validation behavior, accounting links, and reporting group.",
+    master: "activitygroup",
+    gmEndpoint: "activitygroup",
+    routeKeys: ["activitygroup", "activity_group", "activity-group", "freight_activity_group", "freight-activity-group"],
+    keyField: "activity_group_code",
+    fields: [
+      { name: "activity_group_code", label: "Activity Group Code", required: true, disabledOnEdit: true, width: 180, maxLength: 5 },
+      { name: "act_group_name", label: "Activity Group Name", required: true, width: 260 },
+      { name: "mandatory_flag", label: "Mandatory", type: "select", options: yesNo, width: 120 },
+      { name: "validate_flag", label: "Validate", type: "select", options: yesNo, width: 120 },
+      { name: "act_group_type", label: "Group Type", width: 140, maxLength: 2 },
+      { name: "account_code", label: "Account Code", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownValueKey: "ac_code", width: 150, required: true },
+      { name: "alternate_accode", label: "Alternate Account", width: 160 },
+      { name: "exp_account_code", label: "Expense Account", width: 160 },
+      { name: "freight_flag", label: "Freight", type: "select", options: yesNo, width: 110 },
+      { name: "sw_flag", label: "SW Flag", type: "select", options: yesNo, width: 110 },
+      { name: "rpt_group_name", label: "Report Group", width: 180 },
+      { name: "sort_order", label: "Sort Order", type: "number", width: 120 },
+      { name: "cost_group", label: "Cost Group", width: 140, maxLength: 1 },
+      { name: "sac_code", label: "SAC Code", width: 140 },
+    ],
+    defaults: { mandatory_flag: "N", validate_flag: "N", freight_flag: "Y", sw_flag: "N" },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_ACTIVITY_GROUP
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY SORT_ORDER NULLS LAST, ACTIVITY_GROUP_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
+    customSave: async (form, context) => {
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+
+      await executeDynamicMutation({
+        loginid: typedUser.loginid,
+        parameter: "ACTIVITY_GROUP_INS_UPD",
+
+        val1s1: (editMode
+          ? (original?.activity_group_code ?? form.activity_group_code)
+          : undefined) as string | undefined,
+
+        val1s2: form.act_group_name as string,
+        val1s3: form.mandatory_flag as string,
+        val1s4: form.validate_flag as string,
+        val1s5: form.account_code as string,
+        val1s6: form.act_group_type as string,
+        val1s7: form.alternate_accode as string,
+        val1s8: form.exp_account_code as string,
+        val1s9: form.freight_flag as string,
+        val1s10: form.rpt_group_name as string,
+
+        val1n1: form.sort_order as number,
+
+        wval1s1: typedUser.company_code,
+        wval1s2: (editMode
+          ? original?.activity_group_code
+          : form.activity_group_code) as string,
+
+        wval1s3: form.sw_flag as string,
+        wval1s4: form.cost_group as string,
+        wval1s5: (form.sac_code as string) ?? null,
+      });
+    },
+    deleteConfig: { mode: "registered", payload: (row) => [row.activity_group_code] },
+  },
+
   activitySubgroup: {
-    title: "Freight Activity Subgroup",
-    subtitle: "Maintain subgroup classification used by freight activities.",
-    master: "freight-activity-subgroup",
-    gmEndpoint: "freight/activity-subgroup",
-    routeKeys: ["activity_subgroup", "activity-subgroup", "activitysubgroup", "freight_activity_subgroup", "ms_activity_subgroup"],
+    title: "Activity Sub Group Master",
+    subtitle: "Maintain activity sub groups linked with activity groups.",
+    master: "activitysubgroup",
+    gmEndpoint: "activitysubgroup",
+    routeKeys: ["activitysubgroup", "activity_subgroup", "activity-subgroup", "freight_activity_subgroup", "freight-activity-subgroup", "ms_activity_subgroup"],
     keyField: "activity_subgroup_code",
     fields: [
-      { name: "activity_subgroup_code", label: "Subgroup Code", required: true, disabledOnEdit: true, width: 160 },
-      { name: "activity_subgroup", label: "Subgroup Name", required: true, width: 280 },
-      { name: "activity_group_code", label: "Activity Group", dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownValueKey: "activity_group_code", dropdownDisplayFields: ["activity_group_code", "activity_group"], dropdownDisplaySeparator: " - ", width: 170 },
-      { name: "status", label: "Status", type: "select", options: activeStatus, width: 120 },
+      { name: "activity_subgroup_code", label: "Sub Group Code", required: true, disabledOnEdit: true, width: 170 },
+      { name: "act_subgroup_name", label: "Sub Group Name", required: true, width: 260 },
+      { name: "act_group_code", label: "Activity Group Code", required: true, width: 180, maxLength: 5, dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownDisplayFields: ["activity_group_code", "act_group_name"], dropdownLabelKey: "act_group_name", dropdownValueKey: "activity_group_code" },
     ],
-    defaults: { status: "A" },
-    deleteConfig: disableDelete,
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT s.company_code, s.activity_subgroup_code, s.act_subgroup_name, s.act_group_code, g.act_group_name
+        FROM MS_ACTIVITY_SUBGROUP s
+        LEFT JOIN MS_ACTIVITY_GROUP g ON g.company_code = s.company_code AND g.activity_group_code = s.act_group_code
+        WHERE s.COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY s.ACTIVITY_SUBGROUP_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
+    customSave: async (form, context) => {
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+      const code = (editMode ? (original?.activity_subgroup_code ?? form.activity_subgroup_code) : form.activity_subgroup_code) as string;
+      const name = (form.act_subgroup_name || form.activity_subgroup) as string;
+      const groupCode = (form.act_group_code || form.activity_group_code) as string;
+
+      await freightSave({
+        parameter: "freight_activity_subgroup",
+        loginid: typedUser.loginid,
+        code1: typedUser.company_code,
+        val1s1: code,
+        val1s2: name,
+        val1s3: groupCode,
+        wval1s1: code,
+      });
+    },
+    customDelete: async (row, user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      await freightDelete({
+        parameter: "freight_activity_subgroup",
+        loginid: typedUser.loginid,
+        code1: typedUser.company_code,
+        code2: (row.activity_subgroup_code || row.ACTIVITY_SUBGROUP_CODE) as string,
+      });
+    },
+    deleteConfig: { mode: "registered", payload: (row) => [row.activity_subgroup_code] },
   },
 
   container: {

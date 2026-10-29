@@ -292,6 +292,8 @@ export function SalesInvoiceHeaderForm({
                                             curr_name: text(getLookupValue(row || {}, "curr_name") || accountRow?.curr_name),
                                             dept_code: text(getLookupValue(row || {}, "dept_code") || accountRow?.dept_code),
                                             dept_name: text(getLookupValue(row || {}, "dept_name") || accountRow?.dept_name),
+                                            credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount") || accountRow?.credit_amount),
+                                            credit_period: numberOrZero(getLookupValue(row || {}, "credit_period") || accountRow?.credit_period),
                                             remarks: text(getLookupValue(row || {}, "remarks")),
                                             so_remarks: text(getLookupValue(row || {}, "so_remarks")),
                                             // curr_code: text(getLookupValue(row || {}, "curr_code")),
@@ -301,7 +303,6 @@ export function SalesInvoiceHeaderForm({
                                             address2: text(getLookupValue(row || {}, "address2") || accountRow?.address2),
                                             address3: text(getLookupValue(row || {}, "address3") || accountRow?.address3),
                                             e_mail: text(getLookupValue(row || {}, "e_mail") || accountRow?.e_mail),
-                                            credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount")),
                                             so_ref_no: text(getLookupValue(row || {}, "so_ref_no")),
                                             so_ref_date: text(getLookupValue(row || {}, "so_ref_date")),
 
@@ -589,7 +590,8 @@ export function SalesInvoiceHeaderForm({
                             <CField label="Tax Type">
                                 <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
-                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
+                                    const perc = taxType === "S" ? (Number(form.tx_compnt_perc_1) > 0 ? Number(form.tx_compnt_perc_1) : 5) : 0;
+                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_perc_1: perc }));
                                 }}>
                                     <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
                                 </Select>

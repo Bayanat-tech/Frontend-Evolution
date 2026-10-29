@@ -1,3 +1,7 @@
+import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { financeTaxLabel } from "../../utils/financeTaxTreatment";
+import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
+import { roundFinanceTax } from "../../utils/financeTaxAmounts";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins, RotateCcw, Zap, CheckCircle2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
@@ -623,11 +627,13 @@ function CommercialEditor({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const taxLabels = useFinanceTaxLabels(companyInfo);
   const editMode = editor.mode === "edit";
   // const [form, setForm] = useState<FormState>(() => emptyForm(docType, editor.mode === "create" ? editor.div : undefined));
   const [form, setForm] = useState<FormState>(() => { const f = emptyForm(docType, editor.mode === "create" ? editor.div : undefined); const d = clampToFy(f.doc_date, fyRange); 
     return { ...f, doc_date: d, inv_date: d };
   });
+  const gst = useFinanceGst(form, docType, editMode);
   const [loading, setLoading] = useState(editMode);
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -787,10 +793,7 @@ function CommercialEditor({
     if (trimmed && taxRateMap[trimmed] !== undefined) {
       return taxRateMap[trimmed];
     }
-    const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
-    if (defaultPerc !== undefined) return defaultPerc;
-    const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
-    return firstNonZero ?? 0;
+    return 0;
   };
 
   const [reportOpen, setReportOpen] = useState(false);
@@ -1086,17 +1089,20 @@ const limitProps = (f: keyof FormState) => ({
     if (isCancelled) return;
     setForm((current) => {
       const newLine = emptyLine(docType, current.detail.length + 1, current.curr_code, current.curr_name, current.ex_rate || 1);
-      const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "S";
-      const resolvedPerc = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
-        ? current.tx_compnt_perc_1
-        : resolvedExpmt === "S" ? 5 : 0;
+      const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "N";
+      const catCode = current.tx_compntcat_code_1 || "";
+      const dynamicPerc = getTaxPercForCode(catCode);
+      const resolvedPerc = resolvedExpmt === "S"
+        ? (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0 ? current.tx_compnt_perc_1 : dynamicPerc)
+        : 0;
 
       const withTax: Line = {
         ...newLine,
         curr_code: current.curr_code,
         curr_name: current.curr_name,
         ex_rate: current.ex_rate || 1,
-        tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
+        tx_cat_code: current.tx_cat_code || "",
+        tx_compntcat_code_1: catCode,
         tx_compnt_1_expmt: resolvedExpmt,
         tx_compnt_perc_1: resolvedPerc,
       };
@@ -1257,6 +1263,7 @@ const limitProps = (f: keyof FormState) => ({
         user?.loginid || ""
       );
 
+      gst.attachToHeader(bulkPayload.header);
       const result: any = await upsertBulkAccountEntryApi(bulkPayload);
 
       console.log("Commercial document save response:", result);
@@ -1369,6 +1376,7 @@ const limitProps = (f: keyof FormState) => ({
             </Button>
           </div>
         </div>
+      <FinanceGstPanel editor={gst} disabled={saving || form.canceled === "Y"} />
       </CardHeader>
       {isCancelled && (
         <div className="cancelled-document-banner" role="status">
@@ -1416,7 +1424,7 @@ const limitProps = (f: keyof FormState) => ({
               )}
               <span className="inline-flex items-center gap-1.5">
                 <span className="font-semibold text-[#00378C]">Tax:</span>
-                <span className="font-medium">{form.tax_type === "S" ? "STD (5%)" : "No Tax"}</span>
+                <span className="font-medium">{(form.tx_compnt_1_expmt || form.tax_type) === "S" ? `${taxLabels.S} (${Number(form.tx_compnt_perc_1 || getTaxPercForCode(form.tx_compntcat_code_1 || ""))}%)` : financeTaxLabel(form.tx_compnt_1_expmt || form.tax_type, taxLabels)}</span>
               </span>
             </div>
             <Button
@@ -1786,7 +1794,7 @@ const limitProps = (f: keyof FormState) => ({
                               tx_compntcat_code_1: catCode || line.tx_compntcat_code_1,
                               tx_compnt_1_expmt:   v,
                               tx_compnt_perc_1:    perc,
-                              tx_compnt_amt_1:     (Number(line.amount || 0) * perc) / 100,
+                              tx_compnt_amt_1:     roundFinanceTax((Number(line.amount || 0) * perc) / 100),
                             }));
                             return {
                               ...c,
@@ -1799,10 +1807,10 @@ const limitProps = (f: keyof FormState) => ({
                         }}
                       >
                         <option value="" />
-                        <option value="S">Std. Tax</option>
-                        <option value="Z">Zero</option>
-                        <option value="E">Expmt</option>
-                        <option value="N">No VAT</option>
+                        <option value="S">{taxLabels.S}</option>
+                        <option value="Z">{taxLabels.Z}</option>
+                        <option value="E">{taxLabels.E}</option>
+                        <option value="N">{taxLabels.N}</option>
                       </Select>
                     </CField>
 
@@ -1840,7 +1848,7 @@ const limitProps = (f: keyof FormState) => ({
                               tx_compntcat_code_1: value || line.tx_compntcat_code_1,
                               tx_compnt_1_expmt:   resolvedExpmt,
                               tx_compnt_perc_1:    resolvedPerc,
-                              tx_compnt_amt_1:     (Number(line.amount || 0) * resolvedPerc) / 100,
+                              tx_compnt_amt_1:     roundFinanceTax((Number(line.amount || 0) * resolvedPerc) / 100),
                             }));
 
                             return {
@@ -2149,7 +2157,7 @@ const limitProps = (f: keyof FormState) => ({
                             onChange={(e) => {
                              const amount = Number(e.target.value || 0);
                              const taxperc   = Number(line.tx_compnt_perc_1 || 0);
-                            updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
+                            updateLine(line.id, { amount, tx_compnt_amt_1: roundFinanceTax((amount * taxperc) / 100) });
                           }} /></td>
                         {/* {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-24 min-w-[90px] px-1 py-1 text-center">
@@ -2190,17 +2198,17 @@ const limitProps = (f: keyof FormState) => ({
                           <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
   const v    = event.target.value;
   const perc = v === "S" ? (line.tx_compnt_perc_1 && line.tx_compnt_perc_1 > 0 ? line.tx_compnt_perc_1 : getTaxPercForCode(line.tx_compntcat_code_1 || form.tx_compntcat_code_1 || "")) : 0;
-  const taxAmt = (Number(line.amount || 0) * perc) / 100;
+  const taxAmt = roundFinanceTax((Number(line.amount || 0) * perc) / 100);
   updateLine(line.id, {
     tx_compnt_1_expmt:   v,
     tx_compnt_perc_1:    perc,
     tx_compnt_amt_1:     taxAmt,
   });
 }}>
-  <option value="S">Std Tax</option>
-  <option value="N">No Tax</option>
-  <option value="Z">Zero</option>
-  <option value="E">Exempt</option>
+  <option value="S">{taxLabels.S}</option>
+  <option value="N">{taxLabels.N}</option>
+  <option value="Z">{taxLabels.Z}</option>
+  <option value="E">{taxLabels.E}</option>
 </Select>
                         </td>
                       )}
@@ -2651,11 +2659,11 @@ const limitProps = (f: keyof FormState) => ({
                     ex_rate: docEx,
                     sign_ind: 1,
                     tx_cat_code: exp.tx_cat_code || current.tx_cat_code || "",
-                    tx_compntcat_code_1: exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "10100",
-                    tx_compnt_1_expmt: current.tx_compnt_1_expmt || "S",
-                    tx_compnt_perc_1: exp.tx_compnt_perc_1 != null && exp.tx_compnt_perc_1 !== 0
-                      ? exp.tx_compnt_perc_1
-                      : (current.tx_compnt_perc_1 || 5),
+                    tx_compntcat_code_1: exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "",
+                    tx_compnt_1_expmt: exp.tx_compnt_1_expmt || (Number(exp.tx_compnt_perc_1) > 0 ? "S" : (current.tx_compnt_1_expmt || "N")),
+                    tx_compnt_perc_1: exp.tx_compnt_perc_1 != null
+                      ? Number(exp.tx_compnt_perc_1)
+                      : (current.tx_compnt_1_expmt === "S" ? (Number(current.tx_compnt_perc_1) || getTaxPercForCode(exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "")) : 0),
                   };
                 });
                 return { ...current, detail: [...current.detail, ...newLines] };
@@ -2852,7 +2860,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
 //     ...form,
 //     company_code: companyCode,
 function buildCommercialPayload(form: FormState, companyCode: string) {
-  const { tx_compntcat_name_1, ...formForSave } = form;
+  const { tx_compntcat_name_1, allocations, ...formForSave } = form;
   return {
     ...formForSave,
     company_code: companyCode,
@@ -2870,7 +2878,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       const lineCurrCode = line.curr_code || form.curr_code || "";
       const lineExRate = Number(line.ex_rate || form.ex_rate || 1);
       const baseAmt = Math.abs(Number(line.amount || 0));
-      const taxAmt = baseAmt * Number(line.tx_compnt_perc_1 || 0) / 100;
+      const taxAmt = roundFinanceTax(baseAmt * Number(line.tx_compnt_perc_1 || 0) / 100);
       return {
         company_code: companyCode,
         doc_type: form.doc_type,
@@ -2894,7 +2902,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
         dept_code: line.dept_code || "",
         div_code: form.div_code,
         tx_compnt_amt_1: taxAmt,
-        tx_compnt_lcuramt_1: taxAmt * lineExRate,
+        tx_compnt_lcuramt_1: roundFinanceTax(taxAmt * lineExRate),
         lcur_amount: baseAmt * lineExRate,
         prod_code: line.prod_code || "",
         cost_code: line.cost_code || "", 
@@ -3053,7 +3061,7 @@ function recalc(line: Line): Partial<Line> {
   const price  = Number(line.price  || 0);
   const amount = qty * price;
   const perc   = Number(line.tx_compnt_perc_1 || 0);
-  const taxAmt = (amount * perc) / 100;
+  const taxAmt = roundFinanceTax((amount * perc) / 100);
   const exRate = Number(line.ex_rate || 1);
 
   return { qty: line.qty, price: line.price, amount, tx_compnt_amt_1: taxAmt, lcur_amount: Math.abs(amount) * exRate };
@@ -3099,7 +3107,8 @@ function dateInput(value: unknown) {
 }
 // const today = () => localYmd(new Date());
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
   return value < 0 ? `(${amount})` : amount;
 }
