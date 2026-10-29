@@ -1,12 +1,10 @@
 import {
-  BadgeCheck, Car, ChevronDown, Contact, Home, IdCard, MapPin, ShieldAlert, User, Users,
+  BookOpen, Car, Contact, Home, MapPin, ShieldAlert, User, Users,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useAuth } from "../../../state/AuthContext";
 import { useToast } from "../../../components/ui/AlertToast";
-import { Field } from "../../../components/ui/Formblocks";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -37,6 +35,7 @@ const LOOKUP_PARAMS = {
   religion: "MS_HR_EMPDETAIL_RELIGION",
   caste: "MS_HR_EMPDETAIL_CASTE",
   marital: "MS_HR_EMPDETAIL_MARITAL",
+  supervisor: "HR_DROPDOWN_MS_HR_EMPLOYEE",
 } as const;
 
 type LookupKey = keyof typeof LOOKUP_PARAMS;
@@ -50,35 +49,9 @@ type TextKey = {
       : never;
 }[keyof TEmployeeDetails];
 
-// ── Sections ────────────────────────────────────────────────────────────
-type SectionId =
-  | "name"
-  | "personal"
-  | "employment"
-  | "contact"
-  | "reporting"
-  | "permanent"
-  | "local"
-  | "emergency"
-  | "licence";
+const CTL = "h-7 text-xs";
 
-const SECTION_IDS: SectionId[] = [
-  "name", "personal", "employment", "contact", "reporting", "permanent", "local", "emergency", "licence",
-];
-
-const DEFAULT_OPEN: Record<SectionId, boolean> = {
-  name: true,
-  personal: true,
-  employment: true,
-  contact: true,
-  reporting: false,
-  permanent: false,
-  local: false,
-  emergency: false,
-  licence: false,
-};
-
-// yyyy-mm-dd (native <input type="date"> value format) <-> Date
+/* ── date helpers ─────────────────────────────────────────────── */
 function toInputDate(value: Date | null): string {
   if (!value) return "";
   const d = value instanceof Date ? value : new Date(value);
@@ -95,65 +68,66 @@ function fromInputDate(value: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function SectionPanel({
-  title,
-  icon: Icon,
-  open,
-  onToggle,
-  className = "",
-  children,
+/* ── UI primitives (mirrors AddEmployeeHrForm) ────────────────── */
+function HeaderBlock({
+  label, icon, children, gridCols = "grid-cols-2", bodyClass, className = "",
 }: {
-  title: string;
-  icon: LucideIcon;
-  open: boolean;
-  onToggle: () => void;
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+  bodyClass?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`overflow-hidden rounded-md border border-[#cbd5e1] bg-card ${className}`}>
+      <div className="flex items-center gap-2 border-b border-[#cbd5e1] bg-slate-50 px-2.5 py-1">
+        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
+          {icon}
+        </span>
+        <span className="text-xs font-bold text-[#00378C]">{label}</span>
+      </div>
+      <div
+        className={
+          bodyClass ?? `grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CField({
+  label, required, className = "", children,
+}: {
+  label: string;
+  required?: boolean;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        title={open ? "Collapse section" : "Expand section"}
-        className={`freight-panel-title flex w-full cursor-pointer items-center justify-between gap-2 bg-muted/35 px-3 py-2 text-left transition-colors hover:bg-muted/60 ${
-          open ? "border-b" : ""
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={16} />
-          </span>
-          <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-        </div>
-        <ChevronDown
-          size={14}
-          className={`shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
-        />
-      </button>
-      <div className={`freight-panel-body p-3 ${open ? "" : "hidden"}`}>{children}</div>
-    </section>
+    <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+        {label}
+        {required && <span className="ml-1 text-destructive">*</span>}
+      </span>
+      {children}
+    </label>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Main Form (forwardRef so parent can trigger save)
+   Main Form
    ───────────────────────────────────────────────────────────── */
 export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmployeeDetailsFormProps>(
   function EditEmployeeDetailsForm({ existingData, onClose, onAllOpenChange }, ref) {
     const { user } = useAuth();
     const { toast } = useToast();
     const [form, setForm] = useState<TEmployeeDetails>(existingData);
-    const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>(DEFAULT_OPEN);
 
     const [lookupOptions, setLookupOptions] = useState<Record<LookupKey, LookupRow[]>>({
-      title: [],
-      gender: [],
-      blood: [],
-      religion: [],
-      caste: [],
-      marital: [],
+      title: [], gender: [], blood: [], religion: [], caste: [], marital: [], supervisor: [],
     });
 
     useEffect(() => {
@@ -177,9 +151,13 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
           toast.error(error instanceof Error ? error.message : "Unable to load dropdown options");
         }
       })();
-      return () => {
-        cancelled = true;
-      };
+      return () => { cancelled = true; };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Notify parent once — sections are always visually open now.
+    useEffect(() => {
+      onAllOpenChange?.(true);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -188,54 +166,35 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
     const set = <K extends keyof TEmployeeDetails>(key: K, value: TEmployeeDetails[K]) =>
       setForm((prev) => ({ ...prev, [key]: value }));
 
-    // ── Section open/close ───────────────────────────────────────────────
-    const toggleSection = (id: SectionId) => setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
-    const setAllSections = (open: boolean) =>
-      setOpenSections(Object.fromEntries(SECTION_IDS.map((id) => [id, open])) as Record<SectionId, boolean>);
-    const allOpen = SECTION_IDS.every((id) => openSections[id]);
-
-    useEffect(() => {
-      onAllOpenChange?.(allOpen);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [allOpen]);
-
-    const section = (
-      id: SectionId,
-      title: string,
-      icon: LucideIcon,
-      children: ReactNode,
-      className?: string,
+    /* ── Field builders (add-form visual language) ──────────── */
+    const textField = (
+      key: TextKey,
+      label: string,
+      opts?: { required?: boolean; className?: string; type?: string },
     ) => (
-      <SectionPanel
-        title={title}
-        icon={icon}
-        open={openSections[id]}
-        onToggle={() => toggleSection(id)}
-        className={className}
-      >
-        {children}
-      </SectionPanel>
-    );
-
-    // ── Field helpers ────────────────────────────────────────────────────
-    const textField = (key: TextKey, label: string, opts?: { required?: boolean; className?: string; type?: string }) => (
-      <Field label={label} required={opts?.required} className={opts?.className}>
+      <CField label={label} required={opts?.required} className={opts?.className}>
         <Input
           type={opts?.type}
+          className={CTL}
           value={String(form[key] ?? "")}
           onChange={(e) => set(key, e.target.value as never)}
         />
-      </Field>
+      </CField>
     );
 
-    const dateField = (key: "health_expiry" | "dl_issue_date" | "dl_valid_upto", label: string) => (
-      <Field label={label}>
+    const dateField = (
+      key: "health_expiry" | "ppt_valid_from" | "ppt_valid_to" | "dl_issue_date" | "dl_valid_upto",
+      label: string,
+      className?: string,
+    ) => (
+      <CField label={label} className={className}>
         <Input
           type="date"
+          className={CTL}
           value={toInputDate(form[key])}
           onChange={(e) => set(key, fromInputDate(e.target.value))}
         />
-      </Field>
+      </CField>
     );
 
     const lookupField = (
@@ -245,8 +204,9 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
       codeField: string,
       nameField: string,
       required?: boolean,
+      className?: string,
     ) => (
-      <Field label={label} required={required}>
+      <CField label={label} required={required} className={className}>
         <LookupField
           compact
           dense
@@ -261,27 +221,21 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
           onChange={(value) => set(key, value as never)}
           placeholder={`Select ${label.toLowerCase()}`}
         />
-      </Field>
+      </CField>
     );
 
-    // ── Validation (starred fields) ──────────────────────────────────────
-    // Returns the message plus the section holding the field, so the section
-    // can be expanded if the user had collapsed it.
-    const validate = (): { message: string; section: SectionId } | null => {
-      if (!form.title) return { message: "Title is required", section: "name" };
-      if (!form.first_name?.trim()) return { message: "First Name is required", section: "name" };
-      if (!form.gender) return { message: "Gender is required", section: "personal" };
+    /* ── Validation ─────────────────────────────────────────── */
+    const validate = (): string | null => {
+      if (!form.title) return "Title is required";
+      if (!form.first_name?.trim()) return "First Name is required";
+      if (!form.gender) return "Gender is required";
       return null;
     };
 
-    // ── Submit (called by the page header Save button) ───────────────────
+    /* ── Save ───────────────────────────────────────────────── */
     const handleSubmit = async () => {
       const error = validate();
-      if (error) {
-        setOpenSections((prev) => ({ ...prev, [error.section]: true }));
-        toast.warning(error.message);
-        return;
-      }
+      if (error) { toast.warning(error); return; }
 
       try {
         const finalPayload = {
@@ -306,11 +260,11 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
           SPOUSE_NAME: form.spouse_name,
           NO_OF_CHILDREN: form.no_of_children,
           BLOOD_GROUP: form.blood_group,
-          NATIONALITY: form.nationality,
+          // NATIONALITY: form.nationality,
           RELIGION_CODE: form.religion_code,
           CASTE_CODE: form.caste_code,
-          COUNTRY_CODE: form.country_code,
-          COUNTRY_LIVING_IN: form.country_living_in,
+          // COUNTRY_CODE: form.country_code,
+          // COUNTRY_LIVING_IN: form.country_living_in,
 
           PPT_NAME: form.ppt_name,
           PPT_NO: form.ppt_no,
@@ -367,152 +321,148 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
       }
     };
 
-    /* ✅ Expose save() to parent */
     useImperativeHandle(ref, () => ({
       save: handleSubmit,
-      toggleAll: () => setAllSections(!allOpen),
+      toggleAll: () => {}, // no-op — sections are always open now
     }));
 
+    /* ── Render ─────────────────────────────────────────────── */
     return (
-      <div className="freight-workspace-ui freight-dense-form freight-ui-standard grid grid-cols-1 items-start gap-2 lg:grid-cols-2">
-        {section(
-          "name",
-          "Name",
-          User,
-          <div className="grid gap-3 sm:grid-cols-2">
-            {lookupField("title", "Title", "title", "value_code", "value_desc", true)}
-            {textField("first_name", "First Name", { required: true })}
-            {textField("second_name", "Second Name")}
-            {textField("third_name", "Third Name")}
-            {textField("fourth_name", "Fourth Name")}
-            {textField("last_name", "Last Name")}
-            {textField("family_name", "Family Name")}
-            {/* Alias Name intentionally hidden (was commented out in the old form) */}
-          </div>,
-        )}
+      <div
+        style={{ zoom: 0.8 }}
+        className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-1.5"
+      >
+        {/* ══════════ TOP HALF ══════════ */}
+        <div className="grid items-start gap-1.5 xl:grid-cols-2">
+          {/* Personal Information (2 cols) */}
+          <div className="xl:col-span-2">
+            <HeaderBlock
+              label="Personal Information"
+              icon={<User size={11} />}
+              bodyClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-3 gap-y-2 p-2"
+            >
+              {/* Row 1 */}
+              {lookupField("title", "Title", "title", "value_code", "value_desc", true)}
+              {textField("first_name", "First Name", { required: true })}
+              {textField("second_name", "Second Name")}
+              {textField("third_name", "Third Name")}
 
-        {section(
-          "personal",
-          "Personal Information",
-          IdCard,
-          <div className="grid gap-3 sm:grid-cols-2">
-            {lookupField("gender", "Gender", "gender", "value_code", "value_desc", true)}
-            {/* Date of Birth intentionally hidden (was commented out in the old form) */}
-            {textField("birth_place", "Place of Birth")}
-            {lookupField("blood_group", "Blood Group", "blood", "value_code", "value_desc")}
-            {lookupField("marrital_status", "Marital Status", "marital", "value_code", "value_desc")}
+              {/* Row 2 */}
+              {textField("fourth_name", "Fourth Name")}
+              {textField("last_name", "Last Name")}
+              {textField("family_name", "Family Name")}
 
-            {textField("father_name", "Father's Name")}
-            {textField("mother_name", "Mother's Name")}
-            {lookupField("religion_code", "Religion", "religion", "religion_code", "religion_name")}
-            {lookupField("caste_code", "Caste", "caste", "caste_code", "caste_name")}
+              {/* Row 3 */}
+              {lookupField("gender", "Gender", "gender", "value_code", "value_desc", true)}
+              {lookupField("religion_code", "Religion", "religion", "religion_code", "religion_name")}
+              {textField("birth_place", "Place of Birth")}
+              {lookupField("blood_group", "Blood Group", "blood", "value_code", "value_desc")}
+              {lookupField("caste_code", "Caste", "caste", "caste_code", "caste_name")}
 
-            {textField("spouse_name", "Spouse Name")}
-            <Field label="Children">
-              <Input
-                type="number"
-                value={String(form.no_of_children)}
-                onChange={(e) => set("no_of_children", Number(e.target.value) || 0)}
-              />
-            </Field>
-          </div>,
-        )}
+              {/* Row 4 */}
+              {textField("father_name", "Father's Name")}
+              {textField("mother_name", "Mother's Name")}
 
-        {section(
-          "employment",
-          "Employment & Health",
-          BadgeCheck,
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="OT Applicable">
-              <Select value={form.ot_applicable} onChange={(e) => set("ot_applicable", e.target.value)}>
-                <option value="">Select...</option>
-                {OT_APPLICABLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            {dateField("health_expiry", "Health Card Expiry")}
-          </div>,
-        )}
+              {/* Row 5 */}
+              {lookupField("marrital_status", "Marital Status", "marital", "value_code", "value_desc")}
+              {textField("spouse_name", "Spouse Name")}
+              <CField label="Children">
+                <Input
+                  type="number"
+                  className={CTL}
+                  value={String(form.no_of_children)}
+                  onChange={(e) => set("no_of_children", Number(e.target.value) || 0)}
+                />
+              </CField>
+              {dateField("health_expiry", "Health Card Expiry")}
+              {textField("mobile_no", "Mobile No")}
+              {textField("mobile_no2", "Mobile Alt")}
+              {textField("email_official", "Email", { type: "email" })}
+              <CField label="OT Applicable">
+                <Select
+                  className={CTL}
+                  value={form.ot_applicable}
+                  onChange={(e) => set("ot_applicable", e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  {OT_APPLICABLE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </Select>
+              </CField>
+              {lookupField("supervisor_empid", "Supervisor", "supervisor", "employee_id", "rpt_name", true,)}
+              {lookupField("dept_head_emp_id", "Dept Head", "supervisor", "employee_id", "rpt_name", true,)}
+              {lookupField("manager_code", "Manager Code", "supervisor", "employee_id", "rpt_name", true,)}
+            </HeaderBlock>
+          </div>
 
-        {section(
-          "contact",
-          "Contact Details",
-          Contact,
-          <div className="grid gap-3 sm:grid-cols-2">
-            {textField("mobile_no", "Mobile No")}
-            {textField("mobile_no2", "Mobile No (Alt)")}
-            {textField("email_official", "Official Email", { type: "email" })}
-            {textField("email_personal", "Personal Email", { type: "email" })}
-          </div>,
-        )}
+        </div>
 
-        {section(
-          "reporting",
-          "Reporting",
-          Users,
-          <div className="grid gap-3 sm:grid-cols-2">
-            {textField("supervisor_empid", "Supervisor")}
-            {textField("dept_head_emp_id", "Dept Head")}
-            {textField("manager_code", "Manager Code")}
-          </div>,
-        )}
+        {/* ══════════ BOTTOM HALF (4 Columns) ══════════ */}
+        <div className="grid gap-1.5 xl:grid-cols-4">
 
-        {section(
-          "licence",
-          "Driving Licence",
-          Car,
-          <div className="grid gap-3 sm:grid-cols-2">
-            {textField("driving_license_no", "Licence No")}
-            {textField("dl_issue_place", "Place of Issue")}
-            {dateField("dl_issue_date", "Date of Issue")}
-            {dateField("dl_valid_upto", "Valid Upto")}
-          </div>,
-        )}
+          {/* Col 2: Permanent + Driving Licence */}
+          <div className="flex h-full flex-col gap-1.5">
+            <HeaderBlock
+              className="flex-1"
+              label="Permanent Address"
+              icon={<Home size={11} />} 
+              gridCols="grid-cols-1 sm:grid-cols-2"
+            >
+              {textField("perm_address1", "Address Line 1", { className: "sm:col-span-2" })}
+              {textField("perm_address2", "", { className: "sm:col-span-2" })}
+              {textField("perm_address3", "", { className: "sm:col-span-2" })}
+              {textField("perm_phone", "Phone")}
+              {textField("perm_mobile", "Mobile")}
+            </HeaderBlock>
+          </div>
 
-        {section(
-          "permanent",
-          "Permanent Address",
-          Home,
-          <div className="grid gap-3 sm:grid-cols-2">
-            {textField("perm_address1", "Address Line 1", { className: "sm:col-span-2" })}
-            {textField("perm_address2", "Address Line 2", { className: "sm:col-span-2" })}
-            {textField("perm_address3", "Address Line 3", { className: "sm:col-span-2" })}
-            {textField("perm_phone", "Phone")}
-            {textField("perm_mobile", "Mobile")}
-          </div>,
-        )}
+          {/* Col 3: Local Address */}
+          <div className="flex h-full flex-col gap-1.5">
+            <HeaderBlock
+              className="flex-1"
+              label="Local Address"
+              icon={<MapPin size={11} />}
+              gridCols="grid-cols-1 sm:grid-cols-2"
+            >
+              {textField("local_address1", "Address Line 1", { className: "sm:col-span-2" })}
+              {textField("local_address2", "", { className: "sm:col-span-2" })}
+              {textField("local_address3", "", { className: "sm:col-span-2" })}
+              {textField("local_phone", "Phone")}
+              {textField("local_mobile", "Mobile")}
+            </HeaderBlock>
+          </div>
 
-        {section(
-          "local",
-          "Local Address",
-          MapPin,
-          <div className="grid gap-3 sm:grid-cols-2">
-            {textField("local_address1", "Address Line 1", { className: "sm:col-span-2" })}
-            {textField("local_address2", "Address Line 2", { className: "sm:col-span-2" })}
-            {textField("local_address3", "Address Line 3", { className: "sm:col-span-2" })}
-            {textField("local_phone", "Phone")}
-            {textField("local_mobile", "Mobile")}
-          </div>,
-        )}
+          {/* Col 4: Emergency Contact */}
+          <div className="flex h-full flex-col gap-1.5">
+            <HeaderBlock
+              className="flex-1"
+              label="Emergency Contact"
+              icon={<ShieldAlert size={11} />}
+              gridCols="grid-cols-1 sm:grid-cols-2"
+            >
+              {textField("emgr_address1", "Address Line 1", { className: "sm:col-span-2" })}
+              {textField("emgr_address2", "", { className: "sm:col-span-2" })}
+              {textField("emgr_address3", "", { className: "sm:col-span-2" })}
+              {textField("emgr_phone", "Phone")}
+              {textField("emgr_mobile", "Mobile")}
+              {textField("emgr_contact_person", "Contact Person", { className: "sm:col-span-2" })}
+            </HeaderBlock>
+          </div>
 
-        {/* Emergency spans both page columns, so its fields use the original 4-col row */}
-        {section(
-          "emergency",
-          "Emergency Contact",
-          ShieldAlert,
-          <div className="grid gap-3 md:grid-cols-4">
-            {textField("emgr_address1", "Address Line 1", { className: "md:col-span-2" })}
-            {textField("emgr_address2", "Address Line 2", { className: "md:col-span-2" })}
-            {textField("emgr_address3", "Address Line 3", { className: "md:col-span-2" })}
-            {textField("emgr_phone", "Phone")}
-            {textField("emgr_mobile", "Mobile")}
-            {textField("emgr_contact_person", "Contact Person", { className: "md:col-span-2" })}
-          </div>,
-          "lg:col-span-2",
-        )}
+          <HeaderBlock
+              className="flex-1"
+              label="Driving Licence"
+              icon={<Car size={11} />}
+              gridCols="grid-cols-1 sm:grid-cols-2"
+            >
+              {textField("driving_license_no", "Licence No", { className: "sm:col-span-2" })}
+              {textField("dl_issue_place", "Place of Issue", { className: "sm:col-span-2" })}
+              {dateField("dl_issue_date", "Date of Issue")}
+              {dateField("dl_valid_upto", "Valid Upto")}
+          </HeaderBlock>
+          
+        </div>
       </div>
     );
   },

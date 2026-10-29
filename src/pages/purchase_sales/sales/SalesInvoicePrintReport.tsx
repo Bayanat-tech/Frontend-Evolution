@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Download, FileText, Loader2, Printer, X } from "lucide-react";
+import { Download, Eye, FileText, Loader2, Printer, X } from "lucide-react";
 import {
   getSalesInvoiceReportHtml,
   getSalesInvoiceReportExcel,
@@ -250,15 +250,15 @@ export function SalesInvoicePrintDialog({
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/80 px-4 py-3">
-            <button
+            {/* <button
               type="button"
               onClick={onClose}
               disabled={busy}
               className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <X size={13} /> Close
-            </button>
-            <button
+            </button> */}
+            {/* <button
               type="button"
               onClick={handleExcel}
               disabled={busy}
@@ -266,16 +266,16 @@ export function SalesInvoicePrintDialog({
             >
               {loadingAction === "excel" ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
               {loadingAction === "excel" ? "Exporting..." : "Excel"}
-            </button>
+            </button> */}
             <button
-              type="button"
-              onClick={handlePrint}
-              disabled={busy}
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#00378C] bg-[#00378C] px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#002a6b] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {loadingAction === "print" ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
-              {loadingAction === "print" ? "Opening..." : "Print"}
-            </button>
+  type="button"
+  onClick={handlePrint}
+  disabled={busy}
+  className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#00378C] bg-[#00378C] px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#002a6b] disabled:cursor-not-allowed disabled:opacity-70"
+>
+  {loadingAction === "print" ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />}
+  {loadingAction === "print" ? "Opening..." : "View"}
+</button>
           </div>
         </div>
       </div>

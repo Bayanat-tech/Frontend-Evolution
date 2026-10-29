@@ -37,6 +37,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 function normalizeUser(user: UserProfile, tenantId?: string): UserProfile {
+  const decimalsVal = user.decimals ?? user.amount_decimal_nos ?? user.DECIMALS ?? user.AMOUNT_DECIMAL_NOS ?? 2;
+  if (typeof window !== "undefined") {
+    (window as any).__APP_DECIMALS__ = Number(decimalsVal);
+  }
   return {
     ...user,
     username: user.username || user.USERNAME,
@@ -48,6 +52,12 @@ function normalizeUser(user: UserProfile, tenantId?: string): UserProfile {
     company_logo: user.company_logo || user.COMPANY_LOGO,
     tenantId: tenantId || user.tenantId,
     tenant_name: user.tenant_name || user.TENANT_NAME || user.tenantName || user.TENANTNAME || tenantId || user.tenantId,
+    decimals: user.decimals ?? user.amount_decimal_nos ?? user.DECIMALS ?? user.AMOUNT_DECIMAL_NOS ?? 2,
+    amount_decimal_nos: user.amount_decimal_nos ?? user.AMOUNT_DECIMAL_NOS ?? user.decimals ?? user.DECIMALS ?? 2,
+    price_decimal_nos: user.price_decimal_nos ?? user.PRICE_DECIMAL_NOS ?? 2,
+    lcur_decimal_nos: user.lcur_decimal_nos ?? user.LCUR_DECIMAL_NOS ?? 2,
+    base_curr_code: user.base_curr_code || user.BASE_CURR_CODE || user.currency || user.CURRENCY || "OMR",
+    currency: user.currency || user.CURRENCY || user.base_curr_code || user.BASE_CURR_CODE || "OMR",
   };
 }
 
