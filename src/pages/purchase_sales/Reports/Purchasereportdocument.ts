@@ -174,7 +174,16 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     } else if (table.classList.contains("pr-kv-box")) {
       widths = ["38%", 8, "*"];
     }
-    else if (!details && table.rows[0]) {
+
+    else if (table.classList.contains("pr-title-line")) {
+      widths = ["*"];
+    }
+
+    else if (table.classList.contains("pr-items-portrait")) {
+      widths = ["28%", "8%", "13%", "13%", "13%", "12%", "13%"];
+    } else if (table.classList.contains("pr-items-landscape")) {
+      widths = ["4%", "15%", "8%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
+    } else if (!details && table.rows[0]) {
       const isGrnKvTable = !!table.closest(".grn-two-col");
       if (isGrnKvTable) {
         widths = ["30%", 12, "*"];
@@ -214,7 +223,15 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
       widths,
       headerRows: table.tHead?.rows.length || (table.rows[0]?.querySelector("th") ? 1 : 0),
       dontBreakRows: true,
-      layout: details ? "noBorders" : table.classList.contains("pr-kv-box") ? "kvBox" : "biscReportTable",
+      layout: details
+        ? "noBorders"
+        : table.classList.contains("pr-title-line")
+          ? "titleLine"
+          : table.classList.contains("pr-kv-box")
+            ? "kvBox"
+            : table.classList.contains("pr-title-tight")
+              ? { margin: [0, 2, 0, 0] }
+              : "biscReportTable"
     }));
     table.querySelectorAll("th").forEach((cell) => {
       cell.style.backgroundColor = "#eaf0f8";
@@ -406,6 +423,15 @@ export async function createPurchasePdf(report: PurchaseReportDocument, identity
       paddingTop: () => 2.5,
       paddingBottom: () => 2.5,
       fillColor: (rowIndex: number) => (rowIndex === 0 ? "#eaf0f8" : null),
+    },
+    titleLine: {
+      hLineWidth: (i: number) => (i === 0 ? 0.75 : 0),
+      vLineWidth: () => 0,
+      hLineColor: () => "#cbd5e1",
+      paddingLeft: () => 0,
+      paddingRight: () => 0,
+      paddingTop: () => 6,
+      paddingBottom: () => 0,
     },
   };
   return new Promise<Blob>((resolve, reject) => {
