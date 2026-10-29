@@ -2860,7 +2860,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
 //     ...form,
 //     company_code: companyCode,
 function buildCommercialPayload(form: FormState, companyCode: string) {
-  const { tx_compntcat_name_1, ...formForSave } = form;
+  const { tx_compntcat_name_1, allocations, ...formForSave } = form;
   return {
     ...formForSave,
     company_code: companyCode,
