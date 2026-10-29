@@ -10,6 +10,7 @@ import {
   getRequestFlowUsers,
   getHrWorkflowIdentity,
   getHrWorkflowRequest,
+  getHrEmployeeFiles,
 } from "../../../api/hr";
 import { Button } from "../../../components/ui/Button";
 import { LmsDialog } from "../../../components/ui/LmsDialog";
@@ -18,17 +19,10 @@ import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToas
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
-import { HrLeaveAttachmentDialog } from "./HrLeaveAttachmentDialog";
 import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate";
 import { getDynamicLookupaccount } from "../../../api/lookups";
 import { api } from "../../../api/client";
-
-/**
- * TODO: set this to the table your HrLeaveAttachmentDialog stores files in.
- * It must have a REQUEST_NUMBER column. It is used only to check that a
- * sick-leave request has at least one attachment before it can be submitted.
- */
-const LEAVE_ATTACHMENT_TABLE = "LEAVE_REQUEST_ATTACHMENT";
+import { HrLeaveAttachmentPanel } from "./HrLeaveAttachmentPanel";
 
 const LEAVE_TYPES_SKIP_VALIDATION = new Set(["SL"]);
 
@@ -206,7 +200,7 @@ export function LeaveRequestDialog({
   const [approverInfo, setApproverInfo] = useState<Record<string, unknown> | null>(null);
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [requestNumber, setRequestNumber] = useState("");
-  const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"details" | "attachments">("details");
   const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
   const [notice, setNotice] = useState<ToastNotice>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof LeaveForm, string>>>({});
@@ -255,6 +249,14 @@ export function LeaveRequestDialog({
   // Sick leave (e.g. "002 - SICK LEAVE") needs a supporting attachment before it can be submitted.
   const isSickLeave = form.leaveType === "002" || (form.leaveTypeDesc || "").toUpperCase().includes("SICK");
   const sickLeaveNeedsAttachment = isCreator && isSickLeave && (attachmentCount ?? 0) === 0;
+
+  // The Attachments tab exists only for sick leave; always start on the details tab.
+  useEffect(() => {
+    if (!isSickLeave) setActiveTab("details");
+  }, [isSickLeave]);
+  useEffect(() => {
+    if (open) setActiveTab("details");
+  }, [open]);
 
   const refreshAttachmentCount = async (reqNo: string = requestNumber): Promise<number> => {
     if (!reqNo) {
@@ -773,6 +775,8 @@ export function LeaveRequestDialog({
             ? `Draft saved. Request ${savedRequestNumber} is ready for attachments.`
             : "Draft saved. Attachments will enable after request number is available.",
         });
+        // Sick leave: take the user straight to the Attachments tab after the draft is saved.
+        if (isSickLeave && (savedRequestNumber || requestNumber)) setActiveTab("attachments");
         onSaved();
         return savedRequestNumber || requestNumber || undefined;
       }
@@ -796,17 +800,6 @@ export function LeaveRequestDialog({
     }
   };
 
-  // Attachments can be added before the user clicks Save As Draft: if no request number exists yet,
-  // the form is saved as a draft automatically (this generates the number) and the dialog then opens.
-  const openAttachments = async () => {
-    let reqNo = requestNumber;
-    if (!reqNo) {
-      reqNo = (await save("SAVEASDRAFT")) || "";
-      if (!reqNo) return; // validation failed or save error; save() already showed the message
-    }
-    setAttachmentOpen(true);
-  };
-
   /* ------------------------------------------------------------------ */
   /*  Shared pieces (used by both the modal and the inline page layout)  */
   /* ------------------------------------------------------------------ */
@@ -825,12 +818,6 @@ export function LeaveRequestDialog({
   const actionButtons =
     readOnly || (!createMode && !canPrimary) ? (
       <>
-        {requestNumber && isSickLeave && (
-          <Button type="button" variant="outline" onClick={() => void openAttachments()} className={actionBtn}>
-            <Paperclip size={14} />
-            <span>Attachments</span>
-          </Button>
-        )}
         {!inline && (
           <Button type="button" variant="outline" onClick={onClose} className={actionBtn}>
             <X size={14} />
@@ -855,24 +842,9 @@ export function LeaveRequestDialog({
           </Button>
         )}
 
-        {/* Before the first save only "Save As Draft" is shown. Once the request number exists:
-            - Attachments appears only for sick leave
-            - Submit/Approve appears for other leave types straight away, and for sick leave
-              only after at least one attachment has been uploaded */}
-        {requestNumber && isSickLeave && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void openAttachments()}
-            title="Attach files"
-            disabled={Boolean(savingAction) || workflowLoading || Boolean(workflowError)}
-            className={actionBtn}
-          >
-            <Paperclip size={14} />
-            <span>Attachments</span>
-          </Button>
-        )}
-
+        {/* Before the first save only "Save As Draft" is shown. Once the request number exists,
+            Submit/Approve appears for other leave types straight away, and for sick leave only
+            after at least one file is uploaded in the Attachments tab. */}
         {requestNumber && !sickLeaveNeedsAttachment && (
           <Button
             type="button"
@@ -947,9 +919,48 @@ export function LeaveRequestDialog({
       {!readOnly && isCreator && isSickLeave && (attachmentCount ?? 0) === 0 && (
         <p className="m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           {requestNumber
-            ? "Sick leave requires a supporting attachment. Use Attachments to add one; Submit appears once it is uploaded."
-            : "Sick leave requires a supporting attachment. Save As Draft first, then use Attachments to add one."}
+            ? "Sick leave requires a supporting attachment. Open the Attachments tab and upload one; Submit appears once it is uploaded."
+            : "Sick leave requires a supporting attachment. Save As Draft first, then upload one in the Attachments tab."}
         </p>
+      )}
+
+      {/* Tabs: the Attachments tab exists only for sick leave */}
+      {isSickLeave && (
+        <div className="flex gap-1 border-b border-slate-200">
+          {(
+            [
+              { id: "details", label: "Leave Details" },
+              { id: "attachments", label: "Attachments" },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-1.5 text-xs font-semibold ${
+                activeTab === tab.id
+                  ? "border-[#00378C] text-[#00378C]"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {tab.id === "attachments" && <Paperclip size={13} />}
+              {tab.label}
+              {tab.id === "attachments" && attachmentCount !== null && attachmentCount > 0 && (
+                <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">{attachmentCount}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isSickLeave && activeTab === "attachments" && (
+        <HrLeaveAttachmentPanel
+          requestNumber={requestNumber}
+          companyCode={companyCode}
+          loginId={loginId}
+          readOnly={fieldsDisabled}
+          onCountChange={setAttachmentCount}
+        />
       )}
       {showSendBackRemark && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
@@ -965,7 +976,7 @@ export function LeaveRequestDialog({
       )}
 
       {/* Three columns side-by-side with bordered section cards */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${isSickLeave && activeTab === "attachments" ? "hidden" : ""}`}>
         {/* ---------- Column 1: Leave Details ---------- */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
@@ -1018,6 +1029,16 @@ export function LeaveRequestDialog({
                 disabled={fieldsDisabled}
               />
             </Field>
+            {/* User picks the end date; after the API call it is replaced by start date + leave days */}
+            <Field label="Leave End Date *" error={fieldErrors.leaveEndDate}>
+              <Input
+                type="date"
+                value={form.leaveEndDate}
+                min={form.leaveStartDate || undefined}
+                onChange={(event) => update("leaveEndDate", event.target.value)}
+                disabled={fieldsDisabled}
+              />
+            </Field>
 
             <div className="grid grid-cols-[1fr_auto] items-end gap-3">
               <Field label={fetchingLeaveDays ? "Leave Days (calculating…)" : "Leave Days"} error={fieldErrors.leaveDays}>
@@ -1038,17 +1059,6 @@ export function LeaveRequestDialog({
                 Half Day
               </label>
             </div>
-
-            {/* User picks the end date; after the API call it is replaced by start date + leave days */}
-            <Field label="Leave End Date *" error={fieldErrors.leaveEndDate}>
-              <Input
-                type="date"
-                value={form.leaveEndDate}
-                min={form.leaveStartDate || undefined}
-                onChange={(event) => update("leaveEndDate", event.target.value)}
-                disabled={fieldsDisabled}
-              />
-            </Field>
 
             {tenantName === "MHDL" && (
               <Field label="Duty Resume Date *">
@@ -1195,7 +1205,7 @@ export function LeaveRequestDialog({
         </div>
       </div>
 
-      {hasActualResumeDate(initialRow) && (
+      {hasActualResumeDate(initialRow) && !(isSickLeave && activeTab === "attachments") && (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
             <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
@@ -1327,18 +1337,6 @@ export function LeaveRequestDialog({
           />
         </Field>
       </LmsDialog>
-
-      <HrLeaveAttachmentDialog
-        open={attachmentOpen}
-        requestNumber={requestNumber}
-        companyCode={companyCode}
-        loginId={loginId}
-        onClose={() => {
-          setAttachmentOpen(false);
-          // Re-check after the attachment dialog closes so Submit enables for sick leave.
-          if (isSickLeave) void refreshAttachmentCount().catch(() => undefined);
-        }}
-      />
     </>
   );
 
@@ -1508,13 +1506,8 @@ async function loadLeaveEntitlement(employeeId: string, companyCode: string, log
 
 // Counts the files attached to a leave request (used to gate sick-leave submission).
 async function countLeaveAttachments(requestNumber: string): Promise<number> {
-  const rows = await executeHrRawSql<Record<string, unknown>>(
-    `SELECT COUNT(*) AS CNT FROM ${LEAVE_ATTACHMENT_TABLE} WHERE REQUEST_NUMBER = '${escapeSql(requestNumber)}'`
-  );
-  const first = rows?.[0] ?? {};
-  const raw = first.CNT ?? first.cnt ?? first.COUNT ?? Object.values(first)[0] ?? 0;
-  const count = Number(raw);
-  return Number.isNaN(count) ? 0 : count;
+  const files = await getHrEmployeeFiles(requestNumber);
+  return Array.isArray(files) ? files.length : 0;
 }
 
 function uniqueBy<T>(rows: T[], getKey: (row: T) => string) {
@@ -1685,3 +1678,4 @@ function getUuid() {
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
+
