@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
 
 import { Button } from "../../../components/ui/Button";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
@@ -174,6 +174,13 @@ export default function VacationSeparationReportPage() {
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+  // Pay Year increase / decrease (1900 - 2200 ke beech)
+  const changeYear = (delta: number) => {
+    const base = Number.isInteger(yearNum) && yearNum > 0 ? yearNum : now.getFullYear();
+    const next = Math.min(2200, Math.max(1900, base + delta));
+    setPayYear(String(next));
+  };
+
   const handleGenerate = () => {
     if (!inputValid) return;
     fetchReport({ reportType, payMonth: monthNum, payYear: yearNum });
@@ -266,7 +273,7 @@ export default function VacationSeparationReportPage() {
         <ReportFilterHeader onClear={handleClearAll} />
 
         {/* Single row: Pay Month / Pay Year / Report Type */}
-        <div className="freight-report-fields grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_250px] items-start gap-3 p-3">
+        <div className="freight-report-fields grid grid-cols-[200px_140px_240px] items-start gap-4 p-3">
           <Field label="Pay Month">
             <select
               className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
@@ -282,41 +289,116 @@ export default function VacationSeparationReportPage() {
           </Field>
 
           <Field label="Pay Year">
-            <input
-              type="number"
-              min={1900}
-              max={2200}
-              className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-              value={payYear}
-              onChange={(e) => setPayYear(e.target.value)}
-            />
+            <div className="relative w-full">
+              <input
+                type="number"
+                min={1900}
+                max={2200}
+                className="h-8 w-full rounded-md border bg-background pl-2 pr-7 text-sm font-medium text-foreground shadow-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                value={payYear}
+                onChange={(e) => setPayYear(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    changeYear(1);
+                  } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    changeYear(-1);
+                  }
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  right: 3,
+                  bottom: 3,
+                  width: 20,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label="Increase year"
+                  tabIndex={-1}
+                  onClick={() => changeYear(1)}
+                  disabled={yearNum >= 2200}
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                    margin: 0,
+                    minHeight: 0,
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 3,
+                    background: "#ffffff",
+                    color: "#334155",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  <ChevronUp size={11} strokeWidth={3} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Decrease year"
+                  tabIndex={-1}
+                  onClick={() => changeYear(-1)}
+                  disabled={yearNum <= 1900}
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                    margin: 0,
+                    minHeight: 0,
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 3,
+                    background: "#ffffff",
+                    color: "#334155",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  <ChevronDown size={11} strokeWidth={3} />
+                </button>
+              </div>
+            </div>
           </Field>
 
           <Field label="Report Type">
-            {/* Peeche ek readonly input: isse Month/Year jaisa hi outline, background aur height milti hai */}
-            <div className="relative h-8 w-full">
-              <input
-                type="text"
-                readOnly
-                tabIndex={-1}
-                aria-hidden="true"
-                className="pointer-events-none h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+            {/* Input-field jaisa box (Month/Year jaisa outline, 32px height) */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 20,
+                width: "100%",
+                height: 32,
+                boxSizing: "border-box",
+                padding: "0 12px",
+                borderRadius: 6,
+                border: "1px solid #94a3b8",
+                background: "#f5f8fd",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.06)",
+              }}
+            >
+              <RadioOption
+                label="Vacation"
+                checked={reportType === "VACATION"}
+                onSelect={() => setReportType("VACATION")}
               />
-              <div
-                className="absolute inset-0 flex items-center px-3"
-                style={{ flexDirection: "row", gap: 20 }}
-              >
-                <RadioOption
-                  label="Vacation"
-                  checked={reportType === "VACATION"}
-                  onSelect={() => setReportType("VACATION")}
-                />
-                <RadioOption
-                  label="Separation"
-                  checked={reportType === "SEPARATION"}
-                  onSelect={() => setReportType("SEPARATION")}
-                />
-              </div>
+              <RadioOption
+                label="Separation"
+                checked={reportType === "SEPARATION"}
+                onSelect={() => setReportType("SEPARATION")}
+              />
             </div>
           </Field>
         </div>
