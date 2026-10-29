@@ -341,6 +341,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     gmEndpoint: "sponsor",
     routeKeys: ["sponsor", "hrsponsor", "hr_sponsor"],
     keyField: "sponsor_code",
+    reportEndpoint: "/wms/sponsor/html",
     source: "dynamic",
     mutationMode: "column90",
     listQuery: (context) => ({
@@ -552,6 +553,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     gmEndpoint: "educational_level",
     routeKeys: ["educational_level", "education_level", "edulevel", "edu_level"],
     keyField: "edu_level_code",
+    reportEndpoint: "/wms/edu-level/html",
     source: "dynamic",
     listQuery: dynamicList("HR_EDUCATIONAL_LEVEL_SELECT", true),
     autoGenerateKey: true,
