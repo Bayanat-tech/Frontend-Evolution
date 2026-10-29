@@ -162,6 +162,7 @@ export type Division = {
 };
 
 export type CompanyInfo = {
+  tax_treatment_labels?: Partial<Record<'N' | 'S' | 'Z' | 'E', string>>;
   company_code?: string;
   company_name?: string;
   currency?: string;
@@ -426,7 +427,7 @@ export async function getTransactionDetail(docNo: string, divCode: string, docTy
     params: { div_code: divCode, doc_type: docType },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to load document details");
-  return response.data.data || [];
+  return (response.data.data || []).filter(row => { const serial = Number(row.serial_no ?? row.SERIAL_NO); return serial < 9011 || serial > 9999; });
 }
 
 export async function getDocAccounts(docType: TransactionType, hdrDtl: "H" | "D" | "HDR" | "DTL", divCode: string) {

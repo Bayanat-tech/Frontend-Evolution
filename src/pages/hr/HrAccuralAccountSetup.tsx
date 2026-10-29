@@ -1,23 +1,36 @@
 // ════════════════════════════════════════════════════════════════════════
-// HrAccuralAccountSetup.tsx — Refresh now clears header filters + grid
+// HrAccuralAccountSetup.tsx — Refactored to Employee-Master style UI
+// Header: freight-transaction-header; Panels: SectionPanel + Field
 // ════════════════════════════════════════════════════════════════════════
 import type { ColumnDef } from "@tanstack/react-table";
-import { Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import {
+  Building2,
+  ListChecks,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
 import { upsertAccrualAcctSetupApi } from "../../api/hr";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Button } from "../../components/ui/Button";
+import { Field, SectionPanel } from "../../components/ui/Formblocks";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 
+// ─── Shared control density (matches employee master / other refactored pages) ──
+const CTL = "h-7 text-xs";
+
 // ─── Header filter set — Division / Department / Section, all required,
-// mirroring the old dw_hr_accrualacsetup header band. Company now comes
-// from useAuth (logged-in user's company_code) rather than being picked
-// here. These four still scope every row in MS_HR_SEC_PAYCOMP_AC (see
-// SELECT in email ss: COMPANY_CODE / DIV_CODE / DEPT_CODE / SECTION_CODE
-// WHERE clause). ───────────────────────────────────────────────────────
+// mirroring the old dw_hr_accrualacsetup header band. ─────────────────────
 type THeaderFilters = {
   div_code: string;
   div_name: string;
@@ -36,22 +49,20 @@ const EMPTY_HEADER: THeaderFilters = {
   section_name: "",
 };
 
-// ─── Grid row — one per Accrual Type, field names mirror the SELECT list
-// from MS_HR_SEC_PAYCOMP_AC (PAY_COMP_TYPE = 'A' branch) plus the joined
-// pay_desc subquery (ms_hr_accruals.accrual_desc). ─────────────────────────
+// ─── Grid row ─────────────────────────────────────────────────────────────
 type TAccrualAccountRow = {
   row_id: string;
   company_code: string;
   div_code: string;
   dept_code: string;
   section_code: string;
-  pay_comp_id: string; // Accrual Type code, e.g. "11", "AL", "GR"
-  pay_desc: string; // Accrual Type description
+  pay_comp_id: string;
+  pay_desc: string;
   ac_code_db: string;
   ac_code_db_name: string;
   ac_code_cr: string;
   ac_code_cr_name: string;
-  sepn_flag: "Y" | "N"; // End of Service
+  sepn_flag: "Y" | "N";
   remarks: string;
   pay_comp_earn_ded?: string;
   is_new?: boolean;
@@ -74,63 +85,38 @@ const blankRow = (): TAccrualAccountRow => ({
   is_new: true,
 });
 
-// ─── LookupField configs — parameter strings match the exact WHEN literals
-// in PROC_BUILD_DYNAMIC_SQL_MST_HR. ────────────────────────────────────
-
-// Division — existing proc branch, P_CODE1 = company.
+// ─── LookupField configs ──────────────────────────────────────────────────
 const DIVISION_LOOKUP_PARAMETER = "MST_HR_ACCOUNT_DIVISION";
 const DIVISION_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "div_code", header: "Division Code" },
   { field: "div_name", header: "Division Name" },
 ];
 
-// Department — existing proc branch, P_CODE1 = company, P_CODE2 = division.
 const DEPARTMENT_LOOKUP_PARAMETER = "MST_HR_MS_HR_DEPARTMENT";
 const DEPARTMENT_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "dept_code", header: "Department Code" },
   { field: "dept_name", header: "Department Name" },
 ];
 
-// Section — existing filtered proc branch, P_CODE1 = company, P_CODE2 =
-// division, P_CODE3 = department.
 const SECTION_LOOKUP_PARAMETER = "MST_HR_MS_HR_SECTION_DDL";
 const SECTION_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "section_code", header: "Section Code" },
   { field: "section_name", header: "Section Name" },
 ];
 
-// Accrual Type (pay_comp_id) — P_CODE1 = company. Mirrors PB 'pay_comp_id'
-// CASE: SELECT accrual_type, accrual_desc FROM MS_HR_ACCRUALS WHERE
-// COMPANY_CODE = :co AND ACCR_STATUS = 'A'.
 const ACCRUAL_TYPE_LOOKUP_PARAMETER = "MST_HR_ACCRUAL_TYPE_DDL";
 const ACCRUAL_TYPE_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "accrual_type", header: "Accrual Type" },
   { field: "accrual_desc", header: "Accrual Description" },
 ];
 
-// Account Code (ac_code_db / ac_code_cr share the same query) — P_CODE1 =
-// company. Mirrors PB 'ac_code_db' / 'ac_code_cr' CASE blocks.
 const ACCOUNT_LOOKUP_PARAMETER = "MST_HR_ACCOUNT_CODE_DDL";
 const ACCOUNT_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "ac_code", header: "Account Code" },
   { field: "ac_name", header: "Account Name" },
 ];
 
-// ─── Retrieve parameter — matches the proc WHEN block added for
-// MS_HR_SEC_PAYCOMP_AC. Save now goes through upsertAccrualAcctSetupApi
-// (POST /api/finance/insUpdAccrualAcctSetup), one row per call, since
-// PROC_INS_UPD_MS_HR_SEC_PAYCOMP_AC only accepts a single-row table type. ──
 const RETRIEVE_PARAMETER = "MST_HR_ACCRUAL_AC_SETUP_RETRIEVE";
-
-// ─── Delete parameter — routes through PROC_BUILD_DYNAMIC_DEL_COMMON
-// ('MST_HR_' prefix) → PROC_BUILD_DYNAMIC_DEL_MST_HR. P_CODE1..P_CODE4 =
-// Company/Div/Dept/Section, as usual. NOTE: the backend route
-// (proc_build_dynamic_del_common) never forwards P_CODE5 — it's hardcoded
-// to null there and that route can't be changed — so pay_comp_id (accrual
-// type) instead gets appended directly onto the parameter string itself:
-// 'MST_HR_ACCRUAL_AC_SETUP_DELETE_' + pay_comp_id (e.g. "...DELETE_AL").
-// The DB proc detects this prefix with SUBSTR before its CASE statement
-// and pulls pay_comp_id back out of the parameter suffix. ────────────────
 const DELETE_PARAMETER_PREFIX = "MST_HR_ACCRUAL_AC_SETUP_DELETE_";
 
 export function HrAccuralAccountSetup() {
@@ -155,10 +141,6 @@ export function HrAccuralAccountSetup() {
   const headerReady =
     !!companyCode && !!header.div_code && !!header.dept_code && !!header.section_code;
 
-  // ── Generic dropdown loader — P_CODE1..P_CODE4 only, since
-  // PROC_BUILD_DYNAMIC_SQL_MST_HR doesn't read code5-10. Those are still
-  // sent (as "NULL"/0/null) because getDynamicLookup's signature requires
-  // them; the proc simply ignores them. ──────────────────────────────────
   const loadLookupRows = useCallback(
     async (
       parameter: string,
@@ -194,9 +176,6 @@ export function HrAccuralAccountSetup() {
     [loginid],
   );
 
-  // ── Retrieve — pulls existing MS_HR_SEC_PAYCOMP_AC rows for the header
-  // scope (COMPANY_CODE / DIV_CODE / DEPT_CODE / SECTION_CODE, PAY_COMP_TYPE
-  // = 'A'), per the SELECT in the email ss. ──────────────────────────────
   const handleRetrieve = useCallback(async () => {
     if (!companyCode || !header.div_code || !header.dept_code || !header.section_code) {
       return;
@@ -255,27 +234,16 @@ export function HrAccuralAccountSetup() {
     }
   }, [loginid, companyCode, header.div_code, header.dept_code, header.section_code]);
 
-  // ── Auto-retrieve — as soon as Division, Department and Section are
-  // selected (Company now comes from the logged-in user), fire the same
-  // Retrieve call the button triggers, so the grid populates without an
-  // extra click. Any change that clears one of the three simply won't
-  // satisfy the condition below, so this won't fire again until the full
-  // scope is complete again. ─────────────────────────────────────────────
   useEffect(() => {
     if (headerReady) {
       handleRetrieve();
     } else {
-      // Header scope is incomplete again — clear any previously retrieved
-      // rows so the grid doesn't show data for a stale/mismatched scope.
       setRows([]);
       setDeletedRowIds([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyCode, header.div_code, header.dept_code, header.section_code]);
 
-  // ── Refresh — clears the header filters and the grid back to a clean
-  // slate, rather than re-fetching for whatever's currently selected.
-  // Distinct from Retrieve, which re-fetches for the current selection. ──
   const handleClearAll = useCallback(() => {
     setHeader({ ...EMPTY_HEADER });
     setRows([]);
@@ -283,21 +251,11 @@ export function HrAccuralAccountSetup() {
     setNotice(null);
   }, []);
 
-  // ── Row editing helpers ────────────────────────────────────────────
   const updateRow = (row_id: string, patch: Partial<TAccrualAccountRow>) =>
     setRows((prev) => prev.map((r) => (r.row_id === row_id ? { ...r, ...patch } : r)));
 
   const addRow = () => setRows((prev) => [...prev, blankRow()]);
 
-  // ── Delete row — new/unsaved rows (row_id starts with "new-") only ever
-  // existed in local state, so they're just dropped. Existing rows are
-  // deleted immediately against MS_HR_SEC_PAYCOMP_AC via executeDynamicDelete
-  // (routes through PROC_BUILD_DYNAMIC_DEL_COMMON → PROC_BUILD_DYNAMIC_DEL_MST_HR),
-  // scoped by Company/Div/Dept/Section (P_CODE1-4) + pay_comp_id, which is
-  // appended onto the parameter string itself (see DELETE_PARAMETER_PREFIX)
-  // since the backend route never forwards P_CODE5. Only removed from the
-  // grid on success so a failed delete doesn't silently desync the UI from
-  // the database. ───────────────────────────────────────────────────────
   const removeRow = async (row: TAccrualAccountRow) => {
     if (row.row_id.startsWith("new-")) {
       setRows((prev) => prev.filter((r) => r.row_id !== row.row_id));
@@ -328,12 +286,6 @@ export function HrAccuralAccountSetup() {
     }
   };
 
-  // ── Save — pushes each row back to MS_HR_SEC_PAYCOMP_AC via
-  // upsertAccrualAcctSetupApi (POST /api/finance/insUpdAccrualAcctSetup).
-  // The proc only accepts one row per call (WMSTST.MS_HR_SEC_PAYCOMP_AC_TAB
-  // is built from a single-element array server-side), so rows are saved
-  // sequentially. Row deletes are handled separately by removeRow, which
-  // deletes immediately rather than batching with Save. ──────────────────
   const handleSave = useCallback(async () => {
     if (!headerReady) return;
     setSaving(true);
@@ -378,158 +330,186 @@ export function HrAccuralAccountSetup() {
     { accessorKey: "sepn_flag", header: "End of Service", size: 130 },
     { accessorKey: "remarks", header: "Remarks", size: 200 },
   ];
-  void columns; // kept for parity with Stock Inquiry's ColumnDef usage; grid below is hand-rolled for inline editing
+  void columns;
+
+  const thClass =
+    "px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-600";
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Accrual Account Setup</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Map accrual types to debit / credit accounts by division, department and section.
-          </p>
-        </div>
-      </div>
-
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
-      )}
-
-      {/* ── Header band — Division / Department / Section ───── */}
-      <div className="rounded-md border bg-card p-3">
-        <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-          <div className="flex items-center gap-1.5 min-w-0" key="division">
-            <span className="w-24 shrink-0 text-sm text-primary font-medium">Division: *</span>
-            <div className="min-w-0 flex-1">
-              <LookupField
-                compact
-                disabled={!companyCode}
-                value={header.div_code}
-                columns={DIVISION_LOOKUP_COLUMNS}
-                valueField="div_code"
-                displayFields={["div_code", "div_name"]}
-                loadOptions={() => loadLookupRows(DIVISION_LOOKUP_PARAMETER, companyCode)}
-                onChange={(value, row) => {
-                  setHeaderField("div_code", value);
-                  setHeaderField("div_name", (row?.div_name as string) ?? "");
-                  setHeaderField("dept_code", "");
-                  setHeaderField("dept_name", "");
-                  setHeaderField("section_code", "");
-                  setHeaderField("section_name", "");
-                }}
-                placeholder="Division code or name"
-              />
-            </div>
+    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+      {/* ══ Header — freight-transaction-header (Employee Master style) ══ */}
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <Wallet size={15} />
           </div>
-
-          <div className="flex items-center gap-1.5 min-w-0" key="department">
-            <span className="w-24 shrink-0 text-sm text-primary font-medium">Department: *</span>
-            <div className="min-w-0 flex-1">
-              <LookupField
-                compact
-                disabled={!header.div_code}
-                value={header.dept_code}
-                columns={DEPARTMENT_LOOKUP_COLUMNS}
-                valueField="dept_code"
-                displayFields={["dept_code", "dept_name"]}
-                loadOptions={() =>
-                  loadLookupRows(DEPARTMENT_LOOKUP_PARAMETER, companyCode, header.div_code)
-                }
-                onChange={(value, row) => {
-                  setHeaderField("dept_code", value);
-                  setHeaderField("dept_name", (row?.dept_name as string) ?? "");
-                  setHeaderField("section_code", "");
-                  setHeaderField("section_name", "");
-                }}
-                placeholder="Department code or name"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 min-w-0" key="section">
-            <span className="w-24 shrink-0 text-sm text-primary font-medium">Section: *</span>
-            <div className="min-w-0 flex-1">
-              <LookupField
-                compact
-                disabled={!header.dept_code}
-                value={header.section_code}
-                columns={SECTION_LOOKUP_COLUMNS}
-                valueField="section_code"
-                displayFields={["section_code", "section_name"]}
-                loadOptions={() =>
-                  loadLookupRows(
-                    SECTION_LOOKUP_PARAMETER,
-                    companyCode,
-                    header.div_code,
-                    header.dept_code,
-                  )
-                }
-                onChange={(value, row) => {
-                  setHeaderField("section_code", value);
-                  setHeaderField("section_name", (row?.section_name as string) ?? "");
-                }}
-                placeholder="Section code or name"
-              />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                Accrual Account Setup
+              </h1>
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                {headerReady ? "Scope Ready" : "Select Scope"}
+              </span>
+              {headerReady && (
+                <span className="text-xs text-muted-foreground">
+                  {header.div_code} / {header.dept_code} / {header.section_code}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="mt-2 flex items-center justify-end gap-2 border-t pt-2">
-          <Button size="sm" variant="outline" onClick={handleClearAll}>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <Button size="sm" variant="outline" onClick={handleClearAll} disabled={saving}>
             <RefreshCw size={14} /> Refresh
           </Button>
-          <Button size="sm" disabled={!headerReady || loading} onClick={handleRetrieve}>
-            {loading ? "Retrieving..." : "Retrieve"}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!headerReady || loading}
+            onClick={handleRetrieve}
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            {loading ? "Retrieving" : "Retrieve"}
+          </Button>
+          <Button size="sm" disabled={!headerReady || saving} onClick={handleSave}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {saving ? "Saving" : "Save"}
           </Button>
         </div>
       </div>
 
-      {/* ── Editable grid — Accrual Type / DB / CR / End of Service / Remarks ── */}
-      <div className="rounded-md border bg-card">
-        <div className="flex items-center justify-between border-b p-2">
-          <span className="text-sm font-medium text-foreground">
-            {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+      {/* ══ Scope — Division / Department / Section ══ */}
+      <SectionPanel title="Scope" icon={Building2}>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Field label="Division" required>
+            <LookupField
+              compact
+              disabled={!companyCode}
+              value={header.div_code}
+              displayValue={
+                header.div_code && header.div_name
+                  ? `${header.div_code} - ${header.div_name}`
+                  : header.div_code
+              }
+              columns={DIVISION_LOOKUP_COLUMNS}
+              valueField="div_code"
+              displayFields={["div_code", "div_name"]}
+              loadOptions={() => loadLookupRows(DIVISION_LOOKUP_PARAMETER, companyCode)}
+              onChange={(value, row) => {
+                setHeaderField("div_code", value);
+                setHeaderField("div_name", (row?.div_name as string) ?? "");
+                setHeaderField("dept_code", "");
+                setHeaderField("dept_name", "");
+                setHeaderField("section_code", "");
+                setHeaderField("section_name", "");
+              }}
+              placeholder="Division code or name"
+            />
+          </Field>
+
+          <Field label="Department" required>
+            <LookupField
+              compact
+              disabled={!header.div_code}
+              value={header.dept_code}
+              displayValue={
+                header.dept_code && header.dept_name
+                  ? `${header.dept_code} - ${header.dept_name}`
+                  : header.dept_code
+              }
+              columns={DEPARTMENT_LOOKUP_COLUMNS}
+              valueField="dept_code"
+              displayFields={["dept_code", "dept_name"]}
+              loadOptions={() =>
+                loadLookupRows(DEPARTMENT_LOOKUP_PARAMETER, companyCode, header.div_code)
+              }
+              onChange={(value, row) => {
+                setHeaderField("dept_code", value);
+                setHeaderField("dept_name", (row?.dept_name as string) ?? "");
+                setHeaderField("section_code", "");
+                setHeaderField("section_name", "");
+              }}
+              placeholder="Department code or name"
+            />
+          </Field>
+
+          <Field label="Section" required>
+            <LookupField
+              compact
+              disabled={!header.dept_code}
+              value={header.section_code}
+              displayValue={
+                header.section_code && header.section_name
+                  ? `${header.section_code} - ${header.section_name}`
+                  : header.section_code
+              }
+              columns={SECTION_LOOKUP_COLUMNS}
+              valueField="section_code"
+              displayFields={["section_code", "section_name"]}
+              loadOptions={() =>
+                loadLookupRows(
+                  SECTION_LOOKUP_PARAMETER,
+                  companyCode,
+                  header.div_code,
+                  header.dept_code,
+                )
+              }
+              onChange={(value, row) => {
+                setHeaderField("section_code", value);
+                setHeaderField("section_name", (row?.section_name as string) ?? "");
+              }}
+              placeholder="Section code or name"
+            />
+          </Field>
+        </div>
+      </SectionPanel>
+
+      {/* ══ Editable grid ══ */}
+      <SectionPanel title="Accrual Accounts" icon={ListChecks}>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            {rows.length.toLocaleString()} row{rows.length === 1 ? "" : "s"}
           </span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" disabled={!headerReady} onClick={addRow}>
-              <Plus size={13} /> Add Row
-            </Button>
-            <Button size="sm" disabled={!headerReady || saving} onClick={handleSave}>
-              <Save size={13} /> {saving ? "Saving..." : "Save"}
-            </Button>
-          </div>
+          <Button size="sm" variant="secondary" disabled={!headerReady} onClick={addRow}>
+            <Plus size={13} /> Add Row
+          </Button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-md border">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b bg-muted/50 text-left">
-                <th className="w-10 px-2 py-1.5 font-medium">#</th>
-                <th className="min-w-[180px] px-2 py-1.5 font-medium">Accrual Type</th>
-                <th className="min-w-[260px] px-2 py-1.5 font-medium">DB Account Code</th>
-                <th className="min-w-[260px] px-2 py-1.5 font-medium">CR Account Code</th>
-                <th className="min-w-[120px] px-2 py-1.5 font-medium">End of Service</th>
-                <th className="min-w-[180px] px-2 py-1.5 font-medium">Remarks</th>
+              <tr className="border-b bg-slate-50">
+                <th className={`w-10 ${thClass}`}>#</th>
+                <th className={`min-w-[180px] ${thClass}`}>Accrual Type</th>
+                <th className={`min-w-[260px] ${thClass}`}>DB Account Code</th>
+                <th className={`min-w-[260px] ${thClass}`}>CR Account Code</th>
+                <th className={`min-w-[120px] ${thClass}`}>End of Service</th>
+                <th className={`min-w-[180px] ${thClass}`}>Remarks</th>
                 <th className="w-10 px-2 py-1.5" />
               </tr>
             </thead>
             <tbody>
               {rows.map((row, idx) => (
                 <tr key={row.row_id} className="border-b last:border-b-0">
-                  <td className="px-2 py-1 text-muted-foreground">{idx + 1}</td>
+                  <td className="px-2 py-1 text-xs text-muted-foreground">{idx + 1}</td>
 
                   <td className="px-2 py-1">
                     <LookupField
                       compact
                       value={row.pay_comp_id}
+                      displayValue={
+                        row.pay_comp_id && row.pay_desc
+                          ? `${row.pay_comp_id} - ${row.pay_desc}`
+                          : row.pay_comp_id
+                      }
                       columns={ACCRUAL_TYPE_LOOKUP_COLUMNS}
                       valueField="accrual_type"
                       displayFields={["accrual_type", "accrual_desc"]}
-                      loadOptions={() =>
-                        loadLookupRows(ACCRUAL_TYPE_LOOKUP_PARAMETER, companyCode)
-                      }
+                      loadOptions={() => loadLookupRows(ACCRUAL_TYPE_LOOKUP_PARAMETER, companyCode)}
                       onChange={(value, opt) =>
                         updateRow(row.row_id, {
                           pay_comp_id: value,
@@ -544,12 +524,15 @@ export function HrAccuralAccountSetup() {
                     <LookupField
                       compact
                       value={row.ac_code_db}
+                      displayValue={
+                        row.ac_code_db && row.ac_code_db_name
+                          ? `${row.ac_code_db} - ${row.ac_code_db_name}`
+                          : row.ac_code_db
+                      }
                       columns={ACCOUNT_LOOKUP_COLUMNS}
                       valueField="ac_code"
                       displayFields={["ac_code", "ac_name"]}
-                      loadOptions={() =>
-                        loadLookupRows(ACCOUNT_LOOKUP_PARAMETER, companyCode)
-                      }
+                      loadOptions={() => loadLookupRows(ACCOUNT_LOOKUP_PARAMETER, companyCode)}
                       onChange={(value, opt) =>
                         updateRow(row.row_id, {
                           ac_code_db: value.trim(),
@@ -564,12 +547,15 @@ export function HrAccuralAccountSetup() {
                     <LookupField
                       compact
                       value={row.ac_code_cr}
+                      displayValue={
+                        row.ac_code_cr && row.ac_code_cr_name
+                          ? `${row.ac_code_cr} - ${row.ac_code_cr_name}`
+                          : row.ac_code_cr
+                      }
                       columns={ACCOUNT_LOOKUP_COLUMNS}
                       valueField="ac_code"
                       displayFields={["ac_code", "ac_name"]}
-                      loadOptions={() =>
-                        loadLookupRows(ACCOUNT_LOOKUP_PARAMETER, companyCode)
-                      }
+                      loadOptions={() => loadLookupRows(ACCOUNT_LOOKUP_PARAMETER, companyCode)}
                       onChange={(value, opt) =>
                         updateRow(row.row_id, {
                           ac_code_cr: value,
@@ -581,8 +567,8 @@ export function HrAccuralAccountSetup() {
                   </td>
 
                   <td className="px-2 py-1">
-                    <select
-                      className="h-7 w-full rounded border bg-background px-2 text-sm"
+                    <Select
+                      className={`${CTL} w-full`}
                       value={row.sepn_flag}
                       onChange={(e) =>
                         updateRow(row.row_id, {
@@ -592,12 +578,12 @@ export function HrAccuralAccountSetup() {
                     >
                       <option value="N">No</option>
                       <option value="Y">Yes</option>
-                    </select>
+                    </Select>
                   </td>
 
                   <td className="px-2 py-1">
                     <Input
-                      className="h-7 text-sm px-2"
+                      className={`${CTL} w-full`}
                       value={row.remarks}
                       onChange={(e) => updateRow(row.row_id, { remarks: e.target.value })}
                       placeholder="Remarks"
@@ -607,12 +593,12 @@ export function HrAccuralAccountSetup() {
                   <td className="px-2 py-1 text-center">
                     <button
                       type="button"
-                      className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                      className="grid h-6 w-6 place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                       onClick={() => removeRow(row)}
                       disabled={deletingRowId === row.row_id}
                       aria-label="Remove row"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={13} />
                     </button>
                   </td>
                 </tr>
@@ -632,7 +618,7 @@ export function HrAccuralAccountSetup() {
             </tbody>
           </table>
         </div>
-      </div>
+      </SectionPanel>
     </section>
   );
 }

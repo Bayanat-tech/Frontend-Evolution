@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Button } from "../../../components/ui/Button";
-import { Plus, RefreshCw, Save, X, Pencil, Trash2 } from "lucide-react";
+import { Plus, Save, X, Pencil, Trash2, Upload, Calculator } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { DataTable } from "../../../components/ui/DataTable";
-import { type WmsRow, value } from "../../../utils/inboundHelpers"; // adjust path to match your project
+import { type WmsRow, value } from "../../../utils/inboundHelpers";
+import { ActivityImportDialog, type ImportedActivity } from "./ActivityImportDialog";
 
-type ActivityRow = WmsRow;   // <-- alias instead of redefining
+type ActivityRow = WmsRow;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 function deriveTaxPercentFromCategory(code: string): number {
@@ -19,7 +20,46 @@ function sqlEscape(str: string) {
   return str.replace(/'/g, "''");
 }
 
-// In the component props, keep using ActivityRow — it's now just WmsRow
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const FULL_MONTHS = [
+  "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+  "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER",
+];
+
+// startMonth is "YYYY-MM" (from <input type="month">). Returns e.g. "APRIL-2026"
+function monthLabel(startMonth: string, offset: number): string {
+  if (!startMonth) return "";
+  const [y, m] = startMonth.split("-").map(Number);
+  if (!y || !m) return "";
+  const idx = m - 1 + offset;
+  return `${FULL_MONTHS[idx % 12]}-${y + Math.floor(idx / 12)}`;
+}
+
+const fmtINR = (n: number) =>
+  n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+type AllocForm = {
+  act_code: string;
+  activity: string;
+  taxCompCat: string;
+  taxCat: string;
+  amount: string;
+  months: string;
+  startMonth: string;
+  otherServices: string;
+};
+
+const emptyAlloc = (): AllocForm => ({
+  act_code: "",
+  activity: "",
+  taxCompCat: "0",
+  taxCat: "0",
+  amount: "",
+  months: "",
+  startMonth: "",
+  otherServices: "",
+});
+
 export function ActivityBillingSection({
   companyCode,
   prinCode,
@@ -54,13 +94,41 @@ export function ActivityBillingSection({
     totalCostAmount: number;
   };
   loadActivityBilling: () => void;
-  handleActivityBillingSubmit: () => void;
+  handleActivityBillingSubmit: () => void | Promise<void>;
   executeWmsInboundSql: (sql: string) => Promise<any>;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
-  // ── Queries (unchanged) ──
+  // ── Allocation (split total into N monthly rows) ──
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [alloc, setAlloc] = useState<AllocForm>(emptyAlloc());
+  const [allocError, setAllocError] = useState("");
+
+  const openSplit = () => {
+    setAlloc(emptyAlloc());
+    setAllocError("");
+    setSplitOpen(true);
+  };
+
+  const closeSplit = () => {
+    setSplitOpen(false);
+    setAlloc(emptyAlloc());
+    setAllocError("");
+  };
+
+  // ── Local Submit Lock (Prevents Double Submits using useRef) ──
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
+
+  useEffect(() => {
+    if (!activitySaving) {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
+  }, [activitySaving]);
+
   const { data: activityData = [] } = useQuery({
     queryKey: ["activityBilling", companyCode, prinCode, jobNo],
     enabled: !!companyCode && !!prinCode && !!jobNo,
@@ -81,6 +149,17 @@ export function ActivityBillingSection({
     },
   });
 
+  const newUid = () =>
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `r_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  useEffect(() => {
+    if (activityRows.some((r) => !value(r, "_uid"))) {
+      setActivityRows((cur) => cur.map((r) => (value(r, "_uid") ? r : { ...r, _uid: newUid() })));
+    }
+  }, [activityRows, setActivityRows]);
+
   const { data: taxCategoryData = [], isLoading: taxCategoryLoading } = useQuery({
     queryKey: ["taxCategory", companyCode],
     enabled: !!companyCode,
@@ -92,8 +171,13 @@ export function ActivityBillingSection({
   });
 
   // ── Handlers ──
+  // Key rows by their unique _uid (falls back to act_code / index) so that
+  // multiple rows with the SAME activity (e.g. monthly split) don't overwrite each other.
+  const rowKey = (row: ActivityRow, index: number) =>
+    String(value(row, "_uid") || value(row, "act_code") || `row_${index}`);
+
   const markEdited = useCallback((row: ActivityRow, index: number) => {
-    const key = String(value(row, "act_code") || `row_${index}`);
+    const key = rowKey(row, index);
     setActivityEdited((prev) => ({ ...prev, [key]: row }));
   }, [setActivityEdited]);
 
@@ -199,8 +283,6 @@ export function ActivityBillingSection({
 
   // ── Add / Edit Dialog State ──
   const emptyForm = (): ActivityRow => {
-    const noCompntcatMaster = !txCompntcatCode1Loading && txCompntcatCode1Data.length === 0;
-
     return {
       act_code: "",
       activity: "",
@@ -214,13 +296,12 @@ export function ActivityBillingSection({
       TX_COMPNT_LCURAMT_1: 0,
       TX_COMPNT_AMT_1_COST: 0,
       TX_COMPNT_LCURAMT_1_COST: 0,
-      // always present, just vary by legacy rule
-      TX_COMPNTCAT_CODE_1: noCompntcatMaster ? "11100" : "",
-      TX_COMPNTCAT_CODE_1_COST: noCompntcatMaster ? "11100" : "",
-      TX_COMPNT_PERC_1: noCompntcatMaster ? 5 : 0,
-      TX_COMPNT_PERC_1_COST: noCompntcatMaster ? 5 : 0,
-      TX_CAT_CODE: noCompntcatMaster ? "" : "00",
-      TX_CAT_CODE_COST: noCompntcatMaster ? "" : "00",
+      TX_COMPNTCAT_CODE_1: "0",
+      TX_COMPNTCAT_CODE_1_COST: "0",
+      TX_COMPNT_PERC_1: 0,
+      TX_COMPNT_PERC_1_COST: 0,
+      TX_CAT_CODE: "0",
+      TX_CAT_CODE_COST: "0",
     };
   };
 
@@ -240,10 +321,15 @@ export function ActivityBillingSection({
 
   const handleDelete = useCallback((index: number) => {
     const row = activityRows[index];
-    const key = String(value(row, "act_code") || `row_${index}`);
+    const key = rowKey(row, index);
     setActivityEdited((prev) => {
       const next = { ...prev };
       delete next[key];
+      // also clear any legacy act_code-keyed entry for this row
+      const legacy = String(value(row, "act_code") || `row_${index}`);
+      if (next[legacy] && String(value(next[legacy], "_uid") || "") === String(value(row, "_uid") || "")) {
+        delete next[legacy];
+      }
       return next;
     });
     setActivityRows((cur) => cur.filter((_, i) => i !== index));
@@ -252,16 +338,86 @@ export function ActivityBillingSection({
   const commitFormRow = () => {
     const final = recalcRow(formRow);
     if (editIndex !== null) {
-      setActivityRows((cur) => {
-        const next = cur.map((r, i) => (i === editIndex ? final : r));
-        return next;
-      });
+      setActivityRows((cur) => cur.map((r, i) => (i === editIndex ? final : r)));
       markEdited(final, editIndex);
     } else {
-      setActivityRows((cur) => [...cur, final]);
+      const added = { ...final, _uid: newUid(), _isNew: true };
+      setActivityRows((cur) => [...cur, added]);
+      setActivityEdited((prev) => ({ ...prev, [added._uid]: added }));
     }
     setDialogOpen(false);
     setEditIndex(null);
+  };
+
+  const handleImportConfirm = (items: ImportedActivity[]) => {
+    const added = items.map((it) => {
+      const merged: ActivityRow = { ...emptyForm(), ...it };
+      if (it.TX_COMPNTCAT_CODE_1)
+        merged.TX_COMPNT_PERC_1 = deriveTaxPercentFromCategory(it.TX_COMPNTCAT_CODE_1);
+      if (it.TX_COMPNTCAT_CODE_1_COST)
+        merged.TX_COMPNT_PERC_1_COST = deriveTaxPercentFromCategory(it.TX_COMPNTCAT_CODE_1_COST);
+      return { ...recalcRow(merged), _uid: newUid(), _isNew: true };
+    });
+
+    setActivityRows((cur) => [...cur, ...added]);
+    setActivityEdited((prev) => {
+      const next = { ...prev };
+      added.forEach((r) => (next[r._uid] = r));
+      return next;
+    });
+    setImportOpen(false);
+  };
+
+  // ── Allocate: split total amount across N months → N rows ──
+  const allocTotal = Number(alloc.amount);
+  const allocMonths = Math.floor(Number(alloc.months));
+  const allocPreview =
+    Number.isFinite(allocTotal) && allocTotal > 0 && allocMonths > 0
+      ? allocTotal / allocMonths
+      : null;
+
+  const handleAllocate = () => {
+    setAllocError("");
+
+    if (!alloc.act_code) return setAllocError("Select an activity.");
+    if (!Number.isFinite(allocTotal) || allocTotal <= 0) return setAllocError("Enter a total amount greater than 0.");
+    if (!Number.isFinite(allocMonths) || allocMonths < 1 || allocMonths > 120)
+      return setAllocError("Period must be between 1 and 120 months.");
+
+    // Work in paise so the split always adds up exactly; last row takes the remainder.
+    const totalPaise = Math.round(allocTotal * 100);
+    const basePaise = Math.floor(totalPaise / allocMonths);
+    const remainder = totalPaise - basePaise * allocMonths;
+
+    const taxCompCode = alloc.taxCompCat || "0";
+    const taxCatCode = alloc.taxCat || "0";
+    const baseDesc = alloc.otherServices.trim();
+
+    const added = Array.from({ length: allocMonths }, (_, i) => {
+      const paise = basePaise + (i === allocMonths - 1 ? remainder : 0);
+      const label = monthLabel(alloc.startMonth, i);
+      const merged: ActivityRow = {
+        ...emptyForm(),
+        act_code: alloc.act_code,
+        activity: alloc.activity,
+        quantity: 1,
+        bill_rate: paise / 100,
+        other_services: [baseDesc, label].filter(Boolean).join(" "),
+        TX_COMPNTCAT_CODE_1: taxCompCode,
+        TX_COMPNT_PERC_1: deriveTaxPercentFromCategory(taxCompCode),
+        TX_CAT_CODE: taxCatCode,
+      };
+      return { ...recalcRow(merged), _uid: newUid(), _isNew: true };
+    });
+
+    setActivityRows((cur) => [...cur, ...added]);
+    setActivityEdited((prev) => {
+      const next = { ...prev };
+      added.forEach((r) => (next[r._uid] = r));
+      return next;
+    });
+
+    closeSplit();
   };
 
   const columns = useMemo(() => {
@@ -497,17 +653,37 @@ export function ActivityBillingSection({
     ];
   }, [openEditDialog, handleDelete]);
 
+  // ── Bulletproof Submit Lock using useRef ──
+  const handleSubmitClick = async () => {
+    if (submitLockRef.current || activitySaving) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+
+    try {
+      await handleActivityBillingSubmit();
+    } finally {
+      // Fallback unlock in case activitySaving doesn't trigger
+      setTimeout(() => {
+        submitLockRef.current = false;
+        setIsSubmitting(false);
+      }, 1500);
+    }
+  };
+
   // ── Toolbar ──
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
       <Button size="sm" variant="outline" onClick={openAddDialog}>
         <Plus size={14} /> Add Activity
       </Button>
-      <Button size="sm" variant="outline" onClick={loadActivityBilling}>
-        <RefreshCw size={14} /> Refresh
+      <Button size="sm" variant="outline" onClick={openSplit}>
+        <Calculator size={14} /> Split Activities
       </Button>
-      <Button size="sm" onClick={handleActivityBillingSubmit} >
-        <Save size={14} /> {activitySaving ? "Saving..." : "Submit"}
+      <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+        <Upload size={14} /> Import Excel
+      </Button>
+      <Button size="sm" onClick={handleSubmitClick} disabled={activitySaving || isSubmitting}>
+        <Save size={14} /> {activitySaving || isSubmitting ? "Saving..." : "Submit"}
       </Button>
     </div>
   );
@@ -532,6 +708,205 @@ export function ActivityBillingSection({
           {toolbar}
         </div>
       </div>
+
+      {/* ── Split Activities Modal ── */}
+      {splitOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-[2px]">
+          <div className="grid w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl border bg-card shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b px-5 py-3">
+              <div className="flex items-center gap-2">
+                <Calculator size={16} className="text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">Split Activities</h3>
+              </div>
+              <Button size="icon" variant="ghost" onClick={closeSplit}>
+                <X size={16} />
+              </Button>
+            </div>
+
+            <div className="px-5 pt-3 text-xs text-muted-foreground">
+              Split a total amount equally across months. One row per month is added to the table.
+            </div>
+
+            {/* Body */}
+            <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Activity */}
+              <div className="grid gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Activity</label>
+                <LookupField
+                  compact
+                  value={alloc.act_code}
+                  displayValue={alloc.activity}
+                  columns={[
+                    { field: "ACTIVITY_CODE", header: "Code" },
+                    { field: "ACTIVITY", header: "Activity" },
+                  ]}
+                  valueField="ACTIVITY_CODE"
+                  displayFields={["ACTIVITY"]}
+                  loadOptions={async (query?: string) => {
+                    if (!query) return activityData;
+                    const term = query.toLowerCase();
+                    return activityData.filter(
+                      (r: any) =>
+                        String(r.ACTIVITY_CODE ?? "").toLowerCase().includes(term) ||
+                        String(r.ACTIVITY ?? "").toLowerCase().includes(term)
+                    );
+                  }}
+                  onChange={(_val: any, selectedRow: any) =>
+                    setAlloc((a) => ({
+                      ...a,
+                      act_code: selectedRow ? String(selectedRow.ACTIVITY_CODE ?? "") : "",
+                      activity: selectedRow ? String(selectedRow.ACTIVITY ?? "") : "",
+                    }))
+                  }
+                  placeholder="Select activity"
+                />
+              </div>
+
+              {/* Tax Component Category */}
+              <div className="grid gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Tax Component Category</label>
+                <LookupField
+                  compact
+                  value={alloc.taxCompCat}
+                  displayValue={alloc.taxCompCat}
+                  columns={[
+                    { field: "TX_COMPNTCAT_CODE", header: "Code" },
+                    { field: "TX_COMPNTCAT_NAME", header: "Description" },
+                  ]}
+                  valueField="TX_COMPNTCAT_CODE"
+                  displayFields={["TX_COMPNTCAT_NAME"]}
+                  loadOptions={async (query?: string) => {
+                    if (txCompntcatCode1Loading) return [];
+                    if (!query) return txCompntcatCode1Data;
+                    const term = query.toLowerCase();
+                    return txCompntcatCode1Data.filter(
+                      (r: any) =>
+                        String(r.TX_COMPNTCAT_CODE ?? "").toLowerCase().includes(term) ||
+                        String(r.TX_COMPNTCAT_NAME ?? "").toLowerCase().includes(term)
+                    );
+                  }}
+                  onChange={(_val: any, selectedRow: any) =>
+                    setAlloc((a) => ({
+                      ...a,
+                      taxCompCat: selectedRow ? String(selectedRow.TX_COMPNTCAT_CODE ?? "") : "0",
+                    }))
+                  }
+                  placeholder="Select tax code"
+                />
+              </div>
+
+              {/* Tax Category */}
+              <div className="grid gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Tax Category</label>
+                <LookupField
+                  compact
+                  value={alloc.taxCat}
+                  displayValue={alloc.taxCat}
+                  columns={[
+                    { field: "TX_CAT_CODE", header: "Code" },
+                    { field: "TX_CAT_NAME", header: "Description" },
+                  ]}
+                  valueField="TX_CAT_CODE"
+                  displayFields={["TX_CAT_NAME"]}
+                  loadOptions={async (query?: string) => {
+                    if (taxCategoryLoading) return [];
+                    if (!query) return taxCategoryData;
+                    const term = query.toLowerCase();
+                    return taxCategoryData.filter(
+                      (r: any) =>
+                        String(r.TX_CAT_CODE ?? "").toLowerCase().includes(term) ||
+                        String(r.TX_CAT_NAME ?? "").toLowerCase().includes(term)
+                    );
+                  }}
+                  onChange={(_val: any, selectedRow: any) =>
+                    setAlloc((a) => ({
+                      ...a,
+                      taxCat: selectedRow ? String(selectedRow.TX_CAT_CODE ?? "") : "0",
+                    }))
+                  }
+                  placeholder="Select tax category"
+                />
+              </div>
+
+              {/* Total Amount */}
+              <div className="grid gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Total Amount</label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  className="text-right"
+                  value={alloc.amount}
+                  onChange={(e: any) => setAlloc((a) => ({ ...a, amount: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+
+              {/* Period */}
+              <div className="grid gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Period (Months)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={120}
+                  step={1}
+                  className="text-right"
+                  value={alloc.months}
+                  onChange={(e: any) => setAlloc((a) => ({ ...a, months: e.target.value }))}
+                  placeholder="e.g. 10"
+                />
+              </div>
+
+              {/* Effective Month */}
+              <div className="grid gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Effective Month</label>
+                <Input
+                  type="month"
+                  value={alloc.startMonth}
+                  onChange={(e: any) => setAlloc((a) => ({ ...a, startMonth: e.target.value }))}
+                />
+              </div>
+
+              {/* Other Services */}
+              <div className="grid gap-1.5 sm:col-span-2 lg:col-span-3">
+                <label className="text-xs font-medium text-muted-foreground">Other Services</label>
+                <Input
+                  type="text"
+                  value={alloc.otherServices}
+                  onChange={(e: any) => setAlloc((a) => ({ ...a, otherServices: e.target.value }))}
+                  placeholder="Description (month name is appended if Effective Month is set)"
+                />
+              </div>
+            </div>
+
+            {/* Preview / error */}
+            <div className="flex items-center justify-between gap-3 border-y bg-muted/30 px-5 py-3 text-xs">
+              <span className="text-muted-foreground">
+                {allocPreview !== null ? (
+                  <>
+                    {allocMonths} row(s) × approx.{" "}
+                    <strong className="text-foreground">{fmtINR(allocPreview)}</strong> per month (bill, before tax)
+                  </>
+                ) : (
+                  "Enter total amount and period to preview the split."
+                )}
+              </span>
+              {allocError && <span className="font-medium text-destructive">{allocError}</span>}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
+              <Button variant="outline" size="sm" onClick={closeSplit}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleAllocate}>
+                <Plus size={14} className="mr-1" /> Allocate &amp; Add to Table
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DataTable */}
       <DataTable
@@ -852,6 +1227,16 @@ export function ActivityBillingSection({
           </div>
         </div>
       )}
+
+      <ActivityImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        activities={activityData}
+        taxCompCats={txCompntcatCode1Data}
+        taxCats={taxCategoryData}
+        masterLoading={txCompntcatCode1Loading || taxCategoryLoading}
+        onConfirm={handleImportConfirm}
+      />
     </section>
   );
 }
