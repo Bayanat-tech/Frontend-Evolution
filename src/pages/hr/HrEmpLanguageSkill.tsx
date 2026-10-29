@@ -428,7 +428,7 @@ export function HrEmpLanguagePage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                  HR Employee - Language Skills
+                  Language Skills
                 </h1>
                 <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
                   Editing

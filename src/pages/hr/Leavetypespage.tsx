@@ -1,19 +1,21 @@
-import { Save, X, CalendarClock, SlidersHorizontal, StickyNote } from "lucide-react";
+import { Save, X, CalendarClock, SlidersHorizontal, StickyNote, Loader2 } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { executeDynamicMutation, executeDynamicMutationColumn90, getDynamicLookup, LookupRow } from "../../api/lookups";
+import { executeDynamicMutationColumn90, getDynamicLookup, LookupRow } from "../../api/lookups";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
+import { Field, SectionPanel } from "../../components/ui/Formblocks";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 
 // ── Dynamic lookup parameters ────────────────────────────────────────────
 const MST_HR_LEAVE_TYPE_LIST = "MST_HR_LEAVE_TYPE_LIST";
 const MST_HR_ATTENDANCE_TYPE_LIST = "MST_HR_ATTENDANCE_TYPE_LIST";
 const PAY_COMPONENT_LOOKUP = "PAY_COMPONENT_LOOKUP";
-
 const HR_MSE_LEAVE_TYPES = "HR_MSE_LEAVE_TYPES";
+
+const CTL = "h-7 text-xs";
 
 type TLeaveType = {
   company_code?: string;
@@ -74,6 +76,28 @@ const payComponentColumns = [
   { field: "pay_comp_desc", header: "Pay Unit Description" },
 ];
 
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function buildLookupOptions(parameter: string, companyCode: string) {
+  return () =>
+    getDynamicLookup({
+      parameter,
+      loginid: "",
+      code1: companyCode,
+      code2: "",
+      code3: "",
+      code4: "",
+      number1: 0,
+      number2: 0,
+      number3: 0,
+      number4: 0,
+      date1: null,
+      date2: null,
+      date3: null,
+      date4: null,
+    } as Parameters<typeof getDynamicLookup>[0]);
+}
+
 export function LeaveTypesPage() {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? "";
@@ -91,12 +115,13 @@ export function LeaveTypesPage() {
     setForm({ ...EMPTY, company_code: companyCode });
     setIsExistingRecord(false);
     setErrors({});
+    setNotice(null);
   };
 
   const validate = (): boolean => {
     const next: Partial<Record<keyof TLeaveType, string>> = {};
-    if (!form.leave_type?.trim()) next.leave_type = "Leave Type is required";
-    if (!form.status?.trim()) next.status = "Status is required";
+    if (!form.leave_type?.trim()) next.leave_type = "Required";
+    if (!form.status?.trim()) next.status = "Required";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -130,83 +155,114 @@ export function LeaveTypesPage() {
         val1s17: form.status ?? "Active",
       } as any);
 
-      setNotice({ type: "success", message: isExistingRecord ? "Leave type updated." : "Leave type added." });
+      setNotice({
+        type: "success",
+        message: isExistingRecord ? "Leave type updated." : "Leave type added.",
+      });
       setIsExistingRecord(true);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save leave type record" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to save leave type record",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="p-4">
-      <div className="mb-3">
-        <p className="eyebrow m-0 text-xs text-muted-foreground">HR Pay Components</p>
-        <h2 className="m-0 text-base font-semibold">Leave Types</h2>
+    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+      {/* ══ Header — freight-transaction-header (Employee Master style) ══ */}
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <CalendarClock size={15} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                Leave Types
+              </h1>
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                {isExistingRecord ? "Editing" : "New"}
+              </span>
+              {form.leave_type && (
+                <span className="text-xs text-muted-foreground">
+                  {form.leave_type}
+                  {form.leave_type_desc ? ` - ${form.leave_type_desc}` : ""}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={resetForm}
+            disabled={saving}
+          >
+            <X size={14} /> Cancel
+          </Button>
+          <Button type="submit" form="leave-types-form" size="sm" disabled={saving}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
+            {saving ? "Saving" : "Submit"}
+          </Button>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+      <form id="leave-types-form" onSubmit={handleSubmit} className="grid gap-2">
         {/* ── Leave Details ──────────────────────────────────────────── */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CalendarClock size={16} className="text-muted-foreground" />
-              <h3 className="m-0 text-sm font-semibold">Leave Details</h3>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+        <SectionPanel title="Leave Details" icon={CalendarClock}>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <Field
+              label="Leave Type"
+              required
+              error={errors.leave_type}
+              className="md:col-span-2"
+            >
+              <LookupField
+                compact
+                label="Leave Type"
+                value={form.leave_type ?? ""}
+                displayValue={
+                  form.leave_type && form.leave_type_desc
+                    ? `${form.leave_type} - ${form.leave_type_desc}`
+                    : form.leave_type ?? ""
+                }
+                valueField="leave_type"
+                displayFields={["leave_type", "leave_type_desc"]}
+                columns={leaveTypeColumns}
+                loadOptions={buildLookupOptions(MST_HR_LEAVE_TYPE_LIST, form.company_code ?? "")}
+                onChange={(value, row: LookupRow | null) => {
+                  setField("leave_type", value);
+                  if (row) setField("leave_type_desc", String(row.leave_type_desc ?? ""));
+                  setIsExistingRecord(Boolean(row));
+                }}
+              />
+            </Field>
 
-            <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="lg:col-span-2">
-                <Lookup
-                  label="Leave Type"
-                  required
-                  parameter={MST_HR_LEAVE_TYPE_LIST}
-                  value={form.leave_type ?? ""}
-                  displayValue={
-                    form.leave_type && form.leave_type_desc
-                      ? `${form.leave_type} - ${form.leave_type_desc}`
-                      : form.leave_type ?? ""
-                  }
-                  valueField="leave_type"
-                  displayFields={["leave_type", "leave_type_desc"]}
-                  columns={leaveTypeColumns}
-                  companyCode={form.company_code ?? ""}
-                  error={errors.leave_type}
-                  onSelect={(value, row) => {
-                    setField("leave_type", value);
-                    if (row) setField("leave_type_desc", String(row.leave_type_desc ?? ""));
-                    setIsExistingRecord(Boolean(row));
-                  }}
-                />
-              </div>
+            <Field label="Short Description">
+              <Input
+                className={CTL}
+                value={form.leave_type_short_desc ?? ""}
+                onChange={(e) => setField("leave_type_short_desc", e.target.value)}
+              />
+            </Field>
+          </div>
+        </SectionPanel>
 
-              <label className="field">
-                <span>Short Description</span>
-                <Input
-                  value={form.leave_type_short_desc ?? ""}
-                  onChange={(e) => setField("leave_type_short_desc", e.target.value)}
-                />
-              </label>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Parameters (Leave + Salary combined, 4-col grid) ───────── */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={16} className="text-muted-foreground" />
-              <h3 className="m-0 text-sm font-semibold">Parameters</h3>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Lookup
+        {/* ── Parameters ─────────────────────────────────────────────── */}
+        <SectionPanel title="Parameters" icon={SlidersHorizontal}>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Field label="Attendance Type">
+              <LookupField
+                compact
                 label="Attendance Type"
-                parameter={MST_HR_ATTENDANCE_TYPE_LIST}
                 value={form.attend_type ?? ""}
                 displayValue={
                   form.attend_type && form.attend_desc
@@ -216,202 +272,139 @@ export function LeaveTypesPage() {
                 valueField="attend_type"
                 displayFields={["attend_type", "attend_desc"]}
                 columns={attendTypeColumns}
-                companyCode={form.company_code ?? ""}
-                onSelect={(value, row) => {
+                loadOptions={buildLookupOptions(MST_HR_ATTENDANCE_TYPE_LIST, form.company_code ?? "")}
+                onChange={(value, row: LookupRow | null) => {
                   setField("attend_type", value);
                   if (row) setField("attend_desc", String(row.attend_desc ?? ""));
                 }}
               />
+            </Field>
 
-              <label className="field">
-                <span>Max. Days Allowed</span>
-                <Input
-                  type="number"
-                  value={form.maximum_days_allow ?? ""}
-                  onChange={(e) => setField("maximum_days_allow", e.target.value)}
-                />
-              </label>
+            <Field label="Max. Days Allowed">
+              <Input
+                className={CTL}
+                type="number"
+                value={form.maximum_days_allow ?? ""}
+                onChange={(e) => setField("maximum_days_allow", e.target.value)}
+              />
+            </Field>
 
-              <label className="field">
-                <span>Min Service Days Reqd.</span>
-                <Input
-                  type="number"
-                  value={form.min_service_days_required ?? ""}
-                  onChange={(e) => setField("min_service_days_required", e.target.value)}
-                />
-              </label>
+            <Field label="Min Service Days Reqd.">
+              <Input
+                className={CTL}
+                type="number"
+                value={form.min_service_days_required ?? ""}
+                onChange={(e) => setField("min_service_days_required", e.target.value)}
+              />
+            </Field>
 
-              <Lookup
+            <Field label="Pay Unit">
+              <LookupField
+                compact
                 label="Pay Unit"
-                parameter={PAY_COMPONENT_LOOKUP}
                 value={form.pay_comp_id ?? ""}
                 displayValue={
-                  form.pay_comp_id && form.pay_comp_desc ? `${form.pay_comp_id} - ${form.pay_comp_desc}` : form.pay_comp_id ?? ""
+                  form.pay_comp_id && form.pay_comp_desc
+                    ? `${form.pay_comp_id} - ${form.pay_comp_desc}`
+                    : form.pay_comp_id ?? ""
                 }
                 valueField="pay_comp_id"
                 displayFields={["pay_comp_id", "pay_comp_desc"]}
                 columns={payComponentColumns}
-                companyCode={form.company_code ?? ""}
-                onSelect={(value, row) => {
+                loadOptions={buildLookupOptions(PAY_COMPONENT_LOOKUP, form.company_code ?? "")}
+                onChange={(value, row: LookupRow | null) => {
                   setField("pay_comp_id", value);
                   if (row) setField("pay_comp_desc", String(row.pay_comp_desc ?? ""));
                 }}
               />
+            </Field>
 
-              <label className="field">
-                <span>Carry Forward</span>
-                <YesNoSelect value={form.carry_forward ?? ""} onChange={(v) => setField("carry_forward", v)} />
-              </label>
+            <Field label="Carry Forward">
+              <YesNoSelect
+                value={form.carry_forward ?? ""}
+                onChange={(v) => setField("carry_forward", v)}
+              />
+            </Field>
 
-              <label className="field">
-                <span>Half Day Allowed</span>
-                <YesNoSelect value={form.half_day ?? ""} onChange={(v) => setField("half_day", v)} />
-              </label>
+            <Field label="Half Day Allowed">
+              <YesNoSelect
+                value={form.half_day ?? ""}
+                onChange={(v) => setField("half_day", v)}
+              />
+            </Field>
 
-              <label className="field">
-                <span>All Employees</span>
-                <YesNoSelect value={form.all_employees ?? ""} onChange={(v) => setField("all_employees", v)} />
-              </label>
+            <Field label="All Employees">
+              <YesNoSelect
+                value={form.all_employees ?? ""}
+                onChange={(v) => setField("all_employees", v)}
+              />
+            </Field>
 
-              <label className="field">
-                <span>Back Dated</span>
-                <YesNoSelect value={form.back_dated_allow ?? ""} onChange={(v) => setField("back_dated_allow", v)} />
-              </label>
+            <Field label="Back Dated">
+              <YesNoSelect
+                value={form.back_dated_allow ?? ""}
+                onChange={(v) => setField("back_dated_allow", v)}
+              />
+            </Field>
 
-              <label className="field">
-                <span>Future Date</span>
-                <YesNoSelect value={form.post_dated_allow ?? ""} onChange={(v) => setField("post_dated_allow", v)} />
-              </label>
+            <Field label="Future Date">
+              <YesNoSelect
+                value={form.post_dated_allow ?? ""}
+                onChange={(v) => setField("post_dated_allow", v)}
+              />
+            </Field>
 
-              <label className="field">
-                <span>Encashable</span>
-                <YesNoSelect value={form.encashable ?? ""} onChange={(v) => setField("encashable", v)} />
-              </label>
+            <Field label="Encashable">
+              <YesNoSelect
+                value={form.encashable ?? ""}
+                onChange={(v) => setField("encashable", v)}
+              />
+            </Field>
 
-              <label className="field">
-                <span>Leave with Pay</span>
-                <YesNoSelect value={form.with_pay ?? ""} onChange={(v) => setField("with_pay", v)} />
-              </label>
-            </div>
-          </CardContent>
-        </Card>
+            <Field label="Leave with Pay">
+              <YesNoSelect
+                value={form.with_pay ?? ""}
+                onChange={(v) => setField("with_pay", v)}
+              />
+            </Field>
+          </div>
+        </SectionPanel>
 
-        {/* ── Remarks & Status ────────────────────────────────────────── */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <StickyNote size={16} className="text-muted-foreground" />
-              <h3 className="m-0 text-sm font-semibold">Remarks &amp; Status</h3>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-3">
-              <label className="field md:col-span-2">
-                <span>Remarks</span>
-                <textarea
-                  className="input min-h-[60px] w-full rounded-md border px-3 py-2 text-sm"
-                  value={form.remarks ?? ""}
-                  onChange={(e) => setField("remarks", e.target.value)}
-                />
-              </label>
+        {/* ── Remarks & Status ───────────────────────────────────────── */}
+        <SectionPanel title="Remarks & Status" icon={StickyNote}>
+          <div className="grid gap-3 md:grid-cols-3">
+            <Field label="Remarks" className="md:col-span-2">
+              <textarea
+                className="min-h-[60px] w-full rounded-md border px-3 py-2 text-sm"
+                value={form.remarks ?? ""}
+                onChange={(e) => setField("remarks", e.target.value)}
+              />
+            </Field>
 
-              <label className="field">
-                <span>
-                  Status <strong className="text-destructive">*</strong>
-                </span>
-                <select
-                  className="input rounded-md border px-3 py-2 text-sm"
-                  value={form.status ?? "Active"}
-                  onChange={(e) => setField("status", e.target.value)}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-                {errors.status && <span className="text-destructive text-xs mt-0.5">{errors.status}</span>}
-              </label>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Footer actions */}
-        <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" onClick={resetForm}>
-            <X size={15} /> Cancel
-          </Button>
-          <Button disabled={saving} type="submit">
-            {saving ? <span className="spinner small" /> : <Save size={15} />} {saving ? "Saving..." : "Submit"}
-          </Button>
-        </div>
+            <Field label="Status" required error={errors.status}>
+              <Select
+                className={CTL}
+                value={form.status ?? "Active"}
+                onChange={(e) => setField("status", e.target.value)}
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </Select>
+            </Field>
+          </div>
+        </SectionPanel>
       </form>
-    </div>
+    </section>
   );
 }
 
 // ── Small shared helpers ────────────────────────────────────────────────
 function YesNoSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <select className="input rounded-md border px-3 py-2 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
+    <Select className={CTL} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">-- Select --</option>
       <option value="Y">Yes</option>
       <option value="N">No</option>
-    </select>
-  );
-}
-
-function Lookup({
-  label,
-  required,
-  parameter,
-  value,
-  displayValue,
-  valueField,
-  displayFields,
-  columns,
-  companyCode,
-  error,
-  onSelect,
-}: {
-  label: string;
-  required?: boolean;
-  parameter: string;
-  value: string;
-  displayValue: string;
-  valueField: string;
-  displayFields: string[];
-  columns: { field: string; header: string }[];
-  companyCode: string;
-  error?: string;
-  onSelect: (value: string, row: LookupRow | null) => void;
-}) {
-  return (
-    <div className="field">
-      <LookupField
-        label={required ? `${label} *` : label}
-        value={value}
-        displayValue={displayValue}
-        columns={columns}
-        valueField={valueField}
-        displayFields={displayFields}
-        loadOptions={() =>
-          getDynamicLookup({
-            parameter,
-            code1: companyCode,
-            code2: "",
-            code3: "",
-            code4: "",
-            number1: 0,
-            number2: 0,
-            number3: 0,
-            number4: 0,
-            date1: null,
-            date2: null,
-            date3: null,
-            date4: null,
-          })
-        }
-        onChange={onSelect}
-      />
-      {error && <span className="text-destructive text-xs mt-0.5">{error}</span>}
-    </div>
+    </Select>
   );
 }
