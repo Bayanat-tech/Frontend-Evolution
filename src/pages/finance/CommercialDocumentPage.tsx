@@ -1,3 +1,6 @@
+import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { financeTaxLabel } from "../../utils/financeTaxTreatment";
+import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
 import { roundFinanceTax } from "../../utils/financeTaxAmounts";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins, RotateCcw, Zap, CheckCircle2 } from "lucide-react";
@@ -624,11 +627,13 @@ function CommercialEditor({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const taxLabels = useFinanceTaxLabels(companyInfo);
   const editMode = editor.mode === "edit";
   // const [form, setForm] = useState<FormState>(() => emptyForm(docType, editor.mode === "create" ? editor.div : undefined));
   const [form, setForm] = useState<FormState>(() => { const f = emptyForm(docType, editor.mode === "create" ? editor.div : undefined); const d = clampToFy(f.doc_date, fyRange); 
     return { ...f, doc_date: d, inv_date: d };
   });
+  const gst = useFinanceGst(form, docType, editMode);
   const [loading, setLoading] = useState(editMode);
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -788,10 +793,7 @@ function CommercialEditor({
     if (trimmed && taxRateMap[trimmed] !== undefined) {
       return taxRateMap[trimmed];
     }
-    const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
-    if (defaultPerc !== undefined) return defaultPerc;
-    const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
-    return firstNonZero ?? 0;
+    return 0;
   };
 
   const [reportOpen, setReportOpen] = useState(false);
@@ -1261,6 +1263,7 @@ const limitProps = (f: keyof FormState) => ({
         user?.loginid || ""
       );
 
+      gst.attachToHeader(bulkPayload.header);
       const result: any = await upsertBulkAccountEntryApi(bulkPayload);
 
       console.log("Commercial document save response:", result);
@@ -1373,6 +1376,7 @@ const limitProps = (f: keyof FormState) => ({
             </Button>
           </div>
         </div>
+      <FinanceGstPanel editor={gst} disabled={saving || form.canceled === "Y"} />
       </CardHeader>
       {isCancelled && (
         <div className="cancelled-document-banner" role="status">
@@ -1420,7 +1424,7 @@ const limitProps = (f: keyof FormState) => ({
               )}
               <span className="inline-flex items-center gap-1.5">
                 <span className="font-semibold text-[#00378C]">Tax:</span>
-                <span className="font-medium">{form.tax_type === "S" ? "STD (5%)" : "No Tax"}</span>
+                <span className="font-medium">{(form.tx_compnt_1_expmt || form.tax_type) === "S" ? `${taxLabels.S} (${Number(form.tx_compnt_perc_1 || getTaxPercForCode(form.tx_compntcat_code_1 || ""))}%)` : financeTaxLabel(form.tx_compnt_1_expmt || form.tax_type, taxLabels)}</span>
               </span>
             </div>
             <Button
@@ -1803,10 +1807,10 @@ const limitProps = (f: keyof FormState) => ({
                         }}
                       >
                         <option value="" />
-                        <option value="S">Std. Tax</option>
-                        <option value="Z">Zero</option>
-                        <option value="E">Expmt</option>
-                        <option value="N">No VAT</option>
+                        <option value="S">{taxLabels.S}</option>
+                        <option value="Z">{taxLabels.Z}</option>
+                        <option value="E">{taxLabels.E}</option>
+                        <option value="N">{taxLabels.N}</option>
                       </Select>
                     </CField>
 
@@ -2201,10 +2205,10 @@ const limitProps = (f: keyof FormState) => ({
     tx_compnt_amt_1:     taxAmt,
   });
 }}>
-  <option value="S">Std Tax</option>
-  <option value="N">No Tax</option>
-  <option value="Z">Zero</option>
-  <option value="E">Exempt</option>
+  <option value="S">{taxLabels.S}</option>
+  <option value="N">{taxLabels.N}</option>
+  <option value="Z">{taxLabels.Z}</option>
+  <option value="E">{taxLabels.E}</option>
 </Select>
                         </td>
                       )}

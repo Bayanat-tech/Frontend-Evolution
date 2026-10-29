@@ -1,3 +1,6 @@
+import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
+import { taxTreatmentFromMaster, financeTaxLabel } from "../../utils/financeTaxTreatment";
 import { financeTaxAmounts } from "../../utils/financeTaxAmounts";
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
@@ -498,8 +501,10 @@ function PaymentDocumentEditor({
   onCancelled: () => Promise<void>;
 }) {
   const { user } = useAuth();
+  const taxLabels = useFinanceTaxLabels();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const gst = useFinanceGst(form, docType, editMode);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [childLoading, setChildLoading] = useState(false);
@@ -746,7 +751,7 @@ function PaymentDocumentEditor({
       const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
       if (code) {
         rMap[code] = rawRate;
-        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
+        tMap[code] = taxTreatmentFromMaster(rawType, rawRate);
       }
     });
     setTaxRateMap((prev) => ({ ...prev, ...rMap }));
@@ -760,18 +765,15 @@ function PaymentDocumentEditor({
     }
   }, [user?.company_code, loadTaxOptions]);
 
-  const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
-    const trimmed = String(taxCode || "").trim();
-    if (trimmed && taxRateMap[trimmed] !== undefined) {
-      return taxRateMap[trimmed];
-    }
-    if (fallbackPerc != null && !isNaN(Number(fallbackPerc))) {
-      return Number(fallbackPerc);
-    }
-    return 0;
+  const getTaxPercForCode = useCallback((taxCode?: string, existingPerc?: number | null) => {
+    // An assigned voucher rate survives later master-rate changes.
+    if (existingPerc != null && Number.isFinite(Number(existingPerc))) return Number(existingPerc);
+    const code = String(taxCode || "").trim();
+    return code && taxRateMap[code] !== undefined ? taxRateMap[code] : 0;
   }, [taxRateMap]);
 
   useEffect(() => {
+    if (editMode) return;
     setForm((current) => {
       let changed = false;
       const nextDetail = current.detail.map((d) => {
@@ -794,7 +796,7 @@ function PaymentDocumentEditor({
       });
       return changed ? { ...current, detail: nextDetail } : current;
     });
-  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), form.tx_compntcat_code_1, form.tx_compnt_1_expmt, getTaxPercForCode]);
+  }, [editMode, form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), form.tx_compntcat_code_1, form.tx_compnt_1_expmt, getTaxPercForCode]);
 
   const disabled = form.canceled === "Y" || saving;
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
@@ -1375,6 +1377,7 @@ if (tooLong.length) {
       console.log("detail child_table:", form.detail.map(d => ({ ac: d.ac_code, table: d.child_table, children: form.children[d.id] })));
       const bulkPayload = buildBulkAccountEntryPayload(form, docType, user?.company_code || "", user?.loginid || "");
       console.log("Bulk payload header:", bulkPayload.header);
+      gst.attachToHeader(bulkPayload.header);
       await upsertBulkAccountEntryApi(bulkPayload);
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
@@ -1513,6 +1516,7 @@ if (tooLong.length) {
             </Button>
           </div>
         </div>
+      <FinanceGstPanel editor={gst} disabled={saving || form.canceled === "Y"} />
       </CardHeader>
       {isCancelled && (
         <div className="cancelled-document-banner" role="status">
@@ -1560,7 +1564,7 @@ if (tooLong.length) {
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="font-semibold text-[#00378C]">Tax:</span>
-                    <span className="font-medium">{form.tx_compnt_1_expmt === "S" ? "Std Tax" : form.tx_compnt_1_expmt === "Z" ? "Zero" : form.tx_compnt_1_expmt === "E" ? "Exempt" : "No Tax"}</span>
+                    <span className="font-medium">{financeTaxLabel(form.tx_compnt_1_expmt, taxLabels)}</span>
                   </span>
                 </div>
                 <Button
@@ -1860,10 +1864,10 @@ if (tooLong.length) {
                               });
                             }}
                           >
-                            <option value="N">No Tax</option>
-                            <option value="S">Std Tax</option>
-                            <option value="Z">Zero</option>
-                            <option value="E">Exempt</option>
+                            <option value="N">{taxLabels.N}</option>
+                            <option value="S">{taxLabels.S}</option>
+                            <option value="Z">{taxLabels.Z}</option>
+                            <option value="E">{taxLabels.E}</option>
                           </Select>
                         </CField>
 
@@ -2254,10 +2258,10 @@ if (tooLong.length) {
                                   });
                                 }}
                               >
-                                <option value="N">No Tax</option>
-                                <option value="S">Std Tax</option>
-                                <option value="Z">Zero</option>
-                                <option value="E">Exempt</option>
+                                <option value="N">{taxLabels.N}</option>
+                                <option value="S">{taxLabels.S}</option>
+                                <option value="Z">{taxLabels.Z}</option>
+                                <option value="E">{taxLabels.E}</option>
                               </Select>
                             </td>
                           )}

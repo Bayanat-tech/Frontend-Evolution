@@ -52,10 +52,17 @@ const statusTabs = [
   { value: "confirmed", label: "Confirmed" },
 ];
 
+export function isInvoiceConfirmed(status: unknown): boolean {
+  const s = text(status).toUpperCase();
+  if (s === "N" || s === "DRAFT") return false;
+  // In PowerBuilder / Freight: 'B' = Billed/Confirmed, 'C' = Confirmed, 'CONFIRMED', 'F', 'Y' or null in TN_INVOICE = Confirmed
+  return true;
+}
+
 function filterInvoiceByStatus(row: LookupRow, status: string) {
-  const s = text(row.inv_status).toUpperCase();
-  if (status === "confirmed") return s === "C" || s === "CONFIRMED";
-  if (status === "draft") return s !== "C" && s !== "CONFIRMED";
+  const confirmed = isInvoiceConfirmed(row.inv_status);
+  if (status === "confirmed") return confirmed;
+  if (status === "draft") return !confirmed;
   return true;
 }
 
@@ -290,9 +297,9 @@ export function FreightInvoicePage() {
       header: "Status",
       size: 100,
       cell: ({ row }) => {
-        const val = text(row.original.inv_status).toUpperCase();
-        if (val === "C" || val === "CONFIRMED") return <StatusChip tone="green" label="Confirmed" />;
-        return <StatusChip tone="slate" label={val === "N" ? "Draft" : val || "Draft"} />;
+        const confirmed = isInvoiceConfirmed(row.original.inv_status);
+        if (confirmed) return <StatusChip tone="green" label="Confirmed" />;
+        return <StatusChip tone="slate" label="Draft" />;
       },
     },
     {
@@ -301,15 +308,14 @@ export function FreightInvoicePage() {
       size: 120,
       enableColumnFilter: false,
       cell: ({ row }) => {
-        const invStatus = text(row.original.inv_status).toUpperCase();
-        const isConfirmed = invStatus === "C" || invStatus === "CONFIRMED";
+        const confirmed = isInvoiceConfirmed(row.original.inv_status);
         const invNo = text(row.original.invoice_no);
         const prinCode = text(row.original.prin_code);
         return (
           <div className="flex items-center gap-1">
             <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print / Download invoice" onClick={() => void directPrintInvoice(prinCode, invNo)}><Printer size={13} /></Button>
             <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={13} /></Button>
-            {!isConfirmed && (
+            {!confirmed && (
               <>
                 <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Edit invoice" onClick={() => void openExisting(row.original, "edit")}><Pencil size={13} /></Button>
                 <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Confirm invoice" onClick={() => void confirmExistingInvoice(invNo)}><CheckCircle size={13} /></Button>
@@ -443,7 +449,7 @@ export function FreightInvoicePage() {
 
   const selectedKeys = useMemo(() => new Set(selectedRows.map(lineKey)), [selectedRows]);
   const readOnly = editorMode === "view";
-  const isFormConfirmed = text(form.inv_status).toUpperCase() === "C" || text(form.inv_status).toUpperCase() === "CONFIRMED";
+  const isFormConfirmed = isInvoiceConfirmed(form.inv_status);
 
   async function printInvoice(reportType: "grouped" | "activitywise") {
     if (!form.prin_code || !form.invoice_no) return;

@@ -1,3 +1,6 @@
+import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
+import { taxTreatmentFromMaster } from "../../utils/financeTaxTreatment";
 import { Textarea } from "../../components/ui/Textarea";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
@@ -389,8 +392,10 @@ function PettyCashPaymentDocument({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const taxLabels = useFinanceTaxLabels();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const gst = useFinanceGst(form, docType, editMode);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
@@ -614,7 +619,7 @@ function PettyCashPaymentDocument({
       const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
       if (code) {
         rMap[code] = rawRate;
-        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
+        tMap[code] = taxTreatmentFromMaster(rawType, rawRate);
       }
     });
     setTaxRateMap((prev) => ({ ...prev, ...rMap }));
@@ -628,18 +633,15 @@ function PettyCashPaymentDocument({
     }
   }, [user?.company_code, loadTaxOptions]);
 
-  const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
-    const trimmed = String(taxCode || "").trim();
-    if (trimmed && taxRateMap[trimmed] !== undefined) {
-      return taxRateMap[trimmed];
-    }
-    if (fallbackPerc != null && !isNaN(Number(fallbackPerc))) {
-      return Number(fallbackPerc);
-    }
-    return 0;
+  const getTaxPercForCode = useCallback((taxCode?: string, existingPerc?: number | null) => {
+    // An assigned voucher rate survives later master-rate changes.
+    if (existingPerc != null && Number.isFinite(Number(existingPerc))) return Number(existingPerc);
+    const code = String(taxCode || "").trim();
+    return code && taxRateMap[code] !== undefined ? taxRateMap[code] : 0;
   }, [taxRateMap]);
 
   useEffect(() => {
+    if (editMode) return;
     setForm((current) => {
       let changed = false;
       const nextDetail = current.detail.map((d) => {
@@ -661,7 +663,7 @@ function PettyCashPaymentDocument({
       });
       return changed ? { ...current, detail: nextDetail } : current;
     });
-  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), getTaxPercForCode]);
+  }, [editMode, form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), getTaxPercForCode]);
 
   const disabled = form.canceled === "Y" || saving;
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
@@ -1152,6 +1154,7 @@ function PettyCashPaymentDocument({
       console.log("detail child_table:", form.detail.map(d => ({ ac: d.ac_code, table: d.child_table, children: form.children[d.id] })));
       const bulkPayload = buildBulkAccountEntryPayload(form, docType, user?.company_code || "", user?.loginid || "");
       console.log("Bulk payload header:", bulkPayload.header);
+      gst.attachToHeader(bulkPayload.header);
       await upsertBulkAccountEntryApi(bulkPayload);
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
@@ -1254,6 +1257,7 @@ function PettyCashPaymentDocument({
             </Button>
           </div>
         </div>
+      <FinanceGstPanel editor={gst} disabled={saving || form.canceled === "Y"} />
       </CardHeader>
 
       <CardContent className="commercial-editor-body min-h-0 overflow-auto p-3">
@@ -1821,10 +1825,10 @@ function PettyCashPaymentDocument({
                                   });
                                 }}
                               >
-                                <option value="N">No Tax</option>
-                                <option value="S">Std Tax</option>
-                                <option value="Z">Zero</option>
-                                <option value="E">Exempt</option>
+                                <option value="N">{taxLabels.N}</option>
+                                <option value="S">{taxLabels.S}</option>
+                                <option value="Z">{taxLabels.Z}</option>
+                                <option value="E">{taxLabels.E}</option>
                               </Select>
                             </td>
                           )}
