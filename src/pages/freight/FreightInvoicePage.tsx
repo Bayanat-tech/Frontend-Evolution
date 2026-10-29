@@ -52,10 +52,17 @@ const statusTabs = [
   { value: "confirmed", label: "Confirmed" },
 ];
 
+export function isInvoiceConfirmed(status: unknown): boolean {
+  const s = text(status).toUpperCase();
+  if (s === "N" || s === "DRAFT") return false;
+  // In PowerBuilder / Freight: 'B' = Billed/Confirmed, 'C' = Confirmed, 'CONFIRMED', 'F', 'Y' or null in TN_INVOICE = Confirmed
+  return true;
+}
+
 function filterInvoiceByStatus(row: LookupRow, status: string) {
-  const s = text(row.inv_status).toUpperCase();
-  if (status === "confirmed") return s === "C" || s === "CONFIRMED";
-  if (status === "draft") return s !== "C" && s !== "CONFIRMED";
+  const confirmed = isInvoiceConfirmed(row.inv_status);
+  if (status === "confirmed") return confirmed;
+  if (status === "draft") return !confirmed;
   return true;
 }
 
@@ -243,6 +250,26 @@ export function FreightInvoicePage() {
     }
   }
 
+  const directPrintInvoice = useCallback(async (prinCode: string, invoiceNo: string) => {
+    if (!invoiceNo) return;
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      toast.error("Please allow pop-ups for this site to view the report.");
+      return;
+    }
+    reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Loading invoice report...</p>");
+    try {
+      const html = await getFreightInvoiceDetailReport(prinCode, invoiceNo, companyCode, "grouped");
+      if (reportWindow.closed) return;
+      reportWindow.document.open();
+      reportWindow.document.write(html);
+      reportWindow.document.close();
+    } catch {
+      reportWindow.close();
+      toast.error("Failed to load invoice report.");
+    }
+  }, [companyCode, toast]);
+
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     {
       accessorKey: "invoice_no",
@@ -270,24 +297,25 @@ export function FreightInvoicePage() {
       header: "Status",
       size: 100,
       cell: ({ row }) => {
-        const val = text(row.original.inv_status).toUpperCase();
-        if (val === "C" || val === "CONFIRMED") return <StatusChip tone="green" label="Confirmed" />;
-        return <StatusChip tone="slate" label={val === "N" ? "Draft" : val || "Draft"} />;
+        const confirmed = isInvoiceConfirmed(row.original.inv_status);
+        if (confirmed) return <StatusChip tone="green" label="Confirmed" />;
+        return <StatusChip tone="slate" label="Draft" />;
       },
     },
     {
       id: "actions",
       header: "Actions",
-      size: 96,
+      size: 120,
       enableColumnFilter: false,
       cell: ({ row }) => {
-        const invStatus = text(row.original.inv_status).toUpperCase();
-        const isConfirmed = invStatus === "C" || invStatus === "CONFIRMED";
+        const confirmed = isInvoiceConfirmed(row.original.inv_status);
         const invNo = text(row.original.invoice_no);
+        const prinCode = text(row.original.prin_code);
         return (
           <div className="flex items-center gap-1">
+            <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print / Download invoice" onClick={() => void directPrintInvoice(prinCode, invNo)}><Printer size={13} /></Button>
             <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={13} /></Button>
-            {!isConfirmed && (
+            {!confirmed && (
               <>
                 <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Edit invoice" onClick={() => void openExisting(row.original, "edit")}><Pencil size={13} /></Button>
                 <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Confirm invoice" onClick={() => void confirmExistingInvoice(invNo)}><CheckCircle size={13} /></Button>
@@ -297,7 +325,7 @@ export function FreightInvoicePage() {
         );
       },
     },
-  ], [companyCode, loginId, loadRows]);
+  ], [companyCode, loginId, loadRows, directPrintInvoice]);
 
   async function loadCandidateJobs(
   search = candidateSearch,
@@ -420,8 +448,8 @@ export function FreightInvoicePage() {
   }
 
   const selectedKeys = useMemo(() => new Set(selectedRows.map(lineKey)), [selectedRows]);
-  const readOnly = editorMode === "view";
-  const isFormConfirmed = text(form.inv_status).toUpperCase() === "C" || text(form.inv_status).toUpperCase() === "CONFIRMED";
+  const isFormConfirmed = isInvoiceConfirmed(form.inv_status);
+  const readOnly = editorMode === "view" || (editorMode === "edit" && isFormConfirmed);
 
   async function printInvoice(reportType: "grouped" | "activitywise") {
     if (!form.prin_code || !form.invoice_no) return;
@@ -516,7 +544,7 @@ export function FreightInvoicePage() {
 
           </div>
           <div className="freight-invoice-header-actions"><div className="flex w-full items-center justify-between">
-            {form.invoice_no ? <Button type="button" variant="outline" onClick={() => setPrintDialogOpen(true)}><Printer size={14} /> Print</Button> : <span />}
+            {form.invoice_no ? <Button type="button" variant="outline" onClick={() => void directPrintInvoice(form.prin_code, form.invoice_no)}><Printer size={14} /> Print</Button> : <span />}
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" disabled={saving} onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}>{readOnly ? "Close" : "Cancel"}</Button>
               {readOnly && form.invoice_no && !isFormConfirmed && (
@@ -524,12 +552,12 @@ export function FreightInvoicePage() {
                   <CheckCircle size={14} />Confirm Invoice
                 </Button>
               )}
-              {!readOnly && (
+              {!readOnly && !isFormConfirmed && (
                 <>
                   <Button type="button" variant="outline" onClick={() => void saveInvoice("draft")} disabled={saving || !selectedRows.length}>
                     <Save size={14} />{saving ? "Saving..." : "Save Draft"}
                   </Button>
-                  <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void saveInvoice("confirm")} disabled={saving || !selectedRows.length}>
+                  <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void saveInvoice("confirm")} disabled={saving || !selectedRows.length || isFormConfirmed}>
                     <CheckCircle size={14} />{saving ? "Confirming..." : "Confirm Invoice"}
                   </Button>
                 </>

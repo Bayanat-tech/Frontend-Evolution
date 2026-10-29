@@ -166,7 +166,15 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     let widths: (string | number)[] = Array(columns).fill("*");
     if (isTotals) {
       widths = ["*", 80];
-    } else if (!details && table.rows[0]) {
+    } else if (table.classList.contains("prh-table")) {
+      // PR approval history: status | updated by (rest of width) | date-time on one line
+      // widths = [120, 230, "*"];
+      widths = ["18%", "45%", "37%"];
+      //  widths = ["18%", "42%", "*"];
+    } else if (table.classList.contains("pr-kv-box")) {
+      widths = ["38%", 8, "*"];
+    }
+    else if (!details && table.rows[0]) {
       const isGrnKvTable = !!table.closest(".grn-two-col");
       if (isGrnKvTable) {
         widths = ["30%", 12, "*"];
@@ -206,7 +214,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
       widths,
       headerRows: table.tHead?.rows.length || (table.rows[0]?.querySelector("th") ? 1 : 0),
       dontBreakRows: true,
-      layout: details ? "noBorders" : "biscReportTable",
+      layout: details ? "noBorders" : table.classList.contains("pr-kv-box") ? "kvBox" : "biscReportTable",
     }));
     table.querySelectorAll("th").forEach((cell) => {
       cell.style.backgroundColor = "#eaf0f8";
@@ -278,7 +286,7 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
       p: { margin: [0, 1, 0, 3] },
       td: { margin: [1, 1.5, 1, 1.5] },
       th: { bold: true, color: "#00378c", fillColor: "#eaf0f8", margin: [1, 2.5, 1, 2.5] },
-      table: { margin: [0, 2, 0, 5] },
+      table: { margin: [0, 0, 0, 0] },
     },
   }) as Content;
   const styles: StyleDictionary = {
@@ -385,6 +393,19 @@ export async function createPurchasePdf(report: PurchaseReportDocument, identity
       paddingRight: () => 4,
       paddingTop: () => 2.5,
       paddingBottom: () => 2.5,
+    },
+
+
+    kvBox: {
+      hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length ? 0.75 : 0),
+      vLineWidth: (i: number, node: any) => (i === 0 || i === node.table.widths.length ? 0.75 : 0),
+      hLineColor: () => "#cbd5e1",
+      vLineColor: () => "#cbd5e1",
+      paddingLeft: () => 6,
+      paddingRight: () => 4,
+      paddingTop: () => 2.5,
+      paddingBottom: () => 2.5,
+      fillColor: (rowIndex: number) => (rowIndex === 0 ? "#eaf0f8" : null),
     },
   };
   return new Promise<Blob>((resolve, reject) => {

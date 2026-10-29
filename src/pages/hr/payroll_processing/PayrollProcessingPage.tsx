@@ -38,6 +38,18 @@ function pick(row: any, key: string): any {
   return row[key] ?? row[key.toLowerCase()] ?? row[key.toUpperCase()];
 }
 
+function pickAny(row: any, ...keys: string[]): any {
+  if (!row) return undefined;
+  const squash = (s: string) => s.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const map = new Map<string, any>();
+  for (const k of Object.keys(row)) map.set(squash(k), row[k]);
+  for (const k of keys) {
+    const v = map.get(squash(k));
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return undefined;
+}
+
 const norm = (v: unknown) => String(v ?? "").trim().toUpperCase();
 
 /** Every identifier a lookup row might carry for an employee. */
@@ -125,26 +137,58 @@ type TxnType = "E" | "D" | "ALL";
 /* API                                                                        */
 /* -------------------------------------------------------------------------- */
 
-async function processBulkSalary(
+/**
+ * Sync employee pay components before salary is processed.
+ * Runs PROC_SYNC_HR_EMP_COMPONENTS through the dynamic SQL common proc
+ * (same getDynamicLookup path as the other lookups on this page).
+ *   code1 = company code                    (P_CODE1)
+ *   code2 = employee ids, comma separated   (P_CODE2)  e.g. "101,102,103"
+ */
+async function syncEmpComponents(
   companyCode: string,
   employeeIds: string,
-  divCode: string,
   loginId: string
-): Promise<ApiResponse> {
-  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
-    parameter: "PROC_BULK_PROCESS_SALARY",
-    loginid: loginId || "",
-    val1s1: companyCode || "", // P_VAL1S1 (Company Code)
-    val1s2: employeeIds, // P_VAL1S2 (Employee IDs - comma separated)
-    // val1s3 is the OUT parameter (L_PROCESS_FLAG), so we skip it
-    val1s4: divCode || "", // P_VAL1S4 (Division Code)
-  });
+): Promise<void> {
+  try {
+    const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+      parameter: "PROC_SYNC_HR_EMP_COMPONENTS",
+      loginid: loginId || "",
+      val1s1: companyCode || "",
+      val1s2: employeeIds,
+    });
 
-  if (!res.data.success)
-    throw new Error(res.data.message || "Failed to bulk process salary");
-
-  return res.data;
+    if (!res.data?.success) {
+      throw new Error(res.data?.message || "Failed to sync employee components");
+    }
+  } catch (e: any) {
+    // surface the backend's message (axios hides it inside e.response)
+    const d = e?.response?.data;
+    throw new Error(
+      d?.details || d?.message || e?.message || "Failed to sync employee components"
+    );
+  }
 }
+
+// async function processBulkSalary(
+//   companyCode: string,
+//   employeeIds: string,
+//   divCode: string,
+//   loginId: string
+// ): Promise<ApiResponse> {
+//   const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+//     parameter: "PROC_BULK_PROCESS_SALARY",
+//     loginid: loginId || "",
+//     val1s1: companyCode || "", // P_VAL1S1 (Company Code)
+//     val1s2: employeeIds, // P_VAL1S2 (Employee IDs - comma separated)
+//     // val1s3 is the OUT parameter (L_PROCESS_FLAG), so we skip it
+//     val1s4: divCode || "", // P_VAL1S4 (Division Code)
+//   });
+
+//   if (!res.data.success)
+//     throw new Error(res.data.message || "Failed to bulk process salary");
+
+//   return res.data;
+// }
 
 async function fetchPayrollProcessingData(params: {
   companyCode: string;
@@ -193,25 +237,31 @@ async function fetchAddDedData(params: {
 
   const rows = (await getDynamicLookup(queryParams)) ?? [];
 
+  // DEBUG: shows what the backend really returns. Remove once fixed.
+  if (rows.length > 0) {
+    console.log("[AddDed] columns returned:", Object.keys(rows[0] as any));
+    console.log("[AddDed] first row:", rows[0]);
+  }
+
   return (rows as any[]).map((r, i) => ({
-    doc_type: pick(r, "DOC_TYPE") ?? null,
-    doc_no: pick(r, "DOC_NO") ?? null,
-    doc_date: pick(r, "DOC_DATE") ?? null,
-    employee_code: String(pick(r, "EMPLOYEE_CODE") ?? ""),
+    doc_type: pickAny(r, "DOC_TYPE", "DOCTYPE", "DOC_TYPE_CODE", "TXN_TYPE") ?? null,
+    doc_no: pickAny(r, "DOC_NO", "DOCNO", "DOC_NUMBER") ?? null,
+    doc_date: pickAny(r, "DOC_DATE", "DOCDATE") ?? null,
+    employee_code: String(pickAny(r, "EMPLOYEE_CODE", "EMP_CODE") ?? ""),
     employee_name: String(
-      pick(r, "EMPLOYEE_NAME") || pick(r, "EMP_NAME") || pick(r, "RPT_NAME") || ""
+      pickAny(r, "EMPLOYEE_NAME", "EMP_NAME", "RPT_NAME") ?? ""
     ),
-    pay_comp_code: pick(r, "PAY_COMP_CODE") ?? null,
-    pay_comp_id: pick(r, "PAY_COMP_ID") ?? pick(r, "PAY_COMP_CODE") ?? null,
-    pay_comp_desc: pick(r, "PAY_COMP_DESC") ?? null,
-    pay_comp_earn_ded: pick(r, "PAY_COMP_EARN_DED") ?? null,
-    recover_mth_amt: Number(pick(r, "RECOVER_MTH_AMT") ?? 0) || 0,
-    serial_no: pick(r, "SERIAL_NO") ?? null,
-    // always start as "No"; the user switches a row to "Yes" to cancel it
+    pay_comp_code: pickAny(r, "PAY_COMP_CODE") ?? null,
+    pay_comp_id: pickAny(r, "PAY_COMP_ID", "PAY_COMP_CODE") ?? null,
+    pay_comp_desc: pickAny(r, "PAY_COMP_DESC") ?? null,
+    pay_comp_earn_ded: pickAny(r, "PAY_COMP_EARN_DED") ?? null,
+    recover_mth_amt: Number(pickAny(r, "RECOVER_MTH_AMT") ?? 0) || 0,
+    serial_no: pickAny(r, "SERIAL_NO", "SL_NO", "SR_NO", "SERIAL", "SERIAL_NUMBER", "LINE_NO") ?? null,
     cancel_status: "N" as const,
-    _rowKey: `adv-${pick(r, "DOC_NO") ?? i}-${i}`,
+    _rowKey: `adv-${pickAny(r, "DOC_NO") ?? i}-${i}`,
   }));
 }
+
 
 /**
  * Save the ticked rows in ONE request (PUT /api/hr/consolidate/cancel).
@@ -225,12 +275,17 @@ async function saveConsolidation(params: {
   loginId?: string;
 }): Promise<void> {
   // the procedure needs these on every record
-  const bad = params.rows.find(
-    (r) => !r.doc_type || r.doc_no == null || r.pay_comp_id == null || r.serial_no == null
-  );
-  if (bad) {
+  const missing = new Set<string>();
+  for (const r of params.rows) {
+    if (!r.doc_type) missing.add("DOC_TYPE");
+    if (r.doc_no == null) missing.add("DOC_NO");
+    if (r.pay_comp_id == null) missing.add("PAY_COMP_ID");
+    if (r.serial_no == null) missing.add("SERIAL_NO");
+  }
+  if (missing.size > 0) {
+    console.error("[AddDed] rows failing validation:", params.rows);
     throw new Error(
-      "DOC_TYPE, DOC_NO, PAY_COMP_ID and SERIAL_NO must be returned by the populate query."
+      `Populate query is not returning: ${Array.from(missing).join(", ")}`
     );
   }
 
@@ -925,13 +980,16 @@ export default function PayrollProcessingPage() {
         .filter(Boolean)
         .join(",");
 
-      // 2. Call the bulk process procedure
-      await processBulkSalary(companyCode, employeeIdsStr, divCode, loginid);
+      // 2. Sync employee pay components (company code + comma-separated employee IDs)
+      await syncEmpComponents(companyCode, employeeIdsStr, loginid);
 
-      // 3. Adjust Pay COLA for the company
+      // 3. Call the bulk process procedure
+      // await processBulkSalary(companyCode, employeeIdsStr, divCode, loginid);
+
+      // 4. Adjust Pay COLA for the company
       await adjustPayColaForCompany(companyCode, loginid);
 
-      // 4. Update local state
+      // 5. Update local state
       setRows((prev) =>
         prev.map((r) =>
           selectedRows.some(

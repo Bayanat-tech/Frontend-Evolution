@@ -73,6 +73,7 @@ export function DocumentSetupPage() {
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [addTarget, setAddTarget] = useState<AddTarget>(null);
+  const [panel, setPanel] = useState<"defaults" | "accounts">("defaults");
 
   const companyCode = user?.company_code || "";
   const loginId = user?.loginid || "";
@@ -272,7 +273,7 @@ export function DocumentSetupPage() {
   ], []);
 
   return (
-    <section className="finance-list-page grid gap-0.1">
+    <section className="finance-list-page document-setup-page grid">
      <div className="finance-list-heading sticky top-0 z-20 bg-background flex items-center justify-between gap-1">
       <div className="finance-list-title flex items-center gap-2">
          <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">Document Setup</h1>
@@ -287,13 +288,7 @@ export function DocumentSetupPage() {
 
       <form id="document-setup-form" onSubmit={(event) => void saveChanges(event)} />
 
-      {/* <div className="grid gap-4"> */}
-      <div className="grid gap-4 mt-3">
-        {/* <DataTable
-          columns={docColumns}
-          data={filteredDocs}
-          title={loadingDocs ? "Loading" : `${filteredDocs.length} Documents`}
-          subtitle="Documents" */}
+      <div className="grid gap-2">
           <DataTable
             columns={docColumns}
              data={filteredDocs}
@@ -320,7 +315,153 @@ export function DocumentSetupPage() {
           rowClassName={(doc) => doc.doc_id === selected?.doc_id ? "bg-[#eaf2ff] font-semibold" : ""}
         />
 
-        {selected && docForm ? (
+          {selected && docForm ? (
+          <div className="rounded-lg border bg-card p-3 shadow-sm grid gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">{selected.doc_shortname || selected.doc_id}</span>
+                <h2 className="m-0 truncate text-base font-semibold">{selected.doc_name || "Untitled document"}</h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border bg-secondary px-2.5 py-1">Allowed Headers: {headerRows.length}</span>
+                <span className="rounded-full border bg-secondary px-2.5 py-1">Allowed Details: {detailRows.length}</span>
+                {docDirty && (
+                  <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 font-semibold text-amber-800">
+                    Configuration Modified (Click Save)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-1 border-b">
+              {([
+                ["defaults", "Defaults & Settings"],
+                ["accounts", "Header / Detail Accounts"],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setPanel(key)}
+                  className={`-mb-px border-b-2 px-4 py-1.5 text-sm font-semibold ${
+                    panel === key
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {panel === "defaults" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <AccountLookup
+                  label="Default Header A/C"
+                  value={docForm.default_h_ac}
+                  name={docForm.default_h_ac_name}
+                  onChange={(code, name) => {
+                    setDocForm((prev) => prev ? { ...prev, default_h_ac: code, default_h_ac_name: name } : null);
+                  }}
+                />
+                <AccountLookup
+                  label="Default Detail A/C"
+                  value={docForm.default_d_ac}
+                  name={docForm.default_d_ac_name}
+                  onChange={(code, name) => {
+                    setDocForm((prev) => prev ? { ...prev, default_d_ac: code, default_d_ac_name: name } : null);
+                  }}
+                />
+                <AccountLookup
+                  label="Default Cash A/C (CO)"
+                  value={docForm.default_h_code_co}
+                  name=""
+                  onChange={(code) => {
+                    setDocForm((prev) => prev ? { ...prev, default_h_code_co: code } : null);
+                  }}
+                />
+                <LookupField
+                  label="Default Currency"
+                  value={docForm.curr_code}
+                  displayValue={docForm.curr_code ? `${docForm.curr_code}${docForm.curr_name ? ` - ${docForm.curr_name}` : ""}` : ""}
+                  columns={[
+                    { field: "curr_code", header: "Currency" },
+                    { field: "curr_name", header: "Name" },
+                  ]}
+                  valueField="curr_code"
+                  displayFields={["curr_code", "curr_name"]}
+                  loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Search", loginid: loginId, code1: companyCode })}
+                  onChange={(code, row) => {
+                    setDocForm((prev) => prev ? { ...prev, curr_code: code, curr_name: row ? getLookupText(row, ["curr_name", "currency_name"]) : "" } : null);
+                  }}
+                />
+                <LookupField
+                  label="Default Division"
+                  value={docForm.default_div_code}
+                  displayValue={docForm.default_div_code ? `${docForm.default_div_code}${docForm.default_div_name ? ` - ${docForm.default_div_name}` : ""}` : ""}
+                  columns={[
+                    { field: "div_code", header: "Division Code" },
+                    { field: "div_name", header: "Division Name" },
+                  ]}
+                  valueField="div_code"
+                  displayFields={["div_code", "div_name"]}
+                  loadOptions={() => getDynamicLookup({ parameter: "Account_division", loginid: loginId, code1: companyCode })}
+                  onChange={(code, row) => {
+                    setDocForm((prev) => prev ? { ...prev, default_div_code: code, default_div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" } : null);
+                  }}
+                />
+                <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
+                  <span>Back Date Limit (Days)</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="365"
+                    value={docForm.back_date}
+                    onChange={(e) => {
+                      setDocForm((prev) => prev ? { ...prev, back_date: e.target.value } : null);
+                    }}
+                    placeholder="e.g. 7"
+                    className="h-9"
+                  />
+                </label>
+              </div>
+            )}
+
+            {panel === "accounts" && (
+              <div className="grid min-h-[360px] grid-cols-2 gap-4 max-xl:grid-cols-1">
+                <DocAccountTable
+                  title="Header Accounts"
+                  description="Accounts allowed at document header level"
+                  type="header"
+                  rows={headerRows}
+                  loading={loadingDetails}
+                  active={activeGrid === "header"}
+                  disabled={!selected || activeGrid === "detail"}
+                  onEdit={() => setActiveGrid(activeGrid === "header" ? null : "header")}
+                  onAdd={() => addAccount("header")}
+                  onChange={(row) => updateAccount("header", row)}
+                  onDelete={(row) => setDeleteTarget({ type: "header", row })}
+                />
+                <DocAccountTable
+                  title="Detail Accounts"
+                  description="Accounts allowed at document line level"
+                  type="detail"
+                  rows={detailRows}
+                  loading={loadingDetails}
+                  active={activeGrid === "detail"}
+                  disabled={!selected || activeGrid === "header"}
+                  onEdit={() => setActiveGrid(activeGrid === "detail" ? null : "detail")}
+                  onAdd={() => addAccount("detail")}
+                  onChange={(row) => updateAccount("detail", row)}
+                  onDelete={(row) => setDeleteTarget({ type: "detail", row })}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-md border bg-secondary/30 px-3 py-2 text-sm text-muted-foreground">Select a document from the list above to view and configure its default accounts and allowed accounts.</div>
+        )}
+
+        {/* {selected && docForm ? (
           <div className="rounded-lg border bg-card p-4 shadow-sm grid gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
               <div className="min-w-0">
@@ -414,9 +555,9 @@ export function DocumentSetupPage() {
           </div>
         ) : (
           <div className="rounded-md border bg-secondary/30 px-3 py-2 text-sm text-muted-foreground">Select a document from the list above to view and configure its default accounts and allowed accounts.</div>
-        )}
+        )} */}
 
-
+{/* 
         <div className="grid min-h-[360px] grid-cols-2 gap-4 max-xl:grid-cols-1">
           <DocAccountTable
             title="Header Accounts"
@@ -444,7 +585,7 @@ export function DocumentSetupPage() {
             onChange={(row) => updateAccount("detail", row)}
             onDelete={(row) => setDeleteTarget({ type: "detail", row })}
           />
-        </div>
+        </div> */}
       </div>
 
       {deleteTarget && (
