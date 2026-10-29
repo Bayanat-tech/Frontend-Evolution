@@ -1,3 +1,6 @@
+import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
+import { taxTreatmentFromMaster } from "../../utils/financeTaxTreatment";
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { AlertCircle, Ban, Building2, CheckCircle2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
@@ -202,10 +205,9 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
       header: () => <div className="text-center font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
-    { accessorKey: "ac_name", header: "Account Name" },
+    // { accessorKey: "ac_name", header: "Account Name" },
     ...(docType === "CP" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "remarks", header: "Description" },
-    ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     {
       accessorKey: "amount",
@@ -436,8 +438,10 @@ function JVDocument({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const taxLabels = useFinanceTaxLabels();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const gst = useFinanceGst(form, docType, editMode);
   const [currencyDecimals, setCurrencyDecimals] = useState<number>(2);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
@@ -503,7 +507,7 @@ function JVDocument({
       const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
       if (code) {
         rMap[code] = rawRate;
-        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
+        tMap[code] = taxTreatmentFromMaster(rawType, rawRate);
       }
     });
     setTaxRateMap((prev) => ({ ...prev, ...rMap }));
@@ -787,16 +791,17 @@ function JVDocument({
   }, [docType, editMode, editor]);
 
   useEffect(() => {
+    if (editMode) return;
     setForm((current) => ({
       ...current,
       detail: current.detail.map((d) => {
         if (d.tx_compnt_1_expmt !== "S") return d;
         const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
-        const taxAmt = Number((((Number(d.amount) || 0) * perc) / 100).toFixed(3));
+        const taxAmt = Number((((Number(d.amount) || 0) * perc) / 100).toFixed(4));
         return { ...d, tx_compnt_amt_1: taxAmt };
       }),
     }));
-  }, [form.detail.map((d) => d.amount).join(","), taxRateMap]);
+  }, [editMode, form.detail.map((d) => d.amount).join(","), taxRateMap]);
 
   const disabled = form.canceled === "Y" || saving;
   const isCancelled = form.canceled === "Y";
@@ -817,8 +822,8 @@ function JVDocument({
       setSaving(false);
     }
   };
-  const creditTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === -1 ? Number(row.amount) || 0 : 0), 0);
-  const debitTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === 1 ? Number(row.amount) || 0 : 0), 0);
+  const creditTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === -1 ? (Number(row.amount) || 0) + (gst.enabled ? Number(row.tx_compnt_amt_1 || 0) : 0) : 0), 0);
+  const debitTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === 1 ? (Number(row.amount) || 0) + (gst.enabled ? Number(row.tx_compnt_amt_1 || 0) : 0) : 0), 0);
 
   const [lineSearch, setLineSearch] = useState("");
   const filteredDetail = useMemo(() => {
@@ -850,9 +855,9 @@ function JVDocument({
       detail: current.detail.map((row) => {
         if (row.id !== id) return row;
         const merged = { ...row, ...patch };
-        const isTaxable = merged.tx_compnt_1_expmt === "S" || (merged.tx_compnt_perc_1 != null && Number(merged.tx_compnt_perc_1) > 0);
+        const isTaxable = merged.tx_compnt_1_expmt ? merged.tx_compnt_1_expmt === "S" : Number(merged.tx_compnt_perc_1 || 0) > 0;
         const perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : getTaxPercForCode(merged.tx_compntcat_code_1 || "");
-        const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(3)) : (Number(merged.tx_compnt_amt_1) || 0);
+        const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(4)) : 0;
         const effectiveRate = Number(merged.ex_rate || current.ex_rate || 1);
         const lcurAmt = Math.abs(Number(merged.amount || 0)) * effectiveRate * Number(merged.sign_ind || 1);
         return { ...merged, tx_compnt_amt_1: taxAmt, lcur_amount: lcurAmt };
@@ -861,6 +866,7 @@ function JVDocument({
   };
 
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
+    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: false }));
     const acName = text(getLookupValue(row || {}, "ac_name"));
     updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
     if (docType === "CP") {
@@ -868,7 +874,6 @@ function JVDocument({
     }
     if (!value) return;
     setSelectedDetailId(detail.id);
-    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
     try {
       const child = await getChildTableName(value);
       const childTable = child?.table || "";
@@ -1057,7 +1062,6 @@ function JVDocument({
         }
       }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
-      setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load allocations");
     } finally {
@@ -1097,7 +1101,7 @@ function JVDocument({
           if (d.id !== dId) return d;
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1120,7 +1124,7 @@ function JVDocument({
           if (d.id !== dId) return d;
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1227,6 +1231,7 @@ function JVDocument({
       console.log("detail child_table:", form.detail.map(d => ({ ac: d.ac_code, table: d.child_table, children: form.children[d.id] })));
       const bulkPayload = buildBulkAccountEntryPayload(form, docType, user?.company_code || "", user?.loginid || "");
       console.log("Bulk payload header:", bulkPayload.header);
+      gst.attachToHeader(bulkPayload.header);
       await upsertBulkAccountEntryApi(bulkPayload);
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
@@ -1353,6 +1358,7 @@ function JVDocument({
             </Button>
           </div>
         </div>
+      <FinanceGstPanel editor={gst} disabled={saving || form.canceled === "Y"} />
       </CardHeader>
       {isCancelled && (
         <div className="cancelled-document-banner" role="status">
@@ -1820,7 +1826,7 @@ function JVDocument({
                                   const taxType = event.target.value;
                                   const lineAmt = Number(detail.amount) || 0;
                                   const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : getTaxPercForCode(detail.tx_compntcat_code_1 || "")) : 0;
-                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(4)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,
@@ -1828,10 +1834,10 @@ function JVDocument({
                                   });
                                 }}
                               >
-                                <option value="N">No Tax</option>
-                                <option value="S">Std Tax</option>
-                                <option value="Z">Zero</option>
-                                <option value="E">Exempt</option>
+                                <option value="N">{taxLabels.N}</option>
+                                <option value="S">{taxLabels.S}</option>
+                                <option value="Z">{taxLabels.Z}</option>
+                                <option value="E">{taxLabels.E}</option>
                               </Select>
                             </td>
                           )}

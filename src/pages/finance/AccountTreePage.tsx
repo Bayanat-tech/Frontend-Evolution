@@ -597,7 +597,9 @@ export function AccountTreePage() {
                   </Button>
                 )}
                 {selectedNode.level >= 2 && selectedNode.children.length === 0 && (
-                  <Button variant="destructive" onClick={() => setDeleteTarget(selectedNode)}>
+                  <Button variant="destructive" disabled={selectedNode.delete_blocked}
+                    title={selectedNode.delete_block_reason || undefined}
+                    onClick={() => setDeleteTarget(selectedNode)}>
                     <Trash2 size={15} /> Delete
                   </Button>
                 )}

@@ -37,38 +37,21 @@ function num(val: unknown): number {
 }
 
 function calcFinalRating(
-  taskTotal: number,
-  charTotal: number,
-  goalTotal: number,
-  skillTotal: number,
-  cfg: WeightageConfig
-): number {
-  const t = Number(taskTotal || 0);
-  const c = Number(charTotal || 0);
-  const g = Number(goalTotal || 0);
-  const s = Number(skillTotal || 0);
+  taskTotal: number, charTotal: number, goalTotal: number, skillTotal: number,
+  cfg?: WeightageConfig
+): number | null {
+  const parts = [
+    { score: Number(taskTotal || 0),  pct: Number(cfg?.taskPct)  || 0 },
+    { score: Number(charTotal || 0),  pct: Number(cfg?.charPct)  || 0 },
+    { score: Number(goalTotal || 0),  pct: Number(cfg?.goalPct)  || 0 },
+    { score: Number(skillTotal || 0), pct: Number(cfg?.skillPct) || 0 },
+  ].filter((p) => p.score > 0);
 
-  if (t === 0 && c === 0 && g === 0 && s === 0) return 0;
-
-  const taskPct  = Number(cfg?.taskPct)  || 0;
-  const charPct  = Number(cfg?.charPct)  || 0;
-  const goalPct  = Number(cfg?.goalPct)  || 0;
-  const skillPct = Number(cfg?.skillPct) || 0;
-  const totalWt  = taskPct + charPct + goalPct + skillPct;
-
-  let raw: number;
-
-  if (totalWt > 0) {
-    const weightedSum =
-      (t * taskPct) + (c * charPct) + (g * goalPct) + (s * skillPct);
-    raw = weightedSum / totalWt;
-  } else {
-    const active = [t, c, g, s].filter((v) => v > 0);
-    if (active.length === 0) return 0;
-    raw = active.reduce((a, b) => a + b, 0) / active.length;
-  }
-
-  // ✅ Nearest integer: 2.40 → 2, 2.6 → 3
+  if (parts.length === 0) return null;
+  const totalWt = parts.reduce((a, p) => a + p.pct, 0);
+  const raw = totalWt > 0
+    ? parts.reduce((a, p) => a + p.score * p.pct, 0) / totalWt
+    : parts.reduce((a, p) => a + p.score, 0) / parts.length;
   return Math.round(raw);
 }
 
@@ -166,6 +149,17 @@ const S = {
     color: "#475569",
     whiteSpace: "nowrap" as const,
     fontWeight: 500,
+  },
+  viewOnlyBadge: {
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    color: "#92400e",
+    background: "#fff4e5",
+    border: "1px solid #fcd38a",
+    padding: "2px 10px",
+    borderRadius: "999px",
+    whiteSpace: "nowrap" as const,
+    flexShrink: 0,
   },
   ratingChipWrap: { marginLeft: "10px", flexShrink: 0 },
   actions: {
@@ -356,6 +350,7 @@ const AppraisalViewTabsPage: React.FC = () => {
   const employeeCode = searchParams.get("employee_code") ?? "";
   const employeeName = searchParams.get("employee_name") ?? "";
   const sourceTab = (searchParams.get("source_tab") ?? "").toUpperCase();
+  const mode = (searchParams.get("mode") ?? "").toLowerCase(); // "view" | "edit"
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
@@ -409,7 +404,12 @@ const AppraisalViewTabsPage: React.FC = () => {
   const employeeIsHOD =
     !!createdBy && createdBy.trim().toUpperCase() === employeeCode.trim().toUpperCase();
 
-  const showActionButtons = sourceTab === "" || sourceTab === "PENDING";
+  // Read-only: view mode, ya Pending ke alawa kisi bhi tab se aaye ho.
+  // Read-only me koi edit / Save / Submit / Approve / Reject / Send Back nahi.
+  const isReadOnly =
+    mode === "view" || (sourceTab !== "" && sourceTab !== "PENDING");
+
+  const showActionButtons = !isReadOnly;
   const showSaveSubmitButtons =
     showActionButtons && !isFinalized &&
     (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
@@ -418,8 +418,7 @@ const AppraisalViewTabsPage: React.FC = () => {
     (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
 
   const finalRating = calcFinalRating(taskTotal, characterTotal, goalTotal, skillTotal, weightageConfig);
-  const showFinalRating =
-    taskTotal > 0 || characterTotal > 0 || goalTotal > 0 || skillTotal > 0;
+  const showFinalRating = finalRating !== null;
 
   // ── Fetch ──
   useEffect(() => {
@@ -429,19 +428,17 @@ const AppraisalViewTabsPage: React.FC = () => {
       try {
         const periodNumber = prefetchedRow ? text(prefetchedRow.PERIOD_NUMBER) : "";
 
-        const [flowRes, levelRes, commentRes, historyRes, weightageRes] = await Promise.all([
+        const [flowRes, levelRes, commentRes, historyRes] = await Promise.all([
           pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
           pamsSelect({ parameter: "sentback_levels", loginid, code1: docNo }),
           pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
           pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
-
-          pamsSelect({
-            parameter: "Trn_weightage",
-            loginid,
-            code1: companyCode,
-            code2: periodNumber,
-          }),
         ]);
+
+        const docPeriod = text(flowRes[0]?.PERIOD_NUMBER) || periodNumber;
+        const weightageRes = await pamsSelect({
+          parameter: "Trn_weightage", loginid, code1: companyCode, code2: docPeriod,
+        });
 
         let currentFlowLevel = 0, nextActionBy = "";
         if (flowRes.length > 0) {
@@ -451,7 +448,6 @@ const AppraisalViewTabsPage: React.FC = () => {
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
           setCreatedBy(text(flowRes[0].CREATED_BY));
         }
-
 
         if (weightageRes.length > 0) {
           const w = weightageRes[0] as Row;
@@ -545,6 +541,8 @@ const AppraisalViewTabsPage: React.FC = () => {
 
   // ── Action ──
   const handleAction = async (action: "D" | "S" | "A" | "R") => {
+    // Safety net: read-only me koi bhi action allow nahi
+    if (isReadOnly) return;
     setNotice(null);
     try {
       if (action === "D" || action === "S" || action === "A") {
@@ -561,7 +559,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           await pamsSelect({ parameter: "save_appraisal_comment", loginid, code1: docNo, code2: employeeCode, code3: "0", code4: "APPRAISEE", code5: appraiseeText });
         }
       }
-      const ratingToSend = (action === "S" || action === "A" || action === "D") ? finalRating : 0;
+      const ratingToSend = (action === "S" || action === "A" || action === "D") ? (finalRating ?? 0) : 0;
       await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: action, code4: "", number1: ratingToSend });
       const msg = action === "D" ? "Saved as draft" : action === "S" ? "Submitted successfully" : action === "A" ? "Approved successfully" : "Rejected successfully";
       setNotice({ type: "success", message: msg });
@@ -573,6 +571,7 @@ const AppraisalViewTabsPage: React.FC = () => {
   };
 
   const handleSentBack = async () => {
+    if (isReadOnly) return;
     if (!sentBackReason.trim()) {
       setNotice({ type: "warning", message: "Please enter a reason for sending back!" });
       return;
@@ -645,9 +644,11 @@ const AppraisalViewTabsPage: React.FC = () => {
           <span style={S.empName}>{employeeName || employeeCode || "—"}</span>
           {employeeCode && <span style={S.empId}>ID: {employeeCode}</span>}
 
+          {mode === "view" && <span style={S.viewOnlyBadge}>View only</span>}
+
           {showFinalRating && (
             <div style={S.ratingChipWrap}>
-              <RatingChip rating={finalRating} weightageConfig={weightageConfig} />
+              <RatingChip rating={finalRating ?? 0} weightageConfig={weightageConfig} />
             </div>
           )}
 
@@ -757,53 +758,59 @@ const AppraisalViewTabsPage: React.FC = () => {
       </div>
 
       <div style={S.panel}>
-        <div style={{ display: selectedTab === "task_details" ? "block" : "none" }}>
-          <TaskDetailsAppraisalTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "task_details"}
-            onRowsChange={rows => { taskRowsRef.current = rows; }}
-            onGrandTotalChange={total => setTaskTotal(total)}
-          />
-        </div>
-        <div style={{ display: selectedTab === "characteristics" ? "block" : "none" }}>
-          <TaskCharacterAppraisalTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "characteristics"}
-            onRowsChange={rows => { charRowsRef.current = rows; }}
-            onGrandTotalChange={total => setCharacterTotal(total)}
-          />
-        </div>
-        <div style={{ display: selectedTab === "goals" ? "block" : "none" }}>
-          <TaskGoalAppraisalTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "goals"}
-            onRowsChange={rows => { goalRowsRef.current = rows; }}
-            onGrandTotalChange={total => setGoalTotal(total)}
-          />
-        </div>
-        <div style={{ display: selectedTab === "skill" ? "block" : "none" }}>
-          <TaskSkillAppraisalTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "skill"}
-            onRowsChange={rows => { skillRowsRef.current = rows; }}
-            onGrandTotalChange={total => setSkillTotal(total)}
-          />
-        </div>
-        <div style={{ display: selectedTab === "comments" ? "block" : "none" }}>
-          <AppraiserCommentsTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "comments"}
-            taskTotal={taskTotal}
-            characterTotal={characterTotal}
-            goalTotal={goalTotal}
-            skillTotal={skillTotal}
-            flowLevel={flowLevel} userFlowLevel={userFlowLevel}
-            weightageConfig={weightageConfig}
-            showAllComments={true}
-            onAppraiserCommentChange={handleAppraiserCommentChange}
-            onAppraiseeCommentChange={handleAppraiseeCommentChange}
-          />
-        </div>
+        {/* disabled fieldset: read-only me andar ke saare input/select/textarea/button lock ho jate hain */}
+        <fieldset
+          disabled={isReadOnly}
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+        >
+          <div style={{ display: selectedTab === "task_details" ? "block" : "none" }}>
+            <TaskDetailsAppraisalTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "task_details"}
+              onRowsChange={rows => { taskRowsRef.current = rows; }}
+              onGrandTotalChange={total => setTaskTotal(total)}
+            />
+          </div>
+          <div style={{ display: selectedTab === "characteristics" ? "block" : "none" }}>
+            <TaskCharacterAppraisalTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "characteristics"}
+              onRowsChange={rows => { charRowsRef.current = rows; }}
+              onGrandTotalChange={total => setCharacterTotal(total)}
+            />
+          </div>
+          <div style={{ display: selectedTab === "goals" ? "block" : "none" }}>
+            <TaskGoalAppraisalTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "goals"}
+              onRowsChange={rows => { goalRowsRef.current = rows; }}
+              onGrandTotalChange={total => setGoalTotal(total)}
+            />
+          </div>
+          <div style={{ display: selectedTab === "skill" ? "block" : "none" }}>
+            <TaskSkillAppraisalTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "skill"}
+              onRowsChange={rows => { skillRowsRef.current = rows; }}
+              onGrandTotalChange={total => setSkillTotal(total)}
+            />
+          </div>
+          <div style={{ display: selectedTab === "comments" ? "block" : "none" }}>
+            <AppraiserCommentsTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "comments"}
+              taskTotal={taskTotal}
+              characterTotal={characterTotal}
+              goalTotal={goalTotal}
+              skillTotal={skillTotal}
+              flowLevel={flowLevel} userFlowLevel={userFlowLevel}
+              weightageConfig={weightageConfig}
+              showAllComments={true}
+              onAppraiserCommentChange={handleAppraiserCommentChange}
+              onAppraiseeCommentChange={handleAppraiseeCommentChange}
+            />
+          </div>
+        </fieldset>
       </div>
 
       {/* ── Sent Back Modal ── */}
