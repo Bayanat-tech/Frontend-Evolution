@@ -446,7 +446,9 @@ function AlertGrid({
             op_type: opType,
             op_mode: opMode,
           });
-          return (response.data.data || []).map(normalizeLookupRow);
+          const allOptions = (response.data.data || []).map(normalizeLookupRow);
+          const usedCodes = new Set(rows.map((r) => String(r.OP_CODE || r.op_code || "").trim()).filter(Boolean));
+          return allOptions.filter((opt) => !usedCodes.has(String(opt.OP_CODE || opt.op_code || "").trim()));
         },
       }}
     />
