@@ -909,6 +909,8 @@ export function ActivityBillingSection({
       )}
 
       {/* DataTable */}
+      <div className="[&_*]:[scrollbar-width:none] [&_*::-webkit-scrollbar]:hidden">
+
       <DataTable
         columns={columns as any}
         data={activityRows}
@@ -921,6 +923,7 @@ export function ActivityBillingSection({
         enableExport
         exportFilename={`activity-billing-${jobNo}.csv`}
       />
+</div>
 
       {/* Footer */}
       <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
