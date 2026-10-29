@@ -1790,3 +1790,19 @@ form.commercial-document-workbench {
   overflow-y: auto !important;
   overflow-x: hidden !important;
 }
+/* Keep empty and populated allocation panels aligned to their column widths. */
+.finance-document-editor .finance-allocation-branch > .finance-allocation-panel {
+  width: var(--allocation-panel-width, max-content) !important;
+  max-width: 100% !important;
+}
+
+/* Document Setup: gap under title */
+.document-setup-page .finance-list-heading {
+  margin-bottom: 0 !important;
+  padding-bottom: 2px !important;
+}
+.document-setup-page .data-table-header {
+  margin-top: 0 !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}

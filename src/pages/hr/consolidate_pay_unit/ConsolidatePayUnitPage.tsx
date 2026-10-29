@@ -72,6 +72,17 @@ const emptyForm = (defaults?: { payUnitStatus?: string; status?: string }): Form
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Keep only the first item for each key (safety net against duplicate rows) */
+function uniqueBy<T>(list: T[], keyFn: (x: T) => string): T[] {
+  const seen = new Set<string>();
+  return list.filter((x) => {
+    const k = keyFn(x);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 function formatDateDisplay(value: unknown): string {
   if (!value) return "";
   const raw = String(value);
@@ -184,30 +195,33 @@ export default function ConsolidatePayUnitPage() {
   const readonly = formMode === "view";
   const editing = formMode === "edit";
 
-  // Load status dropdowns from HR_CODE_VALUES
+  // Load status dropdowns from HR_CODE_VALUES (runs once per company, not on every render)
   useEffect(() => {
     const loadCodeOptions = async () => {
       try {
         const [payUnitStatusData, statusData] = await Promise.all([
-          getDynamicLookup({ parameter: "MST_HR_CODE_PAY_UNIT_STATUS",
-            code1: companyCode,
-          }),
-          getDynamicLookup({ parameter: "MST_HR_CODE_STATUS" ,
-            code1: companyCode,
-          }),
+          getDynamicLookup({ parameter: "MST_HR_CODE_PAY_UNIT_STATUS", code1: companyCode }),
+          getDynamicLookup({ parameter: "MST_HR_CODE_STATUS", code1: companyCode }),
         ]);
         setPayUnitStatusOptions(
-          (payUnitStatusData || []).map((r) => normalizeCodeOption(r as Record<string, unknown>)),
+          uniqueBy(
+            (payUnitStatusData || []).map((r) => normalizeCodeOption(r as Record<string, unknown>)),
+            (o) => o.VALUE_CODE,
+          ),
         );
         setStatusOptions(
-          (statusData || []).map((r) => normalizeCodeOption(r as Record<string, unknown>)),
+          uniqueBy(
+            (statusData || []).map((r) => normalizeCodeOption(r as Record<string, unknown>)),
+            (o) => o.VALUE_CODE,
+          ),
         );
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Unable to load status options");
       }
     };
     void loadCodeOptions();
-  }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyCode]);
 
   // ── Load grid when pay unit selected ─────────────────────────────────────
 
@@ -224,7 +238,10 @@ export default function ConsolidatePayUnitPage() {
           code1: companyCode,
           code2: selectedPayCompId,
         });
-        setRows((data || []).map((row) => normalizeEmpCompRow(row as Record<string, unknown>)));
+        const normalized = (data || []).map((row) =>
+          normalizeEmpCompRow(row as Record<string, unknown>),
+        );
+        setRows(uniqueBy(normalized, (r) => `${r.EMPLOYEE_ID}-${r.PAY_COMP_ID}`));
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Unable to load data");
         setRows([]);
@@ -232,7 +249,8 @@ export default function ConsolidatePayUnitPage() {
         setLoading(false);
       }
     },
-    [companyCode, toast],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [companyCode],
   );
 
   // ── Lookups ──────────────────────────────────────────────────────────────
@@ -243,7 +261,10 @@ export default function ConsolidatePayUnitPage() {
         parameter: "MST_HR_CONSOLIDATE_PAY_UNIT",
         code1: companyCode,
       });
-      const list = (data || []).map((row) => normalizePayUnitRow(row as Record<string, unknown>));
+      const list = uniqueBy(
+        (data || []).map((row) => normalizePayUnitRow(row as Record<string, unknown>)),
+        (r) => r.PAY_COMP_ID,
+      );
       if (!q?.trim()) return list as unknown as LookupRow[];
       const term = q.trim().toLowerCase();
       return list.filter(
@@ -263,15 +284,18 @@ export default function ConsolidatePayUnitPage() {
         code1: companyCode,
       });
       // Normalize to uppercase keys so LookupField valueField works
-      const list = (data || []).map((row) => {
-        const r = row as Record<string, unknown>;
-        return {
-          EMPLOYEE_ID: String(pick(r, "EMPLOYEE_ID", "employee_id") ?? ""),
-          EMPLOYEE_CODE: String(pick(r, "EMPLOYEE_CODE", "employee_code") ?? ""),
-          RPT_NAME: String(pick(r, "RPT_NAME", "rpt_name") ?? ""),
-          ...r,
-        } as LookupRow;
-      });
+      const list = uniqueBy(
+        (data || []).map((row) => {
+          const r = row as Record<string, unknown>;
+          return {
+            EMPLOYEE_ID: String(pick(r, "EMPLOYEE_ID", "employee_id") ?? ""),
+            EMPLOYEE_CODE: String(pick(r, "EMPLOYEE_CODE", "employee_code") ?? ""),
+            RPT_NAME: String(pick(r, "RPT_NAME", "rpt_name") ?? ""),
+            ...r,
+          } as LookupRow;
+        }),
+        (r) => String(r.EMPLOYEE_ID),
+      );
       if (!q?.trim()) return list;
       const term = q.trim().toLowerCase();
       return list.filter((r) =>
@@ -281,9 +305,28 @@ export default function ConsolidatePayUnitPage() {
     [companyCode],
   );
 
+  // ── Search filter + total (declared only ONCE) ───────────────────────────
+
+  const filteredRows = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [
+        r.EMPLOYEE_CODE,
+        r.EMPLOYEE_ID,
+        r.RPT_NAME,
+        r.PAY_COMP_AMT,
+        codeLabel(payUnitStatusOptions, r.COMP_STATUS),
+        formatDateDisplay(r.APPROVED_ON),
+        codeLabel(statusOptions, r.STATUS_FLAG),
+        r.REMARKS,
+      ].some((v) => String(v ?? "").toLowerCase().includes(term)),
+    );
+  }, [rows, query, payUnitStatusOptions, statusOptions]);
+
   const totalAmount = useMemo(
-    () => rows.reduce((sum, r) => sum + (Number(r.PAY_COMP_AMT) || 0), 0),
-    [rows],
+    () => filteredRows.reduce((sum, r) => sum + (Number(r.PAY_COMP_AMT) || 0), 0),
+    [filteredRows],
   );
 
   // ── Inline form open / close ─────────────────────────────────────────────
@@ -606,9 +649,10 @@ export default function ConsolidatePayUnitPage() {
                   ? `${row.PAY_COMP_ID ?? value} — ${row.PAY_COMP_DESC ?? ""}`
                   : value;
                 setPayCompLabel(label);
-                // key changed → drop any half-filled form
+                // key changed → drop any half-filled form and old search text
                 setFormOpen(false);
                 setForm(emptyForm());
+                setQuery("");
                 void loadMainPage(value);
               }}
               placeholder="Pay unit code or name"
@@ -712,11 +756,11 @@ export default function ConsolidatePayUnitPage() {
         </SectionPanel>
       )}
 
-      {/* Pay unit grid */}
+      {/* Pay unit grid (gets FILTERED rows so search works) */}
       <DataTable
         columns={columns}
-        data={rows}
-        title={loading ? "Loading" : `${rows.length.toLocaleString()} Employees`}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Employees`}
         subtitle="Employee Pay Unit Amounts"
         searchValue={query}
         onSearchChange={(value) => setQuery(value)}

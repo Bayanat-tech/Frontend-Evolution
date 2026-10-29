@@ -844,22 +844,80 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     deleteMode: "master",
   },
 
-  leavetype: {
-    title: "Leave Type Master",
-    subtitle: "Maintain leave type codes, carry-forward behavior, and half-day eligibility.",
-    master: "leavetype",
-    gmEndpoint: "leavetype",
-    routeKeys: ["leavetype", "leave_type"],
-    keyField: "leave_type",
-    fields: [
-      { name: "leave_type", label: "Leave Type", required: true, disabledOnEdit: true, width: 150 },
-      { name: "leave_type_desc", label: "Leave Description", required: true, width: 280 },
-      { name: "carry_forward", label: "Carry Forward", type: "select", options: yesNo, width: 150 },
-      { name: "half_day", label: "Half Day", type: "select", options: yesNo, width: 130 },
-    ],
-    defaults: { carry_forward: "N", half_day: "N" },
-    deleteMode: "master",
-  },
+  // leavetype: {
+  //   title: "Leave Type Master",
+  //   subtitle: "Maintain leave type codes, carry-forward behavior, and half-day eligibility.",
+  //   master: "leavetype",
+  //   gmEndpoint: "leavetype",
+  //   routeKeys: ["leavetype", "leave_type"],
+  //   keyField: "leave_type",
+  //   fields: [
+  //     { name: "leave_type", label: "Leave Type", required: true, disabledOnEdit: true, width: 150 },
+  //     { name: "leave_type_desc", label: "Leave Description", required: true, width: 280 },
+  //     { name: "carry_forward", label: "Carry Forward", type: "select", options: yesNo, width: 150 },
+  //     { name: "half_day", label: "Half Day", type: "select", options: yesNo, width: 130 },
+  //   ],
+  //   defaults: { carry_forward: "N", half_day: "N" },
+  //   deleteMode: "master",
+  // },
+
+
+  
+ leavetype: {
+  title: "Leave Type Master",
+  subtitle: "Maintain leave type codes, carry-forward behavior, and half-day eligibility.",
+  master: "leavetype",
+  gmEndpoint: "leavetype",
+  routeKeys: ["leavetype", "leave_type"],
+  keyField: "leave_type",
+  source: "dynamic",
+  mutationMode: "column90",
+
+  listQuery: dynamicList("MST_HR__LEAVE_TYPES_SELECT", true),
+
+  buildSave: (form, context) => ({
+    parameter: "hr_mse_leave_types",
+    loginid: context.loginid,
+    val1s1: context.companyCode,
+    val1s2: text(form, "leave_type"),
+    val1s3: text(form, "leave_type_desc"),
+    val1s4: text(form, "leave_type_short_desc"),
+    val1s5: text(form, "attend_type"),
+    val1s6: text(form, "maximum_days_allow"),
+    val1s7: text(form, "min_service_days_required"),
+    val1s8: text(form, "carry_forward", "N"),
+    val1s9: text(form, "half_day", "N"),
+    val1s10: text(form, "all_employees"),
+    val1s11: text(form, "back_dated_allow"),
+    val1s12: text(form, "post_dated_allow"),
+    val1s13: text(form, "encashable"),
+    val1s14: text(form, "pay_comp_id"),
+    val1s15: text(form, "with_pay"),
+    val1s16: text(form, "remarks"),
+    val1s17: text(form, "status", "A"),
+  }),
+
+  // ⚠️ Delete procedure ka naam apne DB ke hisaab se confirm karo
+  buildDelete: (row, context) => ({
+    parameter: "MST_HR_DEL_LEAVE_TYPES",
+    loginid: context.loginid,
+    code1: context.companyCode,
+    code2: text(row, "leave_type"),
+  }),
+
+  fields: [
+    { name: "leave_type", label: "Leave Type", required: true, disabledOnEdit: true, width: 150, limit: 5 },
+    { name: "leave_type_desc", label: "Leave Description", required: true, width: 280 },
+    { name: "leave_type_short_desc", label: "Short Description", width: 170 },
+    { name: "carry_forward", label: "Carry Forward", type: "select", options: yesNo, width: 150 },
+    { name: "half_day", label: "Half Day", type: "select", options: yesNo, width: 130 },
+    { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120 },
+    { name: "remarks", label: "Remarks", table: false },
+  ],
+
+  defaults: { carry_forward: "N", half_day: "N", status: "A" },
+  deleteMode: "master",
+},
 
   paycomponent: {
     title: "Pay Component Master",

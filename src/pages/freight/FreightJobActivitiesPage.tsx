@@ -600,7 +600,7 @@ export function FreightJobActivitiesPage({
 
       <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
         {/* Finance Line Actions Header */}
-        <div className="finance-line-actions flex flex-nowrap items-center justify-between gap-1.5 px-2 py-1 bg-slate-50/90 border-b border-slate-200 min-w-0 overflow-hidden">
+        <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-2.5 py-1.5 bg-slate-50/90 border-b border-slate-200 min-w-0">
           <div className="finance-line-actions-left flex items-center gap-1.5 min-w-0 shrink">
             <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded shrink-0">
               <List size={13} />
@@ -622,7 +622,7 @@ export function FreightJobActivitiesPage({
             <div className="bisc-table-search relative flex items-center shrink-0">
               <Search size={12} className="bisc-table-search-icon absolute left-2 text-slate-400" />
               <input
-                className="bisc-search-input h-7 pl-6 pr-5 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-28 sm:w-32 md:w-36 transition-all"
+                className="bisc-search-input h-7 pl-6 pr-5 text-xs rounded-md border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-36 sm:w-44 md:w-52 transition-all"
                 type="text"
                 value={lineSearch}
                 onChange={(e) => setLineSearch(e.target.value)}
@@ -2753,8 +2753,9 @@ function normalizeMoneyInput(value: string) {
   return `${sign}${whole}${decimal.length ? `.${decimal.join("")}` : ""}`;
 }
 
-function money(input: unknown) {
-  return numberValue(input).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function money(input: unknown, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  return numberValue(input).toLocaleString("en-US", { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
 }
 
 function formatDate(value: string) {
