@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useRef } from "react";
 import { Briefcase, Building2, FileText, Percent, Receipt, Truck } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -81,7 +81,7 @@ export function PurchaseOrderHeaderForm({
   const discountScope = form.discount_scoope || "ITEM";
   const docTypeUpper = String(docType ?? "").trim().toUpperCase();
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
+  const prLoadSeq = useRef(0);
   // phone / fax: digits, + ( ) - and space only, max 20 chars
   const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
 
@@ -276,7 +276,7 @@ export function PurchaseOrderHeaderForm({
                       ac_code: text(getLookupValue(row || {}, "ac_code")),
                       ac_name: text(getLookupValue(row || {}, "ac_name")),
                       // dept_code: text(getLookupValue(row || {}, "dept_code")),
-                      remarks: text(getLookupValue(row || {}, "remarks")).slice(0,250),
+                      remarks: text(getLookupValue(row || {}, "remarks")).slice(0, 250),
                       ref_date: text(getLookupValue(row || {}, "ref_date")),
                       curr_code: text(getLookupValue(row || {}, "curr_code") || accountRow?.curr_code),
                       curr_name: text(getLookupValue(row || {}, "curr_name") || accountRow?.curr_name),
@@ -286,8 +286,8 @@ export function PurchaseOrderHeaderForm({
                       other_expense_cost: numberOrZero(getLookupValue(row || {}, "other_expense_cost")),
                       disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
                       disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
-                      payment_terms: text(getLookupValue(row || {}, "payment_terms")).slice(0,250),
-                      credit_period: numberOrZero(getLookupValue(row || {}, "credit_period") || accountRow?.credit_period ),
+                      payment_terms: text(getLookupValue(row || {}, "payment_terms")).slice(0, 250),
+                      credit_period: numberOrZero(getLookupValue(row || {}, "credit_period") || accountRow?.credit_period),
                       due_date: getLookupValue(row || {}, "due_date"),
                       party_name: text(getLookupValue(row || {}, "party_name")),
                       party_address: text(getLookupValue(row || {}, "party_address")),
@@ -295,7 +295,7 @@ export function PurchaseOrderHeaderForm({
                       address2: text(getLookupValue(row || {}, "address2") || accountRow?.address2),
                       address3: text(getLookupValue(row || {}, "address3") || accountRow?.address3),
                       e_mail: text(getLookupValue(row || {}, "e_mail") || accountRow?.e_mail),
-                      credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount")  || accountRow?.credit_amount),
+                      credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount") || accountRow?.credit_amount),
                       prin_name: text(getLookupValue(row || {}, "prin_name") || accountRow?.prin_name),
 
                       party_phone: text(getLookupValue(row || {}, "party_phone")),
@@ -304,7 +304,7 @@ export function PurchaseOrderHeaderForm({
                       dlvr_contact: text(getLookupValue(row || {}, "dlvr_contact")),
                       dlvr_email: text(getLookupValue(row || {}, "dlvr_email")),
                       dlvr_mobile: text(getLookupValue(row || {}, "dlvr_mobile")),
-                      dlvr_term: text(getLookupValue(row || {}, "dlvr_term")).slice(0,250),
+                      dlvr_term: text(getLookupValue(row || {}, "dlvr_term")).slice(0, 250),
                       salesman_code: text(getLookupValue(row || {}, "salesman_code")),
                       zone_code: text(getLookupValue(row || {}, "zone_code")),
                       tx_compntcat_code_1: text(getLookupValue(row || {}, "tx_compntcat_code_1")),
@@ -395,9 +395,83 @@ export function PurchaseOrderHeaderForm({
                 <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} value={form.ref_no || ""} onChange={(e) => updateField("ref_no", e.target.value)} />
               </CField>
             )}
-            {docTypeUpper === "PQO" && (<CField label="Purchase Req No" className="col-span-2">
-              <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} value={form.pr_req_no} onChange={(e) => updateField("pr_req_no", e.target.value)} />
-            </CField>)}
+            {docTypeUpper === "PQO" && (
+              <div className="col-span-2">
+                <LookupField
+                  label="Purchase Req No"
+                  placeholder="Select PR No"
+                  multiSelect
+                  value={form.pr_req_no || ""}
+                  displayValue={form.pr_req_no || ""}
+                  columns={[{ field: "request_number", header: "Request No" }]}
+                  valueField="request_number"
+                  displayFields={["request_number"]}
+                  loadOptions={() =>
+                    getDynamicLookup({
+                      parameter: "PS_PO_PR_SELECTION_LIST",
+                      code1: companyCode,
+                      code2: form.div_code,
+                      loginid: loginIdOrAdmin,
+                    })
+                  }
+                  disabled={headerAndLineDisabled}
+                  onChange={async (value) => {
+                    updateField("pr_req_no", value);
+                    const seq = ++prLoadSeq.current;
+                    if (!value) {
+                      setdetails?.([]);
+                      return;
+                    }
+                    try {
+                      const items = await getDynamicLookup({
+                        parameter: "PS_PO_PR_SELECTION",
+                        code1: companyCode,
+                        code2: value, // "PR1,PR2,PR3"
+                        loginid: loginIdOrAdmin,
+                      });
+                      if (seq !== prLoadSeq.current) return; // a newer click already started
+                      const mapped = (items || []).map((raw: any, index: number) => {
+                        const item = lowerRecord(raw as Record<string, unknown>);
+                        return {
+                          id: `${value}-${index + 1}`,
+                          div_code: form.div_code,
+                          zone_code: "",
+                          prod_code: text(item.item_code),
+                          prod_name: text(item.prod_name),
+                          p_uom: "",
+                          l_uom: "",
+                          uppp: 1,
+                          qty_puom: numberOrZero(item.approved_qty_puom),
+                          qty_luom: numberOrZero(item.approved_qty_luom),
+                          quantity: numberOrZero(item.approved_qty_puom) + numberOrZero(item.approved_qty_luom),
+                          unit_price: 0,
+                          disc_hdr_percent: 0,
+                          disc_percent: 0,
+                          disc_price: 0,
+                          tax_pct: 0,
+                          tax_amount: 0,
+                          lcur_amount: 0,
+                          lcur_amount_disc: 0,
+                          tax_lcur_amount: 0,
+                          required_dt: "",
+                          line_remarks: "",
+                          tx_cat_code: "",
+                          tx_compnt_1_expmt: "N",
+                          tx_compnt_perc_1: 0,
+                          tx_compnt_amt_1: 0,
+                          ex_rate: Number(form.ex_rate) || 1,
+                          serial_no: index + 1,
+                        };
+                      });
+                      setdetails?.(mapped);
+                    } catch (error) {
+                      console.error("ERROR LOADING PR ITEMS:", error);
+                      if (seq === prLoadSeq.current) setdetails?.([]);
+                    }
+                  }}
+                />
+              </div>
+            )}
 
             <CField label="Ref Date" className="col-span-2">
               <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
@@ -405,8 +479,8 @@ export function PurchaseOrderHeaderForm({
 
             {docTypeUpper === "LPO" && (
               <>
-                <CField label="Buyer" className="col-span-2"><Input className="h-7 text-xs" maxLength = {50} disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
-                <CField label="WO No" className="col-span-2"><Input className="h-7 text-xs" maxLength = {50} disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
+                <CField label="Buyer" className="col-span-2"><Input className="h-7 text-xs" maxLength={50} disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
+                <CField label="WO No" className="col-span-2"><Input className="h-7 text-xs" maxLength={50} disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
               </>
             )}
             {docTypeUpper === "JO" && (
@@ -451,16 +525,16 @@ export function PurchaseOrderHeaderForm({
             </CField>)}
             {docTypeUpper === "LPO" && (
               <>
-                <CField label="Project Name" className="col-span-2" ><Input className="h-7 text-xs" maxLength = {200} disabled={headerAndLineDisabled} value={form.project_name} onChange={(e) => updateField("project_name", e.target.value)} /></CField>
-                <CField label="PR No" className="col-span-2"><Input className="h-7 text-xs text-right" maxLength = {200} disabled={headerAndLineDisabled} value={form.pr_no} onChange={(e) => updateField("pr_no", e.target.value)} /></CField>
-                <CField label="Scope of Work" className="col-span-2"><Input className="h-7 text-xs" maxLength = {200} disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(e) => updateField("scope_of_work", e.target.value)} /></CField>
+                <CField label="Project Name" className="col-span-2" ><Input className="h-7 text-xs" maxLength={200} disabled={headerAndLineDisabled} value={form.project_name} onChange={(e) => updateField("project_name", e.target.value)} /></CField>
+                <CField label="PR No" className="col-span-2"><Input className="h-7 text-xs text-right" maxLength={200} disabled={headerAndLineDisabled} value={form.pr_no} onChange={(e) => updateField("pr_no", e.target.value)} /></CField>
+                <CField label="Scope of Work" className="col-span-2"><Input className="h-7 text-xs" maxLength={200} disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(e) => updateField("scope_of_work", e.target.value)} /></CField>
               </>
             )}
             <CField
               label="Payment Terms"
               className={String(docType ?? "").trim().toUpperCase() === "LPO" ? "col-span-4" : "col-span-6"}
             >
-              <Input className="h-7 text-xs" disabled={headerAndLineDisabled}   maxLength={250} value={form.payment_terms} onChange={(e) => updateField("payment_terms", e.target.value)} />
+              <Input className="h-7 text-xs" disabled={headerAndLineDisabled} maxLength={250} value={form.payment_terms} onChange={(e) => updateField("payment_terms", e.target.value)} />
             </CField>
 
             <CField label="Remarks" className="col-span-6">
@@ -521,11 +595,11 @@ export function PurchaseOrderHeaderForm({
           <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-4">
             {(docTypeUpper === "LPO" || docTypeUpper === "SO" || docTypeUpper === "PQO" || docTypeUpper === "JO") && (
               <>
-                <CField label="Delivery Contact Person"><Input className="h-7 text-xs" maxLength = {70} disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
+                <CField label="Delivery Contact Person"><Input className="h-7 text-xs" maxLength={70} disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
                 {(docTypeUpper === "JO" && <CField label="Delivery Date" ><Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.dlvr_date} onChange={(e) => updateField("dlvr_date", e.target.value)} /></CField>)}
                 <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.dlvr_mobile} maxLength={20} onChange={(e) => updateField("dlvr_mobile", cleanPhone(e.target.value))} /></CField>
                 <CField label="Delivery Email Address"><Input className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`} type="email" maxLength={100} disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", (e.target.value))} /></CField>
-                <CField label="Delivery Term"><Input className="h-7 text-xs"   maxLength={250} disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
+                <CField label="Delivery Term"><Input className="h-7 text-xs" maxLength={250} disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
               </>
             )}
           </HeaderBlock>

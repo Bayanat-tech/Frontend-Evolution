@@ -11,6 +11,7 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
 import {
   ActionKey,
+  ExpenseRow,
   PO_DOC_TYPE,
   PROCESSGRN,
   PurchaseConfig,
@@ -20,11 +21,13 @@ import {
   SendBackUserOption,
 } from "./Purchaseordertypes";
 import {
+  amountBeforeDiscPrice,
   computeQuantity,
   emptyForm,
   emptyLineRow,
   fetchPurchaseOrderDetail,
   fetchPurchaseOrderHeader,
+  fetchPurchaseExpenseDetails,
   formatAmount,
   lineAmount,
   lineDiscPrice,
@@ -42,6 +45,7 @@ import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
 import { PurchaseGrnHeaderForm } from "./PurchaseGrnheaderForm";
 import { PurchaseGrnDetailsTable } from "./PurchaseGrnDetails";
+import { PurchaseGrnOtherExpenses } from "./PurchaseGrnOtherExpenses";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { NewReportDialog } from "../../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
@@ -69,6 +73,38 @@ async function fetchHtmlFromPreviewUrl(url: string): Promise<string> {
   }
 }
 
+function emptyGrnExpenseRow(divCode?: string): ExpenseRow {
+  return {
+    id: newId(),
+    company_code: null,
+    doc_type: PO_DOC_TYPE.GRN,
+    doc_no: null,
+    doc_date: null,
+    div_code: divCode || "",
+    dept_code: null,
+    serial_no: 0,
+    exp_code: null,
+    expense_name: null,
+    remarks: null,
+    amount: 0,
+    curr_code: null,
+    ex_rate: 1,
+    lcur_amount: 0,
+    ref_doc_type: null,
+    ref_doc_no: 0,
+    ref_doc_serial: 0,
+    edit_user: null,
+    edit_date: null,
+    user_id: null,
+    user_dt: null,
+    zone_code: null,
+    ac_code: null,
+    wrk_type: null,
+    employee_id: null,
+    hourly_rate: 0,
+  };
+}
+
 export function PurchaseGRNEditor({
   config,
   editor,
@@ -86,6 +122,9 @@ export function PurchaseGRNEditor({
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
+  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>(() =>
+    editMode ? [] : [emptyGrnExpenseRow(form.div_code)]
+  );
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -110,12 +149,15 @@ export function PurchaseGRNEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+  const [activeTab, setActiveTab] = useState<"main" | "expenses">("main");
   const submitBtnRef = useRef<HTMLDivElement>(null);
+  const prevHeaderCurr = useRef("");
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
@@ -123,9 +165,46 @@ export function PurchaseGRNEditor({
     const initialForm = emptyForm(editor);
     setForm(initialForm);
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
+    setExpenseRows(editor.mode === "edit" ? [] : [emptyGrnExpenseRow(initialForm.div_code)]);
     setError("");
+    setActiveTab("main");
     setLoading(editor.mode === "edit");
   }, [editor]);
+
+  useEffect(() => {
+    const taxPerc =
+      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+
+    setRows((current) =>
+      current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
+        };
+
+        return updatedRow;
+      })
+    );
+
+
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
+
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -135,10 +214,27 @@ export function PurchaseGRNEditor({
       setError("");
       try {
         const docNo = editor.row.doc_no;
-        const [headerRaw, detailRows] = await Promise.all([
+        const [headerRaw, detailRows, expenseDetailRows] = await Promise.all([
           fetchPurchaseOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
           fetchPurchaseOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseExpenseDetails(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
+        let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -152,10 +248,16 @@ export function PurchaseGRNEditor({
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
           party_address: text(headerRaw.address || current.party_address),
-          credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
           dept_code: text(headerRaw.dept_code || current.dept_code),
-          party_phone: text(headerRaw.tel || current.party_phone),
-          party_fax: text(headerRaw.fax || current.party_fax),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
+          credit_period: Number(headerRaw.credit_period || acRow?.credit_period || current.credit_period || 0),
+          party_phone: text(headerRaw.tel || acRow?.party_phone || current.party_phone),
+          party_fax: text(headerRaw.fax || acRow?.party_fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
           curr_code: text(headerRaw.curr_code || current.curr_code),
@@ -163,10 +265,10 @@ export function PurchaseGRNEditor({
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
-          dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
-          dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
-          dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
-          remarks: text(headerRaw.remarks || current.remarks),
+          po_dlvr_contact: text(headerRaw.po_dlvr_contact || current.po_dlvr_contact),
+          po_dlvr_mobile: text(headerRaw.po_dlvr_mobile || current.po_dlvr_mobile),
+          po_dlvr_email: text(headerRaw.po_dlvr_email || current.po_dlvr_email),
+          po_remarks: text(headerRaw.po_remarks || current.po_remarks),
           disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
@@ -186,8 +288,20 @@ export function PurchaseGRNEditor({
           po_payment_terms: text(headerRaw.po_payment_terms || current.po_payment_terms),
           po_dlvr_term: text(headerRaw.po_dlvr_term || current.po_dlvr_term),
           total_po_amount: numberOrZero(headerRaw.total_po_amount) || current.total_po_amount,
+          po_disc_hdr_price: numberOrZero(headerRaw.po_disc_hdr_price),
+          po_disc_hdr_percent: numberOrZero(headerRaw.po_disc_hdr_percent),
+          po_discount_scoope: text(headerRaw.po_discount_scoope) || "ITEM",
+          po_tx_compnt_1_expmt: text(headerRaw.po_tx_compnt_1_expmt),
+          po_tx_cat_code: text(headerRaw.po_tx_cat_code),
+          po_tx_compntcat_code_1: text(headerRaw.po_tx_compntcat_code_1),
+
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
+        setExpenseRows(
+          expenseDetailRows.length
+            ? expenseDetailRows
+            : [emptyGrnExpenseRow(text(headerRaw.div_code) || "")]
+        );
       } catch (loadError) {
         if (!mounted) return;
         setError(loadError instanceof Error ? loadError.message : "Unable to load Purchase GRN");
@@ -221,6 +335,26 @@ export function PurchaseGRNEditor({
     return () => { mounted = false; };
   }, [user?.company_code, user?.loginid, user?.username]);
 
+  useEffect(() => {
+    const newCurr = form.curr_code || "";
+    const newRate = Number(form.ex_rate) || 1;
+    const prev = prevHeaderCurr.current;
+    prevHeaderCurr.current = newCurr;
+    if (!newCurr) return;
+    setExpenseRows((current) =>
+      current.map((r) => {
+        const code = r.curr_code || "";
+        if (code && code !== prev) return r;
+        return {
+          ...r,
+          curr_code: newCurr,
+          ex_rate: newRate,
+          lcur_amount: Number(((Number(r.amount) || 0) * newRate).toFixed(2)),
+        };
+      })
+    );
+  }, [form.curr_code, form.ex_rate]);
+
   const disabled = form.canceled === "Y" || saving || loading;
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
@@ -240,12 +374,94 @@ export function PurchaseGRNEditor({
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
 
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
+
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
+
+  const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
+  const updateExpenseRow = (id: string, patch: Partial<ExpenseRow>) => {
+    setExpenseRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  };
+  const addExpenseRow = () =>
+    setExpenseRows((current) => [
+      ...current,
+      {
+        ...emptyGrnExpenseRow(form.div_code),
+        curr_code: form.curr_code || null,
+        ex_rate: Number(form.ex_rate) || 1,
+      },
+    ]);
+  const removeExpenseRow = (id: string) => setExpenseRows((current) => current.filter((row) => row.id !== id));
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
+  const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? Number(form.tx_compnt_perc_1 || 0) : 0,
+      },
+    ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
@@ -275,7 +491,7 @@ export function PurchaseGRNEditor({
         return setError(`Line ${lineNo}: Product should not be empty`);
       }
 
-      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      const netQty = computeQuantity(row);
       if (!(netQty > 0)) {
         return setError(`Line ${lineNo}: Net Quantity should not be 0`);
       }
@@ -285,7 +501,7 @@ export function PurchaseGRNEditor({
       }
     }
     return runAction("draft", async () => {
-      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username, expenseRows);
     }, "Purchase Quotation saved as draft");
   };
 
@@ -326,13 +542,13 @@ export function PurchaseGRNEditor({
   const confirmSubmit = () => {
 
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username, expenseRows);
     }, editMode ? "Purchase GRN updated successfully" : "Purchase GRN created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
-      await runWorkflow("CANCELED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("CANCELED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username, expenseRows);
     }, "Purchase GRN cancelled");
 
   // ── Print opens the in-app NewReportDialog preview ───────────────────────
@@ -438,7 +654,7 @@ export function PurchaseGRNEditor({
     setRejectError("");
     return runAction("reject", async () => {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", PO_DOC_TYPE.GRN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("REJECTED", PO_DOC_TYPE.GRN, payloadForm, rows, user?.company_code, user?.loginid || user?.username, expenseRows);
       setRejectDialogOpen(false);
     }, "Purchase GRN rejected");
   };
@@ -494,12 +710,23 @@ export function PurchaseGRNEditor({
         sentback_reason: sendBackReason.trim(),
         flow_level_running: sendBackUserLevel,
       };
-      await runWorkflow("SENTBACK", PO_DOC_TYPE.GRN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SENTBACK", PO_DOC_TYPE.GRN, payloadForm, rows, user?.company_code, user?.loginid || user?.username, expenseRows);
       setSendBackDialogOpen(false);
     }, "Purchase GRN sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
+
+  const tabButtonClass = (key: "main" | "expenses") =>
+    `px-4 py-1.5 text-xs font-semibold border-b-2 -mb-px transition-colors cursor-pointer ${activeTab === key
+      ? "border-[#00378C] text-[#00378C]"
+      : "border-transparent text-slate-500 hover:text-slate-800"
+    }`;
+  const expenseTotalLcur = expenseRows.reduce((sum, row) => {
+    const amt = Number(row.amount) || 0;
+    const rate = Number(row.ex_rate) || 1;
+    return sum + (Number(row.lcur_amount) || amt * rate);
+  }, 0);
 
   return (
     <>
@@ -627,66 +854,104 @@ export function PurchaseGRNEditor({
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-                {!showHeaderDetails ? (
-                  <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
-                    <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="font-semibold text-[#00378C]">Doc Date:</span>
-                        <span className="font-medium">{form.doc_date}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="font-semibold text-[#00378C]">Division:</span>
-                        <span className="font-medium">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 truncate">
-                        <span className="font-semibold text-[#00378C]">A/c Code:</span>
-                        <span className="font-medium truncate">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "Not selected"}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="font-semibold text-[#00378C]">Currency:</span>
-                        <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
-                      </span>
+                {/* ── Tabs: Header & Details | Other Expenses ── */}
+                <div className="flex items-center gap-1 border-b border-slate-200" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "main"}
+                    className={tabButtonClass("main")}
+                    onClick={() => setActiveTab("main")}
+                  >
+                    Header &amp; Details
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "expenses"}
+                    className={tabButtonClass("expenses")}
+                    onClick={() => setActiveTab("expenses")}
+                  >
+                    Other Expenses
+                  </button>
+                </div>
+
+                {/* ── Tab 1: Header + Details ── */}
+                <div className={activeTab === "main" ? "grid gap-3 min-w-0" : "hidden"}>
+                  {!showHeaderDetails ? (
+                    <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
+                      <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="font-semibold text-[#00378C]">Doc Date:</span>
+                          <span className="font-medium">{form.doc_date}</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="font-semibold text-[#00378C]">Division:</span>
+                          <span className="font-medium">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 truncate">
+                          <span className="font-semibold text-[#00378C]">A/c Code:</span>
+                          <span className="font-medium truncate">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "Not selected"}</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="font-semibold text-[#00378C]">Currency:</span>
+                          <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer"
+                        onClick={() => setShowHeaderDetails(true)}
+                      >
+                        Show Header Fields <ChevronDown size={13} className="ml-1" />
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer"
-                      onClick={() => setShowHeaderDetails(true)}
-                    >
-                      Show Header Fields <ChevronDown size={13} className="ml-1" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
-                    <PurchaseGrnHeaderForm
-                      form={form}
-                      docType={PO_DOC_TYPE.GRN}
-                      setForm={setForm}
-                      updateField={updateField}
-                      disabled={disabled}
-                      headerAndLineDisabled={headerAndLineDisabled}
-                      editMode={editMode}
-                      companyCode={user?.company_code}
-                      loginid={user?.loginid || user?.username}
-                      setdetails={setRows}
-                    />
-                  </div>
-                )}
-                <PurchaseGrnDetailsTable
-                  rows={rows}
-                  form={form}
-                  setdetails={setRows}
-                  docType={PO_DOC_TYPE.GRN}
-                  updateRow={updateRow}
-                  addRow={addRow}
-                  removeRow={removeRow}
-                  headerAndLineDisabled={headerAndLineDisabled}
-                  discAmt={form.disc_price}
-                  ex_rate={form.ex_rate}
-                  companyCode={user?.company_code}
-                  loginid={user?.loginid || user?.username}
-                />
+                  ) : (
+                    <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
+                      <PurchaseGrnHeaderForm
+                        form={form}
+                        docType={PO_DOC_TYPE.GRN}
+                        calculateDiscount={applyDiscountCalculation}
+                        setForm={setForm}
+                        updateField={updateField}
+                        disabled={disabled}
+                        headerAndLineDisabled={headerAndLineDisabled}
+                        editMode={editMode}
+                        companyCode={user?.company_code}
+                        loginid={user?.loginid || user?.username}
+                        setdetails={setRows}
+                      />
+                    </div>
+                  )}
+                  <PurchaseGrnDetailsTable
+                    rows={rows}
+                    form={form}
+                    setdetails={setRows}
+                    docType={PO_DOC_TYPE.GRN}
+                    updateRow={updateRow}
+                    addRow={addRow}
+                    removeRow={removeRow}
+                    headerAndLineDisabled={headerAndLineDisabled}
+                    discAmt={form.disc_price}
+                    ex_rate={form.ex_rate}
+                    expenseTotal={expenseTotalLcur}
+                    companyCode={user?.company_code}
+                    loginid={user?.loginid || user?.username}
+                  />
+                </div>
+
+                {/* ── Tab 2: Other Expenses ── */}
+                <div className={activeTab === "expenses" ? "grid gap-3 min-w-0" : "hidden"}>
+                  <PurchaseGrnOtherExpenses
+                    rows={expenseRows}
+                    updateRow={updateExpenseRow}
+                    addRow={addExpenseRow}
+                    removeRow={removeExpenseRow}
+                    disabled={headerAndLineDisabled}
+                  />
+                </div>
               </div>
             )}
           </CardContent>
@@ -790,7 +1055,7 @@ export function PurchaseGRNEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
-          readOnly={!isPendingTab || isCancelled} 
+        readOnly={!isPendingTab || isCancelled}
       />
     </>
   );

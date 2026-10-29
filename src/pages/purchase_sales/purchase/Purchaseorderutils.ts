@@ -612,6 +612,7 @@ import {
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
+  ExpenseRow,
   TteJmiConsumType,
 } from "./Purchaseordertypes";
 
@@ -786,6 +787,7 @@ export async function fetchPurchaseOrderDetail(
       l_uom: text(row.l_uom),
       qty_luom: numberOrZero(row.qty_luom),
       unit_price: numberOrZero(row.unit_price),
+      grn_unit_chgs: numberOrZero(row.grn_unit_chgs),
       disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
       disc_percent: exactDiscPercent,
       disc_price: numberOrZero(row.disc_price),
@@ -840,6 +842,56 @@ export async function fetchPurchaseOrderDetail(
   });
 }
 
+export async function fetchPurchaseExpenseDetails(
+  docNo: string,
+  config: PurchaseConfig,
+  companyCode?: string,
+  loginid?: string,
+): Promise<ExpenseRow[]> {
+  if (!config.expenseDetails) return [];
+
+  const rows = await getDynamicLookup({
+    parameter: config.expenseDetails,
+    code1: companyCode,
+    code2: config.docType,
+    code3: docNo,
+    loginid: loginid || "ADMIN",
+  });
+
+  return (rows || []).map((raw, index) => {
+    const row = lowerRecord(raw as Record<string, unknown>);
+    return {
+      id: newId(),
+      company_code: text(row.company_code) || null,
+      doc_type: text(row.doc_type) || config.docType,
+      doc_no: text(row.doc_no) || docNo,
+      doc_date: row.doc_date ? new Date(String(row.doc_date)) : null,
+      div_code: text(row.div_code) || null,
+      dept_code: text(row.dept_code) || null,
+      serial_no: numberOrZero(row.serial_no) || index + 1,
+      exp_code: text(row.exp_code) || null,
+      expense_name: text(row.expense_name ?? row.exp_name) || null,
+      remarks: text(row.remarks) || null,
+      amount: numberOrZero(row.amount),
+      curr_code: text(row.curr_code) || null,
+      ex_rate: numberOrZero(row.ex_rate) || 1,
+      lcur_amount: numberOrZero(row.lcur_amount),
+      ref_doc_type: text(row.ref_doc_type) || null,
+      ref_doc_no: numberOrZero(row.ref_doc_no),
+      ref_doc_serial: numberOrZero(row.ref_doc_serial),
+      edit_user: text(row.edit_user) || null,
+      edit_date: row.edit_date ? new Date(String(row.edit_date)) : null,
+      user_id: text(row.user_id) || null,
+      user_dt: row.user_dt ? new Date(String(row.user_dt)) : null,
+      zone_code: text(row.zone_code) || null,
+      ac_code: text(row.ac_code) || null,
+      wrk_type: text(row.wrk_type) || null,
+      employee_id: text(row.employee_id) || null,
+      hourly_rate: numberOrZero(row.hourly_rate),
+    };
+  });
+}
+
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType, rows?: PurchaseOrderLineRow[]) {
   const refDocNo =
     docType === "GRN"
@@ -882,8 +934,10 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     dlvr_mobile: form.dlvr_mobile,
     dlvr_email: form.dlvr_email,
     remarks: form.remarks,
-    disc_hdr_price: form.disc_hdr_price,
-    disc_hdr_percent: Number(form.disc_hdr_price) > 0
+    disc_hdr_price: (form.discount_scoope || "ITEM") === "ITEM"
+      ? TotalDiscAmount(rows || [])
+      : form.disc_hdr_price,
+    disc_hdr_percent: (form.discount_scoope || "ITEM") === "ITEM" || Number(form.disc_hdr_price) > 0
       ? DiscAmountPercentage(form, rows || [])
       : Number(form.disc_hdr_percent || 0),
     tx_cat_code: form.tx_cat_code,
@@ -940,7 +994,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     pi_pr_no: form.po_pr_no,
     pi_scope_of_work: form.po_scope_of_work,
     pi_ref_doc_no: form.grn_doc_no,
-    discount_scoope:form.discount_scoope||"ITEM",
+    discount_scoope: form.discount_scoope || "ITEM",
     pr_req_no: form.pr_req_no,
     job_card_no: form.job_card_no
 
@@ -969,6 +1023,24 @@ export function computeQuantity(row: PurchaseOrderLineRow): number {
   const qtyLuom = numberOrZero(row.qty_luom);
   const uppp = numberOrZero(row.uppp);
   return isSameUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
+}
+
+export function calculateGrnUnitCharges(
+  rows: PurchaseOrderLineRow[],
+  expenseTotal: number,
+): Map<string, number> {
+  const charges = new Map<string, number>();
+  rows.forEach((row) => charges.set(row.id, 0));
+  const activeRows = rows.filter(
+    (row) => text(row.prod_code).trim() && computeQuantity(row) > 0,
+  );
+  if (!(expenseTotal > 0) || activeRows.length === 0) return charges;
+
+  const expensePerLine = expenseTotal / activeRows.length;
+  activeRows.forEach((row) => {
+    charges.set(row.id, expensePerLine / computeQuantity(row));
+  });
+  return charges;
 }
 
 export function computePoQuantity(row: PurchaseOrderLineRow): number {
@@ -1184,26 +1256,75 @@ export function buildDetailsPayload(
 }
 
 export async function runWorkflow(
-  status: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED" | "CANCELED" | "SENTBACK",
+  status:
+    | "SAVEASDRAFT"
+    | "SUBMITTED"
+    | "REJECTED"
+    | "CLOSED"
+    | "CANCELED"
+    | "SENTBACK",
   docType: PODocType,
   form: PurchaseOrderForm,
   rows: PurchaseOrderLineRow[],
   companyCode?: string,
   loginid?: string,
+  expenseRows?: ExpenseRow[],
 ) {
+  const expenseTotalLcur = (expenseRows || []).reduce((sum, row) => {
+    const amount = numberOrZero(row.amount);
+    const rate = numberOrZero(row.ex_rate) || 1;
+    return sum + (numberOrZero(row.lcur_amount) || amount * rate);
+  }, 0);
+  const grnUnitCharges = calculateGrnUnitCharges(rows, expenseTotalLcur);
+
   return upsertBulkPurchaseEntryApi(
     {
       header: {
-        ...buildHeaderPayload(form, companyCode, loginid, docType, rows),
-        // When the action is CANCELED, tell the backend the document is cancelled.
-        cancelled: status === "CANCELED" ? "Y" : form.canceled || "N",
+        ...buildHeaderPayload(
+          form,
+          companyCode,
+          loginid,
+          docType,
+          rows,
+        ),
+
+        // When the action is CANCELED, mark the document as cancelled.
+        cancelled:
+          status === "CANCELED"
+            ? "Y"
+            : form.canceled || "N",
       },
-      details: buildDetailsPayload(rows, form.ex_rate),
+
+      // Include GRN_UNIT_CHGS in each detail row.
+      details: buildDetailsPayload(rows, form.ex_rate).map(
+        (detail, index) => ({
+          ...detail,
+          grn_unit_chgs:
+            docType === PO_DOC_TYPE.GRN
+              ? grnUnitCharges.get(rows[index]?.id ?? "") ?? 0
+              : numberOrZero(rows[index]?.grn_unit_chgs),
+        }),
+      ),
+
+      ...(expenseRows
+        ? {
+            expenseDetails: expenseRows.map((row, index) => ({
+              ...row,
+              company_code: companyCode || row.company_code,
+              doc_type: docType,
+              doc_no: numberOrZero(form.doc_no),
+              doc_date: form.doc_date,
+              div_code: row.div_code || form.div_code,
+              serial_no: index + 1,
+              user_id: loginid || "ADMIN",
+            })),
+          }
+        : {}),
 
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",
     },
     status,
-    docType
+    docType,
   );
 }

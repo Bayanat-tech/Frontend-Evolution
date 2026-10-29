@@ -839,6 +839,7 @@ export function PurchaseQuotationEditor({
                       companyCode={user?.company_code}
                       loginid={user?.loginid || user?.username}
                       rows={rows}
+                      setdetails={setRows}
                     />
                   </div>
                 )}
