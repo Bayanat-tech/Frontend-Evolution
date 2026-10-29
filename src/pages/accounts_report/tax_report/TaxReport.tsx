@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
+import { api } from '../../../api/client';
 import {
   taxOutInSummaryReport,
   taxOutInReport,
@@ -18,7 +19,8 @@ type TaxReportKey =
   | "taxoutsummary"
   | "taxinsummary"
   | "taxledgeroutreport"
-  | "taxledgerinreport";
+  | "taxledgerinreport"
+  | "gstregister";
 
 const TAX_REPORT_OPTIONS: {
   key: TaxReportKey;
@@ -26,6 +28,7 @@ const TAX_REPORT_OPTIONS: {
   parameter: string;
   isSummary: boolean;
 }[] = [
+  { key: 'gstregister', label: 'GST Register (CGST / SGST / IGST)', parameter: 'GST_REGISTER', isSummary: false },
   {
     key: "taxoutsummary",
     label: "Tax Out Summary",
@@ -63,6 +66,12 @@ const formatDate = (date: string) => {
 
 export default function TaxReportFilter() {
   const { user } = useAuth();
+  const [gstEnabled, setGstEnabled] = useState(false);
+  useEffect(() => {
+    let active = true;
+    api.get('/api/finance/transactions/gst/setup').then(r => { if (active) setGstEnabled(Boolean(r.data.data?.enabled)); }).catch(() => { if (active) setGstEnabled(false); });
+    return () => { active = false; };
+  }, [user?.company_code]);
 
   // ── Filter values ─────────────────────────────────────────────────────────
   const [values, setValues] = useState<Record<string, any>>({
@@ -197,8 +206,8 @@ export default function TaxReportFilter() {
   );
 
   const reportTypeOptions: ReportOption[] = useMemo(
-    () => TAX_REPORT_OPTIONS.map((o) => ({ value: o.key, label: o.label })),
-    []
+    () => TAX_REPORT_OPTIONS.filter(o => o.key !== 'gstregister' || gstEnabled).map((o) => ({ value: o.key, label: o.label })),
+    [gstEnabled]
   );
 
   // ── Field config ──────────────────────────────────────────────────────────
@@ -320,7 +329,7 @@ export default function TaxReportFilter() {
       const params = buildParams(selectedReport.parameter);
       console.log("Generating:", selectedReport.parameter, params);
 
-      const html = selectedReport.isSummary
+      const html = reportType === 'gstregister' ? (await api.post('/api/finance/transactions/reports/gst-register/html', params)).data : selectedReport.isSummary
         ? await taxOutInSummaryReport(params)
         : await taxOutInReport(params);
 
@@ -344,7 +353,11 @@ export default function TaxReportFilter() {
     try {
       const params = buildParams(selectedReport.parameter);
 
-      if (selectedReport.isSummary) {
+      if (reportType === 'gstregister') {
+        const response = await api.post('/api/finance/transactions/reports/gst-register/excel', params, { responseType: 'blob' });
+        const url = URL.createObjectURL(response.data); const anchor = document.createElement('a');
+        anchor.href = url; anchor.download = 'GST-register.xlsx'; document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } else if (selectedReport.isSummary) {
         await exportTaxInvoiceSummaryExcel(params);
       } else {
         await getTaxInvoiceExcelReport(params);

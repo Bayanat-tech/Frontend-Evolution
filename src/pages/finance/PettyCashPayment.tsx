@@ -1,3 +1,6 @@
+import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
+import { taxTreatmentFromMaster } from "../../utils/financeTaxTreatment";
 import { Textarea } from "../../components/ui/Textarea";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
@@ -389,8 +392,10 @@ function PettyCashPaymentDocument({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const taxLabels = useFinanceTaxLabels();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const gst = useFinanceGst(form, docType, editMode);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
@@ -614,7 +619,7 @@ function PettyCashPaymentDocument({
       const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
       if (code) {
         rMap[code] = rawRate;
-        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
+        tMap[code] = taxTreatmentFromMaster(rawType, rawRate);
       }
     });
     setTaxRateMap((prev) => ({ ...prev, ...rMap }));
@@ -628,18 +633,15 @@ function PettyCashPaymentDocument({
     }
   }, [user?.company_code, loadTaxOptions]);
 
-  const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
-    const trimmed = String(taxCode || "").trim();
-    if (trimmed && taxRateMap[trimmed] !== undefined) {
-      return taxRateMap[trimmed];
-    }
-    if (fallbackPerc != null && !isNaN(Number(fallbackPerc))) {
-      return Number(fallbackPerc);
-    }
-    return 0;
+  const getTaxPercForCode = useCallback((taxCode?: string, existingPerc?: number | null) => {
+    // An assigned voucher rate survives later master-rate changes.
+    if (existingPerc != null && Number.isFinite(Number(existingPerc))) return Number(existingPerc);
+    const code = String(taxCode || "").trim();
+    return code && taxRateMap[code] !== undefined ? taxRateMap[code] : 0;
   }, [taxRateMap]);
 
   useEffect(() => {
+    if (editMode) return;
     setForm((current) => {
       let changed = false;
       const nextDetail = current.detail.map((d) => {
@@ -652,7 +654,7 @@ function PettyCashPaymentDocument({
           }
           return d;
         }
-        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(3));
+        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(4));
         if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === dynamicRate && d.tx_compnt_1_expmt === "S") {
           return d;
         }
@@ -661,7 +663,7 @@ function PettyCashPaymentDocument({
       });
       return changed ? { ...current, detail: nextDetail } : current;
     });
-  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), getTaxPercForCode]);
+  }, [editMode, form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), getTaxPercForCode]);
 
   const disabled = form.canceled === "Y" || saving;
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
@@ -718,14 +720,9 @@ function PettyCashPaymentDocument({
           const dynamicRate = getTaxPercForCode(merged.tx_compntcat_code_1, merged.tx_compnt_perc_1);
           let taxType = merged.tx_compnt_1_expmt || (dynamicRate > 0 ? "S" : "N");
 
-          if (dynamicRate > 0 && taxType === "N") {
-            taxType = "S";
-            merged.tx_compnt_1_expmt = "S";
-          }
-
           if (taxType === "S") {
             merged.tx_compnt_perc_1 = dynamicRate;
-            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(3));
+            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(4));
           } else {
             merged.tx_compnt_perc_1 = 0;
             merged.tx_compnt_amt_1 = 0;
@@ -753,7 +750,7 @@ function PettyCashPaymentDocument({
       const dynamicRate = getTaxPercForCode(detail.tx_compntcat_code_1, detail.tx_compnt_perc_1);
       const isTaxable = detail.tx_compnt_1_expmt === "S";
       const taxPerc = isTaxable ? dynamicRate : 0;
-      const taxAmt = isTaxable ? Number(((newAmount * taxPerc) / 100).toFixed(3)) : 0;
+      const taxAmt = isTaxable ? Number(((newAmount * taxPerc) / 100).toFixed(4)) : 0;
       const taxPatch = {
         tx_compnt_1_expmt: isTaxable ? "S" : "N",
         tx_compnt_perc_1: isTaxable ? taxPerc : 0,
@@ -1020,7 +1017,7 @@ function PettyCashPaymentDocument({
           if (d.id !== dId) return d;
           const dynamicRate = getTaxPercForCode(d.tx_compntcat_code_1, d.tx_compnt_perc_1);
           const isTaxable = d.tx_compnt_1_expmt === "S";
-          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(4)) : 0;
           return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1043,7 +1040,7 @@ function PettyCashPaymentDocument({
           if (d.id !== dId) return d;
           const dynamicRate = getTaxPercForCode(d.tx_compntcat_code_1, d.tx_compnt_perc_1);
           const isTaxable = d.tx_compnt_1_expmt === "S";
-          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(4)) : 0;
           return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1157,6 +1154,7 @@ function PettyCashPaymentDocument({
       console.log("detail child_table:", form.detail.map(d => ({ ac: d.ac_code, table: d.child_table, children: form.children[d.id] })));
       const bulkPayload = buildBulkAccountEntryPayload(form, docType, user?.company_code || "", user?.loginid || "");
       console.log("Bulk payload header:", bulkPayload.header);
+      gst.attachToHeader(bulkPayload.header);
       await upsertBulkAccountEntryApi(bulkPayload);
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
@@ -1259,6 +1257,7 @@ function PettyCashPaymentDocument({
             </Button>
           </div>
         </div>
+      <FinanceGstPanel editor={gst} disabled={saving || form.canceled === "Y"} />
       </CardHeader>
 
       <CardContent className="commercial-editor-body min-h-0 overflow-auto p-3">
@@ -1789,7 +1788,7 @@ function PettyCashPaymentDocument({
                                   }
 
                                   const lineAmt = Number(detail.amount) || 0;
-                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(4)) : 0;
 
                                   if (valStr && perc > 0) {
                                     setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
@@ -1818,7 +1817,7 @@ function PettyCashPaymentDocument({
                                         ? detail.tx_compnt_perc_1
                                         : getTaxPercForCode(detail.tx_compntcat_code_1 || ""))
                                     : 0;
-                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(4)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,
@@ -1826,10 +1825,10 @@ function PettyCashPaymentDocument({
                                   });
                                 }}
                               >
-                                <option value="N">No Tax</option>
-                                <option value="S">Std Tax</option>
-                                <option value="Z">Zero</option>
-                                <option value="E">Exempt</option>
+                                <option value="N">{taxLabels.N}</option>
+                                <option value="S">{taxLabels.S}</option>
+                                <option value="Z">{taxLabels.Z}</option>
+                                <option value="E">{taxLabels.E}</option>
                               </Select>
                             </td>
                           )}
