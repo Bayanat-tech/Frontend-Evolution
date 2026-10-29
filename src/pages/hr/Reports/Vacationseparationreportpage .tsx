@@ -7,7 +7,6 @@ import { Button } from "../../../components/ui/Button";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import { useAuth } from "../../../state/AuthContext";
 
-
 import { NewReportDialog } from "../../../components/new_report_format";
 import { getVacationSeparationReportExcelDownload, getVacationSeparationReportHtml } from "../../../api/transactions";
 
@@ -30,12 +29,79 @@ const MONTH_OPTIONS = MONTHS.map((m, i) => ({ label: m, value: String(i + 1) }))
 
 // ─── Small UI helpers ─────────────────────────────────────────────────────────
 
+// div (label nahi) use kiya hai taaki andar ke radio <label> nested na hon
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-      {label}
+    <div className="grid min-w-0 gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+      <span>{label}</span>
       {children}
-    </label>
+    </div>
+  );
+}
+
+// Custom radio: inline styles + hidden native input, taaki global CSS
+// (label/input ke styles) isko tod na sake.
+function RadioOption({
+  label,
+  checked,
+  onSelect,
+}: {
+  label: string;
+  checked: boolean;
+  onSelect: () => void;
+}) {
+  // <label>/<input> nahi, <span role="radio"> use kiya hai, kyunki global CSS
+  // label/input par apne styles laga kar text ko radio ke neeche bhej raha tha.
+  return (
+    <span
+      role="radio"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      style={{
+        display: "inline-flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        userSelect: "none",
+        textTransform: "none",
+        fontSize: 13,
+        fontWeight: 500,
+        lineHeight: 1,
+        color: checked ? "#2563eb" : "#0f172a",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          width: 16,
+          height: 16,
+          boxSizing: "border-box",
+          borderRadius: "50%",
+          border: `1.5px solid ${checked ? "#2563eb" : "#94a3b8"}`,
+          background: "#ffffff",
+        }}
+      >
+        {checked ? (
+          <span
+            style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563eb", display: "block" }}
+          />
+        ) : null}
+      </span>
+      {label}
+    </span>
   );
 }
 
@@ -122,16 +188,16 @@ export default function VacationSeparationReportPage() {
   };
 
   const handleExcel = async () => {
-  if (!lastParamsRef.current) return;
-  setExporting(true);
-  try {
-    await getVacationSeparationReportExcelDownload(buildPayload(lastParamsRef.current));
-  } catch (err) {
-    console.error("Excel export error:", err);
-  } finally {
-    setExporting(false);
-  }
-};
+    if (!lastParamsRef.current) return;
+    setExporting(true);
+    try {
+      await getVacationSeparationReportExcelDownload(buildPayload(lastParamsRef.current));
+    } catch (err) {
+      console.error("Excel export error:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleOpenInNewWindow = () => {
     if (!reportHtml) return;
@@ -199,11 +265,11 @@ export default function VacationSeparationReportPage() {
 
         <ReportFilterHeader onClear={handleClearAll} />
 
-        {/* Row 1: Pay Month / Pay Year */}
-        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+        {/* Single row: Pay Month / Pay Year / Report Type */}
+        <div className="freight-report-fields grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_250px] items-start gap-3 p-3">
           <Field label="Pay Month">
             <select
-              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
               value={payMonth}
               onChange={(e) => setPayMonth(e.target.value)}
             >
@@ -220,33 +286,39 @@ export default function VacationSeparationReportPage() {
               type="number"
               min={1900}
               max={2200}
-              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
               value={payYear}
               onChange={(e) => setPayYear(e.target.value)}
             />
           </Field>
-        </div>
 
-        {/* Row 2: Vacation / Separation */}
-        <div className="freight-report-fields flex flex-wrap items-center gap-6 px-3 pb-3 text-sm">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="vacation-separation-type"
-              checked={reportType === "VACATION"}
-              onChange={() => setReportType("VACATION")}
-            />
-            Vacation
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="vacation-separation-type"
-              checked={reportType === "SEPARATION"}
-              onChange={() => setReportType("SEPARATION")}
-            />
-            Separation
-          </label>
+          <Field label="Report Type">
+            {/* Peeche ek readonly input: isse Month/Year jaisa hi outline, background aur height milti hai */}
+            <div className="relative h-8 w-full">
+              <input
+                type="text"
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                className="pointer-events-none h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              />
+              <div
+                className="absolute inset-0 flex items-center px-3"
+                style={{ flexDirection: "row", gap: 20 }}
+              >
+                <RadioOption
+                  label="Vacation"
+                  checked={reportType === "VACATION"}
+                  onSelect={() => setReportType("VACATION")}
+                />
+                <RadioOption
+                  label="Separation"
+                  checked={reportType === "SEPARATION"}
+                  onSelect={() => setReportType("SEPARATION")}
+                />
+              </div>
+            </div>
+          </Field>
         </div>
 
         {!inputValid && (
