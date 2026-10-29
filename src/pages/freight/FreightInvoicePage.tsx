@@ -448,8 +448,8 @@ export function FreightInvoicePage() {
   }
 
   const selectedKeys = useMemo(() => new Set(selectedRows.map(lineKey)), [selectedRows]);
-  const readOnly = editorMode === "view";
   const isFormConfirmed = isInvoiceConfirmed(form.inv_status);
+  const readOnly = editorMode === "view" || (editorMode === "edit" && isFormConfirmed);
 
   async function printInvoice(reportType: "grouped" | "activitywise") {
     if (!form.prin_code || !form.invoice_no) return;
@@ -544,7 +544,7 @@ export function FreightInvoicePage() {
 
           </div>
           <div className="freight-invoice-header-actions"><div className="flex w-full items-center justify-between">
-            {form.invoice_no ? <Button type="button" variant="outline" onClick={() => setPrintDialogOpen(true)}><Printer size={14} /> Print</Button> : <span />}
+            {form.invoice_no ? <Button type="button" variant="outline" onClick={() => void directPrintInvoice(form.prin_code, form.invoice_no)}><Printer size={14} /> Print</Button> : <span />}
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" disabled={saving} onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}>{readOnly ? "Close" : "Cancel"}</Button>
               {readOnly && form.invoice_no && !isFormConfirmed && (
@@ -552,12 +552,12 @@ export function FreightInvoicePage() {
                   <CheckCircle size={14} />Confirm Invoice
                 </Button>
               )}
-              {!readOnly && (
+              {!readOnly && !isFormConfirmed && (
                 <>
                   <Button type="button" variant="outline" onClick={() => void saveInvoice("draft")} disabled={saving || !selectedRows.length}>
                     <Save size={14} />{saving ? "Saving..." : "Save Draft"}
                   </Button>
-                  <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void saveInvoice("confirm")} disabled={saving || !selectedRows.length}>
+                  <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void saveInvoice("confirm")} disabled={saving || !selectedRows.length || isFormConfirmed}>
                     <CheckCircle size={14} />{saving ? "Confirming..." : "Confirm Invoice"}
                   </Button>
                 </>
