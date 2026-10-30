@@ -108,6 +108,7 @@ const supportApiDelete = (ticket: number, message: number) =>
 
 export function SupportLauncher() {
   const { role, unread } = useSupport();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
 
@@ -124,7 +125,8 @@ export function SupportLauncher() {
   }, [open]);
 
   // DEVADMIN and Developers work directly in full desk; hide floating headset launcher for staff
-  if (role === 'admin' || role === 'developer') {
+  const isStaff = role === 'admin' || role === 'developer' || user?.loginid?.toUpperCase() === 'DEVADMIN';
+  if (isStaff) {
     return null;
   }
 
