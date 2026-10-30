@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TicketDrawer } from './TicketDrawer';
+import { SupportCenter } from '../../pages/support/SupportCenter';
 
 /**
  * Generic sliding drawer wrapper used by the Support module.
@@ -21,10 +21,9 @@ export const SupportDrawer: React.FC = () => {
           <button className="close-btn" onClick={toggle} aria-label="Close">
             ✕
           </button>
-          <TicketDrawer />
+          <SupportCenter compact onClose={toggle} />
         </div>
       )}
     </>
   );
 };
-
