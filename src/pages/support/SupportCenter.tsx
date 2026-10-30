@@ -111,6 +111,11 @@ export function SupportLauncher() {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
 
+  // DEVADMIN and Developers work directly in full desk; hide floating headset launcher for staff
+  if (role === 'admin' || role === 'developer') {
+    return null;
+  }
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -781,7 +786,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   <span style={{ fontSize: 11, color: 'var(--sup-muted)' }}>Distribution across ERP & Supply Chain</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, padding: '8px 0' }}>
-                  {['HCM', 'Finance', 'WMS', 'FMS', 'Security', 'Masters', 'General'].map(mod => {
+                  {['Finance', 'HCM', 'IMS', 'WMS', 'FMS', 'VMS', 'Security', 'Masters', 'General'].map(mod => {
                     const modTickets = tickets.filter(t => (t.MODULE_NAME || '').toUpperCase().includes(mod.toUpperCase()) || (t.PAGE_URL || '').toUpperCase().includes(mod.toUpperCase()));
                     const modActive = modTickets.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
                     const modClosed = modTickets.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
@@ -1370,10 +1375,10 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
             <div className="sup-section-card">
               <h3><BarChart3 size={16} />Module Ticket Distribution</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {['HCM', 'Finance', 'WMS', 'FMS', 'Security', 'Masters', 'Other'].map(mod => {
+                {['Finance', 'HCM', 'IMS', 'WMS', 'FMS', 'VMS', 'Security', 'Masters', 'Other'].map(mod => {
                   const count = visible.filter(t => {
                     const str = `${t.MODULE_NAME || ''} ${t.SUBJECT || ''}`.toUpperCase();
-                    if (mod === 'Other') return !['HCM', 'FINANCE', 'WMS', 'FMS', 'SECURITY', 'MASTERS'].some(m => str.includes(m));
+                    if (mod === 'Other') return !['FINANCE', 'HCM', 'IMS', 'WMS', 'FMS', 'VMS', 'SECURITY', 'MASTERS'].some(m => str.includes(m));
                     return str.includes(mod.toUpperCase());
                   }).length;
                   const pct = visible.length ? Math.round((count / visible.length) * 100) : 0;
@@ -1616,7 +1621,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   <div className="sup-form-field">
                     <label>Module / Area</label>
                     <div className="sup-module-pills">
-                      {['Finance', 'HCM', 'WMS', 'FMS', 'Security', 'Masters', 'General'].map(mod => {
+                      {['Finance', 'HCM', 'IMS', 'WMS', 'FMS', 'VMS', 'Security', 'Masters', 'General'].map(mod => {
                         const isMatch = (draft.subject || '').toLowerCase().includes(mod.toLowerCase());
                         return (
                           <button
