@@ -7,7 +7,9 @@ import { WorkspacePage } from "./pages/WorkspacePage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { useAuth } from "./state/AuthContext";
 import { ToastProvider } from "./components/ui/AlertToast";
+// ── SUPPORT-START ──
 import { SupportProvider } from "./components/SupportProvider";
+// ── SUPPORT-END ──
 import "../src/styles.css";
 import { WmsBootScreen } from "./components/BootScreen";
 
@@ -46,7 +48,8 @@ if (isBooting) {
 
   return (
     <div className={activeDark ? "app dark" : "app"} style={{ fontFamily: "Inter, sans-serif" }}>
-      <ToastProvider><SupportProvider>
+      <ToastProvider>// -- SUPPORT-START --
+
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
@@ -69,7 +72,8 @@ if (isBooting) {
         />
         <Route path="*" element={<Navigate to="/apps" replace />} />
       </Routes>
-    </SupportProvider></ToastProvider>
+    
+// -- SUPPORT-END --</ToastProvider>
     </div>
   );
 }
