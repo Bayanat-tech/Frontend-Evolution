@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   BarChart3,
+  Bell,
   Bot,
   Calendar,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   Headphones,
   ImagePlus,
   LayoutDashboard,
+  Mail,
   MessageSquare,
   Paperclip,
   Plus,
@@ -61,9 +63,12 @@ const statusBadge = (s: string) => (
 
 const getUserInitials = (name?: string) => {
   if (!name) return 'U';
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const clean = name.replace(/[-_.]+/g, ' ').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
   if (!parts.length) return 'U';
-  if (parts.length === 1) return parts[0][0].toUpperCase();
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
@@ -137,6 +142,10 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const location = useLocation();
   const navigate = useNavigate();
 
+  const isAdmin = role === 'admin' || user?.loginid?.toUpperCase() === 'DEVADMIN';
+  const isDeveloper = role === 'developer';
+  const isStaff = isAdmin || isDeveloper;
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -204,19 +213,20 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const tab = useMemo(() => {
     if (compact) return 'tickets';
     if (location.pathname.endsWith('/dashboard')) return 'dashboard';
-    if (location.pathname.endsWith('/team')) return 'team';
-    if (location.pathname.endsWith('/reports')) return 'reports';
-    if (location.pathname.endsWith('/settings')) return 'settings';
+    if (location.pathname.endsWith('/team') || location.pathname.endsWith('/developers')) return 'team';
+    if (location.pathname.endsWith('/reports') || location.pathname.endsWith('/overview')) return 'reports';
+    if (location.pathname.endsWith('/settings') || location.pathname.endsWith('/notifications')) return 'settings';
     if (location.pathname.endsWith('/assigned')) return 'assigned';
-    return role === 'admin' && location.pathname.endsWith('/tickets') ? 'tickets' : role === 'admin' ? 'dashboard' : 'tickets';
-  }, [compact, location.pathname, role]);
+    return isAdmin && location.pathname.endsWith('/tickets') ? 'tickets' : isAdmin ? 'dashboard' : 'tickets';
+  }, [compact, location.pathname, isAdmin]);
 
   const patch = (v: Partial<typeof draft>) => setDrafts(d => ({ ...d, [draftKey]: { ...draft, ...v } }));
 
   const refresh = useCallback(async (isBackground = false) => {
     if (!isBackground) setFetching(true);
     try {
-      const t = await supportApi.tickets(role);
+      const effectiveRole = isAdmin ? 'admin' : isDeveloper ? 'developer' : 'user';
+      const t = await supportApi.tickets(effectiveRole);
       setTickets(prev => {
         // Play notification if a new unread arrives
         const prevUnread = prev.reduce((acc, curr) => acc + (curr.UNREAD_COUNT || 0), 0);
@@ -234,7 +244,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     } finally {
       if (!isBackground) setFetching(false);
     }
-  }, [role]);
+  }, [isAdmin, isDeveloper]);
 
   useEffect(() => {
     void refresh();
@@ -248,14 +258,14 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   }, [refresh]);
 
   useEffect(() => {
-    if (role === 'admin') {
+    if (isAdmin) {
       void supportApi.developers().then(setDevelopers).catch(() => undefined);
       void supportApi.candidateDevelopers().then(setCandidates).catch(() => undefined);
       if (tab === 'settings') {
         void supportApi.settings().then(setSettings).catch(() => undefined);
       }
     }
-  }, [role, tab]);
+  }, [isAdmin, tab]);
 
   const loadMessages = useCallback(async () => {
     if (!selectedRef.current) return;
@@ -403,6 +413,11 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   // Month & Year filtering
   const visible = useMemo(() => {
     return tickets.filter(t => {
+      // Developer desk filter: developer only sees their own assigned tickets
+      if ((isDeveloper || tab === 'assigned') && t.DEVELOPER_LOGINID?.toUpperCase() !== user?.loginid?.toUpperCase()) {
+        return false;
+      }
+
       // Query filter
       const matchesQuery = [t.SUBJECT, t.REQUESTER_NAME, t.COMPANY_CODE, t.TENANT_ID, String(t.TICKET_ID)]
         .join(' ')
@@ -431,7 +446,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
 
       return true;
     });
-  }, [tickets, query, statusFilter, priorityFilter, developerFilter, yearFilter, monthFilter]);
+  }, [tickets, query, statusFilter, priorityFilter, developerFilter, yearFilter, monthFilter, isDeveloper, tab, user?.loginid]);
 
   // Export Tickets as CSV
   const handleExportCSV = () => {
@@ -503,27 +518,35 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
         <div className="sup-title">
           <span className="sup-brand"><Headphones size={20} /></span>
           <div>
-            <h1>{compact ? 'Bayanat Help & Support' : role === 'admin' ? 'Enterprise Support Desk' : role === 'developer' ? 'Developer Workbench' : 'My Support Tickets'}</h1>
-            <p>{compact ? 'Instant answers, ticket status, and dedicated developer help.' : role === 'admin' ? 'Central ticketing operations, SLA metrics, and developer allocations.' : 'Track your assigned issues, progress, and resolution status.'}</p>
+            <h1>{compact ? 'Bayanat Help & Support' : isAdmin ? 'Enterprise Support Desk' : isDeveloper ? 'Developer Workbench' : 'My Support Tickets'}</h1>
           </div>
         </div>
         <div className="sup-actions">
           <button title="Refresh" aria-label="Refresh" disabled={fetching} onClick={() => void refresh()}>
             <RefreshCw size={15} className={fetching ? 'sup-spin' : ''} />
           </button>
-          {role !== 'admin' && role !== 'developer' && (
+          {!compact && isAdmin && (
+            <button
+              className="sup-export-btn"
+              title="Download Filtered Tickets as CSV"
+              onClick={handleExportCSV}
+            >
+              <Download size={14} />Export CSV
+            </button>
+          )}
+          {!isStaff && (
             <button className="sup-primary" onClick={startNewIssue} disabled={busy}>
               <Plus size={15} />New issue
             </button>
           )}
-          {compact && (role === 'admin' || role === 'developer') && (
+          {compact && isStaff && (
             <button
               type="button"
               className="sup-launch"
               title="Open full support desk"
               onClick={() => {
                 if (onClose) onClose();
-                navigate(role === 'developer' ? '/workspace/support/support/assigned' : '/workspace/support/support/dashboard');
+                navigate(isDeveloper ? '/workspace/support/support/assigned' : '/workspace/support/support/dashboard');
               }}
             >
               Full desk ↗
@@ -789,12 +812,14 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
             </div>
           )}
         </div>
-      ) : tab === 'team' && role === 'admin' ? (
+      ) : tab === 'team' && isAdmin ? (
         /* TAB 2: DEVELOPER MANAGEMENT (DEVADMIN) */
         <div className="sup-settings">
           <div className="sup-master-header" style={{ marginBottom: 16 }}>
             <h2>Enterprise Support Developers</h2>
-            <p>Select developers from User Master (LOGINID starting with B / BI) to grant or configure ticket assignments.</p>
+            <p style={{ color: 'var(--sup-muted)', fontSize: 12 }}>
+              Developers registered here can be assigned support tickets across all tenants and have access to their dedicated Developer Workbench.
+            </p>
           </div>
 
           <form
@@ -901,7 +926,11 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       <td><strong>{d.USERNAME}</strong></td>
                       <td>{d.LOGINID}</td>
                       <td>{d.EMAIL_ID}</td>
-                      <td>{tickets.filter(t => t.DEVELOPER_LOGINID === d.LOGINID && !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</td>
+                      <td>
+                        <span className="sup-status s-assigned">
+                          {tickets.filter(t => t.DEVELOPER_LOGINID === d.LOGINID && !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length} Active
+                        </span>
+                      </td>
                       <td>
                         <span className={`sup-status ${d.ACTIVE_FLAG === 'Y' ? 's-closed' : 's-waiting_info'}`}>
                           {d.ACTIVE_FLAG === 'Y' ? 'Active' : 'Disabled'}
@@ -926,6 +955,302 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      ) : tab === 'settings' && isAdmin ? (
+        /* TAB: NOTIFICATIONS & ALERT CONFIGURATION (DEVADMIN) */
+        <div className="sup-settings-wrap">
+          <div className="sup-master-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h2>Support Notifications & Email Alert Configuration</h2>
+              <p>Configure administrators and CC emails notified on ticket creation and resolution, and view live email dispatch logs.</p>
+            </div>
+            <button
+              className="sup-primary"
+              style={{ fontSize: 12, padding: '6px 14px' }}
+              onClick={() => void supportApi.settings().then(setSettings)}
+              disabled={fetching}
+            >
+              <RefreshCw size={14} className={fetching ? 'sup-spin' : ''} />Refresh Outbox
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
+            {/* Add Contact Card */}
+            <div className="sup-section-card">
+              <h3><Mail size={16} />Add Notification Recipient / CC Email</h3>
+              <p style={{ fontSize: 12, color: 'var(--sup-muted)', marginBottom: 12 }}>
+                Recipients registered here will receive automatic HTML alerts for new tickets, SLA escalations, and ticket closures.
+              </p>
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  if (!contact.email_id.trim()) return;
+                  void run(async () => {
+                    await supportApi.contact({ email_id: contact.email_id.trim(), display_name: contact.display_name.trim(), active_flag: 'Y' });
+                    const s = await supportApi.settings();
+                    setSettings(s);
+                    setContact({ email_id: '', display_name: '' });
+                  }, `Notification recipient ${contact.email_id} saved.`);
+                }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+              >
+                <label>
+                  Email Address *
+                  <input
+                    type="email"
+                    required
+                    value={contact.email_id}
+                    onChange={e => setContact({ ...contact, email_id: e.target.value })}
+                    placeholder="e.g. prem@bayanattechnology.com"
+                    className="sup-input-modern"
+                  />
+                </label>
+                <label>
+                  Display Name
+                  <input
+                    type="text"
+                    value={contact.display_name}
+                    onChange={e => setContact({ ...contact, display_name: e.target.value })}
+                    placeholder="e.g. Prem Rawat"
+                    className="sup-input-modern"
+                  />
+                </label>
+                <button className="sup-primary" style={{ marginTop: 6, alignSelf: 'flex-start' }} disabled={busy || !contact.email_id.trim()}>
+                  <Plus size={14} />Add Notification Recipient
+                </button>
+              </form>
+            </div>
+
+            {/* Configured Recipients Card */}
+            <div className="sup-section-card">
+              <h3><Bell size={16} />Configured Alert Recipients ({settings.contacts?.length || 0})</h3>
+              <div className="sup-table-scroll" style={{ maxHeight: 240 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Display Name</th>
+                      <th>Email ID</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(settings.contacts || []).map((c: any) => (
+                      <tr key={c.EMAIL_ID}>
+                        <td><strong>{c.DISPLAY_NAME || 'Support Contact'}</strong></td>
+                        <td>{c.EMAIL_ID}</td>
+                        <td>
+                          <span className={`sup-status ${c.ACTIVE_FLAG === 'Y' ? 's-closed' : 's-waiting_info'}`}>
+                            {c.ACTIVE_FLAG === 'Y' ? 'Active' : 'Disabled'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            style={{ fontSize: 11, padding: '3px 8px' }}
+                            disabled={busy}
+                            onClick={() => {
+                              const nextFlag = c.ACTIVE_FLAG === 'Y' ? 'N' : 'Y';
+                              void run(async () => {
+                                await supportApi.contact({ email_id: c.EMAIL_ID, display_name: c.DISPLAY_NAME, active_flag: nextFlag });
+                                setSettings(await supportApi.settings());
+                              }, `Recipient ${nextFlag === 'Y' ? 'enabled' : 'disabled'}.`);
+                            }}
+                          >
+                            {c.ACTIVE_FLAG === 'Y' ? 'Disable' : 'Enable'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!settings.contacts || settings.contacts.length === 0) && (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: 'center', color: 'var(--sup-muted)', padding: 16 }}>
+                          No notification recipients configured. (Default CC: prem@bayanattechnology.com)
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Email Outbox Queue Audit */}
+          <div className="sup-section-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3><FileSpreadsheet size={16} />Live Support Email Dispatch Outbox & Audit</h3>
+              <span style={{ fontSize: 12, color: 'var(--sup-muted)' }}>Recent 50 queued notifications</span>
+            </div>
+            <div className="sup-table-scroll" style={{ maxHeight: 320 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ticket #</th>
+                    <th>Recipients</th>
+                    <th>Subject</th>
+                    <th>Status</th>
+                    <th>Attempts</th>
+                    <th>Dispatched Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(settings.queue || []).map((q: any) => (
+                    <tr key={q.EMAIL_ID}>
+                      <td>#{q.TICKET_ID}</td>
+                      <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.RECIPIENTS}</td>
+                      <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.SUBJECT}</td>
+                      <td>
+                        <span className={`sup-status ${q.STATUS === 'SENT' ? 's-closed' : q.STATUS === 'RETRY' ? 's-waiting_info' : 's-assigned'}`}>
+                          {q.STATUS}
+                        </span>
+                      </td>
+                      <td>{q.ATTEMPTS || 0}</td>
+                      <td>{q.SENT_AT || 'Pending'}</td>
+                    </tr>
+                  ))}
+                  {(!settings.queue || settings.queue.length === 0) && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', color: 'var(--sup-muted)', padding: 20 }}>
+                        Email dispatch log is clear.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : tab === 'reports' && isAdmin ? (
+        /* TAB: SERVICE OVERVIEW & ANALYTICS (DEVADMIN) */
+        <div className="sup-reports-wrap">
+          <div className="sup-master-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h2>Support Operations & Analytics Overview</h2>
+              <p>Volume trends, resolution rates, module breakdown, and developer performance metrics.</p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} title="Year">
+                <option value="all">All Years</option>
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+              </select>
+              <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} title="Month">
+                <option value="all">All Months</option>
+                <option value="0">January</option>
+                <option value="1">February</option>
+                <option value="2">March</option>
+                <option value="3">April</option>
+                <option value="4">May</option>
+                <option value="5">June</option>
+                <option value="6">July</option>
+                <option value="7">August</option>
+                <option value="8">September</option>
+                <option value="9">October</option>
+                <option value="10">November</option>
+                <option value="11">December</option>
+              </select>
+              <button className="sup-export-btn" onClick={handleExportCSV}>
+                <Download size={14} />Export Tickets to CSV
+              </button>
+            </div>
+          </div>
+
+          {/* KPI Grid */}
+          <div className="sup-kpi-grid">
+            <div className="sup-kpi-card tone-blue">
+              <div className="sup-kpi-top">
+                <span className="sup-kpi-label">Total Tickets</span>
+                <span className="sup-kpi-icon"><MessageSquare size={16} /></span>
+              </div>
+              <span className="sup-kpi-value">{visible.length}</span>
+              <span className="sup-kpi-sub">Filtered volume</span>
+            </div>
+
+            <div className="sup-kpi-card tone-amber">
+              <div className="sup-kpi-top">
+                <span className="sup-kpi-label">Active / In Progress</span>
+                <span className="sup-kpi-icon"><Clock3 size={16} /></span>
+              </div>
+              <span className="sup-kpi-value">{visible.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</span>
+              <span className="sup-kpi-sub">Awaiting developer completion</span>
+            </div>
+
+            <div className="sup-kpi-card tone-green">
+              <div className="sup-kpi-top">
+                <span className="sup-kpi-label">Resolved / Closed</span>
+                <span className="sup-kpi-icon"><CheckCircle2 size={16} /></span>
+              </div>
+              <span className="sup-kpi-value">{visible.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</span>
+              <span className="sup-kpi-sub">{visible.length ? Math.round((visible.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length / visible.length) * 100) : 0}% completion rate</span>
+            </div>
+
+            <div className="sup-kpi-card tone-rose">
+              <div className="sup-kpi-top">
+                <span className="sup-kpi-label">SLA Overdue</span>
+                <span className="sup-kpi-icon"><AlertCircle size={16} /></span>
+              </div>
+              <span className="sup-kpi-value">{visible.filter(overdue).length}</span>
+              <span className="sup-kpi-sub">Critical attention needed</span>
+            </div>
+          </div>
+
+          {/* Module Breakdown & Developer Performance */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
+            <div className="sup-section-card">
+              <h3><BarChart3 size={16} />Module Ticket Distribution</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {['HCM', 'Finance', 'WMS', 'FMS', 'Security', 'Masters', 'Other'].map(mod => {
+                  const count = visible.filter(t => {
+                    const str = `${t.MODULE_NAME || ''} ${t.SUBJECT || ''}`.toUpperCase();
+                    if (mod === 'Other') return !['HCM', 'FINANCE', 'WMS', 'FMS', 'SECURITY', 'MASTERS'].some(m => str.includes(m));
+                    return str.includes(mod.toUpperCase());
+                  }).length;
+                  const pct = visible.length ? Math.round((count / visible.length) * 100) : 0;
+                  return (
+                    <div key={mod} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                        <span><strong>{mod}</strong></span>
+                        <span style={{ color: 'var(--sup-muted)' }}>{count} tickets ({pct}%)</span>
+                      </div>
+                      <div style={{ height: 6, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--sup-blue)', borderRadius: 4 }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="sup-section-card">
+              <h3><Users size={16} />Developer Workload & Performance</h3>
+              <div className="sup-table-scroll" style={{ maxHeight: 260 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Developer</th>
+                      <th>Active</th>
+                      <th>Resolved</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {developers.map(d => {
+                      const devTickets = visible.filter(t => t.DEVELOPER_LOGINID === d.LOGINID);
+                      const devActive = devTickets.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
+                      const devDone = devTickets.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
+                      return (
+                        <tr key={d.LOGINID}>
+                          <td><strong>{d.USERNAME}</strong></td>
+                          <td><span className="sup-status s-assigned">{devActive}</span></td>
+                          <td><span className="sup-status s-closed">{devDone}</span></td>
+                          <td><strong>{devTickets.length}</strong></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       ) : compact && compactTab === 'chat' ? (
@@ -959,9 +1284,11 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-              <button style={{ fontSize: 11 }} onClick={startNewIssue}>
-                Need developer fix? + Raise Ticket
-              </button>
+              {!isStaff && (
+                <button style={{ fontSize: 11 }} onClick={startNewIssue}>
+                  Need developer fix? + Raise Ticket
+                </button>
+              )}
               <button className="sup-primary" style={{ padding: '4px 12px' }} onClick={sendLiveChat} disabled={!liveChatText.trim()}>
                 <Send size={13} />Send
               </button>
@@ -1016,6 +1343,17 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   <option value="11">Dec</option>
                 </select>
               </div>
+
+              {compact && !isStaff && (
+                <button
+                  type="button"
+                  className="sup-primary"
+                  style={{ width: '100%', height: 34, fontSize: 12.5, justifyContent: 'center' }}
+                  onClick={startNewIssue}
+                >
+                  <Plus size={14} />Raise New Ticket
+                </button>
+              )}
             </div>
 
             {/* Scrollable WhatsApp List */}
@@ -1077,31 +1415,138 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
           {/* Right Panel: WhatsApp-Style Thread & Chat */}
           <main className="sup-thread">
             {newIssue ? (
-              <>
+              <div className="sup-create-ticket-view">
                 <div className="sup-thread-head">
-                  <button className="sup-mobile-back" aria-label="Back" onClick={() => setMobileThread(false)}>
+                  <button className="sup-mobile-back" aria-label="Back" onClick={() => { setNewIssue(false); setMobileThread(false); }}>
                     <ArrowLeft size={16} />
                   </button>
                   <div>
                     <h2>Raise New Support Ticket</h2>
-                    <p>{user?.username || user?.loginid} · {user?.company_code}</p>
+                    <p>{user?.username || user?.loginid} · {user?.company_code} · {user?.tenantId || 'Default'}</p>
                   </div>
                 </div>
-                <div className="sup-new">
-                  <label>
-                    Issue Subject <span>(Required)</span>
+
+                <div className="sup-create-form-body">
+                  <div className="sup-form-field">
+                    <label>
+                      Issue Subject <span className="sup-req">*</span>
+                    </label>
                     <input
+                      type="text"
+                      required
                       maxLength={300}
                       value={draft.subject}
                       onChange={e => patch({ subject: e.target.value })}
-                      placeholder="e.g. Sales Invoice attachment 400 error"
+                      placeholder="Brief summary of the issue (e.g. Sales Invoice attachment 400 error)"
+                      className="sup-input-modern"
                     />
-                  </label>
-                  <p style={{ marginTop: 12, color: 'var(--sup-muted)', fontSize: 12 }}>
-                    Please write full description below, paste screenshots, and our support team will attend to it immediately.
-                  </p>
+                  </div>
+
+                  <div className="sup-form-field">
+                    <label>Module / Area</label>
+                    <div className="sup-module-pills">
+                      {['Finance', 'HCM', 'WMS', 'FMS', 'Security', 'Masters', 'General'].map(mod => {
+                        const isMatch = (draft.subject || '').toLowerCase().includes(mod.toLowerCase());
+                        return (
+                          <button
+                            type="button"
+                            key={mod}
+                            className={`sup-mod-chip ${isMatch ? 'active' : ''}`}
+                            onClick={() => {
+                              if (!draft.subject.includes(`[${mod}]`)) {
+                                patch({ subject: `[${mod}] ${draft.subject.replace(/\[\w+\]\s*/g, '')}`.trim() });
+                              }
+                            }}
+                          >
+                            {mod}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="sup-form-field">
+                    <label>
+                      Detailed Description <span className="sup-req">*</span>
+                    </label>
+                    <textarea
+                      ref={textInput}
+                      required
+                      maxLength={8000}
+                      value={draft.text}
+                      onChange={e => patch({ text: e.target.value })}
+                      onPaste={paste}
+                      placeholder="Please describe what happened, error codes or messages, and steps to reproduce. (You can paste screenshots directly with Ctrl+V)..."
+                      className="sup-textarea-modern"
+                      rows={5}
+                    />
+                  </div>
+
+                  <div className="sup-attachment-zone">
+                    <div className="sup-att-header">
+                      <span>Attachments & Screenshots</span>
+                      <small>Paste directly (Ctrl+V) or upload images/PDFs (max 5MB each)</small>
+                    </div>
+
+                    {draft.files.length > 0 && (
+                      <div className="sup-files-list">
+                        {draft.files.map((f, i) => (
+                          <div key={i} className="sup-file-chip">
+                            <Paperclip size={12} />
+                            <span className="sup-file-name" title={f.file_name}>{f.file_name}</span>
+                            <span className="sup-file-size">({Math.round(f.file_size / 1024)} KB)</span>
+                            <button type="button" onClick={() => patch({ files: draft.files.filter((_, n) => n !== i) })}>
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="sup-att-buttons">
+                      <input
+                        ref={fileInput}
+                        type="file"
+                        multiple
+                        accept="image/png,image/jpeg,image/webp,application/pdf,text/plain"
+                        hidden
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                          void attach(Array.from(e.target.files || []));
+                          e.target.value = '';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="sup-att-btn"
+                        disabled={readingFiles || busy}
+                        onClick={() => fileInput.current?.click()}
+                      >
+                        <ImagePlus size={15} />
+                        {readingFiles ? 'Reading Files...' : 'Attach Screenshots / Files'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="sup-form-footer">
+                    <button
+                      type="button"
+                      className="sup-cancel-btn"
+                      onClick={() => { setNewIssue(false); setMobileThread(false); }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="sup-primary sup-submit-ticket-btn"
+                      disabled={busy || readingFiles || !draft.subject?.trim() || !draft.text?.trim()}
+                      onClick={send}
+                    >
+                      <Send size={15} />
+                      {busy ? 'Submitting Ticket...' : 'Submit Support Ticket'}
+                    </button>
+                  </div>
                 </div>
-              </>
+              </div>
             ) : ticket ? (
               <>
                 <div className="sup-thread-head">
@@ -1344,8 +1789,8 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               <div className="sup-empty sup-welcome">
                 <Headphones size={36} color="var(--sup-blue)" />
                 <h2>Select a ticket to view conversation</h2>
-                <p>Choose an item from the left queue {role !== 'admin' && role !== 'developer' ? 'or click "+ New issue" to raise a new request.' : 'to view discussion, assignment, and status.'}</p>
-                {role !== 'admin' && role !== 'developer' && (
+                <p>Choose an item from the left queue {isStaff ? 'to view discussion, assignment, and status.' : 'or click "+ New issue" to raise a new request.'}</p>
+                {!isStaff && (
                   <button className="sup-primary" onClick={startNewIssue}>
                     <Plus size={15} />New issue
                   </button>
@@ -1353,8 +1798,8 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               </div>
             )}
 
-            {/* Compose Area */}
-            {(newIssue || (ticket && ticket.STATUS !== 'CLOSED')) && (
+            {/* Compose Area for active conversation */}
+            {!newIssue && ticket && ticket.STATUS !== 'CLOSED' && (
               <div className="sup-compose">
                 <textarea
                   ref={textInput}
@@ -1362,7 +1807,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   value={draft.text}
                   onChange={e => patch({ text: e.target.value })}
                   onPaste={paste}
-                  placeholder={newIssue ? 'Describe your issue in detail...' : 'Write your reply... (Ctrl + Enter to send)'}
+                  placeholder="Write your reply... (Ctrl + Enter to send)"
                   onKeyDown={e => {
                     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                       e.preventDefault();

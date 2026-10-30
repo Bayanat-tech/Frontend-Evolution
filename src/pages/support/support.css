@@ -755,12 +755,270 @@
 .sup-developer-grant-card {
   background: #f8fafc;
   border: 1px solid var(--sup-line);
-  border-radius: 8px;
-  padding: 14px 18px;
+  border-radius: 10px;
+  padding: 16px 20px;
   margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
 }
 .dark .sup-developer-grant-card {
   background: #1e293b;
+}
+
+/* Master Table Styling */
+.sup-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--sup-line);
+  border-radius: 8px;
+  background: var(--sup-card-bg);
+}
+.sup-table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12.5px;
+}
+.sup-table-scroll th {
+  background: #f8fafc;
+  color: var(--sup-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sup-line);
+  white-space: nowrap;
+}
+.dark .sup-table-scroll th {
+  background: #0f172a;
+}
+.sup-table-scroll td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sup-line);
+  color: var(--sup-ink);
+  vertical-align: middle;
+}
+.sup-table-scroll tr:last-child td {
+  border-bottom: 0;
+}
+.sup-table-scroll tr:hover td {
+  background: #f8fafc;
+}
+.dark .sup-table-scroll tr:hover td {
+  background: #1e293b;
+}
+
+/* Dedicated Modern New Issue Form View */
+.sup-create-ticket-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--sup-card-bg);
+}
+.sup-create-form-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sup-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sup-form-field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sup-ink);
+}
+.sup-req {
+  color: #ef4444;
+  margin-left: 2px;
+}
+.sup-input-modern {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--sup-line);
+  background: var(--sup-card-bg);
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+.sup-input-modern:focus, .sup-textarea-modern:focus {
+  border-color: var(--sup-blue);
+  box-shadow: 0 0 0 3px rgba(7, 89, 180, 0.12);
+  outline: none;
+}
+.sup-module-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sup-mod-chip {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 500;
+  border: 1px solid var(--sup-line);
+  background: #f8fafc;
+  color: var(--sup-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.sup-mod-chip:hover {
+  background: #f1f5f9;
+  color: var(--sup-ink);
+  border-color: #cbd5e1;
+}
+.sup-mod-chip.active {
+  background: #eff6ff;
+  color: var(--sup-blue);
+  border-color: var(--sup-blue);
+  font-weight: 600;
+}
+.sup-textarea-modern {
+  width: 100%;
+  min-height: 110px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--sup-line);
+  background: var(--sup-card-bg);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  transition: all 0.15s ease;
+}
+.sup-attachment-zone {
+  border: 1px dashed var(--sup-line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dark .sup-attachment-zone {
+  background: #1e293b44;
+}
+.sup-att-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sup-att-header small {
+  font-weight: normal;
+  color: var(--sup-muted);
+  font-size: 11px;
+}
+.sup-files-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sup-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--sup-card-bg);
+  border: 1px solid var(--sup-line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.sup-file-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.sup-file-size {
+  color: var(--sup-muted);
+  font-size: 10.5px;
+}
+.sup-file-chip button {
+  border: 0;
+  background: transparent;
+  padding: 1px;
+  cursor: pointer;
+  color: var(--sup-muted);
+}
+.sup-file-chip button:hover {
+  color: #ef4444;
+}
+.sup-att-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sup-att-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  background: var(--sup-card-bg);
+}
+.sup-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sup-line);
+}
+.sup-cancel-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: transparent;
+  border-color: var(--sup-line);
+}
+.sup-submit-ticket-btn {
+  padding: 8px 22px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Service Overview & Reports Styles */
+.sup-reports-wrap, .sup-settings-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  background: var(--sup-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.sup-section-card {
+  background: var(--sup-card-bg);
+  border: 1px solid var(--sup-line);
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+.sup-section-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sup-export-btn {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+  font-weight: 500;
+  font-size: 12.5px;
+  padding: 6px 14px;
+}
+.sup-export-btn:hover:not(:disabled) {
+  background: #0369a1;
+  color: #ffffff;
 }
 
 /* Alert banner for SLA overdue */
