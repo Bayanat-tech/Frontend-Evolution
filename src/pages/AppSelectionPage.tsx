@@ -34,7 +34,7 @@ import { SupportLauncher } from "./support/SupportCenter";
 import { useAuth } from "../state/AuthContext";
 import type { MenuNode } from "../types/auth";
 import { firstLeafPath } from "../utils/menu";
-import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isUtilitiesApp } from "../utils/workspaceApps";
+import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isBtSupportApp, isUtilitiesApp } from "../utils/workspaceApps";
 
 type ModuleAccent = {
   gradient: string;
@@ -205,7 +205,6 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
       status: "completed",
     },
   },
-  
   {
     keys: ["lms"],
     meta: {
@@ -228,19 +227,6 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
       status: "completed",
     },
   },
-  // {
-  //   keys: [],
-  //   meta: {
-  //     Icon: ScanFace,
-  //     accent: { gradient: "linear-gradient(135deg, #ec4899 0%, #f59e0b 100%)", light: "#fff0f6", border: "#f9a8d4", icon: "#be185d", text: "#831843", glow: "rgba(236, 72, 153, 0.18)" },
-  //     code: "AMS",
-  //     fullForm: "Attendance Management System",
-  //     description: "Biometric Attendances with geo location , shifts, OT , Integration , Reports.",
-  //     status: "completed",
-  //   },
-  //   external: { url: "https://ams-new.bayanattechnology.com" },
-  // },
-  
   {
     keys: ["security"],
     meta: {
@@ -271,11 +257,16 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const { user, menuTree, logout } = useAuth();
   const navigate = useNavigate();
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
-  const findApp = (code: string) => workspaceApps.find((app) => getModuleMeta(app, 0).code === code);
+  const findApp = (code: string) =>
+    workspaceApps.find((app) => getModuleMeta(app, 0).code.toUpperCase() === code.toUpperCase());
   const openApp = (app: MenuNode) => {
     const code = cleanAppCode(app.title);
     if (code === "finance") {
       navigate("/workspace/finance");
+      return;
+    }
+    if (code === "support" || code === "bt-support") {
+      navigate("/workspace/support/support/tickets");
       return;
     }
     const firstPath = firstLeafPath(app);
@@ -285,7 +276,8 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     logout();
     navigate("/login", { replace: true });
   };
-  const catalogMeta = (code: string) => moduleCatalog.find((entry) => entry.meta.code === code)!.meta;
+  const catalogMeta = (code: string) =>
+    (moduleCatalog.find((entry) => entry.meta.code.toUpperCase() === code.toUpperCase()) || moduleCatalog[0]).meta;
   const renderApp = (code: string, overrides: Partial<ModuleMeta> = {}) => {
     const app = findApp(code);
     if (!app) return null;
@@ -293,7 +285,11 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   };
   const mastersApp = workspaceApps.find(isBtMastersApp) || workspaceApps.find(isUtilitiesApp);
   const securityApp = findApp("Security");
-  const supportApp = findApp("Support") || findApp("BT SUPPORT");
+  const supportApp =
+    findApp("SUPPORT") ||
+    findApp("Support") ||
+    findApp("BT SUPPORT") ||
+    workspaceApps.find(isBtSupportApp);
   const sections = [
     {
       id: "erp", title: "ERP",
@@ -321,7 +317,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     {
       id: "utilities", title: "Utilities",
       cards: securityApp || mastersApp || supportApp ? [
-        supportApp ? <ModuleCard key="support" meta={{ ...catalogMeta("Security"), code: "Support", fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking.", Icon: LifeBuoy }} onClick={() => openApp(supportApp)} /> : null,
+        supportApp ? <ModuleCard key="support" meta={{ ...catalogMeta("SUPPORT"), fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking." }} onClick={() => openApp(supportApp)} /> : null,
         securityApp ? <ModuleCard key="security" meta={catalogMeta("Security")} onClick={() => openApp(securityApp)} /> : null,
         mastersApp ? <ModuleCard key="masters" meta={{ ...catalogMeta("Security"), code: "Masters", fullForm: "General Masters", description: "General masters for your permitted applications.", Icon: FolderCog }} onClick={() => openApp(mastersApp)} /> : null,
       ] : [],

@@ -27,7 +27,8 @@ export function isBtMastersApp(node?: MenuNode | null) {
 }
 
 export function isBtSupportApp(node?: MenuNode | null) {
-  return normalizeTitle(node?.title || "") === "bt support";
+  const title = normalizeTitle(node?.title || "");
+  return title === "bt support" || title === "support";
 }
 
 const securityRoutes: Record<string, string> = {

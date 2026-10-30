@@ -7,9 +7,7 @@ import { WorkspacePage } from "./pages/WorkspacePage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { useAuth } from "./state/AuthContext";
 import { ToastProvider } from "./components/ui/AlertToast";
-// ── SUPPORT-START ──
 import { SupportProvider } from "./components/SupportProvider";
-// ── SUPPORT-END ──
 import "../src/styles.css";
 import { WmsBootScreen } from "./components/BootScreen";
 
@@ -33,47 +31,38 @@ export function App() {
   const isAuthRoute = location.pathname === "/login" || location.pathname === "/reset-password";
   const activeDark = isAuthRoute ? authDark : workspaceDark;
 
-  // if (isBooting) {
-  //   return (
-  //     <div className="boot-screen">
-  //       <div className="spinner" />
-  //       <span>Starting secure workspace...</span>
-  //     </div>
-  //   );
-  // }
-
-if (isBooting) {
-  return <WmsBootScreen />;
-}
+  if (isBooting) {
+    return <WmsBootScreen />;
+  }
 
   return (
     <div className={activeDark ? "app dark" : "app"} style={{ fontFamily: "Inter, sans-serif" }}>
-      <ToastProvider>// -- SUPPORT-START --
-
-        <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<LoginPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
-          <Route path="/reset-password" element={<ResetPasswordPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
-          <Route
-          path="/apps"
-          element={
-            <ProtectedRoute>
-              <AppSelectionPage dark={workspaceDark} onToggleTheme={toggleWorkspaceTheme} />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspace/:appCode/*"
-          element={
-            <ProtectedRoute>
-              <WorkspacePage dark={workspaceDark} onToggleTheme={toggleWorkspaceTheme} />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/apps" replace />} />
-      </Routes>
-    
-// -- SUPPORT-END --</ToastProvider>
+      <ToastProvider>
+        <SupportProvider>
+          <Routes>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<LoginPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
+            <Route path="/reset-password" element={<ResetPasswordPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
+            <Route
+              path="/apps"
+              element={
+                <ProtectedRoute>
+                  <AppSelectionPage dark={workspaceDark} onToggleTheme={toggleWorkspaceTheme} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/workspace/:appCode/*"
+              element={
+                <ProtectedRoute>
+                  <WorkspacePage dark={workspaceDark} onToggleTheme={toggleWorkspaceTheme} />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/apps" replace />} />
+          </Routes>
+        </SupportProvider>
+      </ToastProvider>
     </div>
   );
 }
