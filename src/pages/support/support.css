@@ -139,13 +139,17 @@
 .sup-head p { font-size: 12px; margin-top: 2px; }
 .sup-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 
-/* Sub-nav Tabs (for Full Desk) */
+/* Navigation tabs */
 .sup-nav-tabs {
   display: flex;
   gap: 4px;
   padding: 0 22px;
   background: var(--sup-card-bg);
   border-bottom: 1px solid var(--sup-line);
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 .sup-nav-tab {
   display: inline-flex;
@@ -1039,11 +1043,71 @@
   color: #fca5a5;
 }
 
+/* Mobile Back Button */
+.sup-mobile-back {
+  display: none;
+  background: transparent;
+  border: 0;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--sup-muted);
+  align-items: center;
+  justify-content: center;
+}
+.sup-mobile-back:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--sup-ink);
+}
+.dark .sup-mobile-back:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.sup-compact .sup-mobile-back {
+  display: inline-flex;
+}
+
 /* Responsive adjustments */
 @media (max-width: 860px) {
+  .sup-mobile-back { display: inline-flex; }
   .sup-layout { display: flex; }
   .sup-inbox { width: 100%; }
   .sup-thread { display: none; }
   .sup-layout.show-thread .sup-inbox { display: none; }
   .sup-layout.show-thread .sup-thread { display: flex; width: 100%; }
+}
+
+@media (max-width: 640px) {
+  /* Full screen drawer on mobile phones for maximum usability */
+  .sup-drawer {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+  }
+  .sup-head {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .sup-title h1 {
+    font-size: 16px;
+  }
+  .sup-title p {
+    font-size: 11px;
+  }
+  .sup-nav-tabs {
+    padding: 0 12px;
+  }
+  .sup-reports-wrap, .sup-settings-wrap, .sup-dash-view {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+  .sup-section-card {
+    padding: 14px;
+  }
+  .sup-create-form-body {
+    padding: 12px 14px;
+  }
 }
