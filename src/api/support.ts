@@ -74,7 +74,9 @@ export const supportApi = {
     progress: (id: number, status: string) => data(api.patch(`/api/support/tickets/${id}/developer-status`, { dev_status: status })),
     assign: (id: number, body: any) => data(api.post(`/api/support/tickets/${id}/assign-developer`, body)),
     developers: () => data<any[]>(api.get('/api/support/developers')),
+    candidateDevelopers: () => data<any[]>(api.get('/api/support/candidate-developers')),
     developer: (body: any) => data(api.post('/api/support/developers', body)),
+    sendReminder: (id: number) => data(api.post(`/api/support/tickets/${id}/reminder`)),
     events: (id: number) => data<any[]>(api.get(`/api/support/tickets/${id}/events`)),
     settings: () => data<{
         contacts: any[];

@@ -292,6 +292,16 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     findApp("Support") ||
     findApp("BT SUPPORT") ||
     workspaceApps.find(isBtSupportApp);
+  const effectiveSupportApp =
+    supportApp ||
+    (role === "admin" || role === "developer"
+      ? {
+          id: "virtual-support",
+          title: "Support",
+          type: "group" as const,
+          children: [],
+        }
+      : null);
   const sections = [
     {
       id: "erp", title: "ERP",
@@ -318,8 +328,8 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     },
     {
       id: "utilities", title: "Utilities",
-      cards: securityApp || mastersApp || supportApp ? [
-        supportApp ? <ModuleCard key="support" meta={{ ...catalogMeta("SUPPORT"), fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking." }} onClick={() => openApp(supportApp)} /> : null,
+      cards: securityApp || mastersApp || effectiveSupportApp ? [
+        effectiveSupportApp ? <ModuleCard key="support" meta={{ ...catalogMeta("SUPPORT"), fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking." }} onClick={() => openApp(effectiveSupportApp)} /> : null,
         securityApp ? <ModuleCard key="security" meta={catalogMeta("Security")} onClick={() => openApp(securityApp)} /> : null,
         mastersApp ? <ModuleCard key="masters" meta={{ ...catalogMeta("Security"), code: "Masters", fullForm: "General Masters", description: "General masters for your permitted applications.", Icon: FolderCog }} onClick={() => openApp(mastersApp)} /> : null,
       ] : [],

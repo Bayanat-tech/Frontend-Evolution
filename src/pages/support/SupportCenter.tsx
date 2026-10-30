@@ -59,6 +59,14 @@ const statusBadge = (s: string) => (
   <span className={`sup-status s-${s.toLowerCase()}`}>{labels[s] || s}</span>
 );
 
+const getUserInitials = (name?: string) => {
+  if (!name) return 'U';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'U';
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 const supportApiDelete = (ticket: number, message: number) =>
   api.delete(`/api/support/tickets/${ticket}/messages/${message}`);
 
@@ -167,6 +175,9 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const [teamName, setTeamName] = useState('');
   const [teamEmail, setTeamEmail] = useState('');
   const [skills, setSkills] = useState('');
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState('');
+  const [teamSearch, setTeamSearch] = useState('');
   const [settings, setSettings] = useState<{ contacts: any[]; queue: any[] }>({ contacts: [], queue: [] });
   const [contact, setContact] = useState({ email_id: '', display_name: '' });
 
@@ -239,6 +250,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   useEffect(() => {
     if (role === 'admin') {
       void supportApi.developers().then(setDevelopers).catch(() => undefined);
+      void supportApi.candidateDevelopers().then(setCandidates).catch(() => undefined);
       if (tab === 'settings') {
         void supportApi.settings().then(setSettings).catch(() => undefined);
       }
@@ -499,9 +511,11 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
           <button title="Refresh" aria-label="Refresh" disabled={fetching} onClick={() => void refresh()}>
             <RefreshCw size={15} className={fetching ? 'sup-spin' : ''} />
           </button>
-          <button className="sup-primary" onClick={startNewIssue} disabled={busy}>
-            <Plus size={15} />New issue
-          </button>
+          {role !== 'admin' && role !== 'developer' && (
+            <button className="sup-primary" onClick={startNewIssue} disabled={busy}>
+              <Plus size={15} />New issue
+            </button>
+          )}
           {compact && (role === 'admin' || role === 'developer') && (
             <button
               type="button"
@@ -522,24 +536,6 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
           )}
         </div>
       </header>
-
-      {/* Sub Navigation Strip for Admin & Developers */}
-      {!compact && role === 'admin' && (
-        <nav className="sup-nav-tabs">
-          <button className={`sup-nav-tab ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('/workspace/support/support/dashboard')}>
-            <LayoutDashboard size={14} />Support Dashboard
-          </button>
-          <button className={`sup-nav-tab ${tab === 'tickets' ? 'active' : ''}`} onClick={() => navigate('/workspace/support/support/tickets')}>
-            <MessageSquare size={14} />Ticket Queue ({activeCount})
-          </button>
-          <button className={`sup-nav-tab ${tab === 'team' ? 'active' : ''}`} onClick={() => navigate('/workspace/support/support/team')}>
-            <Users size={14} />Developers ({developers.length})
-          </button>
-          <button className={`sup-nav-tab ${tab === 'reports' ? 'active' : ''}`} onClick={() => navigate('/workspace/support/support/reports')}>
-            <BarChart3 size={14} />Service Overview
-          </button>
-        </nav>
-      )}
 
       {/* Notice alert */}
       {notice && (
@@ -723,6 +719,31 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   ))}
                 </div>
               </div>
+
+              {/* Module-wise Breakdown matching ERP dashboard */}
+              <div className="sup-panel" style={{ gridColumn: 'span 2' }}>
+                <div className="sup-panel-title">
+                  <span>Module Issue Breakdown</span>
+                  <span style={{ fontSize: 11, color: 'var(--sup-muted)' }}>Distribution across ERP & Supply Chain</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, padding: '8px 0' }}>
+                  {['HCM', 'Finance', 'WMS', 'FMS', 'Security', 'Masters', 'General'].map(mod => {
+                    const modTickets = tickets.filter(t => (t.MODULE_NAME || '').toUpperCase().includes(mod.toUpperCase()) || (t.PAGE_URL || '').toUpperCase().includes(mod.toUpperCase()));
+                    const modActive = modTickets.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
+                    const modClosed = modTickets.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
+                    return (
+                      <div key={mod} style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid var(--sup-line)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--sup-blue)', marginBottom: 4 }}>BT-{mod}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--sup-muted)' }}>
+                          <span>Active: <strong style={{ color: modActive > 0 ? '#b45309' : 'inherit' }}>{modActive}</strong></span>
+                          <span>Closed: <strong style={{ color: '#15803d' }}>{modClosed}</strong></span>
+                        </div>
+                        <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>Total: {modTickets.length}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           ) : (
             /* Developer SLA Matrix */
@@ -771,29 +792,86 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
       ) : tab === 'team' && role === 'admin' ? (
         /* TAB 2: DEVELOPER MANAGEMENT (DEVADMIN) */
         <div className="sup-settings">
-          <h2>Enterprise Support Developers</h2>
-          <p>Developers registered here can be assigned support tickets across all tenants and have access to their dedicated Developer Workbench.</p>
+          <div className="sup-master-header" style={{ marginBottom: 16 }}>
+            <h2>Enterprise Support Developers</h2>
+            <p>Select developers from User Master (LOGINID starting with B / BI) to grant or configure ticket assignments.</p>
+          </div>
 
           <form
-            className="sup-form-row"
+            className="sup-developer-grant-card"
             onSubmit={e => {
               e.preventDefault();
+              if (!teamLogin) return;
               void run(async () => {
-                await supportApi.developer({ loginid: teamLogin, username: teamName, email_id: teamEmail, skill_tags: skills, active_flag: 'Y' });
+                await supportApi.developer({ loginid: teamLogin, username: teamName, email_id: teamEmail, active_flag: 'Y' });
                 setDevelopers(await supportApi.developers());
+                setCandidates(await supportApi.candidateDevelopers());
+                setSelectedCandidate('');
                 setTeamLogin('');
                 setTeamName('');
                 setTeamEmail('');
-                setSkills('');
-              }, 'Developer access saved.');
+              }, `Developer ${teamName || teamLogin} registered and granted access.`);
             }}
           >
-            <label>Login ID / Employee Code<input required value={teamLogin} onChange={e => setTeamLogin(e.target.value)} placeholder="e.g. BI26040740" /></label>
-            <label>Full Name<input value={teamName} onChange={e => setTeamName(e.target.value)} placeholder="e.g. Sagar Buchkule" /></label>
-            <label>Email Address<input type="email" value={teamEmail} onChange={e => setTeamEmail(e.target.value)} placeholder="sagar.b@bayanattechnology.com" /></label>
-            <label>Specialization / Module<input value={skills} onChange={e => setSkills(e.target.value)} placeholder="e.g. Finance, WMS, Security" /></label>
-            <button className="sup-primary" disabled={busy}>Add Developer</button>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) auto', gap: 14, alignItems: 'flex-end' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, fontWeight: 600 }}>
+                Select Developer from User Master (B% / BI%)
+                <select
+                  required
+                  value={selectedCandidate}
+                  onChange={e => {
+                    const login = e.target.value;
+                    setSelectedCandidate(login);
+                    const found = candidates.find(c => c.loginid === login);
+                    if (found) {
+                      setTeamLogin(found.loginid);
+                      setTeamName(found.username);
+                      setTeamEmail(found.email_id);
+                    } else {
+                      setTeamLogin('');
+                      setTeamName('');
+                      setTeamEmail('');
+                    }
+                  }}
+                  style={{ height: 38, padding: '0 10px', borderRadius: 8, border: '1px solid var(--sup-line)', background: 'var(--sup-card-bg)', fontSize: 13 }}
+                >
+                  <option value="">-- Choose Developer from SEC_LOGINTEST --</option>
+                  {candidates.map(c => (
+                    <option key={c.loginid} value={c.loginid}>
+                      {c.username} ({c.loginid}) - {c.email_id} {c.is_registered ? (c.is_active ? '✓ Active' : '⚠ Disabled') : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button className="sup-primary" style={{ height: 38, padding: '0 20px', whiteSpace: 'nowrap' }} disabled={busy || !teamLogin}>
+                <UserCheck size={15} />Grant Developer Access
+              </button>
+            </div>
+
+            {teamLogin && (
+              <div style={{ display: 'flex', gap: 20, marginTop: 12, padding: '10px 14px', background: '#f1f5f9', borderRadius: 8, fontSize: 12 }}>
+                <span><strong>Login ID:</strong> {teamLogin}</span>
+                <span><strong>Full Name:</strong> {teamName}</span>
+                <span><strong>Email:</strong> {teamEmail}</span>
+              </div>
+            )}
           </form>
+
+          {/* Master Table Toolbar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 10px' }}>
+            <div className="sup-search" style={{ maxWidth: 320 }}>
+              <Search size={14} />
+              <input
+                placeholder="Search registered developers..."
+                value={teamSearch}
+                onChange={e => setTeamSearch(e.target.value)}
+              />
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--sup-muted)', fontWeight: 500 }}>
+              {developers.length} Developers Configured
+            </span>
+          </div>
 
           <div className="sup-table-scroll">
             <table>
@@ -808,33 +886,44 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 </tr>
               </thead>
               <tbody>
-                {developers.map(d => (
-                  <tr key={d.LOGINID}>
-                    <td><strong>{d.USERNAME}</strong></td>
-                    <td>{d.LOGINID}</td>
-                    <td>{d.EMAIL_ID}</td>
-                    <td>{tickets.filter(t => t.DEVELOPER_LOGINID === d.LOGINID && !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</td>
-                    <td>
-                      <span className={`sup-status ${d.ACTIVE_FLAG === 'Y' ? 's-closed' : 's-waiting_info'}`}>
-                        {d.ACTIVE_FLAG === 'Y' ? 'Active' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        disabled={busy}
-                        onClick={() => {
-                          const nextFlag = d.ACTIVE_FLAG === 'Y' ? 'N' : 'Y';
-                          void run(async () => {
-                            await supportApi.developer({ loginid: d.LOGINID, active_flag: nextFlag });
-                            setDevelopers(await supportApi.developers());
-                          }, `Developer ${nextFlag === 'Y' ? 'Enabled' : 'Disabled'}.`);
-                        }}
-                      >
-                        {d.ACTIVE_FLAG === 'Y' ? 'Disable' : 'Enable'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {developers
+                  .filter(d => {
+                    if (!teamSearch.trim()) return true;
+                    const q = teamSearch.toLowerCase();
+                    return (
+                      (d.USERNAME || '').toLowerCase().includes(q) ||
+                      (d.LOGINID || '').toLowerCase().includes(q) ||
+                      (d.EMAIL_ID || '').toLowerCase().includes(q)
+                    );
+                  })
+                  .map(d => (
+                    <tr key={d.LOGINID}>
+                      <td><strong>{d.USERNAME}</strong></td>
+                      <td>{d.LOGINID}</td>
+                      <td>{d.EMAIL_ID}</td>
+                      <td>{tickets.filter(t => t.DEVELOPER_LOGINID === d.LOGINID && !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</td>
+                      <td>
+                        <span className={`sup-status ${d.ACTIVE_FLAG === 'Y' ? 's-closed' : 's-waiting_info'}`}>
+                          {d.ACTIVE_FLAG === 'Y' ? 'Active' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          disabled={busy}
+                          onClick={() => {
+                            const nextFlag = d.ACTIVE_FLAG === 'Y' ? 'N' : 'Y';
+                            void run(async () => {
+                              await supportApi.developer({ loginid: d.LOGINID, active_flag: nextFlag });
+                              setDevelopers(await supportApi.developers());
+                              setCandidates(await supportApi.candidateDevelopers());
+                            }, `Developer ${nextFlag === 'Y' ? 'Enabled' : 'Disabled'}.`);
+                          }}
+                        >
+                          {d.ACTIVE_FLAG === 'Y' ? 'Disable' : 'Enable'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -933,12 +1022,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
             <div className="sup-ticket-list">
               {visible.map(t => {
                 const isSelected = selected === t.TICKET_ID && !newIssue;
-                const initials = (t.REQUESTER_NAME || t.REQUESTER_LOGINID || 'U')
-                  .split(' ')
-                  .map(p => p[0])
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase();
+                const initials = getUserInitials(t.REQUESTER_NAME || t.REQUESTER_LOGINID);
 
                 return (
                   <button
@@ -1032,6 +1116,24 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   <div className="sup-thread-head-actions">
                     {statusBadge(ticket.STATUS)}
 
+                    {/* Send Reminder button for DEVADMIN */}
+                    {role === 'admin' && ticket.DEVELOPER_LOGINID && ticket.STATUS !== 'CLOSED' && (
+                      <button
+                        className="sup-primary"
+                        style={{ padding: '4px 10px', fontSize: 12 }}
+                        onClick={() => {
+                          void run(
+                            () => supportApi.sendReminder(ticket.TICKET_ID),
+                            `Reminder sent to assigned developer ${ticket.DEVELOPER_NAME || ticket.DEVELOPER_LOGINID}.`
+                          );
+                        }}
+                        disabled={busy}
+                        title="Send urgent reminder notification to assigned developer"
+                      >
+                        <Clock3 size={13} />Send Reminder
+                      </button>
+                    )}
+
                     {/* Prominent Close Ticket Button for DEVADMIN */}
                     {role === 'admin' && ticket.STATUS !== 'CLOSED' && (
                       <button
@@ -1046,6 +1148,14 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                     )}
                   </div>
                 </div>
+
+                {/* Overdue SLA Alert Banner */}
+                {overdue(ticket) && (
+                  <div className="sup-alert-banner">
+                    <AlertCircle size={15} />
+                    <span>OVERDUE SLA: Resolution deadline has passed. Immediate escalation or progress update required.</span>
+                  </div>
+                )}
 
                 {/* Ticket Meta / Assignment Bar */}
                 <div className="sup-ticket-meta">
@@ -1234,10 +1344,12 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               <div className="sup-empty sup-welcome">
                 <Headphones size={36} color="var(--sup-blue)" />
                 <h2>Select a ticket to view conversation</h2>
-                <p>Choose an item from the left queue or click "+ New issue" to raise a new request.</p>
-                <button className="sup-primary" onClick={startNewIssue}>
-                  <Plus size={15} />New issue
-                </button>
+                <p>Choose an item from the left queue {role !== 'admin' && role !== 'developer' ? 'or click "+ New issue" to raise a new request.' : 'to view discussion, assignment, and status.'}</p>
+                {role !== 'admin' && role !== 'developer' && (
+                  <button className="sup-primary" onClick={startNewIssue}>
+                    <Plus size={15} />New issue
+                  </button>
+                )}
               </div>
             )}
 
