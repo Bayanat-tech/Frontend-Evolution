@@ -1635,17 +1635,40 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
 
                 {/* Close Confirmation Modal for Admin */}
                 {showCloseModal && (
-                  <div style={{ padding: '12px 20px', background: '#fee2e2', borderBottom: '1px solid #f87171', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <strong>Confirm Closing Ticket #{ticket.TICKET_ID}</strong>
+                  <div style={{ padding: '14px 20px', background: '#fef2f2', borderBottom: '1px solid #fecaca', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ color: '#991b1b', fontSize: 13 }}>Close Ticket #{ticket.TICKET_ID}</strong>
+                      <span style={{ fontSize: 11, color: '#b91c1c' }}>Specify reason for closure</span>
+                    </div>
+
+                    {/* Quick reason chips */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {['Created by mistake', 'Duplicate ticket', 'Resolved directly', 'User guidance provided'].map(r => (
+                        <button
+                          key={r}
+                          type="button"
+                          style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, border: '1px solid #fca5a5', background: '#ffffff', color: '#991b1b', cursor: 'pointer' }}
+                          onClick={() => setClosingRemark(r)}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+
                     <input
-                      placeholder="Optional closing remark or resolution summary..."
+                      placeholder="Enter closing reason or resolution summary (e.g. Created by mistake)..."
                       value={closingRemark}
                       onChange={e => setClosingRemark(e.target.value)}
+                      style={{ height: 34, padding: '0 10px', borderRadius: 6, border: '1px solid #fca5a5', fontSize: 12.5 }}
                     />
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-                      <button onClick={() => setShowCloseModal(false)}>Cancel</button>
-                      <button className="sup-danger" onClick={() => handleCloseTicket(ticket.TICKET_ID, closingRemark)} disabled={busy}>
-                        Confirm Close
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 2 }}>
+                      <button onClick={() => { setShowCloseModal(false); setClosingRemark(''); }}>Cancel</button>
+                      <button
+                        className="sup-danger"
+                        onClick={() => handleCloseTicket(ticket.TICKET_ID, closingRemark || 'Created by mistake')}
+                        disabled={busy}
+                      >
+                        Confirm & Close Ticket
                       </button>
                     </div>
                   </div>
