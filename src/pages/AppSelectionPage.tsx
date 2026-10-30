@@ -30,6 +30,7 @@ import type { CSSProperties, ElementType } from "react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
+import { SupportLauncher } from "./support/SupportCenter";
 import { useAuth } from "../state/AuthContext";
 import type { MenuNode } from "../types/auth";
 import { firstLeafPath } from "../utils/menu";
@@ -292,6 +293,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   };
   const mastersApp = workspaceApps.find(isBtMastersApp) || workspaceApps.find(isUtilitiesApp);
   const securityApp = findApp("Security");
+  const supportApp = findApp("Support") || findApp("BT SUPPORT");
   const sections = [
     {
       id: "erp", title: "ERP",
@@ -318,8 +320,8 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     },
     {
       id: "utilities", title: "Utilities",
-      cards: securityApp || mastersApp ? [
-        <ModuleCard key="support" meta={{ ...catalogMeta("Security"), code: "Support", fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking.", Icon: LifeBuoy }} />,
+      cards: securityApp || mastersApp || supportApp ? [
+        supportApp ? <ModuleCard key="support" meta={{ ...catalogMeta("Security"), code: "Support", fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking.", Icon: LifeBuoy }} onClick={() => openApp(supportApp)} /> : null,
         securityApp ? <ModuleCard key="security" meta={catalogMeta("Security")} onClick={() => openApp(securityApp)} /> : null,
         mastersApp ? <ModuleCard key="masters" meta={{ ...catalogMeta("Security"), code: "Masters", fullForm: "General Masters", description: "General masters for your permitted applications.", Icon: FolderCog }} onClick={() => openApp(mastersApp)} /> : null,
       ] : [],
@@ -339,7 +341,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
           <span className="brand-logo-shell"><img src="/bayanat-logo.png" alt="Bayanat Technology" className="brand-logo" /></span>
           <div className="brand-wordmark"><strong>Bayanat</strong><span>Technology</span></div>
         </div>
-        <HeaderProfile user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
+        <SupportLauncher /><HeaderProfile user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
       </header>
       <main className="selection-main app-launch-main" style={launcherStyle}>
         {sections.length === 0 ? (
@@ -404,13 +406,4 @@ export function getModuleMeta(app: MenuNode, index: number): ModuleMeta {
     description: "Operational workflows, integrations and reports.",
     status: "completed",
   };
-}
-
-function isLikelySupportAdmin(user: unknown) {
-  const record = (user || {}) as Record<string, unknown>;
-  const supportAdminLoginIds = new Set(["ADMIN", "2012020136"]);
-  const values = [record.loginid, record.LOGINID, record.username, record.USERNAME, record.role, record.user_role, record.USER_ROLE, record.isAdmin]
-    .filter((value) => value !== undefined && value !== null)
-    .map((value) => String(value).trim().toUpperCase());
-  return values.some((value) => supportAdminLoginIds.has(value) || value === "Y" || value === "TRUE" || value.includes("ADMIN"));
 }

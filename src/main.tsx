@@ -17,7 +17,7 @@ import "./styles.css";
 import "./freight-bisc.css";
 import "./finance-document-bisc.css";
 import "./finance-utility-bisc.css";
-import "./support-center.css";
+// Support uses its scoped stylesheet imported by SupportCenter.
 import "./finance-dashboard.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 

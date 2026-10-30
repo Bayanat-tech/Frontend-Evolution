@@ -69,6 +69,7 @@ import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
 import { getModuleMeta } from "./AppSelectionPage";
+import { SupportLauncher } from "./support/SupportCenter";
 
 export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { appCode } = useParams();
@@ -339,6 +340,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
         {/* Center spacer */}
         <div className="flex-1" />
+        <SupportLauncher />
 
         {/* Right: Dark mode + User profile */}
         <div className="flex items-center gap-2 min-w-[200px] justify-end">
