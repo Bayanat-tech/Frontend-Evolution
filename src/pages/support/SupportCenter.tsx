@@ -583,7 +583,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
       )}
 
       {/* TAB 1: SUPPORT DASHBOARD (FOR DEVADMIN) */}
-      {!compact && tab === 'dashboard' && role === 'admin' ? (
+      {!compact && tab === 'dashboard' && isAdmin ? (
         <div className="sup-dashboard">
           <div className="sup-dashboard-header">
             <div>
@@ -1562,7 +1562,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                     {statusBadge(ticket.STATUS)}
 
                     {/* Send Reminder button for DEVADMIN */}
-                    {role === 'admin' && ticket.DEVELOPER_LOGINID && ticket.STATUS !== 'CLOSED' && (
+                    {isAdmin && ticket.DEVELOPER_LOGINID && ticket.STATUS !== 'CLOSED' && (
                       <button
                         className="sup-primary"
                         style={{ padding: '4px 10px', fontSize: 12 }}
@@ -1580,7 +1580,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                     )}
 
                     {/* Prominent Close Ticket Button for DEVADMIN */}
-                    {role === 'admin' && ticket.STATUS !== 'CLOSED' && (
+                    {isAdmin && ticket.STATUS !== 'CLOSED' && (
                       <button
                         className="sup-danger"
                         style={{ padding: '4px 10px', fontSize: 12 }}
@@ -1652,7 +1652,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 )}
 
                 {/* Admin Assignment Section */}
-                {role === 'admin' && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
+                {isAdmin && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
                   <form
                     className="sup-assignment"
                     onSubmit={e => {
@@ -1726,7 +1726,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 </div>
 
                 {/* Developer Work Progress & Resolution Options */}
-                {role === 'developer' && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
+                {isDeveloper && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
                   <div className="sup-progress" style={{ padding: '10px 20px', background: '#f8fafc', borderTop: '1px solid var(--sup-line)' }}>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                       <button disabled={busy} onClick={() => void run(() => supportApi.progress(ticket.TICKET_ID, 'IN_PROGRESS'), 'Started work.')}>
@@ -1756,7 +1756,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 )}
 
                 {/* Admin Approval of Developer Resolution */}
-                {ticket.STATUS === 'RESOLVED' && role === 'admin' && (
+                {ticket.STATUS === 'RESOLVED' && isAdmin && (
                   <div className="sup-resolution" style={{ padding: '10px 20px', background: '#fef9c3', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <strong>Developer has submitted resolution:</strong>
