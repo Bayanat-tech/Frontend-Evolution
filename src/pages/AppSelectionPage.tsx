@@ -32,6 +32,7 @@ import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
 import { SupportLauncher } from "./support/SupportCenter";
 import { useAuth } from "../state/AuthContext";
+import { useSupport } from "../components/SupportProvider";
 import type { MenuNode } from "../types/auth";
 import { firstLeafPath } from "../utils/menu";
 import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isBtSupportApp, isUtilitiesApp } from "../utils/workspaceApps";
@@ -255,6 +256,7 @@ const fallbackIcons = [Layers, Package, Boxes, Truck, Building2, ArrowRightLeft,
 
 export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { user, menuTree, logout } = useAuth();
+  const { role } = useSupport();
   const navigate = useNavigate();
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
   const findApp = (code: string) =>
@@ -266,7 +268,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
       return;
     }
     if (code === "support" || code === "bt-support") {
-      navigate("/workspace/support/support/tickets");
+      navigate(role === "developer" ? "/workspace/support/support/assigned" : "/workspace/support/support/dashboard");
       return;
     }
     const firstPath = firstLeafPath(app);
@@ -337,7 +339,10 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
           <span className="brand-logo-shell"><img src="/bayanat-logo.png" alt="Bayanat Technology" className="brand-logo" /></span>
           <div className="brand-wordmark"><strong>Bayanat</strong><span>Technology</span></div>
         </div>
-        <SupportLauncher /><HeaderProfile user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <SupportLauncher />
+          <HeaderProfile user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
+        </div>
       </header>
       <main className="selection-main app-launch-main" style={launcherStyle}>
         {sections.length === 0 ? (

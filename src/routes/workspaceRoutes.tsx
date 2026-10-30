@@ -268,7 +268,7 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
     const supportLegacy=/^\/workspace\/(?:support|bt-support)\/support\/(admin|developer-assignment|developer-workbench)\/?$/.exec(context.pathname);
     if(supportLegacy){const target=({admin:'tickets','developer-assignment':'team','developer-workbench':'assigned'} as Record<string,string>)[supportLegacy[1]];return <Navigate to={'/workspace/support/support/'+target} replace/>;}
     if(context.pathname.startsWith('/workspace/bt-support/support/'))return <Navigate to={context.pathname.replace('/workspace/bt-support/','/workspace/support/')} replace/>;
-    if (/^\/workspace\/support\/support\/(?:tickets|assigned|team|reports|settings)\/?$/.test(context.pathname)) return <SupportCenter />;
+    if (/^\/workspace\/support\/support\/(?:dashboard|tickets|assigned|team|reports|settings)\/?$/.test(context.pathname)) return <SupportCenter />;
     const route = workspaceRoutes.find((item) => item.match(context));
     const element = route?.element(context);
     return element ? <Fragment key={getWorkspaceRouteKey(context)}>{element}</Fragment> : null;
