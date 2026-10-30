@@ -72,6 +72,37 @@ const getUserInitials = (name?: string) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+function isFeminineName(name?: string) {
+  if (!name) return false;
+  const first = name.trim().split(/\s+/)[0].toLowerCase();
+  const femaleKeywords = [
+    'rashmita', 'srishti', 'usha', 'pooja', 'neha', 'priya', 'anjali', 'divya',
+    'sneha', 'swati', 'kavita', 'meera', 'rekha', 'sunita', 'shweta', 'sheetal',
+    'radha', 'aarti', 'jyoti', 'rupa', 'komal', 'sonal', 'anita', 'renu', 'alka'
+  ];
+  if (femaleKeywords.includes(first)) return true;
+  if (/(a|i)$/.test(first) && !['sagar', 'ganesh', 'rishi', 'shiva', 'krishna', 'ravi', 'ali'].includes(first)) {
+    return true;
+  }
+  return false;
+}
+
+function DeveloperAvatar({ name, isOnline, size = 32 }: { name?: string; isOnline?: boolean | string; size?: number }) {
+  const isGirl = isFeminineName(name);
+  const online = isOnline === 'Y' || isOnline === true;
+  return (
+    <div className="sup-dev-avatar-wrap" title={`${name || 'Developer'} (${isGirl ? 'Developer 👩‍💻' : 'Developer 👨‍💻'}${online ? ' · Online Now' : ' · Offline'})`}>
+      <div
+        className={`sup-dev-avatar ${isGirl ? 'girl' : 'boy'}`}
+        style={{ width: size, height: size, fontSize: size * 0.45 }}
+      >
+        <span>{isGirl ? '👩‍💻' : '👨‍💻'}</span>
+      </div>
+      <span className={online ? 'sup-online-dot' : 'sup-offline-dot'} />
+    </div>
+  );
+}
+
 const supportApiDelete = (ticket: number, message: number) =>
   api.delete(`/api/support/tickets/${ticket}/messages/${message}`);
 
@@ -188,7 +219,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const [selectedCandidate, setSelectedCandidate] = useState('');
   const [teamSearch, setTeamSearch] = useState('');
   const [settings, setSettings] = useState<{ contacts: any[]; queue: any[] }>({ contacts: [], queue: [] });
-  const [contact, setContact] = useState({ email_id: '', display_name: '' });
+  const [contact, setContact] = useState({ email_id: '', display_name: '', recipient_type: 'CC' as 'TO' | 'CC' });
 
   // User compact 2-tab view
   const [compactTab, setCompactTab] = useState<'tickets' | 'chat'>('tickets');
@@ -769,45 +800,148 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               </div>
             </div>
           ) : (
-            /* Developer SLA Matrix */
-            <div className="sup-panel">
-              <div className="sup-panel-title">
-                <span>Developer Assignments & Workloads</span>
+            /* Developer SLA & Workload Matrix */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* 4 Mini KPI Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                <div className="sup-kpi-card" style={{ padding: '14px 16px', background: 'var(--sup-card-bg)', border: '1px solid var(--sup-line)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', color: '#2563eb', display: 'grid', placeItems: 'center' }}>
+                    <Users size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--sup-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Developers</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--sup-ink)' }}>{developers.length}</div>
+                  </div>
+                </div>
+
+                <div className="sup-kpi-card" style={{ padding: '14px 16px', background: 'var(--sup-card-bg)', border: '1px solid var(--sup-line)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#dcfce7', color: '#16a34a', display: 'grid', placeItems: 'center' }}>
+                    <UserCheck size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--sup-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Active Online Now</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#15803d', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {developers.filter(d => d.IS_ONLINE === 'Y').length}
+                      <span className="sup-online-dot" style={{ position: 'static', display: 'inline-block' }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="sup-kpi-card" style={{ padding: '14px 16px', background: 'var(--sup-card-bg)', border: '1px solid var(--sup-line)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fef3c7', color: '#d97706', display: 'grid', placeItems: 'center' }}>
+                    <Clock3 size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--sup-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Active Workload</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#b45309' }}>
+                      {tickets.filter(t => t.DEVELOPER_LOGINID && !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="sup-kpi-card" style={{ padding: '14px 16px', background: 'var(--sup-card-bg)', border: '1px solid var(--sup-line)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f0fdf4', color: '#16a34a', display: 'grid', placeItems: 'center' }}>
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--sup-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Completed / Resolved</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#15803d' }}>
+                      {tickets.filter(t => t.DEVELOPER_LOGINID && ['RESOLVED', 'CLOSED'].includes(t.STATUS)).length}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Developer Name</th>
-                      <th>Login ID</th>
-                      <th>Email</th>
-                      <th>Active Tickets</th>
-                      <th>Resolved Tickets</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {developers.map(d => {
-                      const devTickets = tickets.filter(t => t.DEVELOPER_LOGINID === d.LOGINID);
-                      const devActive = devTickets.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
-                      const devResolved = devTickets.filter(t => ['RESOLVED', 'CLOSED'].includes(t.STATUS)).length;
-                      return (
-                        <tr key={d.LOGINID}>
-                          <td><strong>{d.USERNAME || d.LOGINID}</strong></td>
-                          <td>{d.LOGINID}</td>
-                          <td>{d.EMAIL_ID}</td>
-                          <td><span style={{ fontWeight: 600, color: devActive > 0 ? '#b45309' : 'inherit' }}>{devActive}</span></td>
-                          <td><span style={{ fontWeight: 600, color: '#15803d' }}>{devResolved}</span></td>
-                          <td>
-                            <span className={`sup-status ${d.ACTIVE_FLAG === 'Y' ? 's-closed' : 's-waiting_info'}`}>
-                              {d.ACTIVE_FLAG === 'Y' ? 'Active' : 'Disabled'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+
+              {/* Developer Matrix Table */}
+              <div className="sup-panel" style={{ padding: 0, overflow: 'hidden' }}>
+                <div className="sup-panel-title" style={{ padding: '14px 18px', borderBottom: '1px solid var(--sup-line)' }}>
+                  <div>
+                    <strong style={{ fontSize: 14 }}>Developer Workload & SLA Matrix</strong>
+                    <div style={{ fontSize: 11.5, color: 'var(--sup-muted)', marginTop: 2 }}>Real-time team presence, active allocations, and resolution velocity</div>
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--sup-line)', textAlign: 'left', fontSize: 12 }}>
+                        <th style={{ padding: '10px 16px' }}>Developer</th>
+                        <th style={{ padding: '10px 12px' }}>Login ID</th>
+                        <th style={{ padding: '10px 12px' }}>Presence Status</th>
+                        <th style={{ padding: '10px 12px' }}>Workload Capacity</th>
+                        <th style={{ padding: '10px 12px' }}>Active</th>
+                        <th style={{ padding: '10px 12px' }}>Resolved</th>
+                        <th style={{ padding: '10px 12px' }}>Account Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {developers.map(d => {
+                        const devTickets = tickets.filter(t => t.DEVELOPER_LOGINID === d.LOGINID);
+                        const devActive = devTickets.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
+                        const devResolved = devTickets.filter(t => ['RESOLVED', 'CLOSED'].includes(t.STATUS)).length;
+                        const isOnline = d.IS_ONLINE === 'Y';
+                        return (
+                          <tr key={d.LOGINID} style={{ borderBottom: '1px solid var(--sup-line)', fontSize: 12.5 }}>
+                            <td style={{ padding: '12px 16px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <DeveloperAvatar name={d.USERNAME || d.LOGINID} isOnline={isOnline} size={34} />
+                                <div>
+                                  <strong style={{ fontSize: 13, color: 'var(--sup-ink)' }}>{d.USERNAME || d.LOGINID}</strong>
+                                  <div style={{ fontSize: 11, color: 'var(--sup-muted)' }}>{d.EMAIL_ID}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 12px' }}>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: 12, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>
+                                {d.LOGINID}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 12px' }}>
+                              <span className={`sup-presence-tag ${isOnline ? 'online' : 'offline'}`}>
+                                <span className={isOnline ? 'sup-online-dot' : 'sup-offline-dot'} style={{ position: 'static' }} />
+                                {isOnline ? 'Online Now' : 'Offline'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 12px', minWidth: 140 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                                  <span style={{ fontWeight: 600, color: devActive === 0 ? '#15803d' : devActive <= 2 ? '#0284c7' : '#b45309' }}>
+                                    {devActive === 0 ? 'Available' : devActive <= 2 ? 'Optimal' : 'High Load'}
+                                  </span>
+                                  <span style={{ color: 'var(--sup-muted)' }}>{devActive} tickets</span>
+                                </div>
+                                <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                                  <div
+                                    style={{
+                                      height: '100%',
+                                      width: `${Math.min(100, Math.max(8, devActive * 25))}%`,
+                                      background: devActive === 0 ? '#22c55e' : devActive <= 2 ? '#3b82f6' : '#f59e0b',
+                                      borderRadius: 3
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 12px' }}>
+                              <span style={{ fontWeight: 700, fontSize: 13, color: devActive > 0 ? '#b45309' : 'inherit' }}>
+                                {devActive}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 12px' }}>
+                              <span style={{ fontWeight: 700, fontSize: 13, color: '#15803d' }}>
+                                {devResolved}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 12px' }}>
+                              <span className={`sup-status ${d.ACTIVE_FLAG === 'Y' ? 's-closed' : 's-waiting_info'}`}>
+                                {d.ACTIVE_FLAG === 'Y' ? 'Active' : 'Disabled'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -923,7 +1057,19 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   })
                   .map(d => (
                     <tr key={d.LOGINID}>
-                      <td><strong>{d.USERNAME}</strong></td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <DeveloperAvatar name={d.USERNAME || d.LOGINID} isOnline={d.IS_ONLINE} size={32} />
+                          <div>
+                            <strong>{d.USERNAME}</strong>
+                            <div style={{ fontSize: 11, color: 'var(--sup-muted)' }}>
+                              <span className={`sup-presence-tag ${d.IS_ONLINE === 'Y' ? 'online' : 'offline'}`} style={{ padding: '0 6px', fontSize: 10 }}>
+                                {d.IS_ONLINE === 'Y' ? 'Online' : 'Offline'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
                       <td>{d.LOGINID}</td>
                       <td>{d.EMAIL_ID}</td>
                       <td>
@@ -987,25 +1133,44 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   e.preventDefault();
                   if (!contact.email_id.trim()) return;
                   void run(async () => {
-                    await supportApi.contact({ email_id: contact.email_id.trim(), display_name: contact.display_name.trim(), active_flag: 'Y' });
+                    await supportApi.contact({
+                      email_id: contact.email_id.trim(),
+                      display_name: contact.display_name.trim(),
+                      recipient_type: contact.recipient_type,
+                      active_flag: 'Y'
+                    });
                     const s = await supportApi.settings();
                     setSettings(s);
-                    setContact({ email_id: '', display_name: '' });
-                  }, `Notification recipient ${contact.email_id} saved.`);
+                    setContact({ email_id: '', display_name: '', recipient_type: 'CC' });
+                  }, `Notification recipient ${contact.email_id} (${contact.recipient_type}) saved.`);
                 }}
                 style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
               >
-                <label>
-                  Email Address *
-                  <input
-                    type="email"
-                    required
-                    value={contact.email_id}
-                    onChange={e => setContact({ ...contact, email_id: e.target.value })}
-                    placeholder="e.g. prem@bayanattechnology.com"
-                    className="sup-input-modern"
-                  />
-                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 10 }}>
+                  <label>
+                    Email Address *
+                    <input
+                      type="email"
+                      required
+                      value={contact.email_id}
+                      onChange={e => setContact({ ...contact, email_id: e.target.value })}
+                      placeholder="e.g. prem@bayanattechnology.com"
+                      className="sup-input-modern"
+                    />
+                  </label>
+                  <label>
+                    Routing Role
+                    <select
+                      value={contact.recipient_type}
+                      onChange={e => setContact({ ...contact, recipient_type: e.target.value as 'TO' | 'CC' })}
+                      className="sup-input-modern"
+                      style={{ height: 35, padding: '0 8px' }}
+                    >
+                      <option value="TO">TO (Primary)</option>
+                      <option value="CC">CC (Carbon Copy)</option>
+                    </select>
+                  </label>
+                </div>
                 <label>
                   Display Name
                   <input
@@ -1031,6 +1196,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                     <tr>
                       <th>Display Name</th>
                       <th>Email ID</th>
+                      <th>Routing</th>
                       <th>Status</th>
                       <th>Action</th>
                     </tr>
@@ -1040,6 +1206,11 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       <tr key={c.EMAIL_ID}>
                         <td><strong>{c.DISPLAY_NAME || 'Support Contact'}</strong></td>
                         <td>{c.EMAIL_ID}</td>
+                        <td>
+                          <span className={c.RECIPIENT_TYPE === 'TO' ? 'sup-badge-to' : 'sup-badge-cc'}>
+                            {c.RECIPIENT_TYPE || 'CC'}
+                          </span>
+                        </td>
                         <td>
                           <span className={`sup-status ${c.ACTIVE_FLAG === 'Y' ? 's-closed' : 's-waiting_info'}`}>
                             {c.ACTIVE_FLAG === 'Y' ? 'Active' : 'Disabled'}
@@ -1052,7 +1223,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                             onClick={() => {
                               const nextFlag = c.ACTIVE_FLAG === 'Y' ? 'N' : 'Y';
                               void run(async () => {
-                                await supportApi.contact({ email_id: c.EMAIL_ID, display_name: c.DISPLAY_NAME, active_flag: nextFlag });
+                                await supportApi.contact({ email_id: c.EMAIL_ID, display_name: c.DISPLAY_NAME, recipient_type: c.RECIPIENT_TYPE || 'CC', active_flag: nextFlag });
                                 setSettings(await supportApi.settings());
                               }, `Recipient ${nextFlag === 'Y' ? 'enabled' : 'disabled'}.`);
                             }}
@@ -1064,7 +1235,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                     ))}
                     {(!settings.contacts || settings.contacts.length === 0) && (
                       <tr>
-                        <td colSpan={4} style={{ textAlign: 'center', color: 'var(--sup-muted)', padding: 16 }}>
+                        <td colSpan={5} style={{ textAlign: 'center', color: 'var(--sup-muted)', padding: 16 }}>
                           No notification recipients configured. (Default CC: prem@bayanattechnology.com)
                         </td>
                       </tr>
@@ -1549,14 +1720,19 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               </div>
             ) : ticket ? (
               <>
-                <div className="sup-thread-head">
+                <div className="sup-thread-head compact-bar">
                   <button className="sup-mobile-back" aria-label="Back" onClick={() => setMobileThread(false)}>
                     <ArrowLeft size={16} />
                   </button>
-                  <div>
-                    <span style={{ fontSize: 11, color: 'var(--sup-muted)' }}>Ticket #{ticket.TICKET_ID} · {ticket.PRIORITY}</span>
-                    <h2 style={{ fontSize: 15, margin: '2px 0' }}>{ticket.SUBJECT}</h2>
-                    <p style={{ fontSize: 11 }}>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID} · {ticket.COMPANY_CODE} · {ticket.TENANT_ID}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                    <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--sup-blue)', flexShrink: 0 }}>#{ticket.TICKET_ID}</span>
+                    <strong style={{ fontSize: 13, color: 'var(--sup-ink)', flexShrink: 0, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID}>
+                      {ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID}
+                    </strong>
+                    <span style={{ color: 'var(--sup-muted)', flexShrink: 0 }}>—</span>
+                    <h2 style={{ fontSize: 13, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--sup-ink)' }} title={ticket.SUBJECT}>
+                      {ticket.SUBJECT}
+                    </h2>
                   </div>
                   <div className="sup-thread-head-actions">
                     {statusBadge(ticket.STATUS)}
