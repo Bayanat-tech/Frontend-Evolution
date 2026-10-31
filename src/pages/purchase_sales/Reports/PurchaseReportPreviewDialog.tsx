@@ -164,7 +164,7 @@ export function PurchaseReportPreviewDialog({
             ) : (
               <button type="button" className="primary" disabled><Download size={16} />Download PDF</button>
             )}
-            <button type="button" onClick={onClose}>Close</button>
+            {/* <button type="button" onClick={onClose}>Close</button> */}
           </div>
         </footer>
       </div>

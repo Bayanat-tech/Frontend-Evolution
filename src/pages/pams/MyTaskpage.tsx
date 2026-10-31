@@ -12,7 +12,8 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
-import { DataTable } from "../../components/ui/DataTable";
+import { DataTable } from "../../components/ui/DataTablePams";
+
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -273,13 +274,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     setQuery("");
   }, [activeTab, cacheKey]);
 
-  const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
-    const docNo = text(row.APPRAISAL_DOC_NO);
+const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" | "open" = "open") => {    const docNo = text(row.APPRAISAL_DOC_NO);
     const employeeCode = text(row.EMPLOYEE_CODE);
     const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
     const designation = encodeURIComponent(text(row.DESG_NAME));
     const department = encodeURIComponent(text(row.DEPT_NAME));
-    // ✅ Pass the source tab so the appraisal page knows which buttons to show
     const sourceTab = encodeURIComponent(TAB_STATUS[activeTab]);
     navigate(
       `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}&source_tab=${sourceTab}`,
@@ -456,7 +455,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
           <div
             onClick={(e) => {
               if ((e.target as HTMLElement).tagName !== "INPUT")
-                openAppraisalTabsPage(row.original, "view");
+                openAppraisalTabsPage(row.original, "open");
             }}
             style={{
               display: "flex", alignItems: "center", gap: "8px",
@@ -663,25 +662,29 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     cols.push({
-      id: "actions",
-      header: "Actions",
-      size: 100,
-      cell: ({ row }) => (
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <Button size="sm" variant="ghost" title="Edit"
-            onClick={() => openEditDialog(row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}>
-            <Edit2 size={14} />
-          </Button>
-          <Button size="sm" variant="ghost" title="View"
-            onClick={() => openViewDialog(row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}>
-            <Eye size={14} />
-          </Button>
-        </div>
-      ),
-    });
+  id: "actions",
+  header: "Actions",
+  size: 100,
+  cell: ({ row }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+      {/* Edit sirf Pending tab me */}
+      {activeTab === 0 && (
+        <Button size="sm" variant="ghost" title="Edit"
+          onClick={(e) => { e.stopPropagation(); openAppraisalTabsPage(row.original, "edit"); }}
+          style={{ padding: "4px", height: "28px", width: "28px" }}>
+          <Edit2 size={14} />
+        </Button>
+      )}
 
+      {/* View har tab me, hamesha read-only */}
+      <Button size="sm" variant="ghost" title="View"
+        onClick={(e) => { e.stopPropagation(); openAppraisalTabsPage(row.original, "view"); }}
+        style={{ padding: "4px", height: "28px", width: "28px" }}>
+        <Eye size={14} />
+      </Button>
+    </div>
+  ),
+});
     return cols;
   }, [isHRApprover, selectedRows, activeWeightage]);
 

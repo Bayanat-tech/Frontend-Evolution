@@ -16,6 +16,9 @@ const PAY_COMPONENT_LOOKUP = "PAY_COMPONENT_LOOKUP";
 
 const hr_mse_leave_types = "hr_mse_leave_types";
 
+const CTL = "h-7 text-xs";
+
+
 type TLeaveType = {
   company_code?: string;
   company_name?: string;
