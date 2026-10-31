@@ -1,4 +1,4 @@
-import { ColumnModeToggle } from "../../../components/ui/ColumnModeToggle";
+import { ColumnModeToggle } from "../../components/ui/ColumnModeToggle";
 import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {

@@ -2100,7 +2100,7 @@ const limitProps = (f: keyof FormState) => ({
                           </div>
                         </td>
                       </tr>
-                    ) : filteredLines.map((line) => (
+                    ) : filteredLines.map((line, index) => (
                       <tr className="border-t odd:bg-muted/20" key={line.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{line.serial_no}</td>
                         <td className="finance-sticky-col finance-col-account finance-account-cell px-2 py-1">

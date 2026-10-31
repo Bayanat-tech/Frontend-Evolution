@@ -447,10 +447,6 @@ function JVDocument({
 
   const [accountBalances, setAccountBalances] = useState<Record<string, { formatted: string; sign: string }>>({});
 
-  const handleAutoBalance = () => {
-    addDetailRow();
-  };
-
   const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
   const [taxTypeMap, setTaxTypeMap] = useState<Record<string, string>>({});
@@ -1699,7 +1695,7 @@ function JVDocument({
                               step={currencyDecimals === 3 ? "0.001" : "0.01"}
                               style={{ textAlign: "right" }}
                               value={detail.amount}
-                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (Math.abs(roundDecimals(totalDr - totalCr, 3)) > 0.0001) { handleAutoBalance(); } else { addDetailRow(); } } }}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); addDetailRow(); } }}
                               onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })}
                             />
                           </td>
