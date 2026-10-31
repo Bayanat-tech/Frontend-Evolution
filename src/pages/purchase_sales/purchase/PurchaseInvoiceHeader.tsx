@@ -84,6 +84,9 @@ export function PurchaseInvoiceHeaderForm({
 
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
+    // light placeholder on empty date inputs (Chrome/Edge/Safari)
+const dateCls = (v?: string | null) =>
+    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
 
     // phone / fax: digits, + ( ) - and space only, max 20 chars
     const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
@@ -114,7 +117,7 @@ export function PurchaseInvoiceHeaderForm({
                                 label="Supplier*"
                                 value={form.ac_code}
                                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
@@ -236,7 +239,7 @@ export function PurchaseInvoiceHeaderForm({
                             <Input className="h-7 text-xs" disabled value={form.pi_doc_no || ""} placeholder={editMode ? "" : "Auto"} />
                         </CField> */}
                         <CField label="Doc Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+                            <Input className={dateCls(form.doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
                         </CField>
 
                         {(docTypeUpper === "PIN" || docTypeUpper === "SIN") && (
@@ -334,6 +337,7 @@ export function PurchaseInvoiceHeaderForm({
                                             inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
                                             pinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "pinvoice_total_amount")),
                                             tx_compnt_1_expmt: text(getLookupValue(row || {}, "tx_compnt_1_expmt")) || current.tx_compnt_1_expmt,
+                                            po_tx_compnt_1_expmt: text(getLookupValue(row || {}, "po_tx_compnt_1_expmt")) || current.po_tx_compnt_1_expmt,
                                             tx_compnt_perc_1: getLookupValue(row || {}, "tx_compnt_perc_1") == null
                                                 ? current.tx_compnt_perc_1
                                                 : numberOrZero(getLookupValue(row || {}, "tx_compnt_perc_1")),
@@ -420,17 +424,17 @@ export function PurchaseInvoiceHeaderForm({
                             <Input className="h-7 text-xs" type="text" maxLength={20} disabled={headerAndLineDisabled} required value={form.inv_no} onChange={(e) => updateField("inv_no", e.target.value)} />
                         </CField>
                         <CField label="INV Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.inv_date} onChange={(e) => updateField("inv_date", e.target.value)} />
+                            <Input className={dateCls(form.inv_date)} type="date" disabled={headerAndLineDisabled} required value={form.inv_date} onChange={(e) => updateField("inv_date", e.target.value)} />
                         </CField>
                         <CField label="GRN Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+                            <Input className={dateCls(form.doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
                         </CField>
 
                         <CField label="PO No" required className="col-span-2">
                             <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} required value={form.po_doc_no} onChange={(e) => updateField("po_doc_no", e.target.value)} />
                         </CField>
                         <CField label="PO Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.po_doc_date} onChange={(e) => updateField("po_doc_date", e.target.value)} />
+                            <Input className={dateCls(form.po_doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.po_doc_date} onChange={(e) => updateField("po_doc_date", e.target.value)} />
                         </CField>
                         <CField label="PO Inv Amount" required className="col-span-2">
                             <Input className="h-7 text-xs text-right" type="text" disabled={headerAndLineDisabled} required value={form.pinvoice_total_amount} onChange={(e) => updateField("pinvoice_total_amount", e.target.value)} />
@@ -440,7 +444,7 @@ export function PurchaseInvoiceHeaderForm({
                         </CField>
 
                         <CField label="Ref Date" className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
+                            <Input className={dateCls(form.ref_date)} type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
                         </CField>
 
                         <CField label="WO No" className="col-span-2">

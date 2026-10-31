@@ -26,6 +26,7 @@ import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSDN, PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
 import {
+  amountBeforeDiscPrice,
   computeQuantity,
   emptyForm,
   emptyLineRow,
@@ -86,6 +87,7 @@ export function SalesDNEditor({
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const submitBtnRef = useRef<HTMLDivElement>(null);
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+ const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -143,7 +145,40 @@ export function SalesDNEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
+ useEffect(() => {
+    const taxPerc =
+      form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
+    setRows((current) =>
+      current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
+        };
+
+        return updatedRow;
+      })
+    );
+
+
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
+
+  ]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -213,6 +248,14 @@ export function SalesDNEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+         so_div_code: text(headerRaw.so_div_code || current.so_div_code),
+
+         so_disc_hdr_price: numberOrZero(headerRaw.so_disc_hdr_price),
+         so_disc_hdr_percent: numberOrZero(headerRaw.so_disc_hdr_percent),
+         so_discount_scoope: text(headerRaw.so_discount_scoope) || "ITEM",
+         so_tx_compnt_1_expmt: text(headerRaw.so_tx_compnt_1_expmt),
+         so_tx_cat_code: text(headerRaw.so_tx_cat_code),
+         so_tx_compntcat_code_1: text(headerRaw.so_tx_compntcat_code_1),
         }));
 
         setRows(
@@ -289,14 +332,83 @@ export function SalesDNEditor({
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
+
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
+
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
+   const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
 
   const updateRow = (id: string, patch: Partial<SalesOrderLineRow>) => {
     setRows((current) =>
       current.map((row) => (row.id === id ? { ...row, ...patch } : row)),
     );
   };
+    const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? Number(form.tx_compnt_perc_1 || 0) : 0,
+      },
+    ]);
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
   const removeRow = (id: string) =>
     setRows((current) => current.filter((row) => row.id !== id));
 
@@ -714,6 +826,7 @@ export function SalesDNEditor({
                   <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
                     <SalesDNHeaderForm
                       form={form}
+                      rows={rows}
                       setForm={setForm}
                       docType={SO_DOC_TYPE.SDN}
                       updateField={updateField}
@@ -723,6 +836,7 @@ export function SalesDNEditor({
                       companyCode={user?.company_code}
                       loginid={user?.loginid || user?.username}
                       setdetails={setRows}
+                      calculateDiscount={applyDiscountCalculation}
                     />
 
 

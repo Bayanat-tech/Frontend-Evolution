@@ -82,6 +82,9 @@ export function PurchaseOrderHeaderForm({
   const docTypeUpper = String(docType ?? "").trim().toUpperCase();
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const prLoadSeq = useRef(0);
+  // light placeholder on empty date inputs (Chrome/Edge/Safari)
+const dateCls = (v?: string | null) =>
+    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
   // phone / fax: digits, + ( ) - and space only, max 20 chars
   const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
 
@@ -112,7 +115,7 @@ export function PurchaseOrderHeaderForm({
                 label="Supplier*"
                 value={form.ac_code}
                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "party_address", header: "Address" }, { field: "party_phone", header: "Tel" }, { field: "party_fax", header: "Fax" }]}
+                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                 valueField="ac_code"
                 displayFields={["ac_code", "ac_name"]}
                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
@@ -222,7 +225,7 @@ export function PurchaseOrderHeaderForm({
           <HeaderBlock label="Other Details" icon={<FileText size={11} />} gridCols="grid-cols-6" grow>
             {/* <CField label="Doc No" className="col-span-2"><Input className="h-7 text-xs" disabled value={form.doc_no || ""} /></CField> */}
             <CField label="Doc Date" required className="col-span-2">
-              <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+              <Input className={dateCls(form.doc_date)} type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
             </CField>
 
             {docTypeUpper === "LPO" && (
@@ -474,7 +477,13 @@ export function PurchaseOrderHeaderForm({
             )}
 
             <CField label="Ref Date" className="col-span-2">
-              <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
+              <Input
+               className={dateCls(form.ref_date)}
+                type="date"
+                disabled={headerAndLineDisabled}
+                value={form.ref_date}
+                onChange={(e) => updateField("ref_date", e.target.value)}
+              />
             </CField>
 
             {docTypeUpper === "LPO" && (

@@ -493,7 +493,7 @@ export function SalesInvoiceLinesTable({
                   <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
                   {/* TAX: Tax % */}
                   <td className="px-2 py-1">
-                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.sorder_tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { sorder_tx_compnt_perc_1: Number(event.target.value || 0) })} />
+                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
                   </td>
                   {/* TAX: Tax Amount */}
                   <td className={AMOUNT_CELL}>{formatAmount(lineTaxpoAmount(row))}</td>
@@ -509,12 +509,12 @@ export function SalesInvoiceLinesTable({
                       value={row.sorder_tx_compnt_1_expmt || "N"}
                       onChange={(event) => {
                         const taxType = event.target.value;
-                        const taxPerc = taxType === "S" ? Number(row.sorder_tx_compnt_perc_1 || 5) : 0;
+                        const taxPerc = taxType === "S" ? Number(row.tx_compnt_perc_1 || 5) : 0;
                         // Tax should be calculated on the sales order amount (lineAmount), not regular amount
                         const taxAmt = taxType === "S" ? (Number(lineAmount(row)) || 0) * (taxPerc / 100) : 0;
                         updateRow(row.id, {
                           sorder_tx_compnt_1_expmt: taxType,
-                          sorder_tx_compnt_perc_1: taxPerc,
+                          tx_compnt_perc_1: taxPerc,
                           sorder_tx_compnt_amt_1: taxAmt,
                         });
                       }}

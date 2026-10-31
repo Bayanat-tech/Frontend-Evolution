@@ -13,6 +13,7 @@ type LookupFieldProps = {
   label?: string;
   value: string;
   displayValue?: string;
+  title?: string;
   subText?: string;
   subTextClassName?: string;
   triggerClassName?: string;
@@ -41,6 +42,7 @@ export function LookupField({
   label,
   value,
   displayValue,
+  title,
   subText,
   subTextClassName,
   triggerClassName,
@@ -364,7 +366,7 @@ export function LookupField({
             type="button"
             onClick={openLookup}
             disabled={disabled}
-            title={subText ? `${currentText} - ${subText}` : currentText}
+            title={title ?? (subText ? `${currentText} - ${subText}` : currentText)}
           >
             <span className={`block truncate ${!disabled && currentText ? "text-inherit font-semibold text-[11px] leading-tight" : !disabled ? "text-slate-400 text-[10.5px] leading-tight" : "text-[10.5px] leading-tight"} ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
               {currentText ||

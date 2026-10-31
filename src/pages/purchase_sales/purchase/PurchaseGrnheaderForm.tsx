@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Select } from "../../../components/ui/Select";
@@ -89,7 +89,9 @@ export function PurchaseGrnHeaderForm({
     const discountScope = form.po_discount_scoope || "ITEM";
     const docTypeUpper = String(docType ?? "").trim().toUpperCase();
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
+// light placeholder on empty date inputs (Chrome/Edge/Safari)
+const dateCls = (v?: string | null) =>
+    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
     // phone / fax: digits, + ( ) - and space only, max 20 chars
     const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
 
@@ -104,7 +106,29 @@ export function PurchaseGrnHeaderForm({
     };
     const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
 
+    // Keep header discount in sync with the lines (rvd qty changes -> line disc changes -> header changes)
+    // Update header discount ONLY when received quantity changes (not on load / other row edits)
+    const qtySignature = (rows || []).map((r) => `${r.qty_puom}|${r.qty_luom}`).join(",");
+    const prevQtySignature = useRef<string | null>(null);
 
+    useEffect(() => {
+        if (!rows || rows.length === 0) return;
+        // first time we see loaded rows: remember the quantities, don't touch the header
+        if (prevQtySignature.current === null || prevQtySignature.current === qtySignature) {
+            prevQtySignature.current = qtySignature;
+            return;
+        }
+        prevQtySignature.current = qtySignature;
+
+        const price = TotalDiscAmount(rows);
+        const percent = DiscAmountPercentage(form, rows);
+        setForm((current) =>
+            numberOrZero(current.po_disc_hdr_price) === price &&
+                numberOrZero(current.po_disc_hdr_percent) === percent
+                ? current
+                : { ...current, po_disc_hdr_price: price, po_disc_hdr_percent: percent }
+        );
+    }, [qtySignature]);
     return (
         <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
             {/* HEADER SECTION - HEIGHT UNCHANGED */}
@@ -119,7 +143,7 @@ export function PurchaseGrnHeaderForm({
                                 label="Supplier*"
                                 value={form.ac_code}
                                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "party_address", header: "Address" }, { field: "party_phone", header: "Tel" }, { field: "party_fax", header: "Fax" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
@@ -228,7 +252,7 @@ export function PurchaseGrnHeaderForm({
                     <HeaderBlock label="Other Details" icon={<FileText size={11} />} gridCols="grid-cols-6" grow>
                         {/* <CField label="Doc No" className="col-span-2"><Input className="h-7 text-xs" disabled value={form.doc_no || ""} /></CField> */}
                         <CField label="Doc Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+                            <Input className={dateCls(form.doc_date)} type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
                         </CField>
 
                         {(String(docType ?? "").trim().toUpperCase() === "GRN" &&
@@ -388,8 +412,8 @@ export function PurchaseGrnHeaderForm({
                                                 zone_name: text(getLookupValue(item, "zone_name")),
                                                 serial_no: numberOrZero(getLookupValue(item, "serial_no")),
                                                 tx_compnt_perc_1: numberOrZero(getLookupValue(item, "tx_compnt_perc_1")),
-                                                po_disc_percent:numberOrZero(getLookupValue(item, "po_disc_percent")),
-                                                po_disc_price:numberOrZero(getLookupValue(item, "po_disc_price")),
+                                                po_disc_percent: numberOrZero(getLookupValue(item, "po_disc_percent")),
+                                                po_disc_price: numberOrZero(getLookupValue(item, "po_disc_price")),
                                             }));
                                             console.log("Mapped length:", mappedDetails?.length);
                                             setdetails?.(mappedDetails);
@@ -412,7 +436,7 @@ export function PurchaseGrnHeaderForm({
                         </CField>)}
 
                         <CField label="Ref Date" className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
+                            <Input className={dateCls(form.ref_date)} type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
                         </CField>
 
                         {docTypeUpper === "LPO" && (
@@ -499,7 +523,7 @@ export function PurchaseGrnHeaderForm({
                         {(docTypeUpper === "LPO" || docTypeUpper === "SO" || docTypeUpper === "PQO" || docTypeUpper === "JO" || docTypeUpper === "GRN") && (
                             <>
                                 <CField label="Delivery Contact Person"><Input className="h-7 text-xs" maxLength={70} disabled={headerAndLineDisabled} value={form.po_dlvr_contact} onChange={(e) => updateField("po_dlvr_contact", e.target.value)} /></CField>
-                                {(docTypeUpper === "JO" && <CField label="Delivery Date" ><Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.dlvr_date} onChange={(e) => updateField("dlvr_date", e.target.value)} /></CField>)}
+                                {(docTypeUpper === "JO" && <CField label="Delivery Date" ><Input className={dateCls(form.dlvr_date)} type="date" disabled={headerAndLineDisabled} value={form.dlvr_date} onChange={(e) => updateField("dlvr_date", e.target.value)} /></CField>)}
                                 <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.po_dlvr_mobile} maxLength={20} onChange={(e) => updateField("po_dlvr_mobile", cleanPhone(e.target.value))} /></CField>
                                 <CField label="Delivery Email Address"><Input className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`} type="email" maxLength={100} disabled={headerAndLineDisabled} value={form.po_dlvr_email} onChange={(e) => updateField("po_dlvr_email", (e.target.value))} /></CField>
                                 <CField label="Delivery Term"><Input className="h-7 text-xs" maxLength={250} disabled={headerAndLineDisabled} value={form.po_dlvr_term} onChange={(e) => updateField("po_dlvr_term", e.target.value)} /></CField>

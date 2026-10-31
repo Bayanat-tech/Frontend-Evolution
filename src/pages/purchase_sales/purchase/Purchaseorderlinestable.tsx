@@ -182,7 +182,7 @@ export function PurchaseOrderLinesTable({
   const tableColSpan = showAllColumns ? 27 : 18;
 
   // Default zone = first zone from the same lookup the Zone field uses
-  const [defaultZone, setDefaultZone] = useState("");
+  const [defaultZone, setDefaultZone] = useState({ code: "", name: "" });
 
   useEffect(() => {
     let alive = true;
@@ -192,7 +192,12 @@ export function PurchaseOrderLinesTable({
       .then((res: any) => {
         const list = Array.isArray(res) ? res : res?.data ?? [];
         const first = list[0];
-        if (alive && first) setDefaultZone(text(getLookupValue(first, "zone_code")));
+        if (alive && first) {
+          setDefaultZone({
+            code: text(getLookupValue(first, "zone_code")),
+            name: text(getLookupValue(first, "zone_name")),
+          });
+        }
       })
       .catch(() => { });
     return () => { alive = false; };
@@ -200,9 +205,9 @@ export function PurchaseOrderLinesTable({
 
   // Fill the default zone on any line that has none (existing and newly added)
   useEffect(() => {
-    if (!defaultZone || headerAndLineDisabled) return;
+    if (!defaultZone.code || headerAndLineDisabled) return;
     rows.forEach((r) => {
-      if (!r.zone_code) updateRow(r.id, { zone_code: defaultZone });
+      if (!r.zone_code) updateRow(r.id, { zone_code: defaultZone.code, zone_name: defaultZone.name });
     });
   }, [defaultZone, rows, headerAndLineDisabled]);
 
@@ -356,6 +361,8 @@ export function PurchaseOrderLinesTable({
                       label=""
                       value={row.zone_code || ""}
                       displayValue={row.zone_code}
+                      title={row.zone_name || row.zone_code}
+                      triggerClassName="text-slate-500"
                       columns={[{ field: "zone_code", header: "Code" }, { field: "zone_name", header: "Name" }]}
                       valueField="zone_code"
                       displayFields={["zone_code", "zone_name"]}
@@ -363,7 +370,7 @@ export function PurchaseOrderLinesTable({
                       disabled={headerAndLineDisabled}
                       onChange={(value, selectedRow) => updateRow(row.id, {
                         zone_code: value,
-
+                        zone_name: text(getLookupValue(selectedRow || {}, "zone_name")),
                       })}
                     />
                   </td>

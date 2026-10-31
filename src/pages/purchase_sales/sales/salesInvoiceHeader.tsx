@@ -86,7 +86,9 @@ export function SalesInvoiceHeaderForm({
 
     // phone / fax: digits, + ( ) - and space only, max 20 chars
     const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
-
+// light placeholder on empty date inputs (Chrome/Edge/Safari)
+const dateCls = (v?: string | null) =>
+    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
     // whole number only, max 4 digits
     const cleanInt = (v: string, max = 4) => v.replace(/\D/g, "").slice(0, max);
 
@@ -113,7 +115,7 @@ export function SalesInvoiceHeaderForm({
                                 label="A/c code *"
                                 value={form.ac_code}
                                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
@@ -337,7 +339,7 @@ export function SalesInvoiceHeaderForm({
                                             inv_no: text(getLookupValue(row || {}, "inv_no")),
                                             inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
                                             sinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "sinvoice_total_amount")),
-
+                                            tx_compnt_1_expmt: text(getLookupValue(row || {}, "tx_compnt_1_expmt")) || current.tx_compnt_1_expmt,
                                             discount_scoope:
                                                 text(getLookupValue(row || {}, "discount_scoope")) === "PO"
                                                     ? "PO"
@@ -394,11 +396,11 @@ export function SalesInvoiceHeaderForm({
                                                 quantity: numberOrZero(getLookupValue(item, "quantity")),
                                                 ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
                                                 sorder_tx_compnt_amt_1: text(getLookupValue(item, "sorder_tx_compnt_amt_1")),
-                                                sorder_tx_compnt_perc_1: text(getLookupValue(item, "sorder_tx_compnt_perc_1")),
+                                                tx_compnt_perc_1: text(getLookupValue(item, "tx_compnt_perc_1")),
                                                 sorder_tx_cat_code: text(getLookupValue(item, "sorder_tx_cat_code")),
                                                 sorder_tx_compntcat_code_1: text(getLookupValue(item, "sorder_tx_compntcat_code_1")),
                                                 sorder_required_dt: text(getLookupValue(item, "sorder_required_dt")),
-                                                sorder_tx_compnt_1_expmt: text(getLookupValue(item, "sorder_tx_compnt_1_expmt")),
+                                                tx_compnt_1_expmt: text(getLookupValue(item, "tx_compnt_1_expmt")),
                                                 sorder_remarks: text(getLookupValue(item, "sorder_remarks")),
                                                 serial_no: numberOrZero(getLookupValue(item, "serial_no")),
 
@@ -418,17 +420,17 @@ export function SalesInvoiceHeaderForm({
                             <Input className="h-7 text-xs" type="text" maxLength={20} disabled={headerAndLineDisabled} required value={form.inv_no} onChange={(e) => updateField("inv_no", e.target.value)} />
                         </CField>
                         <CField label="INV Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.inv_date} onChange={(e) => updateField("inv_date", e.target.value)} />
+                            <Input className={dateCls(form.inv_date)} type="date" disabled={headerAndLineDisabled} required value={form.inv_date} onChange={(e) => updateField("inv_date", e.target.value)} />
                         </CField>
                         <CField label="SDN Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+                            <Input className={dateCls(form.doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
                         </CField>
 
                         <CField label="SO No" required className="col-span-2">
                             <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} required value={form.so_doc_no} onChange={(e) => updateField("so_doc_no", e.target.value)} />
                         </CField>
                         <CField label="SO Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(e) => updateField("so_doc_date", e.target.value)} />
+                            <Input className={dateCls(form.sdn_doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(e) => updateField("so_doc_date", e.target.value)} />
                         </CField>
                         <CField label="SO Invoice Amount" required className="col-span-2">
                             <Input className="h-7 text-xs text-right" type="text" disabled={headerAndLineDisabled} required value={form.sinvoice_total_amount} onChange={(e) => updateField("sinvoice_total_amount", e.target.value)} />
@@ -587,11 +589,15 @@ export function SalesInvoiceHeaderForm({
                         </HeaderBlock>
 
                         <HeaderBlock label="Tax" icon={<Receipt size={11} />} gridCols="grid-cols-2">
-                            <CField label="Tax Type">
-                                <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+                            <CField label="Tax Type"  >
+                                <Select className="h-7 text-xs" disabled={headerAndLineDisabled || disabled} value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
                                     const perc = taxType === "S" ? (Number(form.tx_compnt_perc_1) > 0 ? Number(form.tx_compnt_perc_1) : 5) : 0;
-                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_perc_1: perc }));
+                                    setForm((current) => ({
+                                        ...current,
+                                        tx_compnt_1_expmt: taxType,
+                                        tx_compnt_perc_1: perc,
+                                    }));
                                 }}>
                                     <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
                                 </Select>

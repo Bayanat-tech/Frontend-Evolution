@@ -157,9 +157,9 @@ export function PurchaseGrnDetailsTable({
     return (
         <div
             className="commercial-lines-card rounded-md border bg-card min-w-0"
-            style={{ height: "auto", minHeight: 0, maxHeight: "none", overflow: "visible", display: "block" }}
+            style={{ flex: "1 1 0", minHeight: 260, display: "flex", flexDirection: "column" }}
         >
-            <div className="finance-line-actions">
+            <div className="finance-line-actions shrink-0">
                 <div className="finance-line-actions-left">
                     <span className="finance-line-actions-icon"><List size={14} /></span>
                     <span className="finance-line-actions-title">Accounting Lines</span>
@@ -405,6 +405,9 @@ export function PurchaseGrnDetailsTable({
                                                     ...patch,
                                                 });
 
+                                                const amount = amountBeforeDiscPrice({ ...row, ...patch });
+                                                patch.disc_price = amount * (numberOrZero(row.disc_percent) / 100);
+
                                                 updateRow(row.id, patch);
                                             }}
                                         />
@@ -434,6 +437,9 @@ export function PurchaseGrnDetailsTable({
                                                     ...row,
                                                     ...patch,
                                                 });
+
+                                                const amount = amountBeforeDiscPrice({ ...row, ...patch });
+                                                patch.disc_price = amount * (numberOrZero(row.disc_percent) / 100);
 
                                                 updateRow(row.id, patch);
                                             }}

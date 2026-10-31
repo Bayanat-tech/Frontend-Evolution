@@ -877,7 +877,7 @@ export function PurchaseGRNEditor({
                 </div>
 
                 {/* ── Tab 1: Header + Details ── */}
-                <div className={activeTab === "main" ? "grid gap-3 min-w-0" : "hidden"}>
+           <div className={activeTab === "main" ? "contents" : "hidden"}>
                   {!showHeaderDetails ? (
                     <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
                       <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
@@ -912,6 +912,7 @@ export function PurchaseGRNEditor({
                     <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
                       <PurchaseGrnHeaderForm
                         form={form}
+                        rows={rows}
                         docType={PO_DOC_TYPE.GRN}
                         calculateDiscount={applyDiscountCalculation}
                         setForm={setForm}
