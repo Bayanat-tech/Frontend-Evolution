@@ -177,13 +177,25 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
 
     else if (table.classList.contains("pr-title-line")) {
       widths = ["*"];
-    }
-
+       } else if (table.classList.contains("si-top-line")) {
+      widths = ["*"];
+       }
     else if (table.classList.contains("pr-items-portrait")) {
       widths = ["28%", "8%", "13%", "13%", "13%", "12%", "13%"];
     } else if (table.classList.contains("pr-items-landscape")) {
       widths = ["4%", "15%", "8%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
-    } else if (!details && table.rows[0]) {
+    } 
+         else if (table.classList.contains("si-items")) {
+      // S.No | Product/Description | Unit | Qty | Unit Rate | Disc | Amount
+       widths = ["6%", "41%", "6%", "9%", "10%", "13%", "15%"];
+        //  widths = ["8%", "32%", "8%", "10%", "14%", "13%", "15%"];
+    } else if (table.classList.contains("si-items-tax")) {
+      // S.No | Product | Unit | Qty | Rate | Disc | Amount | VAT % | Tax Amt | Amount (Inc. Tax)
+       widths = ["5%", "26%", "5%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
+      //  widths = ["6%", "24%", "6%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
+    }
+    
+    else if (!details && table.rows[0]) {
       const isGrnKvTable = !!table.closest(".grn-two-col");
       if (isGrnKvTable) {
         widths = ["30%", 12, "*"];
@@ -227,6 +239,8 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
         ? "noBorders"
         : table.classList.contains("pr-title-line")
           ? "titleLine"
+           : table.classList.contains("si-top-line")
+            ? "blueLine"
           : table.classList.contains("pr-kv-box")
             ? "kvBox"
             : table.classList.contains("pr-title-tight")
@@ -297,7 +311,7 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
     // html-to-pdfmake supports browsers; its declarations only name JSDOM.
     window: browserWindow as unknown as import("jsdom").DOMWindow,
     defaultStyles: {
-      h1: { fontSize: 13, bold: true, color: "#00378c", marginBottom: 4 },
+      h1: { fontSize: 13, bold: true, color: "#00378c", marginBottom: 2 },
       h2: { fontSize: 10.5, bold: true, color: "#00378c", marginBottom: 3 },
       h3: { fontSize: 9, bold: true, color: "#00378c", marginBottom: 2 },
       p: { margin: [0, 1, 0, 3] },
@@ -306,13 +320,23 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
       table: { margin: [0, 0, 0, 0] },
     },
   }) as Content;
+
+  const hasOwnTopLine = !!prepared.doc.querySelector(".pr-title-line, .si-top-line");
+  const topLine = branded && !hasOwnTopLine
+    ? [{
+        canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 1.3, lineColor: "#1455a3" }],
+        margin: [0, 0, 0, 6] as [number, number, number, number],
+      }]
+    : [];
+  const contentWithLine = [...topLine, ...(Array.isArray(content) ? content : [content])] as Content;
+
   const styles: StyleDictionary = {
     num: { alignment: "right" }, right: { alignment: "right" }, center: { alignment: "center" },
     "primary-text": { bold: true, color: "#00378c" },
     "group-title": { bold: true, fontSize: 9.5, color: "#00378c", margin: [0, 6, 0, 2] },
     "grand-total-title": { bold: true, fontSize: 10.5, color: "#00378c", margin: [0, 8, 0, 2] },
     title: { fontSize: 13, bold: true, color: "#00378c", margin: [0, 0, 0, 3] },
-    "doc-sub": { fontSize: 8.5, color: "#64748b", margin: [0, 0, 0, 6] },
+    "doc-sub": { fontSize: 8.5, color: "#64748b", margin: [0, 0, 0, 2] },
     "subtotal-row": { bold: true, fillColor: "#f1f5f9", color: "#00378c" },
     "grand-total-row": { bold: true, fillColor: "#e2e8f0", color: "#00378c" },
     label: { bold: true, color: "#475569" }, sub: { color: "#64748b", margin: [0, 0, 0, 4] },
@@ -342,6 +366,7 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
           ]
         },
         { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.3, lineColor: "#1455a3" }] },
+        // { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.3, lineColor: "#1455a3" }] },
       ],
     },
     footer: (page, count) => ({
@@ -431,6 +456,16 @@ export async function createPurchasePdf(report: PurchaseReportDocument, identity
       paddingLeft: () => 0,
       paddingRight: () => 0,
       paddingTop: () => 6,
+      paddingBottom: () => 0,
+    },
+
+        blueLine: {
+      hLineWidth: (i: number) => (i === 0 ? 1.3 : 0),
+      vLineWidth: () => 0,
+      hLineColor: () => "#539bf2",
+      paddingLeft: () => 0,
+      paddingRight: () => 0,
+      paddingTop: () => 4,
       paddingBottom: () => 0,
     },
   };
