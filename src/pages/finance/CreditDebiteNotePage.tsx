@@ -1,4 +1,6 @@
 import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { amountInWords } from "../../utils/amountInWords";
+import { ColumnModeToggle } from "../../components/ui/ColumnModeToggle";
 import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
 import { taxTreatmentFromMaster, financeTaxLabel } from "../../utils/financeTaxTreatment";
 import { financeTaxAmounts } from "../../utils/financeTaxAmounts";
@@ -18,6 +20,7 @@ import {
   getChildTableName,
   getDivisions,
   getDocAccounts,
+  getAccountLiveBalance,
   getFinanceMasterRows,
   getFyPeriods,
   getTransactionChildren,
@@ -700,6 +703,7 @@ function PaymentDocumentEditor({
     };
   }, [docType, editMode, editor]);
 
+  const [accountBalances, setAccountBalances] = useState<Record<string, { formatted: string; sign: string }>>({});
   const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
   const [invalidChildRowIds, setInvalidChildRowIds] = useState<Set<string>>(new Set());
   const [invalidChildFields, setInvalidChildFields] = useState<Record<string, string[]>>({});
@@ -1454,13 +1458,23 @@ if (tooLong.length) {
   };
 
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
-  const [showAllColumns, setShowAllColumns] = useState(false);
+  const [showAllColumns, setShowAllColumns] = useState(true);
 
   return (
-    <form data-header-expanded={showHeaderDetails} 
-    // className={`payment-workbench commercial-editor grid h-screen 
-    className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen
-    ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
+    <form
+      data-header-expanded={showHeaderDetails}
+      className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen
+    ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`}
+      onSubmit={submit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.target as HTMLElement)?.tagName !== "TEXTAREA") {
+          const targetType = (e.target as HTMLElement)?.getAttribute("type");
+          if (targetType !== "submit" && (e.target as HTMLElement)?.tagName !== "BUTTON") {
+            e.preventDefault();
+          }
+        }
+      }}
+    >
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -1978,19 +1992,7 @@ if (tooLong.length) {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAllColumns(!showAllColumns)}
-                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                      showAllColumns
-                        ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
-                        : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                    title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
-                  >
-                    <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-                    <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
-                  </button>
+                  <ColumnModeToggle showAllColumns={showAllColumns} onChange={setShowAllColumns} />
 
                   <div className="bisc-table-search">
                     <Search size={13} className="bisc-table-search-icon" />
@@ -2061,7 +2063,14 @@ if (tooLong.length) {
                                   code4: form.div_code
                                 })}
                                 disabled={disabled}
-                                onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                                onChange={(value, row) => {
+                                  void selectDetailAccount(detail, value, row);
+                                  if (value) {
+                                    void getAccountLiveBalance(value, form.div_code)
+                                      .then((b) => { if (b) setAccountBalances((p) => ({ ...p, [value]: { formatted: b.formatted, sign: b.sign } })); })
+                                      .catch(() => {});
+                                  }
+                                }}
                               />
                             </div>
                           </td>

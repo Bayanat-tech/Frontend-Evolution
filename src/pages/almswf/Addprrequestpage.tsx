@@ -1,3 +1,4 @@
+import { ColumnModeToggle } from "../../components/ui/ColumnModeToggle";
 import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1819,10 +1820,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
                   <div className="flex items-center gap-2">
                     {activeTab === "items" && (
                       <>
-                        <button type="button" onClick={() => setShowAllColumns(!showAllColumns)} className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-all ${showAllColumns ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
-                          <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-                          <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
-                        </button>
+                        <ColumnModeToggle showAllColumns={showAllColumns} onChange={setShowAllColumns} />
                         <div className="relative flex h-8 w-64 items-center rounded-full border border-slate-300 bg-white pl-8 pr-3 transition-all duration-300 ease-out focus-within:w-96 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/20">
                           <Search size={13} className="absolute left-3 text-slate-400" />
                           <input className="h-full w-full border-0 bg-transparent text-xs outline-none placeholder:text-slate-400" type="text" value={lineSearch} onChange={(e) => setLineSearch(e.target.value)} placeholder="Search lines..." />

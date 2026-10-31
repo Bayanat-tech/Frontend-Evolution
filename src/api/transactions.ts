@@ -430,6 +430,15 @@ export async function getTransactionDetail(docNo: string, divCode: string, docTy
   return (response.data.data || []).filter(row => { const serial = Number(row.serial_no ?? row.SERIAL_NO); return serial < 9011 || serial > 9999; });
 }
 
+export async function getAccountLiveBalance(acCode: string, divCode?: string) {
+  const response = await api.get<ApiResponse<{ ac_code: string; balance: number; formatted: string; sign: string }>>(
+    "/api/finance/transactions/account_balance",
+    { params: { ac_code: acCode, div_code: divCode } }
+  );
+  if (!response.data.success) return { ac_code: acCode, balance: 0, formatted: "0.000", sign: "Dr" };
+  return response.data.data;
+}
+
 export async function getDocAccounts(docType: TransactionType, hdrDtl: "H" | "D" | "HDR" | "DTL", divCode: string) {
   const normalizedHdrDtl = hdrDtl === "HDR" ? "H" : hdrDtl === "DTL" ? "D" : hdrDtl;
   const response = await api.get<ApiResponse<Record<string, unknown>[]>>("/api/finance/transactions/doc_accounts", {
