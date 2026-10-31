@@ -6,7 +6,9 @@
 //  • Stat chips + DataTable with inline-editable Reason / Type / Remarks
 //  • toast feedback instead of the inline alert banner
 //
-// Data logic (queries, generate block, per-row update, dirty tracking) is unchanged.
+// Generate Calendar builds one row per day for the selected Division / Grade /
+// Year range on the client and posts them to /insUpdHRHolidayCalendarBulk.
+// Dates that already exist are skipped so edited rows are never overwritten.
 
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
@@ -20,6 +22,7 @@ import { Select } from "../../../components/ui/Select";
 import { useToast } from "../../../components/ui/AlertToast";
 import { executeWmsInboundSql } from "../../../api/wms"; // adjust path to wherever this actually lives
 import { getLookupValue } from "../../../api/lookups";
+import { api } from "../../../api/client";
 import { useAuth } from "../../../state/AuthContext";
 
 type HolidayRow = {
@@ -43,6 +46,17 @@ const HOLIDAY_TYPES = [
   { code: "W2", label: "Weekly Off 2", tone: "red" as const },
   { code: "PH", label: "Public Holiday", tone: "amber" as const },
 ];
+
+// Endpoint that upserts the calendar rows (PROC_INS_UPD_HR_HOLIDAYCALENDAR).
+// Adjust the prefix if your router mounts it somewhere else.
+const HOLIDAY_BULK_URL = "/api/hr/insUpdHRHolidayCalendarBulk";
+
+// Weekly offs applied when generating. JS getDay(): 0=Sun ... 5=Fri, 6=Sat.
+// Anything not listed here is generated as NR (normal working day).
+const WEEKLY_OFF_DAYS: Record<number, "W1" | "W2"> = {
+  5: "W1", // Friday
+  6: "W2", // Saturday
+};
 
 function holidayTypeMeta(code: string | null) {
   return (
@@ -107,26 +121,101 @@ function buildHolidayCalendarQuery(params: {
   `;
 }
 
-// TODO: replace with the real proc call once confirmed. This mirrors the anonymous-block
-// pattern used elsewhere in the codebase (e.g. SP_WM_ADJUSTMNT_PROCESS) but the actual
-// proc name/signature for populating a year of holiday rows needs to come from you/DBA.
-function buildGenerateCalendarBlock(params: {
+/* ── Generate calendar (client-built rows → bulk endpoint) ── */
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Returns the DATEIDs already present for this company / division / grade / year range. */
+async function fetchExistingDateIds(params: {
   companyCode: string;
   divCode: string;
+  gradeCode: string;
   yearFrom: string;
   yearTo: string;
-}) {
-  const { companyCode, divCode, yearFrom, yearTo } = params;
-  return `
-    BEGIN
-      SP_HR_HOLIDAYCALENDAR_GENERATE(
-        P_COMPANY_CODE => '${sqlEscape(companyCode)}',
-        P_DIV_CODE     => '${sqlEscape(divCode)}',
-        P_YEAR_FROM    => '${sqlEscape(yearFrom)}',
-        P_YEAR_TO      => '${sqlEscape(yearTo)}'
-      );
-    END;
+}): Promise<Set<string>> {
+  const sql = `
+    SELECT "DATEID"
+    FROM "MS_HR_HOLIDAYCALENDAR"
+    WHERE "COMPANY_CODE" = '${sqlEscape(params.companyCode)}'
+      AND "DIV_CODE" = '${sqlEscape(params.divCode)}'
+      AND "GRADE_CODE" = '${sqlEscape(params.gradeCode)}'
+      AND TO_CHAR("HOLIDAY_DATE",'YYYY') >= '${sqlEscape(params.yearFrom)}'
+      AND TO_CHAR("HOLIDAY_DATE",'YYYY') <= '${sqlEscape(params.yearTo)}'
   `;
+  const res = (await executeWmsInboundSql(sql)) as Record<string, unknown>[];
+  return new Set(
+    (res ?? []).map((r) => String(r.DATEID ?? r.dateid ?? "")).filter(Boolean),
+  );
+}
+
+/** One row per calendar day, in the shape insUpdHRHolidayCalendarBulk expects (lower-case keys). */
+function buildCalendarDetails(params: {
+  companyCode: string;
+  divCode: string;
+  gradeCode: string;
+  yearFrom: string;
+  yearTo: string;
+  loginId: string;
+  existingIds: Set<string>;
+}) {
+  const { companyCode, divCode, gradeCode, yearFrom, yearTo, loginId, existingIds } = params;
+  const nowIso = new Date().toISOString();
+  const details: Record<string, unknown>[] = [];
+
+  for (let y = Number(yearFrom); y <= Number(yearTo); y++) {
+    const d = new Date(y, 0, 1);
+    while (d.getFullYear() === y) {
+      const ymd = `${y}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; // 8 chars → fits VARCHAR2(8)
+      if (!existingIds.has(ymd)) {
+        details.push({
+          dateid: ymd,
+          // no "Z" so the server parses it as local time and the day doesn't shift
+          holiday_date: `${y}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00`,
+          holiday_reason: null,
+          holiday_type: WEEKLY_OFF_DAYS[d.getDay()] ?? "NR",
+          half_day: "N",
+          remarks: null,
+          user_id: loginId || null,
+          user_dt: nowIso,
+          company_code: companyCode,
+          div_code: divCode,
+          grade_code: gradeCode,
+        });
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  return details;
+}
+
+/** Generates the missing days for a division + grade + year range. Returns how many rows were created. */
+async function generateHolidayCalendar(params: {
+  companyCode: string;
+  divCode: string;
+  gradeCode: string;
+  yearFrom: string;
+  yearTo: string;
+  loginId: string;
+}): Promise<number> {
+  try {
+    const existingIds = await fetchExistingDateIds(params);
+    const details = buildCalendarDetails({ ...params, existingIds });
+
+    if (details.length === 0) return 0;
+
+    const res = await api.post(HOLIDAY_BULK_URL, { details });
+
+    if (!res.data?.success) {
+      throw new Error(res.data?.message || "Failed to generate holiday calendar");
+    }
+    return details.length;
+  } catch (e: any) {
+    // surface the backend's message (axios hides it inside e.response)
+    const d = e?.response?.data;
+    throw new Error(
+      d?.details || d?.message || e?.message || "Failed to generate holiday calendar",
+    );
+  }
 }
 
 function buildUpdateHolidayRowQuery(row: HolidayRow) {
@@ -226,6 +315,7 @@ export default function HolidayCalendarPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const companyCode = user?.company_code ?? "";
+  const loginid = user?.loginid ?? "";
 
   const [divCode, setDivCode] = useState("");
   const [divDisplay, setDivDisplay] = useState("");
@@ -291,15 +381,29 @@ export default function HolidayCalendarPage() {
   }, []);
 
   const handleGenerateCalendar = useCallback(async () => {
-    if (!companyCode || !divCode || !yearFrom || !yearTo) {
-      toast.warning("Select Division and Year range before generating");
+    if (!companyCode || !divCode || !gradeCode.trim() || !yearFrom || !yearTo) {
+      toast.warning("Select Division, enter Grade Code and a Year range before generating");
+      return;
+    }
+    if (Number(yearFrom) > Number(yearTo)) {
+      toast.warning("Year From cannot be greater than Year To");
       return;
     }
     setGenerating(true);
     try {
-      const block = buildGenerateCalendarBlock({ companyCode, divCode, yearFrom, yearTo });
-      await executeWmsInboundSql(block);
-      toast.success("Calendar generated successfully");
+      const created = await generateHolidayCalendar({
+        companyCode,
+        divCode,
+        gradeCode: gradeCode.trim(),
+        yearFrom,
+        yearTo,
+        loginId: loginid,
+      });
+      if (created === 0) {
+        toast.warning("Calendar already exists for this Division / Grade / Year range");
+      } else {
+        toast.success(`${created} day${created !== 1 ? "s" : ""} generated successfully`);
+      }
       await fetchCalendar();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to generate calendar");
@@ -307,7 +411,7 @@ export default function HolidayCalendarPage() {
       setGenerating(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyCode, divCode, yearFrom, yearTo, fetchCalendar]);
+  }, [companyCode, divCode, gradeCode, yearFrom, yearTo, loginid, fetchCalendar]);
 
   const handleTypeChange = useCallback((dateId: string, newType: string) => {
     setRows((prev) => prev.map((r) => (r.DATEID === dateId ? { ...r, HOLIDAY_TYPE: newType } : r)));
@@ -514,7 +618,7 @@ export default function HolidayCalendarPage() {
         subtitle="Holiday Calendar"
         loading={loading}
         loaderType="circle"
-        emptyText="No holidays found for this period — try Generate Calendar if this is a new Division/Year"
+        emptyText="No holidays found for this period — enter a Grade Code and use Generate Calendar if this is a new Division/Year"
         searchPlaceholder="Search date, reason, type..."
         height={520}
         minWidth={1100}

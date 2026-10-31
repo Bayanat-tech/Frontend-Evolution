@@ -1,3 +1,5 @@
+import { amountInWords } from "../../utils/amountInWords";
+import { ColumnModeToggle } from "../../components/ui/ColumnModeToggle";
 import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
 import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
 import { taxTreatmentFromMaster } from "../../utils/financeTaxTreatment";
@@ -23,6 +25,7 @@ import {
   getChildTableName,
   getDivisions,
   getDocAccounts,
+  getAccountLiveBalance,
   getFinanceMasterRows,
   getFyPeriods,
   getTransactionChildren,
@@ -500,9 +503,10 @@ function PaymentDocumentEditor({
   const [error, setError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const [lineSearch, setLineSearch] = useState("");
-  const [showAllColumns, setShowAllColumns] = useState(false);
+  const [showAllColumns, setShowAllColumns] = useState(true);
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
   const [showPartyDetails, setShowPartyDetails] = useState(false);
+  const [accountBalances, setAccountBalances] = useState<Record<string, { formatted: string; sign: string }>>({});
   const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
   const [invalidChildRowIds, setInvalidChildRowIds] = useState<Set<string>>(new Set());
   const [invalidChildFields, setInvalidChildFields] = useState<Record<string, string[]>>({});
@@ -1534,7 +1538,19 @@ function PaymentDocumentEditor({
   });
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
+    <form
+      data-header-expanded={showHeaderDetails}
+      className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`}
+      onSubmit={submit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.target as HTMLElement)?.tagName !== "TEXTAREA") {
+          const targetType = (e.target as HTMLElement)?.getAttribute("type");
+          if (targetType !== "submit" && (e.target as HTMLElement)?.tagName !== "BUTTON") {
+            e.preventDefault();
+          }
+        }
+      }}
+    >
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -1864,19 +1880,7 @@ function PaymentDocumentEditor({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAllColumns(!showAllColumns)}
-                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                      showAllColumns
-                        ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
-                        : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                    title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
-                  >
-                    <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-                    <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
-                  </button>
+                  <ColumnModeToggle showAllColumns={showAllColumns} onChange={setShowAllColumns} />
 
                   <div className="bisc-table-search">
                     <Search size={13} className="bisc-table-search-icon" />
@@ -1924,7 +1928,7 @@ function PaymentDocumentEditor({
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No detail lines yet — click "Add Line" to get started</td></tr>
                     ) : filteredDetail.length === 0 ? (
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
-                    ) : filteredDetail.map((detail) => {
+                    ) : filteredDetail.map((detail, index) => {
                       const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
                       const allocatedTotal = childRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
                       const lineAmt = Number(detail.amount) || 0;
@@ -1950,9 +1954,23 @@ function PaymentDocumentEditor({
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
                                 loadOptions={() => getDocAccounts(form.doc_type, "D", form.div_code)}
                                 disabled={disabled}
-                                onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                                onChange={(value, row) => {
+                                  void selectDetailAccount(detail, value, row);
+                                  if (value) {
+                                    void getAccountLiveBalance(value, form.div_code)
+                                      .then((b) => {
+                                        if (b) setAccountBalances((p) => ({ ...p, [value]: { formatted: b.formatted, sign: b.sign } }));
+                                      })
+                                      .catch(() => {});
+                                  }
+                                }}
                               />
-                            </div>
+                            
+                              {detail.ac_code && accountBalances[detail.ac_code] && (
+                                <span className="text-[9.5px] font-mono font-semibold text-slate-500 mt-0.5 block truncate">
+                                  Bal: {accountBalances[detail.ac_code].formatted} {accountBalances[detail.ac_code].sign}
+                                </span>
+                              )}</div>
                           </td>
                           <td className="w-[92px] min-w-[92px] max-w-[92px] px-1 py-1 text-center whitespace-nowrap">
                             {detail.ac_code ? (
@@ -2044,6 +2062,7 @@ function PaymentDocumentEditor({
                                 className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs w-24 ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-1 !ring-rose-400 bg-rose-50/30" : ""}`}
                                 step="0.001"
                                 value={Number(detail.amount || 0)}
+                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (index === filteredDetail.length - 1) { addDetailRow(); } } }}
                                 onChange={(event) => {
                                   const newAmount = Number(event.target.value || 0);
                                   if (detail.child_table === "invoice" && childRows.length > 0) {
