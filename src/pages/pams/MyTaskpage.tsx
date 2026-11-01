@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsDelete, pamsSave } from "../../api/pams";
-import { CheckCircle, Eye, Edit2, X, Save } from "lucide-react";
+import { CheckCircle, Eye, Edit2, Save, Users, User, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -12,11 +12,11 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
-import { DataTable } from "../../components/ui/DataTable";
-
+import { DataTable } from "../../components/ui/DataTablePams";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
+type EmpType = "MANAGER" | "NON-MANAGER";
 
 interface MyTaskPageProps {
   initialTab?: number;
@@ -48,8 +48,11 @@ interface HodBatch {
 
 const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"] as const;
+const IN_PROGRESS_TAB = 1; // is tab me checkbox selection nahi dikhega
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
 const HOD_READY_FLOW_LEVEL = 3;
+// COO aur usse upar ke levels. Apne flow ke hisaab se number adjust karo.
+const COO_MIN_FLOW_LEVEL = 4;
 const taskPageCache = new Map<string, Row[]>();
 
 function text(val: unknown): string {
@@ -64,7 +67,6 @@ function fmtDate(val: unknown): string {
   if (isNaN(d.getTime())) return "NA";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
-
 
 function formatPeriodDisplay(periodNumber: unknown): string {
   const raw = text(periodNumber);
@@ -111,6 +113,10 @@ function computeFinalRating(
   return Math.round((taskScore + charScore) / 2);
 }
 
+function isManagerRow(row: Row): boolean {
+  return text(row.EMPLOYEE_TYPE).toUpperCase() === "MANAGER";
+}
+
 const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -131,9 +137,13 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const [loading, setLoading] = useState(
     () => !taskPageCache.has(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`)
   );
+  const [tabCounts, setTabCounts] = useState<number[]>(() =>
+    TAB_STATUS.map((_, i) => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[i]}`)?.length ?? 0)
+  );
   const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
+  const [empType, setEmpType] = useState<EmpType>("NON-MANAGER");
   const [activeWeightage, setActiveWeightage] = useState<ActiveWeightage | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState(false);
@@ -150,10 +160,25 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const [employees, setEmployees] = useState<Row[]>([]);
   const fetchRequestId = useRef(0);
   const prevUserKeyRef = useRef(`${loginid}-${companyCode}`);
-  const statusFilter = TAB_STATUS[activeTab];
-
   const [hodBatches, setHodBatches] = useState<HodBatch[]>([]);
   const [notifying, setNotifying] = useState<string | null>(null);
+  const showSelection = isHRApprover && activeTab !== IN_PROGRESS_TAB;
+  const [approving, setApproving] = useState(false);
+  const [approveProgress, setApproveProgress] = useState({ done: 0, total: 0 });
+  const APPROVE_CHUNK_SIZE = 50;
+  const showTypeTabs =
+    activeTab === 0 &&
+    rows.some((r) => Number(r.FLOW_LEVEL_RUNNING || 0) >= COO_MIN_FLOW_LEVEL);
+
+  const typeCounts = useMemo(() => ({
+    MANAGER: rows.filter((r) => isManagerRow(r)).length,
+    "NON-MANAGER": rows.filter((r) => !isManagerRow(r)).length,
+  }), [rows]);
+
+  const visibleRows = useMemo(() => {
+    if (!showTypeTabs) return rows;
+    return rows.filter((r) => (empType === "MANAGER" ? isManagerRow(r) : !isManagerRow(r)));
+  }, [rows, showTypeTabs, empType]);
 
   const loadHodBatches = useCallback(async () => {
     try {
@@ -202,6 +227,31 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     void loadLookups();
   }, [loginid, companyCode]);
 
+  // ── Saare tabs ke counts (aur cache) ek saath load karo ──
+  const loadTabCounts = useCallback(async () => {
+    if (!loginid || !companyCode) return;
+    const results = await Promise.all(
+      TAB_STATUS.map(async (status, i) => {
+        try {
+          const data = await pamsSelect({
+            parameter: "Trn_appraisal",
+            loginid,
+            code1: companyCode,
+            code2: "NULL",
+            code3: status,
+          });
+          const normalized = data.map(normalizeRow);
+          taskPageCache.set(cacheKey(i), normalized);
+          return normalized.length;
+        } catch {
+          return null;
+        }
+      })
+    );
+    setTabCounts((prev) => results.map((c, i) => (c ?? prev[i] ?? 0)));
+  }, [loginid, companyCode, cacheKey]);
+
+  useEffect(() => { void loadTabCounts(); }, [loadTabCounts]);
 
   const fetchData = useCallback(async (tabIndex: number, isBackground = false) => {
     const myRequestId = ++fetchRequestId.current;
@@ -223,6 +273,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       const normalizedData = data.map(normalizeRow);
       setRows(normalizedData);
       taskPageCache.set(cacheKey(tabIndex), normalizedData);
+      setTabCounts((prev) => {
+        const next = [...prev];
+        next[tabIndex] = normalizedData.length;
+        return next;
+      });
 
       const initSelected: Record<string, boolean> = {};
       normalizedData.forEach((row) => {
@@ -249,6 +304,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     taskPageCache.clear();
     setRows([]);
     setSelectedRows({});
+    setTabCounts(TAB_STATUS.map(() => 0));
     setLoading(true);
     void fetchData(activeTab, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,13 +329,12 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     setQuery("");
   }, [activeTab, cacheKey]);
 
-  const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
+  const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" | "open" = "open") => {
     const docNo = text(row.APPRAISAL_DOC_NO);
     const employeeCode = text(row.EMPLOYEE_CODE);
     const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
     const designation = encodeURIComponent(text(row.DESG_NAME));
     const department = encodeURIComponent(text(row.DEPT_NAME));
-    // ✅ Pass the source tab so the appraisal page knows which buttons to show
     const sourceTab = encodeURIComponent(TAB_STATUS[activeTab]);
     navigate(
       `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}&source_tab=${sourceTab}`,
@@ -362,6 +417,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       setNotice({ type: "success", message: "Appraisal updated successfully" });
       closeDialog();
       void fetchData(activeTab);
+      void loadTabCounts();
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Failed to update appraisal" });
     } finally {
@@ -378,37 +434,78 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       });
       setNotice({ type: "success", message: "Appraisal deleted successfully" });
       void fetchData(activeTab);
+      void loadTabCounts();
     } catch (err: unknown) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to delete" });
     }
   };
 
-  const handleBulkApprove = async () => {
-    const ids = Object.entries(selectedRows).filter(([, v]) => v).map(([id]) => id);
-    if (!ids.length) {
-      setNotice({ type: "warning", message: "Please select at least one appraisal!" });
-      return;
-    }
-    try {
-      await pamsSelect({
-        parameter: "proc_update_pams_doc_status_bulk", loginid,
-        code1: companyCode, code2: ids.join(","), code3: "A", code4: "",
-      });
-      setNotice({ type: "success", message: "Appraisals approved successfully!" });
-      setSelectedRows({});
-      void fetchData(activeTab);
-    } catch (err: unknown) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
-    }
-  };
+  // ── Selection (sirf visible rows par kaam karta hai) ──
+  const visibleIds = useMemo(
+    () => visibleRows.map((r) => text(r.APPRAISAL_DOC_NO)).filter(Boolean),
+    [visibleRows]
+  );
+  const selectedVisibleIds = useMemo(
+    () => visibleIds.filter((id) => selectedRows[id]),
+    [visibleIds, selectedRows]
+  );
 
   const toggleSelect = (id: string, checked: boolean) =>
     setSelectedRows((prev) => ({ ...prev, [id]: checked }));
 
   const toggleSelectAll = (checked: boolean) => {
-    const next: Record<string, boolean> = {};
-    rows.forEach((row) => { next[text(row.APPRAISAL_DOC_NO)] = checked; });
-    setSelectedRows(next);
+    setSelectedRows((prev) => {
+      const next = { ...prev };
+      visibleIds.forEach((id) => { next[id] = checked; });
+      return next;
+    });
+  };
+
+  const handleBulkApprove = async () => {
+    if (approving) return; // double click guard
+
+    const ids = selectedVisibleIds;
+    if (!ids.length) {
+      setNotice({ type: "warning", message: "Please select at least one appraisal!" });
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to approve ${ids.length} appraisal(s)?`)) return;
+
+    setApproving(true);
+    setApproveProgress({ done: 0, total: ids.length });
+    setNotice(null);
+
+    const failedIds: string[] = [];
+    let approvedCount = 0;
+
+    for (let i = 0; i < ids.length; i += APPROVE_CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + APPROVE_CHUNK_SIZE);
+      try {
+        await pamsSelect({
+          parameter: "proc_update_pams_doc_status_bulk", loginid,
+          code1: companyCode, code2: chunk.join(","), code3: "A", code4: "",
+        });
+        approvedCount += chunk.length;
+      } catch {
+        failedIds.push(...chunk);
+      }
+      setApproveProgress({ done: Math.min(i + chunk.length, ids.length), total: ids.length });
+    }
+
+    if (failedIds.length === 0) {
+      toast.success(`${approvedCount} appraisal(s) approved successfully.`);
+      setSelectedRows({});
+    } else {
+      toast.warning(`${approvedCount} approved, ${failedIds.length} failed. Failed records selected rehenge, dobara try karo.`);
+      // sirf failed wale selected rakho
+      const next: Record<string, boolean> = {};
+      failedIds.forEach((id) => { next[id] = true; });
+      setSelectedRows(next);
+    }
+
+    setApproving(false);
+    void fetchData(activeTab);
+    void loadTabCounts();
   };
 
   const handleNotifyNextLevel = async (flowLevel: number, periodNumber: string) => {
@@ -445,10 +542,30 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const cols: ColumnDef<Row>[] = [];
 
+    // ── Appraisal Doc No: header me Select All, cell me row checkbox ──
     cols.push({
       accessorKey: "APPRAISAL_DOC_NO",
-      header: "Appraisal Doc No",
-      size: 200,
+      size: 220,
+      header: () => {
+        if (!showSelection) return <span>Appraisal Doc No</span>;
+        const allChecked = visibleIds.length > 0 && selectedVisibleIds.length === visibleIds.length;
+        const someChecked = selectedVisibleIds.length > 0 && !allChecked;
+        return (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            <input
+              type="checkbox"
+              checked={allChecked}
+              ref={(el) => { if (el) el.indeterminate = someChecked; }}
+              disabled={visibleIds.length === 0}
+              title={`Select all (${visibleIds.length})`}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => toggleSelectAll(e.target.checked)}
+              style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#082A89" }}
+            />
+            <span>Appraisal Doc No</span>
+          </span>
+        );
+      },
       cell: ({ row }) => {
         const id = text(row.original.APPRAISAL_DOC_NO);
         if (!id) return null;
@@ -456,7 +573,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
           <div
             onClick={(e) => {
               if ((e.target as HTMLElement).tagName !== "INPUT")
-                openAppraisalTabsPage(row.original, "view");
+                openAppraisalTabsPage(row.original, "open");
             }}
             style={{
               display: "flex", alignItems: "center", gap: "8px",
@@ -464,7 +581,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
               overflow: "hidden", textOverflow: "ellipsis"
             }}
           >
-            {isHRApprover && (
+            {showSelection && (
               <input
                 type="checkbox"
                 checked={!!selectedRows[id]}
@@ -493,7 +610,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       size: 110,
       cell: ({ row }) => fmtDate(row.original.APPRAISAL_DOC_DATE),
     });
-
 
     cols.push({
       accessorKey: "PERIOD_NUMBER",
@@ -541,23 +657,19 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         const fromDate = row.original.APPRAISAL_FROM;
         const toDate = row.original.APPRAISAL_TO;
 
+        const getMonthAbbreviation = (monthIndex: number) => {
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          return months[monthIndex];
+        };
+
         const formatDateRange = (dateVal: unknown) => {
           if (!dateVal) return null;
-          let dateStr = String(dateVal);
-          if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-            return dateStr;
-          }
+          const dateStr = String(dateVal);
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return dateStr;
           const d = new Date(dateStr);
           if (isNaN(d.getTime())) return null;
           const day = String(d.getDate()).padStart(2, "0");
-          const month = String(d.getMonth() + 1).padStart(2, "0");
-          const year = d.getFullYear();
-          return `${day} ${getMonthAbbreviation(d.getMonth())} ${year}`;
-        };
-
-        const getMonthAbbreviation = (monthIndex: number) => {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          return months[monthIndex];
+          return `${day} ${getMonthAbbreviation(d.getMonth())} ${d.getFullYear()}`;
         };
 
         const from = formatDateRange(fromDate);
@@ -668,13 +780,18 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       size: 100,
       cell: ({ row }) => (
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <Button size="sm" variant="ghost" title="Edit"
-            onClick={() => openEditDialog(row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}>
-            <Edit2 size={14} />
-          </Button>
+          {/* Edit sirf Pending tab me */}
+          {activeTab === 0 && (
+            <Button size="sm" variant="ghost" title="Edit"
+              onClick={(e) => { e.stopPropagation(); openAppraisalTabsPage(row.original, "edit"); }}
+              style={{ padding: "4px", height: "28px", width: "28px" }}>
+              <Edit2 size={14} />
+            </Button>
+          )}
+
+          {/* View har tab me, hamesha read-only */}
           <Button size="sm" variant="ghost" title="View"
-            onClick={() => openViewDialog(row.original)}
+            onClick={(e) => { e.stopPropagation(); openAppraisalTabsPage(row.original, "view"); }}
             style={{ padding: "4px", height: "28px", width: "28px" }}>
             <Eye size={14} />
           </Button>
@@ -683,7 +800,44 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     return cols;
-  }, [isHRApprover, selectedRows, activeWeightage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSelection, selectedRows, visibleIds, selectedVisibleIds, activeWeightage, activeTab]);
+
+  // ── Manager / Non Manager toggle (DataTable toolbar me) ──
+  const typeToggle = showTypeTabs ? (
+    <div
+      style={{
+        display: "inline-flex", alignItems: "center", gap: "4px",
+        padding: "4px", background: "#eef2f7", borderRadius: "12px",
+      }}
+    >
+      {([
+        { key: "NON-MANAGER", label: "Non Manager", Icon: User },
+        { key: "MANAGER", label: "Manager", Icon: Users },
+      ] as { key: EmpType; label: string; Icon: typeof User }[]).map(({ key, label, Icon }) => {
+        const active = empType === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setEmpType(key)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "7px 14px", fontSize: "13px",
+              fontWeight: active ? 700 : 600,
+              borderRadius: "9px", border: "none", cursor: "pointer",
+              whiteSpace: "nowrap", transition: "all 0.15s",
+              background: active ? "#0b1b3f" : "transparent",
+              color: active ? "#fff" : "#64748b",
+            }}
+          >
+            <Icon size={14} />
+            {label} ({typeCounts[key]})
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
@@ -698,40 +852,31 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: "2px", borderBottom: "2px solid #e5e7eb" }}>
-        {TAB_LABELS.map((label, index) => (
-          <button
-            key={index}
-            onClick={() => handleTabChange(index)}
-            style={{
-              padding: "8px 20px", fontSize: "14px",
-              fontWeight: activeTab === index ? 700 : 500,
-              color: activeTab === index ? "#082A89" : "#6b7280",
-              background: activeTab === index ? "#f0f4ff" : "transparent",
-              border: "none",
-              borderBottom: activeTab === index ? "2px solid #082A89" : "2px solid transparent",
-              borderRadius: "8px 8px 0 0", cursor: "pointer",
-              marginBottom: "-2px", whiteSpace: "nowrap",
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      {/* ── Tabs (Purchase Request jaisa pill UI + count) ── */}
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {TAB_LABELS.map((label, index) => {
+          const active = activeTab === index;
+          return (
+            <button
+              key={TAB_STATUS[index]}
+              type="button"
+              onClick={() => handleTabChange(index)}
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${active
+                ? "bg-[#00378C] font-semibold text-white shadow-sm"
+                : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
+            >
+              <span>{label}</span>
+              <span
+                className={`rounded-full px-1.5 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                  }`}
+              >
+                {tabCounts[index] ?? 0}
+              </span>
+            </button>
+          );
+        })}
       </div>
-
-      {isHRApprover && rows.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "0 4px" }}>
-          <input
-            type="checkbox"
-            checked={rows.length > 0 && rows.every((row) => selectedRows[text(row.APPRAISAL_DOC_NO)])}
-            onChange={(e) => toggleSelectAll(e.target.checked)}
-            style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#082A89" }}
-          />
-          <span style={{ fontSize: "12px", color: "#6b7280" }}>
-            Select All ({rows.length} records)
-          </span>
-        </div>
-      )}
 
       {hodBatches
         .filter((b) => Number(b.PENDING_COUNT) === 0 && Number(b.READY_COUNT) > 0)
@@ -757,30 +902,68 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
             </div>
           );
         })}
+      <div style={{ position: "relative" }}>
+        <DataTable
+          columns={columns}
+          data={visibleRows}
+          title={`${visibleRows.length.toLocaleString()} Records`}
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search appraisal..."
+          toolbar={typeToggle}
+          enableExport={false}
+          loading={loading}
+          loaderType="circle"
+          height={550}
+          minWidth={1300}
+          density="compact"
+          enablePagination
+          pageSize={100}
+          enableColumnFilters={true}
+          getRowId={(row) => text(row.APPRAISAL_DOC_NO)}
+        />
+        {approving && (
+          <div
+            style={{
+              position: "absolute", inset: 0, zIndex: 40,
+              background: "rgba(255,255,255,0.55)", cursor: "wait",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <div style={{
+              display: "flex", alignItems: "center", gap: "10px",
+              padding: "10px 18px", background: "#fff", borderRadius: "10px",
+              border: "1px solid #b3caf5", boxShadow: "0 4px 16px rgba(8,42,137,0.15)",
+              fontSize: "13px", fontWeight: 600, color: "#082A89",
+            }}>
+              <Loader2 size={18} className="animate-spin" />
+              Approving {approveProgress.done}/{approveProgress.total}...
+            </div>
+          </div>
+        )}
+      </div>
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        title={`${rows.length.toLocaleString()} Records`}
-        // subtitle={`${statusFilter} Appraisals`}
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search appraisal..."
-        loading={loading}
-        loaderType="circle"
-        height={550}
-        minWidth={1300}
-        density="compact"
-        enablePagination
-        pageSize={100}
-        enableColumnFilters={true}
-        getRowId={(row) => text(row.APPRAISAL_DOC_NO)}
-      />
-
-      {isHRApprover && Object.values(selectedRows).some(Boolean) && (
-        <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
-          <Button onClick={handleBulkApprove} style={{ background: "#082a89" }}>
-            <CheckCircle size={15} /> Approve Selected ({Object.values(selectedRows).filter(Boolean).length})
+      {showSelection && selectedVisibleIds.length > 0 && (
+        <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "12px" }}>
+          {approving && (
+            <span style={{ fontSize: "12px", color: "#6b7280" }}>
+              Please wait, do not close this page...
+            </span>
+          )}
+          <Button
+            onClick={handleBulkApprove}
+            disabled={approving}
+            style={{ background: "#082a89", opacity: approving ? 0.85 : 1, cursor: approving ? "wait" : "pointer" }}
+          >
+            {approving ? (
+              <>
+                <Loader2 size={15} className="animate-spin" /> Approving... {approveProgress.done}/{approveProgress.total}
+              </>
+            ) : (
+              <>
+                <CheckCircle size={15} /> Approve Selected ({selectedVisibleIds.length})
+              </>
+            )}
           </Button>
         </div>
       )}
