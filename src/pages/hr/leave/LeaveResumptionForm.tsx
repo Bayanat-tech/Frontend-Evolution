@@ -1,32 +1,32 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Calendar, FileDown, Save, Send, XCircle } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { ArrowLeft, FileDown, Loader2, Save, Send, ShieldCheck, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../../state/AuthContext";
-import { useToast } from "../../../components/ui/AlertToast";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
-import { Card, CardContent, CardHeader } from "../../../components/ui/Card";
+import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
+import type { ToastNotice } from "../../../components/ui/NoticeToast";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-// import { Dialog } from "../../../components/ui/Dialog";
-// import { SentBackPopup } from "pages/Purchasefolder/MyTaskPendingRequestTab";
 import * as XLSX from "xlsx";
 import { IHrEmployee, IValidateLeaveResponse, TLeaveApproval } from "./leave-approval-types";
-import { getEmployees, getHrEmployees, getHrLeaveEntitlement, saveHrLeaveApproval, validateHrLeave } from "../../../api/hr";
+import {
+  getEmployees,
+  getHrEmployees,
+  getHrLeaveEntitlement,
+  saveHrLeaveApproval,
+  validateHrLeave,
+} from "../../../api/hr";
+import { saveLeaveRequestFlow } from "./LeaveRequestDialog";
 
 dayjs.extend(customParseFormat);
 
-// All dates are kept internally as ISO (YYYY-MM-DD) so comparisons, dayjs
-// maths and the payload builder stay simple. Only the on-screen text is
-// rendered/typed as DD-MM-YYYY via the DateInput below (which also offers a
-// calendar picker).
+// All dates are kept internally as ISO (YYYY-MM-DD), exactly like the Leave Request
+// form (native <input type="date">), so comparisons and the payload builder stay simple.
 const ISO_FORMAT = "YYYY-MM-DD";
 const DISPLAY_FORMAT = "DD-MM-YYYY";
 
-// Formats we accept coming from the API / parent. Order matters; every one is
-// parsed strictly so that e.g. "01-09-2026" is never misread as MM-DD-YYYY
-// (which is what `new Date("01-09-2026")` does in Chrome).
 const INPUT_FORMATS = [
   "YYYY-MM-DD",
   "DD-MM-YYYY",
@@ -40,8 +40,7 @@ const INPUT_FORMATS = [
 
 /**
  * Normalise anything date-like to ISO (YYYY-MM-DD).
- * Returns "" for empty / unparseable input — including the literal string
- * "Invalid Date" — so callers can rely on a truthy result being a real date.
+ * Returns "" for empty / unparseable input (including "Invalid Date").
  */
 function toIso(value?: string | Date | null): string {
   if (!value) return "";
@@ -54,8 +53,7 @@ function toIso(value?: string | Date | null): string {
   const s = String(value).trim();
   if (!s || s.toLowerCase() === "invalid date") return "";
 
-  // ISO timestamp (e.g. 2026-08-24T20:00:00.000Z from oracledb): convert to
-  // the local calendar day instead of slicing, otherwise UTC shifts the date.
+  // ISO timestamp (e.g. 2026-08-24T20:00:00.000Z): convert to the local calendar day.
   if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
     const d = dayjs(s);
     return d.isValid() ? d.format(ISO_FORMAT) : "";
@@ -76,12 +74,18 @@ function isoToDisplay(value?: string): string {
   return iso ? dayjs(iso, ISO_FORMAT, true).format(DISPLAY_FORMAT) : "";
 }
 
-function displayToIso(display: string): string {
-  const parsed = dayjs(display, DISPLAY_FORMAT, true);
-  return parsed.isValid() ? parsed.format(ISO_FORMAT) : "";
+function formatHeaderDate(value: string) {
+  const iso = toIso(value);
+  if (!iso) return "—";
+  return dayjs(iso, ISO_FORMAT, true).format("DD MMM YYYY");
 }
 
 const todayIso = () => dayjs().format(ISO_FORMAT);
+
+function getUuid() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 type AddLeaveApprovalFormProps = {
   data?: TLeaveApproval | null;
@@ -91,16 +95,9 @@ type AddLeaveApprovalFormProps = {
   viewMode?: boolean;
   approveResumption?: boolean;
   disableButtons?: boolean;
+  /** Render as a full page section (same as the Leave Request editor). Default true. */
+  inline?: boolean;
 };
-
-// interface SentBackPopupState {
-//   open: boolean;
-//   data: {
-//     request_number: string;
-//     level: number;
-//     remarks: string;
-//   };
-// }
 
 interface ILeaveType {
   value: string;
@@ -147,8 +144,6 @@ type FormDataType = {
 
 const emptyFormData = (companyCode: string): FormDataType => ({
   request_number: "",
-  // Local date, not toISOString() — that is UTC and gives "yesterday" for the
-  // first hours of the day in UTC+ timezones.
   request_date: todayIso(),
   EMPLOYEE_ID: "",
   employee_code: "",
@@ -191,22 +186,24 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
   isEditMode,
   viewMode,
   approveResumption,
+  inline = true,
 }) => {
   const { user } = useAuth();
-  const { toast } = useToast();
+
+  // Same tenant detection as the Leave Request form: login ids containing letters are MHDL, the rest ALMS.
+  const LOGINUSER = String(user?.LOGINID || user?.loginid || "");
+  const tenantName = /[A-Za-z]/.test(LOGINUSER.trim()) ? "MHDL" : "ALMS";
+  const isAlms = tenantName === "ALMS";
+  const yesValue = isAlms ? "Y" : "Yes";
+  const noValue = isAlms ? "N" : "No";
+  const loginId = String(user?.loginid1 || user?.LOGINID1 || "");
 
   const [formData, setFormData] = useState<FormDataType>(emptyFormData(user?.company_code || ""));
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [notice, setNotice] = useState<ToastNotice>(null);
 
-  // True when the record arrived without usable leave start/end dates. In that
-  // case the (normally read-only) date fields are unlocked so they can be
-  // re-entered with the calendar instead of being stuck blank.
+  // True when the record arrived without usable leave start/end dates, so they can be re-entered.
   const [repairDates, setRepairDates] = useState(false);
-
-  //   const [sentBackPopup, setSentBackPopup] = useState<SentBackPopupState>({
-  //     open: false,
-  //     data: { request_number: "", level: 0, remarks: "" },
-  //   });
 
   const [leaveTypes, setLeaveTypes] = useState<ILeaveType[]>([]);
   const [leaveTypesLoading, setLeaveTypesLoading] = useState(false);
@@ -221,7 +218,6 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
   const [approverLoading, setApproverLoading] = useState(false);
   const [validationLoading, setValidationLoading] = useState(false);
   const [validationResult, setValidationResult] = useState<IValidateLeaveResponse | null>(null);
-  const [showValidationAlert, setShowValidationAlert] = useState(false);
 
   // Logged-in user's employee data
   const { data: currentUserEmployeeData } = useQuery<IHrEmployee | null>({
@@ -237,7 +233,6 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
 
   useEffect(() => {
     if (!currentUserEmployeeData) return;
-
     if (data) return;
 
     const employeeId = currentUserEmployeeData.EMPLOYEE_ID?.toString() || "";
@@ -258,11 +253,8 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
     void fetchLeaveTypes(employeeId);
   }, [currentUserEmployeeData, data]);
 
-  // Edit mode: the effect above bails out early when `data` is present, so
-  // the leave-types list was never being fetched for existing records —
-  // that's why the Leave Type select had no option matching the saved
-  // value and rendered blank. Fetch it here using the record's own
-  // employee id instead.
+  // Edit mode: fetch the leave-types list using the record's own employee id so the
+  // Leave Type select has an option matching the saved value.
   useEffect(() => {
     if (!data) return;
     const employeeId = (data.EMPLOYEE_ID || data.EMPLOYEE_CODE || "").toString();
@@ -272,9 +264,6 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
   useEffect(() => {
     if (!data) return;
 
-    // Every date coming from the record goes through toIso() so the form state
-    // only ever holds "YYYY-MM-DD" or "" — never "Invalid Date" or a
-    // DD-MM-YYYY / DD-MON-YY string.
     const startIso = toIso(data.LEAVE_START_DATE);
     const endIso = toIso(data.LEAVE_END_DATE);
     setRepairDates(!startIso || !endIso);
@@ -305,7 +294,7 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
       CAUSE_TYPE: data.CAUSE_TYPE || "",
       ADV_PAYMENT: data.ADV_PAYMENT || "",
       LEAVE_ALLOWANCE: data.LEAVE_ALLOWANCE || "",
-      is_half_day: false,
+      is_half_day: String((data as any).HALF_DAY ?? "").toUpperCase() === "Y",
       resume_work: data.RESUME_WORK || false,
       actual_resume_date: toIso(data.ACTUAL_RESUME_DATE),
       DUTY_RESUME_DATE: toIso(data.DUTY_RESUME_DATE),
@@ -360,9 +349,9 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
       XLSX.utils.book_append_sheet(wb, ws, "Leave Request");
       const fileName = `Leave_Request_${formData.request_number || ""}_${todayIso()}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      toast.success("Leave request exported successfully");
-    } catch (error) {
-      toast.error("Failed to export leave request");
+      setNotice({ type: "success", message: "Leave request exported successfully" });
+    } catch {
+      setNotice({ type: "error", message: "Failed to export leave request" });
     }
   };
 
@@ -423,22 +412,24 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
 
   const validateLeave = async () => {
     if (!formData.EMPLOYEE_ID) {
-      toast.error("Please select an employee first");
+      setNotice({ type: "error", message: "Please select an employee first" });
       return;
     }
     if (!formData.leave_type || !formData.leave_start_date || !formData.leave_end_date) {
-      toast.error("Please fill all required leave details (Leave Type, Start Date, End Date)");
+      setNotice({
+        type: "error",
+        message: "Please fill all required leave details (Leave Type, Start Date, End Date)",
+      });
       return;
     }
     const requestedDays = Number(formData.leave_days);
     if (requestedDays <= 0) {
-      toast.error("Leave days must be greater than zero");
+      setNotice({ type: "error", message: "Leave days must be greater than zero" });
       return;
     }
 
     setValidationLoading(true);
     setValidationResult(null);
-    setShowValidationAlert(true);
 
     try {
       const result = await validateHrLeave({
@@ -486,10 +477,9 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
       };
 
       setValidationResult(validationResponse);
-      if (isValid) toast.success(message);
-      else toast.error(message);
-    } catch (error) {
-      toast.error("Failed to validate leave request");
+      setNotice({ type: isValid ? "success" : "error", message });
+    } catch {
+      setNotice({ type: "error", message: "Failed to validate leave request" });
     } finally {
       setValidationLoading(false);
     }
@@ -504,13 +494,16 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
         leave_type_desc: selectedLeaveType ? selectedLeaveType.label : "",
       }));
       setValidationResult(null);
-      setShowValidationAlert(false);
       return;
     }
 
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
-      if ((field === "leave_start_date" || field === "leave_end_date") && updated.leave_start_date && updated.leave_end_date) {
+      if (
+        (field === "leave_start_date" || field === "leave_end_date") &&
+        updated.leave_start_date &&
+        updated.leave_end_date
+      ) {
         const start = dayjs(updated.leave_start_date, ISO_FORMAT, true);
         const end = dayjs(updated.leave_end_date, ISO_FORMAT, true);
         if (start.isValid() && end.isValid() && start.isBefore(end.add(1, "day"))) {
@@ -525,12 +518,10 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
 
     if (["leave_type", "leave_start_date", "leave_end_date", "leave_days"].includes(field)) {
       setValidationResult(null);
-      setShowValidationAlert(false);
     }
   };
 
   const handleSave = async (actionType: string) => {
-    setSaving(true);
     const {
       request_number,
       request_date,
@@ -548,8 +539,6 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
       DUTY_RESUME_DATE,
     } = formData;
 
-    // Normalise once; everything below (validation + payload) uses these so
-    // "Invalid Date" can never reach the backend.
     const requestDateIso = toIso(request_date);
     const startIso = toIso(leave_start_date);
     const endIso = toIso(leave_end_date);
@@ -570,11 +559,12 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
       if (!actualResumeIso) errors.push("Actual Resume Date is required.");
       if (!dutyResumeIso) errors.push("Duty Resume Date is required.");
       if (errors.length) {
-        setSaving(false);
-        toast.error(errors.join(" "));
+        setNotice({ type: "error", message: errors.join(" ") });
         return;
       }
     }
+
+    setSaving(actionType);
 
     const payload = {
       COMPANY_CODE: user?.company_code || "",
@@ -597,7 +587,6 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
       LEAVE_ALLOWANCE: formData.LEAVE_ALLOWANCE || "",
       ADV_PAYMENT: formData.ADV_PAYMENT || "",
       CAUSE_TYPE: formData.CAUSE_TYPE || "",
-      // Optional dates: "" when empty/invalid, never "Invalid Date".
       TRAVEL_DATE: toIso(formData.TRAVEL_DATE),
       TRAVEL_END_DATE: toIso(formData.TRAVEL_END_DATE),
       NAME_OF_REPLACEMENT: formData.NAME_OF_REPLACEMENT || "",
@@ -613,18 +602,40 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
     };
 
     try {
-      const result = await saveHrLeaveApproval(payload);
+      let result: unknown;
+
+      if (isAlms) {
+        // ALMS: save through the same API the Leave Request form uses.
+        const almsPayload: Record<string, unknown> = {
+          ...payload,
+          COMPANY_CODE: String(user?.company_code || user?.COMPANY_CODE || "BSG"),
+          CREATED_BY: String((data as any)?.CREATED_BY || loginId),
+          UPDATED_BY: loginId,
+          LAST_ACTION: actionType === "CANCELLED" ? "CANCEL" : actionType,
+          HALF_DAY: formData.is_half_day ? "Y" : "N",
+          RESUME_WORK: "No",
+          UUID: getUuid(),
+        };
+        result = await saveLeaveRequestFlow(almsPayload, loginId);
+      } else {
+        // MHDL: unchanged.
+        result = await saveHrLeaveApproval(payload);
+      }
+
       if (result) {
-        toast.success("Leave request saved successfully");
+        setNotice({ type: "success", message: "Leave request saved successfully" });
         onSuccess?.();
         onClose?.();
       } else {
-        toast.error("An error occurred while saving the leave request.");
+        setNotice({ type: "error", message: "An error occurred while saving the leave request." });
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "An error occurred while saving the leave request.");
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "An error occurred while saving the leave request.",
+      });
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   };
 
@@ -636,124 +647,164 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
     ? [
         { label: "Immediate Supervisor", name: formData.IMMEDIATE_SUPERVISOR_NAME },
         { label: "Department Head", name: formData.DEPT_HEAD_NAME },
-        { label: "HOD", name: formData.HOD_NAME },
+        { label: "HR. Head Of Department", name: formData.HOD_NAME },
       ]
     : [
         { label: "Immediate Supervisor", name: approverNames.SUPERVISOR_EMPID },
         { label: "Department Head", name: approverNames.DEPT_HEAD_EMPID },
-        { label: "HOD", name: approverNames.MANGR_EMPID },
+        { label: "HR. Head Of Department", name: approverNames.MANGR_EMPID },
       ];
 
-  const fieldsReadOnly = approveResumption || data?.FINAL_APPROVED === "YES";
-
-  // Leave start/end stay locked for resumption/final-approved records, unless
-  // the record came in without valid dates and they need to be re-entered.
+  const fieldsReadOnly = Boolean(approveResumption || data?.FINAL_APPROVED === "YES");
   const leaveDatesReadOnly = fieldsReadOnly && !repairDates;
 
-  return (
-    <div className="grid gap-5">
-      {/* Header with Request Date on the right */}
-      <div className="border-b border-border pb-3">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="m-0 text-lg font-semibold tracking-tight text-foreground">
-              Leave Request Number <span className="text-muted-foreground">{formData.request_number || "—"}</span>
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {data?.EMPLOYEE_NAME_DISPLAY || `${user?.loginid || ""} - ${formData.Employee_Name}`}
-            </p>
+  const lastAction = String(data?.LAST_ACTION || "").toUpperCase();
+  const statusLabel = String((data as any)?.STATUS || lastAction || "Draft");
+  const requestNumber = formData.request_number;
+  const busy = Boolean(saving);
+
+  const alertNotice = notice ? ({ ...notice, type: notice.type === "info" ? "success" : notice.type } as any) : null;
+
+  const actionBtn =
+    "!w-auto shrink-0 whitespace-nowrap h-8 gap-1.5 text-xs font-semibold px-3 rounded-lg cursor-pointer";
+  const dangerBtn = `${actionBtn} !text-red-600 !border-red-200 hover:!bg-red-50`;
+
+  const actionButtons = (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => void handleSave("SAVEASDRAFT")}
+        disabled={viewMode || busy}
+        className={actionBtn}
+      >
+        {saving === "SAVEASDRAFT" ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+        <span>Save As Draft</span>
+      </Button>
+
+      <Button
+        type="button"
+        onClick={() => void handleSave("SUBMITTED")}
+        disabled={viewMode || busy}
+        className={`${actionBtn} bg-[#00378C] text-white hover:bg-[#002d72]`}
+      >
+        {saving === "SUBMITTED" ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+        <span>Submit</span>
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => void handleSave("CANCELLED")}
+        disabled={viewMode || busy}
+        className={dangerBtn}
+      >
+        {saving === "CANCELLED" ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+        <span>Cancel Request</span>
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        title="Export Leave Request"
+        aria-label="Export Leave Request"
+        onClick={handleExport}
+        disabled={!isEditMode && !requestNumber}
+        className="h-8 w-8 shrink-0 rounded-lg cursor-pointer"
+      >
+        <FileDown size={14} />
+      </Button>
+    </>
+  );
+
+  const mainNode = (
+    <>
+      {/* Employee strip */}
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-xs">
+        <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Employee</p>
+        <p className="m-0 mt-0.5 text-sm font-medium text-slate-900">
+          {data?.EMPLOYEE_NAME_DISPLAY || `${user?.loginid || ""} - ${formData.Employee_Name}`}
+        </p>
+      </div>
+
+      {repairDates && (
+        <p className="m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          This record has no valid leave start/end date. Please re-enter them below.
+        </p>
+      )}
+
+      {/* Resumption: the section the user actually fills in */}
+      <div className="overflow-hidden rounded-xl border border-blue-200 bg-white shadow-xs">
+        <div className="border-b border-blue-200 bg-blue-50/70 px-3 py-1.5">
+          <h3 className="m-0 text-sm font-semibold text-[#00378C]">Leave Resumption</h3>
+        </div>
+        <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 p-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-col justify-end">
+            <label
+              className={`flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-[#f8f9fb] px-2.5 text-xs font-semibold text-slate-700 ${
+                viewMode ? "opacity-60" : "cursor-pointer"
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-[#00378C]"
+                disabled={viewMode}
+                checked={formData.actual_resume_date ? true : formData.resume_work}
+                onChange={(e) => handleChange("resume_work", e.target.checked)}
+              />
+              Resume Work
+            </label>
           </div>
-          <div className="flex-shrink-0">
-            <Field label="Request Date" required>
-              <DateInput value={formData.request_date} onChange={() => {}} disabled />
-            </Field>
-          </div>
+
+          <Field label="Duty Resume Date *">
+            <Input
+              type="date"
+              disabled={viewMode}
+              value={formData.DUTY_RESUME_DATE}
+              onChange={(e) => handleChange("DUTY_RESUME_DATE", e.target.value)}
+            />
+          </Field>
+
+          <Field label="Actual Resume Date *">
+            <Input
+              type="date"
+              disabled={viewMode}
+              value={formData.actual_resume_date}
+              onChange={(e) => handleChange("actual_resume_date", e.target.value)}
+            />
+          </Field>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-1 pt-1">
-          <div className="flex items-center justify-between">
-            <h3 className="m-0 text-sm font-semibold text-foreground">Request &amp; Resumption</h3>
+      {data?.LAST_ACTION === "SENTBACK" && data?.SENTBACK_HISTORY && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Sent back with remarks</p>
+          <p className="m-0 mt-0.5 text-sm text-amber-900">{data.SENTBACK_HISTORY}</p>
+        </div>
+      )}
+      {data?.LAST_ACTION === "REJECTED" && data?.CANCEL_REMARK && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-red-800">Rejected with remarks</p>
+          <p className="m-0 mt-0.5 text-sm text-red-900">{data.CANCEL_REMARK}</p>
+        </div>
+      )}
+
+      {/* Three columns side-by-side with bordered section cards */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        {/* ---------- Column 1: Leave Details ---------- */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Details</h3>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-5 md:grid-cols-3">
-            <div className="flex items-center space-x-3">
-              <Field label="Resume Work">
-                <label className="flex items-center gap-3 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    style={{ width: 20, height: 25, minWidth: 25, minHeight: 25 }}
-                    className="rounded border-input text-primary focus:ring-primary/20 cursor-pointer"
-                    disabled={viewMode}
-                    checked={formData.actual_resume_date ? true : formData.resume_work}
-                    onChange={(e) => handleChange("resume_work", e.target.checked)}
-                  />
-                </label>
-              </Field>
-            </div>
-
-            {/* Duty Resume Date */}
-            <div>
-              <Field label="Duty Resume Date" required>
-                <DateInput
-                  disabled={viewMode}
-                  value={formData.DUTY_RESUME_DATE}
-                  onChange={(iso) => handleChange("DUTY_RESUME_DATE", iso)}
-                  placeholder="DD-MM-YYYY"
-                />
-              </Field>
-            </div>
-
-            {/* Actual Resume Date */}
-            <div>
-              <Field label="Actual Resume Date" required>
-                <DateInput
-                  disabled={viewMode}
-                  value={formData.actual_resume_date}
-                  onChange={(iso) => handleChange("actual_resume_date", iso)}
-                  placeholder="DD-MM-YYYY"
-                />
-              </Field>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <div>
-              <h3 className="m-0 text-sm font-semibold">Leave Details</h3>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            {showValidationAlert && validationResult && (
-              <div className={validationResult.isValid ? "alert success" : "alert error"}>
-                <p className="m-0 text-sm">{validationResult.message}</p>
-                {validationResult.validationErrors && validationResult.validationErrors.length > 0 && (
-                  <div className="mt-1">
-                    {validationResult.validationErrors.map((error, index) => (
-                      <p key={index} className="m-0 text-sm">
-                        • {error}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {validationResult.availableBalance !== undefined && (
-                  <p className="m-0 mt-1 text-sm">Available Balance: {validationResult.availableBalance} days</p>
-                )}
-              </div>
-            )}
-
-            <Field label="Leave Type" required>
+          <div className="flex flex-col gap-2.5 p-3">
+            <Field label="Leave Type *">
               <Select
                 value={formData.leave_type}
                 onChange={(e) => handleChange("leave_type", e.target.value)}
                 disabled={leaveTypesLoading || !formData.EMPLOYEE_ID || fieldsReadOnly}
               >
-                <option value="">Select...</option>
+                <option value="">{leaveTypesLoading ? "Loading..." : "Leave Type"}</option>
                 {leaveTypes.map((lt) => (
                   <option key={lt.value} value={lt.value}>
                     {lt.label}
@@ -762,46 +813,49 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
               </Select>
             </Field>
 
-            <Field label="Leave Start Date" required>
-              <DateInput
+            <Field label="Leave Start Date *">
+              <Input
+                type="date"
                 disabled={leaveDatesReadOnly}
                 value={formData.leave_start_date}
-                onChange={(iso) => handleChange("leave_start_date", iso)}
+                onChange={(e) => handleChange("leave_start_date", e.target.value)}
               />
             </Field>
 
-            <Field label="Leave End Date" required>
-              <DateInput
+            <Field label="Leave End Date *">
+              <Input
+                type="date"
                 disabled={leaveDatesReadOnly}
                 value={formData.leave_end_date}
                 min={formData.leave_start_date || undefined}
-                onChange={(iso) => handleChange("leave_end_date", iso)}
+                onChange={(e) => handleChange("leave_end_date", e.target.value)}
               />
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-[1fr_auto] items-end gap-3">
               <Field label="Leave Days">
-                <Input disabled value={formData.leave_days} onChange={() => {}} />
+                <Input value={formData.leave_days} disabled readOnly tabIndex={-1} onChange={() => {}} />
               </Field>
-
-              <Field label="Half Day">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    style={{ width: 14, height: 14, minWidth: 14, minHeight: 14, flexShrink: 0 }}
-                    className="cursor-pointer rounded border-input"
-                    disabled={viewMode || fieldsReadOnly}
-                    checked={formData.is_half_day}
-                    onChange={(e) => handleChange("is_half_day", e.target.checked)}
-                  />
-                </label>
-              </Field>
+              <label
+                className={`mb-0 flex h-8 select-none items-center gap-2 text-xs font-medium text-slate-700 ${
+                  viewMode || fieldsReadOnly ? "opacity-60" : "cursor-pointer"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-[#00378C]"
+                  disabled={viewMode || fieldsReadOnly}
+                  checked={formData.is_half_day}
+                  onChange={(e) => handleChange("is_half_day", e.target.checked)}
+                />
+                Half Day
+              </label>
             </div>
 
             <Button
               type="button"
-              size="sm"
-              onClick={validateLeave}
+              variant="outline"
+              onClick={() => void validateLeave()}
               disabled={
                 validationLoading ||
                 !formData.EMPLOYEE_ID ||
@@ -810,29 +864,44 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
                 !formData.leave_end_date ||
                 fieldsReadOnly
               }
+              className="mt-1 h-9 w-full justify-center gap-2 rounded-full text-xs font-semibold"
             >
-              {validationLoading ? "Validating..." : "Validate"}
+              {validationLoading ? <Loader2 className="animate-spin" size={14} /> : <ShieldCheck size={14} />}
+              {validationLoading ? "Checking..." : "Validate"}
             </Button>
-          </CardContent>
-        </Card>
 
-        {/* Settings */}
-        <Card>
-          <CardHeader>
-            <div>
-              <h3 className="m-0 text-sm font-semibold">Additional Details</h3>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-4">
+            {validationResult?.validationErrors && validationResult.validationErrors.length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                {validationResult.validationErrors.map((error, index) => (
+                  <p key={index} className="m-0 text-xs text-red-800">
+                    • {error}
+                  </p>
+                ))}
+              </div>
+            )}
+            {validationResult?.availableBalance !== undefined && (
+              <p className="m-0 text-xs font-medium text-slate-600">
+                Available Balance: {validationResult.availableBalance} days
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* ---------- Column 2: Request Notes ---------- */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Request Notes</h3>
+          </div>
+          <div className="flex flex-col gap-2.5 p-3">
             <Field label="Leave Allowance">
               <Select
                 value={formData.LEAVE_ALLOWANCE as string}
                 onChange={(e) => handleChange("LEAVE_ALLOWANCE", e.target.value)}
                 disabled={fieldsReadOnly}
               >
-                <option value="">Select...</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
+                <option value="">Leave Allowance</option>
+                <option value={yesValue}>Yes</option>
+                <option value={noValue}>No</option>
               </Select>
             </Field>
 
@@ -842,28 +911,36 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
                 onChange={(e) => handleChange("ADV_PAYMENT", e.target.value)}
                 disabled={fieldsReadOnly}
               >
-                <option value="">Select...</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
+                <option value="">Advance Payment</option>
+                <option value={yesValue}>Yes</option>
+                <option value={noValue}>No</option>
               </Select>
             </Field>
 
             <Field label="Cause Type">
-              <Select
-                value={formData.CAUSE_TYPE}
-                onChange={(e) => handleChange("CAUSE_TYPE", e.target.value)}
-                disabled={fieldsReadOnly}
-              >
-                <option value="">Select...</option>
-                <option value="Occupational">Occupational</option>
-                <option value="Non Occupational">Non Occupational</option>
-              </Select>
+              {isAlms ? (
+                <Input
+                  value={formData.CAUSE_TYPE}
+                  onChange={(e) => handleChange("CAUSE_TYPE", e.target.value)}
+                  disabled={fieldsReadOnly}
+                />
+              ) : (
+                <Select
+                  value={formData.CAUSE_TYPE}
+                  onChange={(e) => handleChange("CAUSE_TYPE", e.target.value)}
+                  disabled={fieldsReadOnly}
+                >
+                  <option value="">Cause Type</option>
+                  <option value="Occupational">Occupational</option>
+                  <option value="Non Occupational">Non Occupational</option>
+                </Select>
+              )}
             </Field>
 
-            <Field label="Remarks" required>
+            <Field label="Remarks *">
               <textarea
-                className="input resize-none"
-                rows={2}
+                className="min-h-[72px] w-full resize-y rounded-md border border-gray-300 p-2 text-sm"
+                rows={3}
                 disabled={fieldsReadOnly}
                 value={formData.remarks}
                 onChange={(e) => handleChange("remarks", e.target.value)}
@@ -872,209 +949,166 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
 
             <Field label="Contact Details During Leave">
               <textarea
-                className="input resize-none"
-                rows={2}
+                className="min-h-[72px] w-full resize-y rounded-md border border-gray-300 p-2 text-sm"
+                rows={3}
                 disabled={fieldsReadOnly}
                 value={formData.CONTACT_DETAILS_DURING_LEAVE}
                 onChange={(e) => handleChange("CONTACT_DETAILS_DURING_LEAVE", e.target.value)}
               />
             </Field>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Approver Details */}
-        <Card>
-          <CardHeader>
-            <div>
-              <h3 className="m-0 text-sm font-semibold">Approver Details</h3>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-4">
+        {/* ---------- Column 3: Approver Details ---------- */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Approver Details</h3>
+          </div>
+          <div className="flex flex-col gap-2.5 p-3">
             {approverRows.map(({ label, name }) => (
               <Field key={label} label={label}>
-                <Input disabled value={name || (approverLoading ? "Loading..." : "Not assigned")} onChange={() => {}} />
+                <Input
+                  value={name || (approverLoading ? "Loading..." : "Not assigned")}
+                  disabled
+                  readOnly
+                  onChange={() => {}}
+                />
               </Field>
             ))}
 
-            <Field label="Travel Start Date">
-              <DateInput
+            <Field label="Air Ticket">
+              <Select
+                value={formData.AIR_TICKET}
+                onChange={(e) => handleChange("AIR_TICKET", e.target.value)}
                 disabled={fieldsReadOnly}
-                value={formData.TRAVEL_DATE}
-                onChange={(iso) => handleChange("TRAVEL_DATE", iso)}
-              />
+              >
+                <option value="">Air Ticket</option>
+                <option value={yesValue}>Yes</option>
+                <option value={noValue}>No</option>
+              </Select>
             </Field>
 
-            <Field label="Travel End Date">
-              <DateInput
-                disabled={fieldsReadOnly}
-                value={formData.TRAVEL_END_DATE}
-                min={formData.TRAVEL_DATE || undefined}
-                onChange={(iso) => handleChange("TRAVEL_END_DATE", iso)}
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Travel Start Date">
+                <Input
+                  type="date"
+                  disabled={fieldsReadOnly}
+                  value={formData.TRAVEL_DATE}
+                  onChange={(e) => handleChange("TRAVEL_DATE", e.target.value)}
+                />
+              </Field>
+              <Field label="Travel End Date">
+                <Input
+                  type="date"
+                  disabled={fieldsReadOnly}
+                  value={formData.TRAVEL_END_DATE}
+                  min={formData.TRAVEL_DATE || undefined}
+                  onChange={(e) => handleChange("TRAVEL_END_DATE", e.target.value)}
+                />
+              </Field>
+            </div>
 
             <Field label="Air Route">
-              <textarea
-                className="input resize-none"
-                rows={2}
-                disabled={fieldsReadOnly}
+              <Input
                 value={formData.AIR_ROUTE}
                 onChange={(e) => handleChange("AIR_ROUTE", e.target.value)}
+                disabled={fieldsReadOnly}
               />
             </Field>
-
-            {data?.LAST_ACTION === "SENTBACK" && data?.SENTBACK_HISTORY !== "" && (
-              <Field label="Send Back Remarks">
-                <textarea className="input resize-none" rows={2} disabled value={data?.SENTBACK_HISTORY || ""} />
-              </Field>
-            )}
-
-            {data?.LAST_ACTION === "REJECTED" && data?.CANCEL_REMARK !== "" && (
-              <Field label="Reject Remarks">
-                <textarea className="input resize-none" rows={2} disabled value={data?.CANCEL_REMARK || ""} />
-              </Field>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
+    </>
+  );
 
-      {/* Action Buttons */}
-      <div className="mt-2 flex flex-col items-center justify-between gap-3 border-t border-border pt-3 sm:flex-row">
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" disabled={viewMode || saving} onClick={() => handleSave("SUBMITTED")}>
-            <Send size={15} /> Submit
-          </Button>
-          <Button type="button" variant="outline" size="sm" disabled={viewMode || saving} onClick={() => handleSave("SAVEASDRAFT")}>
-            <Save size={15} /> {saving ? "Saving..." : "Save as Draft"}
-          </Button>
-          <Button type="button" variant="outline" size="sm" disabled={viewMode || saving} onClick={() => handleSave("CANCELLED")}>
-            <XCircle size={15} /> Cancel
-          </Button>
+  // Page layout: identical shell to the Leave Request editor.
+  if (inline) {
+    return (
+      <section className="leave-request-page flex h-[calc(100dvh-150px)] flex-col gap-2 overflow-hidden p-1">
+        <div className="shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="h-1 w-full bg-[#00378C]" />
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onClose}
+                disabled={busy}
+                aria-label="Back to list"
+                title="Back to list"
+                className="h-8 w-8 shrink-0 rounded-lg cursor-pointer"
+              >
+                <ArrowLeft size={15} />
+              </Button>
+              <h1 className="m-0 truncate text-sm font-semibold text-slate-900">Leave Resumption</h1>
+              {requestNumber && (
+                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  {requestNumber}
+                </span>
+              )}
+              <span className="select-none rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                Request Date: {formatHeaderDate(formData.request_date)}
+              </span>
+              <span className={statusBadgeTone(statusLabel)}>{statusLabel}</span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">{actionButtons}</div>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="icon" title="Export Leave Request" onClick={handleExport} disabled={!isEditMode}>
-            <FileDown size={15} />
-          </Button>
+        <AutoDismissAlert notice={alertNotice} onClose={() => setNotice(null)} />
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-0 flex-col gap-2.5 pr-1">{mainNode}</div>
         </div>
+      </section>
+    );
+  }
+
+  // Embedded layout (e.g. inside a dialog)
+  return (
+    <div className="flex flex-col gap-2.5">
+      <AutoDismissAlert notice={alertNotice} onClose={() => setNotice(null)} />
+      {mainNode}
+      <div className="flex w-full flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-2">
+        {actionButtons}
       </div>
     </div>
   );
 };
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  className = "",
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const required = label.trim().endsWith("*");
+  const text = label.replace(/\s*\*$/, "");
   return (
-    <label className="field">
-      <span>
-        {label}
-        {required && <strong className="text-destructive"> *</strong>}
+    <label className={`flex min-w-0 flex-col gap-1 ${className}`}>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+        {text}
+        {required && <span className="ml-0.5 font-bold text-[#E24B4A]">*</span>}
       </span>
       {children}
     </label>
   );
 }
 
-type DateInputProps = {
-  /** ISO value (YYYY-MM-DD) or "" */
-  value: string;
-  /** Called with an ISO value, or "" when cleared / invalid */
-  onChange: (isoValue: string) => void;
-  disabled?: boolean;
-  placeholder?: string;
-  /** ISO lower bound for the calendar picker */
-  min?: string;
-  /** ISO upper bound for the calendar picker */
-  max?: string;
-};
-
-/**
- * Masked DD-MM-YYYY text input with a calendar button that opens the
- * browser's native date picker. The form only ever sees ISO strings.
- */
-const DateInput: React.FC<DateInputProps> = ({ value, onChange, disabled, placeholder = "DD-MM-YYYY", min, max }) => {
-  const [text, setText] = useState(() => isoToDisplay(value));
-  const pickerRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setText(isoToDisplay(value));
-  }, [value]);
-
-  const handleTextChange = (raw: string) => {
-    const digits = raw.replace(/\D/g, "").slice(0, 8);
-    let formatted = digits;
-    if (digits.length > 4) {
-      formatted = `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
-    } else if (digits.length > 2) {
-      formatted = `${digits.slice(0, 2)}-${digits.slice(2, 4)}`;
-    }
-    setText(formatted);
-
-    if (digits.length === 8) {
-      // "" when the typed date doesn't exist (e.g. 31-02-2026), so the form
-      // never keeps a stale value that differs from what's on screen.
-      onChange(displayToIso(formatted));
-    } else if (formatted === "") {
-      onChange("");
-    }
-  };
-
-  // Half-typed input is discarded on blur, so the box always shows the real value.
-  const handleBlur = () => setText(isoToDisplay(value));
-
-  const openPicker = () => {
-    const el = pickerRef.current;
-    if (!el) return;
-    if (typeof el.showPicker === "function") {
-      try {
-        el.showPicker();
-        return;
-      } catch {
-        /* fall through */
-      }
-    }
-    el.focus();
-    el.click();
-  };
-
-  return (
-    <div className="relative">
-      <Input
-        type="text"
-        inputMode="numeric"
-        placeholder={placeholder}
-        maxLength={10}
-        disabled={disabled}
-        value={text}
-        onChange={(e) => handleTextChange(e.target.value)}
-        onBlur={handleBlur}
-      />
-      {!disabled && (
-        <>
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label="Open calendar"
-            onClick={openPicker}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            <Calendar size={16} />
-          </button>
-          {/* Visually hidden native picker; its value is always ISO. */}
-          <input
-            ref={pickerRef}
-            type="date"
-            tabIndex={-1}
-            aria-hidden="true"
-            value={toIso(value)}
-            min={min}
-            max={max}
-            onChange={(e) => onChange(e.target.value)}
-            className="pointer-events-none absolute bottom-0 left-0 h-0 w-full opacity-0"
-          />
-        </>
-      )}
-    </div>
-  );
-};
+function statusBadgeTone(label: string) {
+  const l = (label || "").toLowerCase();
+  const base = "rounded-md border px-2 py-0.5 text-[11px] font-medium";
+  if (l.includes("approv") || l.includes("close")) return `${base} border-emerald-200 bg-emerald-50 text-emerald-700`;
+  if (l.includes("reject")) return `${base} border-red-200 bg-red-50 text-red-700`;
+  if (l.includes("cancel") || l.includes("draft") || l.includes("saveasdraft"))
+    return `${base} border-slate-200 bg-slate-50 text-slate-600`;
+  if (l.includes("progress")) return `${base} border-sky-200 bg-sky-50 text-sky-700`;
+  return `${base} border-amber-200 bg-amber-50 text-amber-700`;
+}
 
 export default LeaveResumptionForm;

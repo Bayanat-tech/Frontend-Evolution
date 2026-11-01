@@ -1644,18 +1644,8 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
     keyField: "section_code",
     source: "dynamic",
     gmEndpoint: "section",
-    fields: [
-      { name: "section_code", label: "Section Code", required: true, disabledOnEdit: true },
-      { name: "section_name", label: "Section Name", required: true },
-      { name: "section_short_name", label: "Short Name" },
-      { name: "div_code", label: "Division", required: true },
-      { name: "dept_code", label: "Department", required: true },
-      { name: "sect_head_id", label: "Section Head" },
-      { name: "phone", label: "Phone" },
-      { name: "email", label: "Email" },
-      { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
-    ],
-    defaults: { status: "A" }
+    fields: hrMasterConfigs.section.fields.filter((field) => field.table !== false),
+    defaults: hrMasterConfigs.section.defaults,
     }} />
     ),
     },
