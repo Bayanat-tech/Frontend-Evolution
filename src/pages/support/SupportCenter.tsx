@@ -358,6 +358,23 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     setPage(1);
   }, [query, statusFilter, yearFilter, monthFilter, developerFilter, priorityFilter]);
 
+  // Clear notice banner on tab change
+  useEffect(() => {
+    setNotice('');
+  }, [tab]);
+
+  // Service overview tickets: filtered only by year & month, NOT by queue statusFilter
+  const reportsTickets = useMemo(() => {
+    return tickets.filter(t => {
+      if (yearFilter !== 'all' || monthFilter !== 'all') {
+        const ticketDate = new Date(t.CREATED_AT || t.LAST_MESSAGE_AT);
+        if (yearFilter !== 'all' && String(ticketDate.getFullYear()) !== yearFilter) return false;
+        if (monthFilter !== 'all' && String(ticketDate.getMonth()) !== monthFilter) return false;
+      }
+      return true;
+    });
+  }, [tickets, yearFilter, monthFilter]);
+
   const loadMessages = useCallback(async () => {
     if (!selectedRef.current) return;
     const id = selectedRef.current;
@@ -1448,22 +1465,22 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
         </div>
       ) : tab === 'settings' && isAdmin ? (
         /* TAB: NOTIFICATIONS & ALERT CONFIGURATION (DEVADMIN) */
-        <div className="sup-settings-wrap">
-          <div className="sup-master-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="sup-settings-wrap" style={{ padding: '8px 14px', gap: 8 }}>
+          <div className="sup-master-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <div>
-              <h2>Support Notifications & Email Alert Configuration</h2>
+              <h2 style={{ fontSize: 15, margin: 0 }}>Support Notifications & Email Alert Configuration</h2>
             </div>
             <button
               className="sup-primary"
-              style={{ fontSize: 12, padding: '6px 14px' }}
+              style={{ fontSize: 11.5, padding: '4px 10px', height: 28 }}
               onClick={() => void supportApi.settings().then(setSettings)}
               disabled={fetching}
             >
-              <RefreshCw size={14} className={fetching ? 'sup-spin' : ''} />Refresh Outbox
+              <RefreshCw size={13} className={fetching ? 'sup-spin' : ''} />Refresh Outbox
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 10 }}>
             {/* Add Contact Card */}
             <div className="sup-section-card">
               <h3><Mail size={16} />Add Notification Recipient / CC Email</h3>
@@ -1532,7 +1549,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
             {/* Configured Recipients Card */}
             <div className="sup-section-card">
               <h3><Bell size={16} />Configured Alert Recipients ({settings.contacts?.length || 0})</h3>
-              <div className="sup-table-scroll" style={{ maxHeight: 240 }}>
+              <div className="sup-table-scroll" style={{ maxHeight: 140 }}>
                 <table>
                   <thead>
                     <tr>
@@ -1594,7 +1611,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               <h3><FileSpreadsheet size={16} />Live Support Email Dispatch Outbox & Audit</h3>
               <span style={{ fontSize: 12, color: 'var(--sup-muted)' }}>Recent 50 queued notifications</span>
             </div>
-            <div className="sup-table-scroll" style={{ maxHeight: 320 }}>
+            <div className="sup-table-scroll" style={{ maxHeight: 160 }}>
               <table>
                 <thead>
                   <tr>
@@ -1674,8 +1691,8 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 <span className="sup-kpi-label">Total Tickets</span>
                 <span className="sup-kpi-icon"><MessageSquare size={16} /></span>
               </div>
-              <span className="sup-kpi-value">{visible.length}</span>
-              <span className="sup-kpi-sub">Filtered volume</span>
+              <span className="sup-kpi-value">{reportsTickets.length}</span>
+              <span className="sup-kpi-sub">Filtered volume ({yearFilter !== 'all' ? yearFilter : 'All Years'})</span>
             </div>
 
             <div className="sup-kpi-card tone-amber">
@@ -1683,7 +1700,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 <span className="sup-kpi-label">Active / In Progress</span>
                 <span className="sup-kpi-icon"><Clock3 size={16} /></span>
               </div>
-              <span className="sup-kpi-value">{visible.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</span>
+              <span className="sup-kpi-value">{reportsTickets.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</span>
               <span className="sup-kpi-sub">Awaiting developer completion</span>
             </div>
 
@@ -1692,8 +1709,8 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 <span className="sup-kpi-label">Resolved / Closed</span>
                 <span className="sup-kpi-icon"><CheckCircle2 size={16} /></span>
               </div>
-              <span className="sup-kpi-value">{visible.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</span>
-              <span className="sup-kpi-sub">{visible.length ? Math.round((visible.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length / visible.length) * 100) : 0}% completion rate</span>
+              <span className="sup-kpi-value">{reportsTickets.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length}</span>
+              <span className="sup-kpi-sub">{reportsTickets.length ? Math.round((reportsTickets.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length / reportsTickets.length) * 100) : 0}% completion rate</span>
             </div>
 
             <div className="sup-kpi-card tone-rose">
@@ -1701,7 +1718,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 <span className="sup-kpi-label">SLA Overdue</span>
                 <span className="sup-kpi-icon"><AlertCircle size={16} /></span>
               </div>
-              <span className="sup-kpi-value">{visible.filter(overdue).length}</span>
+              <span className="sup-kpi-value">{reportsTickets.filter(overdue).length}</span>
               <span className="sup-kpi-sub">Critical attention needed</span>
             </div>
           </div>
@@ -1712,12 +1729,12 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               <h3><BarChart3 size={16} />Module Ticket Distribution</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {['Finance', 'HCM', 'IMS', 'WMS', 'FMS', 'VMS', 'Security', 'Masters', 'Other'].map(mod => {
-                  const count = visible.filter(t => {
+                  const count = reportsTickets.filter(t => {
                     const str = `${t.MODULE_NAME || ''} ${t.SUBJECT || ''}`.toUpperCase();
                     if (mod === 'Other') return !['FINANCE', 'HCM', 'IMS', 'WMS', 'FMS', 'VMS', 'SECURITY', 'MASTERS'].some(m => str.includes(m));
                     return str.includes(mod.toUpperCase());
                   }).length;
-                  const pct = visible.length ? Math.round((count / visible.length) * 100) : 0;
+                  const pct = reportsTickets.length ? Math.round((count / reportsTickets.length) * 100) : 0;
                   return (
                     <div key={mod} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
@@ -1747,7 +1764,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   </thead>
                   <tbody>
                     {developers.map(d => {
-                      const devTickets = visible.filter(t => t.DEVELOPER_LOGINID === d.LOGINID);
+                      const devTickets = reportsTickets.filter(t => t.DEVELOPER_LOGINID === d.LOGINID);
                       const devActive = devTickets.filter(t => !['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
                       const devDone = devTickets.filter(t => ['CLOSED', 'RESOLVED'].includes(t.STATUS)).length;
                       return (
@@ -2227,15 +2244,63 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
 
                 {/* History popup / drawer */}
                 {showHistory && (
-                  <div className="sup-history">
-                    {events.map(e => (
-                      <p key={e.EVENT_ID}>
-                        <strong>{e.EVENT_TYPE.replaceAll('_', ' ')}</strong> · {e.ACTOR_LOGINID}
-                        <small>{dateFmt(e.CREATED_AT)}</small>
-                        <span>{e.EVENT_TEXT}</span>
-                      </p>
-                    ))}
-                    {!events.length && <p>No events recorded.</p>}
+                  <div className="sup-history-card">
+                    <div className="sup-history-head">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Clock3 size={15} color="var(--sup-blue)" />
+                        <strong style={{ fontSize: 13, color: 'var(--sup-ink)' }}>Ticket Activity & Audit Trail</strong>
+                        <span className="sup-history-count">{events.length}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="sup-history-close"
+                        onClick={() => setShowHistory(false)}
+                        title="Close Audit Trail"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <div className="sup-history-body">
+                      {events.map((e, idx) => {
+                        const eventType = e.EVENT_TYPE.toUpperCase();
+                        const isLast = idx === events.length - 1;
+                        let dotTone = 'blue';
+                        if (['CLOSED', 'RESOLVED'].includes(eventType)) dotTone = 'green';
+                        else if (['REOPENED', 'REWORK'].includes(eventType)) dotTone = 'red';
+                        else if (['ASSIGNED'].includes(eventType)) dotTone = 'indigo';
+                        else if (['IN_PROGRESS', 'WAITING_INFO'].includes(eventType)) dotTone = 'amber';
+
+                        return (
+                          <div key={e.EVENT_ID} className={`sup-history-item tone-${dotTone}`}>
+                            <div className="sup-history-marker">
+                              <span className="sup-history-dot" />
+                              {!isLast && <span className="sup-history-line" />}
+                            </div>
+                            <div className="sup-history-content">
+                              <div className="sup-history-top">
+                                <span className={`sup-event-badge badge-${dotTone}`}>
+                                  {e.EVENT_TYPE.replaceAll('_', ' ')}
+                                </span>
+                                <span className="sup-history-actor">
+                                  <Users size={11} style={{ marginRight: 3, verticalAlign: -1 }} />
+                                  {e.ACTOR_LOGINID}
+                                </span>
+                                <time className="sup-history-time">{dateFmt(e.CREATED_AT)}</time>
+                              </div>
+                              {e.EVENT_TEXT && (
+                                <p className="sup-history-desc">{e.EVENT_TEXT}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {!events.length && (
+                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--sup-muted)', fontSize: 12.5 }}>
+                          No activity events recorded yet.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
