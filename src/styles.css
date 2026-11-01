@@ -7629,9 +7629,15 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   --finance-col-account: 430px;
 }
 
-.finance-lines-table th,
+/* .finance-lines-table th,
 .finance-lines-table td {
   border-right: 1px solid #dbe5f2;
+} */
+
+.finance-lines-table th,
+.finance-lines-table td {
+  border-right: 1px solid #64748b;
+  border-bottom: 1px solid #94a3b8;
 }
 
 .finance-lines-table th:last-child,
@@ -7643,9 +7649,13 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   position: sticky;
   z-index: 4;
   background: #ffffff;
-  box-shadow:
+  /* box-shadow:
     1px 0 0 #c7d5e7,
-    8px 0 14px -14px rgba(15, 23, 42, 0.4);
+    8px 0 14px -14px rgba(15, 23, 42, 0.4); */
+    box-shadow: none;
+   /* box-shadow:
+    1px 0 0 #475569,
+    8px 0 14px -14px rgba(15, 23, 42, 0.4); */
 }
 
 .finance-lines-table thead .finance-sticky-col {
@@ -12142,4 +12152,38 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   .app-launch-grid .app-module-card p {
     display: none;
   }
+}
+
+.freight-job-ops-screen .commercial-lines-card table:not(.finance-lines-table) th,
+.freight-job-ops-screen .commercial-lines-card table:not(.finance-lines-table) td,
+.ui-dialog-content table th,
+.ui-dialog-content table td {
+  border-right: 1px solid #64748b !important;
+  border-bottom: 1px solid #94a3b8 !important;
+}
+.freight-job-ops-screen .commercial-lines-card table:not(.finance-lines-table) :is(th, td):last-child,
+.ui-dialog-content table :is(th, td):last-child {
+  border-right: 0 !important;
+}
+.ui-dialog-content table thead th {
+  border-right-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* Service & Activity Lines: one consistent grid */
+.freight-job-ops-screen .finance-lines-table :is(th, td) {
+  border-right: 1px solid #94a3b8 !important;
+  border-bottom: 1px solid #94a3b8 !important;
+}
+.freight-job-ops-screen .finance-lines-table thead :is(th, td) {
+  border-right: 1px solid rgba(255, 255, 255, 0.55) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.55) !important;
+}
+.freight-job-ops-screen .finance-lines-table tfoot td {
+  border-top: 2px solid #64748b !important;
+}
+.freight-job-ops-screen .finance-lines-table :is(th, td):last-child {
+  border-right: 0 !important;
+}
+.freight-job-ops-screen .finance-lines-table .finance-sticky-col {
+  box-shadow: none !important;
 }

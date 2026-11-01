@@ -291,8 +291,8 @@ export function FreightJobPage({
     { accessorKey: "prin_name", header: "Principal Name", size: 230, cell: ({ row }) => lookupText(row.original, "prin_name") },
     { accessorKey: "doc_ref", header: mode.code === "A" ? "MAWB" : "BL / Doc Ref", size: 140 },
     { accessorKey: "hawb", header: mode.code === "A" ? "HAWB" : "House Ref", size: 130 },
-    { accessorKey: "port_code", header: "Origin", size: 90 },
-    { accessorKey: "destination_port", header: "Destination", size: 120 },
+    { accessorKey: "port_code_name", header: "Origin", size: 90 , cell: ({ row }) => lookupText(row.original, "port_code_name") || lookupText(row.original, "port_code")},
+    { accessorKey: "destination_port", header: "Destination", size: 120, cell: ({ row }) => lookupText(row.original, "destination_port_name") || lookupText(row.original, "destination_port")},
     { accessorKey: "vessel_name", header: mode.code === "R" ? "Transporter" : mode.code === "A" ? "Airline" : "Vessel", size: 150 },
     { accessorKey: "canceled", header: "Status", size: 90, cell: ({ row }) => lookupText(row.original, "canceled") === "Y" ? <span className="rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700">Cancelled</span> : <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-emerald-700">Open</span> },
     {
@@ -1656,7 +1656,12 @@ async function lookup(parameter: string, companyCode: string, code2 = "NULL", co
 }
 
 function normalizeLookupRow(row: LookupRow) {
-  return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key.toUpperCase(), value])) as LookupRow;
+  const next: LookupRow = {};
+  Object.entries(row || {}).forEach(([key, value]) => {
+    next[key.toUpperCase()] = value;
+    next[key.toLowerCase()] = value;
+  });
+  return next;
 }
 
 function lookupText(row: LookupRow | undefined, key: string) {
