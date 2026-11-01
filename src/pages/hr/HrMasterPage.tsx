@@ -312,6 +312,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
       // aur auto-print script preview me dikkat karta hai.
       const html = await getHrReportHtml(config.reportEndpoint, {
         company_code: companyCode,
+        print: "false",
         ...extraParams,
       });
       setReportHtml(html);

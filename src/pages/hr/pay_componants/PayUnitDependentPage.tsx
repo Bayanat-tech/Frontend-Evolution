@@ -3,7 +3,10 @@
 //  • Header owns Change Division / Attach / Save; the form owns the logic
 
 import { useQuery } from "@tanstack/react-query";
-import { Building2, FileText, Loader2, Paperclip, Save } from "lucide-react";
+import { Building2, FileText, Loader2, Save } from "lucide-react";
+
+// import { Paperclip } from "lucide-react";
+
 import { useRef, useState } from "react";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useToast } from "../../../components/ui/AlertToast";
@@ -24,7 +27,7 @@ const PayUnitDependentPage = () => {
   const [saving, setSaving] = useState(false);
 
   const formRef = useRef<PayUnitDependentFormHandle>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  //const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* ── Divisions ── */
   const { data: divisionData, isLoading: isLoadingDivision } = useQuery({
@@ -56,22 +59,33 @@ const PayUnitDependentPage = () => {
     }
   };
 
-  /* ── Attach ── */
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = ""; // allow re-selecting the same file
-    if (!file) return;
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!response.ok) throw new Error("Upload failed");
-      toast.success(`${file.name} uploaded`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed");
-    }
-  };
+  /* ── Attach: Temporarily Disabled ──
+const handleFileChange = async (
+  event: React.ChangeEvent<HTMLInputElement>
+) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
 
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error("Upload failed");
+
+    toast.success(`${file.name} uploaded`);
+  } catch (error) {
+    toast.error(
+      error instanceof Error ? error.message : "Upload failed"
+    );
+  }
+};
+*/
   const divisionPicker = (
     <DivisionPickerDialog
       open={openDivision}
@@ -128,17 +142,25 @@ const PayUnitDependentPage = () => {
           <Button type="button" size="sm" variant="outline" onClick={() => setOpenDivision(true)} disabled={saving}>
             <Building2 size={14} /> Change Division
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            title="Attach file"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={saving}
-          >
-            <Paperclip size={14} /> Attach
-          </Button>
-          <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+          {/* Attach: Temporarily Disabled
+<Button
+  type="button"
+  size="sm"
+  variant="outline"
+  title="Attach file"
+  onClick={() => fileInputRef.current?.click()}
+  disabled={saving}
+>
+  <Paperclip size={14} /> Attach
+</Button>
+
+<input
+  type="file"
+  ref={fileInputRef}
+  className="hidden"
+  onChange={handleFileChange}
+/>
+*/}
           <Button type="button" size="sm" onClick={handleHeaderSave} disabled={saving}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
             {saving ? "Saving" : "Save"}

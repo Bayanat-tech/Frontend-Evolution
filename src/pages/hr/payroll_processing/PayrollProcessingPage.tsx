@@ -256,7 +256,7 @@ async function fetchAddDedData(params: {
     pay_comp_desc: pickAny(r, "PAY_COMP_DESC") ?? null,
     pay_comp_earn_ded: pickAny(r, "PAY_COMP_EARN_DED") ?? null,
     recover_mth_amt: Number(pickAny(r, "RECOVER_MTH_AMT") ?? 0) || 0,
-    serial_no: pickAny(r, "SERIAL_NO", "SL_NO", "SR_NO", "SERIAL", "SERIAL_NUMBER", "LINE_NO") ?? null,
+    serial_no:   pickAny(r, "SR_NO") ?? null,
     cancel_status: "N" as const,
     _rowKey: `adv-${pickAny(r, "DOC_NO") ?? i}-${i}`,
   }));
@@ -313,21 +313,21 @@ async function saveConsolidation(params: {
   }
 }
 
-async function deleteAccrualTempData(
-  companyCode: string,
-  divCode: string,
-  loginId?: string
-): Promise<ApiResponse> {
-  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
-    parameter: "PROC_PROLLPROC_HR_ACCRUAL_TEMP_DATA_DEL",
-    loginid: loginId ?? "",
-    val1s1: companyCode,
-    val1s2: divCode,
-  });
-  if (!res.data.success)
-    throw new Error(res.data.message || "Failed to clear accrual temp data");
-  return res.data;
-}
+// async function deleteAccrualTempData(
+//   companyCode: string,
+//   divCode: string,
+//   loginId?: string
+// ): Promise<ApiResponse> {
+//   const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+//     parameter: "PROC_PROLLPROC_HR_ACCRUAL_TEMP_DATA_DEL",
+//     loginid: loginId ?? "",
+//     val1s1: companyCode,
+//     val1s2: divCode,
+//   });
+//   if (!res.data.success)
+//     throw new Error(res.data.message || "Failed to clear accrual temp data");
+//   return res.data;
+// }
 
 async function processEmployeePayroll(
   companyCode: string,
@@ -371,19 +371,19 @@ async function calcEmployeeSalary(
   return res.data;
 }
 
-async function adjustPayColaForCompany(
-  companyCode: string,
-  loginId: string
-): Promise<ApiResponse> {
-  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
-    parameter: "SP_HR_PAY_COLA_ADJUST",
-    loginid: loginId,
-    val1s1: companyCode,
-  });
-  if (!res.data.success)
-    throw new Error(res.data.message || "Failed to adjust pay COLA");
-  return res.data;
-}
+// async function adjustPayColaForCompany(
+//   companyCode: string,
+//   loginId: string
+// ): Promise<ApiResponse> {
+//   const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+//     parameter: "SP_HR_PAY_COLA_ADJUST",
+//     loginid: loginId,
+//     val1s1: companyCode,
+//   });
+//   if (!res.data.success)
+//     throw new Error(res.data.message || "Failed to adjust pay COLA");
+//   return res.data;
+// }
 
 /* -------------------------------------------------------------------------- */
 /* Populate Addition / Deductions modal                                       */
@@ -958,7 +958,7 @@ export default function PayrollProcessingPage() {
     if (selectedRows.length === 0) return;
 
     try {
-      await deleteAccrualTempData(companyCode, divCode, loginid);
+      // await deleteAccrualTempData(companyCode, divCode, loginid);
 
       const checkRows = await getDynamicLookup({
         parameter: "PAYROLL_Process",
@@ -987,7 +987,7 @@ export default function PayrollProcessingPage() {
       // await processBulkSalary(companyCode, employeeIdsStr, divCode, loginid);
 
       // 4. Adjust Pay COLA for the company
-      await adjustPayColaForCompany(companyCode, loginid);
+      // await adjustPayColaForCompany(companyCode, loginid);
 
       // 5. Update local state
       setRows((prev) =>
