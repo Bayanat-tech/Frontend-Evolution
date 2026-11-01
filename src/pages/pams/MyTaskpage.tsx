@@ -853,30 +853,27 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* ── Tabs (Purchase Request jaisa pill UI + count) ── */}
-      <div className="flex flex-wrap items-center gap-1.5 pb-1">
-        {TAB_LABELS.map((label, index) => {
-          const active = activeTab === index;
-          return (
-            <button
-              key={TAB_STATUS[index]}
-              type="button"
-              onClick={() => handleTabChange(index)}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${active
-                ? "bg-[#00378C] font-semibold text-white shadow-sm"
-                : "border border-border bg-card text-foreground hover:bg-secondary"
-                }`}
-            >
-              <span>{label}</span>
-              <span
-                className={`rounded-full px-1.5 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-                  }`}
-              >
-                {tabCounts[index] ?? 0}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {/* ── Tabs ── */}
+<div style={{ display: "flex", alignItems: "center", gap: "2px", borderBottom: "2px solid #e5e7eb" }}>
+  {TAB_LABELS.map((label, index) => (
+    <button
+      key={index}
+      onClick={() => handleTabChange(index)}
+      style={{
+        padding: "8px 20px", fontSize: "14px",
+        fontWeight: activeTab === index ? 700 : 500,
+        color: activeTab === index ? "#082A89" : "#6b7280",
+        background: activeTab === index ? "#f0f4ff" : "transparent",
+        border: "none",
+        borderBottom: activeTab === index ? "2px solid #082A89" : "2px solid transparent",
+        borderRadius: "8px 8px 0 0", cursor: "pointer",
+        marginBottom: "-2px", whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </button>
+  ))}
+</div>
 
       {hodBatches
         .filter((b) => Number(b.PENDING_COUNT) === 0 && Number(b.READY_COUNT) > 0)
