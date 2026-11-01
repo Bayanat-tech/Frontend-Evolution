@@ -1304,6 +1304,12 @@ function KpiEditorModal({
       : [];
 
     if (needsActivities) {
+      // Delimiter activity text me nahi aana chahiye, nahi to activity toot jayegi
+      if (finalActivities.some((a) => a.includes(ITEM_DELIM))) {
+        toast.error(`Activity me "${ITEM_DELIM}" character allowed nahi hai.`);
+        return;
+      }
+
       const seen = new Set<string>();
       const duplicates: string[] = [];
       for (const act of finalActivities) {
@@ -1371,7 +1377,7 @@ function KpiEditorModal({
           code1: companyCode,
           code2: employeeCode,
           code3: kpiDesc,
-          code4: finalActivities.join(","),
+          code4: finalActivities.join(ITEM_DELIM),
           code5: itemType,
           code6: period,
           number1: needsWeightage ? weightage : 0,
@@ -1702,11 +1708,11 @@ function assignmentRowKey(row: Row) {
     row.EMPLOYEE_CODE,
   ].map(text).join("|");
 }
-
+const ITEM_DELIM = "~";
 function splitItems(value: unknown) {
   const seen = new Set<string>();
   return text(value)
-    .split(",")
+    .split(ITEM_DELIM)
     .map((item) => item.trim())
     .filter((item) => {
       if (!item) return false;
