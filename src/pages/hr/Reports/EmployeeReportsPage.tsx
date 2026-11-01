@@ -167,8 +167,8 @@ async function fetchHrLov(
 function withAllOption(items: LovOption[]): LovOption[] {
   const filtered = (items || []).filter(
     (o) =>
-      String(o.value).toLowerCase() !== "all" &&
-      String(o.label).toLowerCase() !== "all"
+      String(o.value).trim().toLowerCase() !== "all" &&
+      String(o.label).trim().toLowerCase() !== "all"
   );
   return [{ value: ALL, label: "All" }, ...filtered];
 }

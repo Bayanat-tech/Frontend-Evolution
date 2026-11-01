@@ -11,7 +11,7 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
-import { toInputDate } from "../../hooks/apiDate";
+import { toApiDateInput, toInputDate } from "../../hooks/apiDate";
 
 /* ================= TYPES ================= */
 
@@ -27,9 +27,9 @@ type TPayUnitRow = {
   pay_unit_code: string;
   pay_unit_name: string;
   amount: string;
-  pay_unit_status: string; // code: A | R | P
-  approved_on: string; // YYYY-MM-DD
-  status: string; // code: A | I
+  pay_unit_status: string;
+  approved_on: string; 
+  status: string; 
   remarks: string;
   dirty: boolean;
   is_new: boolean;
@@ -112,6 +112,16 @@ const NULLS = {
 
 /* ================= PAGE ================= */
 
+function localTimestamp(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  );
+}
+
+const now = localTimestamp();
+
 export function HrEmployeePayUnits() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -125,6 +135,11 @@ export function HrEmployeePayUnits() {
 
   const patchHeader = (p: Partial<THeaderFilters>) => setHeader((prev) => ({ ...prev, ...p }));
   const employeeReady = !!companyCode && !!header.employee_id;
+  
+    const totalAmount = useMemo(
+    () => rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
+      [rows],
+    );
 
   /* ── Lookups ── */
   const loadLookupRows = useCallback(
@@ -176,7 +191,7 @@ export function HrEmployeePayUnits() {
           pay_unit_name: r.pay_unit_name ?? "",
           amount: r.amount != null ? String(r.amount) : "0",
           pay_unit_status: toCode(r.pay_unit_status, PAY_UNIT_STATUS_OPTIONS, "P"),
-          approved_on: toInputDate(r.approved_on),
+          approved_on: toApiDateInput(r.approved_on),
           status: toCode(r.status, STATUS_OPTIONS, "A"),
           remarks: r.remarks ?? "",
           dirty: false,
@@ -233,9 +248,8 @@ export function HrEmployeePayUnits() {
     }
 
     setSaving(true);
-    try {
-      const now = new Date().toISOString();
-      const payloads: THrEmpComponentPayload[] = dirtyRows.map((row) => ({
+    try {      
+        const payloads: THrEmpComponentPayload[] = dirtyRows.map((row) => ({
         employee_id: header.employee_id,
         pay_comp_id: row.pay_unit_code,
         pay_comp_amt: Number(row.amount) || 0,
@@ -247,9 +261,9 @@ export function HrEmployeePayUnits() {
         user_dt: now,
         entered_on: now,
         entered_by: loginid,
-        approved_on: row.approved_on ? new Date(`${row.approved_on}T00:00:00`).toISOString() : now,
+        approved_on: toApiDateInput(row.approved_on) ? new Date(`${row.approved_on}T00:00:00`).toISOString() : now,
       }));
-
+      console.log('payload',payloads);
       const results = await upsertHrEmpComponentsApi(payloads);
       const failed = results
         .map((result, i) => ({ result, row: dirtyRows[i] }))
@@ -530,6 +544,27 @@ export function HrEmployeePayUnits() {
         density="grid"
         getRowId={(row) => row.row_id}
       />
+
+      {/* Total amount footer — matches AbsentMemo styling */}
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-3 rounded-md border border-[#cbd5e1] bg-slate-50/95 px-4 py-2 shadow-sm">
+          <div className="flex items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3.5 py-1.5 shadow-2xs">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">Rows</span>
+            <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">
+              {rows.length.toLocaleString()}
+            </strong>
+          </div>
+          <div className="flex min-h-9 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">Total Amount</span>
+            <strong className="font-mono text-base font-black tabular-nums text-[#00378c]">
+              {totalAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3,
+              })}
+            </strong>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
