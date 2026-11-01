@@ -108,6 +108,7 @@ export type TPRItem = {
   ITEM_QTY: number;
   ITEM_RATE: number;
   DISCOUNT_AMOUNT: number;
+  DISC_PERC: number;
   FINAL_RATE: number;
   AMOUNT: number;
   LCURR_AMT: number;
