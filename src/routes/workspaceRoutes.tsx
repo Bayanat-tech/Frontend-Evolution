@@ -246,7 +246,7 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
 import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 import { useAuth } from "../state/AuthContext";
 import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
-
+import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -1620,6 +1620,11 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
       match: ({ pathname }) => isHrEmpLanguageSkillRoute(pathname),
       element: () => <HrEmpLanguagePage />
     },
+        {
+      name: "HR Separation Initiation",
+      match: ({ pathname }) => isHrSeparationInitiationRoute(pathname),
+      element: () => <SeparationInitiationPage />,
+    },
     {
       name: "Employee Dependants",
       match: ({ pathname }) => isHrEmpDependantsRoute(pathname),
@@ -1966,6 +1971,14 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
       normalized.includes("/hcm/hr/general%20master/source/holiday_calendar") ||
       compact.includes("generalmastersourceholidaycalendar") ||
       compact.includes("holidaycalendar")
+    );
+  }
+
+  function isHrSeparationInitiationRoute(pathname: string) {
+    const compact = decodeRouteText(pathname).toLowerCase().replace(/[^a-z0-9]/g, "");
+    return (
+      compact.includes("separationinitiation") ||
+      compact.includes("seprationinitiation") // menu url has this typo
     );
   }
 

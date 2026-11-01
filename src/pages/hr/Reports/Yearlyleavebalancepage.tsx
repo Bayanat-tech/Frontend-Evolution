@@ -492,27 +492,36 @@ export default function YearlyLeaveBalancePage() {
           </Field>
         </div>
 
-        {/* Row 4: Report type */}
-        <div className="freight-report-fields flex flex-wrap items-center gap-6 px-3 pb-3 text-sm">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="yearly-leave-balance-mode"
-              checked={mode === "LIST"}
-              onChange={() => setMode("LIST")}
-            />
-            Yearly Leave Balance List
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="yearly-leave-balance-mode"
-              checked={mode === "CURRENT"}
-              onChange={() => setMode("CURRENT")}
-            />
-            Current Leave Balance
-          </label>
-        </div>
+       {/* Row 4: Report type */}
+<div className="freight-report-fields px-3 pb-3">
+  <div className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+    Report Type
+    <div className="inline-flex w-fit items-center gap-4 rounded-md border border-slate-300 bg-blue-50/60 px-2.5 py-1.5 text-[13px] normal-case font-medium">
+      {(
+        [
+          { value: "LIST", label: "Yearly Leave Balance List" },
+          { value: "CURRENT", label: "Current Leave Balance" },
+        ] as const
+      ).map((o) => (
+        <label
+          key={o.value}
+          className={`flex cursor-pointer items-center gap-1.5 ${
+            mode === o.value ? "text-blue-600" : "text-foreground"
+          }`}
+        >
+          <input
+            type="radio"
+            name="yearly-leave-balance-mode"
+            checked={mode === o.value}
+            onChange={() => setMode(o.value)}
+            className="h-3 w-3 cursor-pointer accent-blue-600"
+          />
+          {o.label}
+        </label>
+      ))}
+    </div>
+  </div>
+</div>
 
         {!dateRangeValid && (
           <p className="px-3 pb-2 text-xs text-destructive">From date must be on or before To date.</p>

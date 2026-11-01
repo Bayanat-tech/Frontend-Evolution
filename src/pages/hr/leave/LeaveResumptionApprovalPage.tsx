@@ -1,11 +1,9 @@
-import { Pencil } from "lucide-react";
+import { Loader2, Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useAuth } from "../../../state/AuthContext";
 import { useToast } from "../../../components/ui/AlertToast";
-import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
-import { Dialog } from "../../../components/ui/Dialog";
 import { executeHrRawSql } from "../../../api/hr";
 import { TLeaveApproval } from "./leave-approval-types";
 import LeaveResumptionForm from "./LeaveResumptionForm";
@@ -20,8 +18,8 @@ export function LeaveResumptionApprovalPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [openDialog, setOpenDialog] = useState(false);
-  const [selectedRequestNumber, setSelectedRequestNumber] = useState<string | null>(null);
+  // Page state: "list" shows the grid, "editor" shows the form as a full page (same as Leave Request)
+  const [view, setView] = useState<"list" | "editor">("list");
   const [editData, setEditData] = useState<TLeaveApproval | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -50,15 +48,12 @@ export function LeaveResumptionApprovalPage() {
 
     setLoading(true);
     try {
-      if (user?.tenantName === "WMSTST" ) {
+      if (user?.tenantName === "WMSTST") {
         try {
           const response = await executeHrRawSql(buildSql(loginId, compCode));
           setRows((response ?? []) as TLeaveApproval[]);
         } catch (error) {
-          console.warn(
-            "Unable to load leave resumption approvals with company code filter:",
-            error
-          );
+          console.warn("Unable to load leave resumption approvals with company code filter:", error);
           try {
             const fallbackSql = `
               SELECT *
@@ -98,30 +93,31 @@ export function LeaveResumptionApprovalPage() {
   }, [loginId, compCode]);
 
   const openEdit = async (requestNumber: string) => {
-    setSelectedRequestNumber(requestNumber);
-    setOpenDialog(true);
+    setView("editor");
     setEditLoading(true);
+    setEditData(null);
     try {
-      const editsql = (requestNumber:string) =>`
+      const editsql = (requestNumber: string) => `
       SELECT *
       FROM VW_LEAVE_REQUEST_FLOW_CLOSE
       WHERE company_code = '${user?.COMPANY_CODE}'
       AND request_number = '${requestNumber}'
       ORDER BY request_number ASC
-      `
+      `;
       const res = await executeHrRawSql(editsql(requestNumber));
-      const rows = (res ?? []) as TLeaveApproval[];
-      setEditData(rows[0] ?? null);
-      } catch (error) {
+      const found = (res ?? []) as TLeaveApproval[];
+      // Fall back to the grid row if the lookup view returns nothing (e.g. other tenants).
+      setEditData(found[0] ?? rows.find((r) => r.REQUEST_NUMBER === requestNumber) ?? null);
+    } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to load leave request");
+      setEditData(rows.find((r) => r.REQUEST_NUMBER === requestNumber) ?? null);
     } finally {
       setEditLoading(false);
     }
   };
 
-  const closeDialog = () => {
-    setOpenDialog(false);
-    setSelectedRequestNumber(null);
+  const closeEditor = () => {
+    setView("list");
     setEditData(null);
   };
 
@@ -136,7 +132,7 @@ export function LeaveResumptionApprovalPage() {
             className="font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer"
             type="button"
             onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
-            title="Edit leave request"
+            title="Open leave resumption"
           >
             {row.original.REQUEST_NUMBER || "-"}
           </button>
@@ -147,9 +143,7 @@ export function LeaveResumptionApprovalPage() {
         header: "DATE",
         size: 100,
         cell: ({ row }) => (
-          <span className="text-[11.5px] text-foreground">
-            {formatDate(row.original.REQUEST_DATE)}
-          </span>
+          <span className="text-[11.5px] text-foreground">{formatDate(row.original.REQUEST_DATE)}</span>
         ),
       },
       {
@@ -167,9 +161,7 @@ export function LeaveResumptionApprovalPage() {
         header: "LEAVE TYPE",
         size: 140,
         cell: ({ row }) => (
-          <span className="text-[11.5px] text-foreground font-medium">
-            {row.original.LEAVE_TYPE_DESC || "-"}
-          </span>
+          <span className="text-[11.5px] text-foreground font-medium">{row.original.LEAVE_TYPE_DESC || "-"}</span>
         ),
       },
       {
@@ -177,9 +169,7 @@ export function LeaveResumptionApprovalPage() {
         header: "START DATE",
         size: 100,
         cell: ({ row }) => (
-          <span className="text-[11.5px] text-foreground">
-            {formatDate(row.original.LEAVE_START_DATE)}
-          </span>
+          <span className="text-[11.5px] text-foreground">{formatDate(row.original.LEAVE_START_DATE)}</span>
         ),
       },
       {
@@ -187,9 +177,7 @@ export function LeaveResumptionApprovalPage() {
         header: "END DATE",
         size: 100,
         cell: ({ row }) => (
-          <span className="text-[11.5px] text-foreground">
-            {formatDate(row.original.LEAVE_END_DATE)}
-          </span>
+          <span className="text-[11.5px] text-foreground">{formatDate(row.original.LEAVE_END_DATE)}</span>
         ),
       },
       {
@@ -197,9 +185,7 @@ export function LeaveResumptionApprovalPage() {
         header: "ACTUAL RESUME",
         size: 110,
         cell: ({ row }) => (
-          <span className="text-[11.5px] text-foreground">
-            {formatDate(row.original.ACTUAL_RESUME_DATE)}
-          </span>
+          <span className="text-[11.5px] text-foreground">{formatDate(row.original.ACTUAL_RESUME_DATE)}</span>
         ),
       },
       {
@@ -207,9 +193,7 @@ export function LeaveResumptionApprovalPage() {
         header: "DUTY RESUME",
         size: 110,
         cell: ({ row }) => (
-          <span className="text-[11.5px] text-foreground">
-            {formatDate(row.original.DUTY_RESUME_DATE)}
-          </span>
+          <span className="text-[11.5px] text-foreground">{formatDate(row.original.DUTY_RESUME_DATE)}</span>
         ),
       },
       {
@@ -227,9 +211,7 @@ export function LeaveResumptionApprovalPage() {
         header: "NEXT ACTION BY",
         size: 160,
         cell: ({ row }) => (
-          <span className="text-[11.5px] text-foreground">
-            {row.original.NEXT_ACTION_BY_NAME || "-"}
-          </span>
+          <span className="text-[11.5px] text-foreground">{row.original.NEXT_ACTION_BY_NAME || "-"}</span>
         ),
       },
       {
@@ -242,8 +224,8 @@ export function LeaveResumptionApprovalPage() {
             <button
               type="button"
               className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              title="Edit leave request"
-              aria-label="Edit leave request"
+              title="Open leave resumption"
+              aria-label="Open leave resumption"
               onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
             >
               <Pencil size={13} />
@@ -252,60 +234,61 @@ export function LeaveResumptionApprovalPage() {
         ),
       },
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows]
   );
 
   return (
     <section className="leave-resumption-freight-view grid gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
-        <div className="flex items-center gap-2.5">
-          <h2
-            className="text-foreground m-0"
-            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
-          >
-            Leave Resumption
-          </h2>
-        </div>
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={rows}
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search leave resumption approvals..."
-        loading={loading}
-        emptyText="No leave resumption approvals found"
-        density="grid"
-        height="calc(100dvh - 180px)"
-        minWidth={1200}
-        enablePagination
-        enableExport
-        exportFilename="Leave_Resumption_Approvals.csv"
-        pageSize={25}
-        getRowId={(row, index) => `${row.REQUEST_NUMBER ?? index}`}
-      />
-
-      <Dialog
-        open={openDialog}
-        title={selectedRequestNumber ? "Edit Leave Request" : "Leave Request Form"}
-        compact
-        wide
-        onClose={closeDialog}
-      >
-        {editLoading ? (
-          <p className="m-0 text-sm text-muted-foreground">Loading...</p>
+      {view === "editor" ? (
+        editLoading ? (
+          <div className="flex h-[calc(100dvh-150px)] items-center justify-center gap-2 text-sm text-slate-500">
+            <Loader2 className="animate-spin" size={16} />
+            Loading leave request...
+          </div>
         ) : (
           <LeaveResumptionForm
             data={editData}
-            onClose={closeDialog}
+            isEditMode
+            onClose={closeEditor}
             onSuccess={() => {
-              closeDialog();
+              closeEditor();
               void loadRows();
             }}
           />
-        )}
-      </Dialog>
+        )
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+            <div className="flex items-center gap-2.5">
+              <h2
+                className="text-foreground m-0"
+                style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+              >
+                Leave Resumption
+              </h2>
+            </div>
+          </div>
+
+          <DataTable
+            columns={columns}
+            data={rows}
+            searchValue={query}
+            onSearchChange={setQuery}
+            searchPlaceholder="Search leave resumption approvals..."
+            loading={loading}
+            emptyText="No leave resumption approvals found"
+            density="grid"
+            height="calc(100dvh - 180px)"
+            minWidth={1200}
+            enablePagination
+            enableExport
+            exportFilename="Leave_Resumption_Approvals.csv"
+            pageSize={25}
+            getRowId={(row, index) => `${row.REQUEST_NUMBER ?? index}`}
+          />
+        </>
+      )}
     </section>
   );
 }
