@@ -177,7 +177,10 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
 
     else if (table.classList.contains("pr-title-line")) {
       widths = ["*"];
-       } else if (table.classList.contains("si-top-line")) {
+       } else if (table.classList.contains("si-top-cancel")) {
+      widths = ["*", 90];
+       }
+       else if (table.classList.contains("si-top-line")) {
       widths = ["*"];
        }
     else if (table.classList.contains("pr-items-portrait")) {
@@ -250,6 +253,12 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     table.querySelectorAll("th").forEach((cell) => {
       cell.style.backgroundColor = "#eaf0f8";
       cell.style.color = "#00378c";
+      cell.style.fontWeight = "bold";
+    });
+
+        table.querySelectorAll<HTMLElement>(".si-cancel-tag").forEach((cell) => {
+      cell.style.backgroundColor = "#fee2e2";
+      cell.style.color = "#dc2626";
       cell.style.fontWeight = "bold";
     });
     table.querySelectorAll<HTMLElement>(".subtotal-row td, .subtotal-row th").forEach((cell) => {
