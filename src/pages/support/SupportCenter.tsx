@@ -626,7 +626,6 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
           <div className="sup-dashboard-header">
             <div>
               <h2>Executive Support Overview</h2>
-              <p>Key resolution performance, volume trends, and active workloads across all tenants.</p>
             </div>
             <div className="sup-dashboard-filters">
               <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} title="Filter Year">
@@ -1303,7 +1302,6 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
           <div className="sup-master-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h2>Support Operations & Analytics Overview</h2>
-              <p>Volume trends, resolution rates, module breakdown, and developer performance metrics.</p>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} title="Year">
