@@ -1686,25 +1686,7 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
                 {
       name: "HR Category Master",
       match: (context) => isHrRoute(context) && isHrCategoryMasterRoute(context),
-      element: () => (
-        <MasterWithReportPage config={{
-          title: "Category Master",
-          // 👇 CHANGE THIS:
-          gridParameter: "MST_HR_MS_HR_CATEGORY", 
-          reportUrl: "/api/wms/reports/category/html",
-          keyField: "category_code",
-          source: "dynamic", // 👈 CHANGE TO DYNAMIC
-          gmEndpoint: "categorymaster",
-          fields: [
-            { name: "category_code", label: "Category Code", required: true, disabledOnEdit: true },
-            { name: "category_name", label: "Category Name", required: true },
-            { name: "category_short_name", label: "Short Name" },
-            { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
-            { name: "remarks", label: "Remarks" },
-          ],
-          defaults: { status: "A" }
-        }} />
-      )
+      element: () => <HrMasterPage config={hrMasterConfigs.categorymaster} />,
     },
 
     {

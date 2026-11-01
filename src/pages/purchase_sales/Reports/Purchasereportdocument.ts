@@ -182,7 +182,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     else if (table.classList.contains("pr-items-portrait")) {
       widths = ["28%", "8%", "13%", "13%", "13%", "12%", "13%"];
     } else if (table.classList.contains("pr-items-landscape")) {
-      widths = ["4%", "15%", "8%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
+      widths = ["4%", "18%", "6%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
     } else if (!details && table.rows[0]) {
       const isGrnKvTable = !!table.closest(".grn-two-col");
       if (isGrnKvTable) {

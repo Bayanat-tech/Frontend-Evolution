@@ -1893,7 +1893,8 @@ input[tabindex="-1"].opacity-0,
 :is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .tariff-currency-row { max-width:320px; margin-bottom:10px; }
 
 /* ==========================================================================
-   Freight Control Center & Landing Page - BISC UI Style
+   
+ & Landing Page - BISC UI Style
    ========================================================================== */
 
 .freight-control-center {
@@ -2053,7 +2054,7 @@ input[tabindex="-1"].opacity-0,
 .freight-workspace-tabs {
   display: inline-flex;
   gap: 4px;
-  margin: 0 0 12px;
+  /* margin: 0 ; */
   padding: 4px;
   border: 1px solid #d6deea;
   border-radius: 10px;
@@ -2585,4 +2586,56 @@ input[tabindex="-1"].opacity-0,
 }
 .freight-workspace-ui .freight-doc-pill b {
   font-weight: 800;
+}
+
+.freight-workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.freight-workspace-toolbar {
+  padding: 6px 10px;
+  border: 1px solid #aab8ca;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
+}
+
+/* neutralise the job-tab styles leaking onto the home switcher */
+.freight-workspace-ui .freight-workspace-toolbar .freight-workspace-tabs {
+  min-height: 0 !important;
+  padding: 3px !important;
+  gap: 3px !important;
+  border: 1px solid #d6deea !important;
+  border-radius: 8px !important;
+  background: #eef3f8 !important;
+}
+.freight-workspace-ui .freight-workspace-toolbar .freight-workspace-tabs > button {
+  height: 30px !important;
+  padding: 0 14px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #607089 !important;
+}
+.freight-workspace-ui .freight-workspace-toolbar .freight-workspace-tabs > button.is-active {
+  background: #fff !important;
+  color: #00378c !important;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 14%) !important;
+}
+
+/* filters: compact, aligned, no stacked caption clutter */
+.freight-workspace-toolbar .freight-dashboard-filters { align-items: center; gap: 8px; }
+.freight-workspace-toolbar .freight-dashboard-filters label { flex-direction: row !important; align-items: center !important; gap: 6px !important; }
+.freight-workspace-toolbar .freight-dashboard-filters label > span:first-child {
+  font-size: 10px !important; font-weight: 700 !important; color: #7b879a !important;
+  text-transform: uppercase !important; letter-spacing: .06em !important;
+}
+.freight-workspace-toolbar .freight-dashboard-filters :is(strong, select, > button) {
+  height: 30px !important; min-height: 30px !important; font-size: 11.5px !important;
 }
