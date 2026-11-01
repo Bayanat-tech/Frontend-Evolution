@@ -26,9 +26,12 @@ import {
   UserCheck,
   Users,
   X,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
+  Tags,
+  Play
 } from 'lucide-react';
-import { supportApi, supportMessage, playSupportNotificationSound, type Ticket, type Message, type Upload, type Attachment } from '../../api/support';
+import { supportApi, supportMessage, playSupportNotificationSound, type Ticket, type Message, type Upload, type Attachment, type SupportCategory } from '../../api/support';
 import { useAuth } from '../../state/AuthContext';
 import { useSupport } from '../../components/SupportProvider';
 import { api } from '../../api/client';
@@ -174,6 +177,26 @@ export function SupportLauncher() {
   );
 }
 
+function detectCurrentModule(pathname: string): string {
+  const clean = (pathname || '').toLowerCase();
+  if (clean.includes('/hcm')) return 'HCM';
+  if (clean.includes('/ims')) return 'IMS';
+  if (clean.includes('/wms')) return 'WMS';
+  if (clean.includes('/fms') || clean.includes('/freight')) return 'FMS';
+  if (clean.includes('/finance') || clean.includes('/fin')) return 'Finance';
+  if (clean.includes('/vms') || clean.includes('/vendor')) return 'VMS';
+  if (clean.includes('/security') || clean.includes('/sec')) return 'Security';
+  if (clean.includes('/pams')) return 'PAMS';
+  if (clean.includes('/hr')) return 'HR';
+  if (clean.includes('/masters')) return 'Masters';
+  const parts = clean.split('/').filter(Boolean);
+  const wsIdx = parts.indexOf('workspace');
+  if (wsIdx !== -1 && parts[wsIdx + 1] && parts[wsIdx + 1] !== 'support') {
+    return parts[wsIdx + 1].toUpperCase();
+  }
+  return 'General';
+}
+
 export function SupportCenter({ compact = false, onClose }: { compact?: boolean; onClose?: () => void }) {
   const { user } = useAuth();
   const { role } = useSupport();
@@ -184,19 +207,23 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const isDeveloper = role === 'developer';
   const isStaff = isAdmin || isDeveloper;
 
+  const currentYear = new Date().getFullYear().toString();
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [events, setEvents] = useState<any[]>([]);
   const [typing, setTyping] = useState('');
 
-  // Filters
+  // Filters - Default active tickets & current year
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [yearFilter, setYearFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [yearFilter, setYearFilter] = useState(currentYear);
   const [monthFilter, setMonthFilter] = useState('all');
   const [developerFilter, setDeveloperFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
 
   const [newIssue, setNewIssue] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, { text: string; subject: string; files: Upload[] }>>({});
@@ -216,6 +243,26 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const [showHistory, setShowHistory] = useState(false);
   const [mobileThread, setMobileThread] = useState(false);
   const [readingFiles, setReadingFiles] = useState(false);
+
+  // Category Master & SLA state
+  const [categories, setCategories] = useState<SupportCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<number | ''>('');
+  const [estDays, setEstDays] = useState<number>(1);
+  const [estHours, setEstHours] = useState<number>(0);
+
+  // Category Management Screen Form
+  const [catNameInput, setCatNameInput] = useState('');
+  const [catDescInput, setCatDescInput] = useState('');
+  const [catDaysInput, setCatDaysInput] = useState(1);
+  const [catHoursInput, setCatHoursInput] = useState(4);
+  const [catSearch, setCatSearch] = useState('');
+  const [editingCatId, setEditingCatId] = useState<number | null>(null);
+
+  // Work Finish & Rework Modals
+  const [showDevFinishModal, setShowDevFinishModal] = useState(false);
+  const [devResolutionInput, setDevResolutionInput] = useState('');
+  const [showReworkModal, setShowReworkModal] = useState(false);
+  const [reworkCommentsInput, setReworkCommentsInput] = useState('');
 
   // Settings & Team
   const [teamLogin, setTeamLogin] = useState('');
@@ -254,6 +301,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     if (location.pathname.endsWith('/team') || location.pathname.endsWith('/developers')) return 'team';
     if (location.pathname.endsWith('/reports') || location.pathname.endsWith('/overview')) return 'reports';
     if (location.pathname.endsWith('/settings') || location.pathname.endsWith('/notifications')) return 'settings';
+    if (location.pathname.endsWith('/categories')) return 'categories';
     if (location.pathname.endsWith('/assigned')) return 'assigned';
     return isAdmin && location.pathname.endsWith('/tickets') ? 'tickets' : isAdmin ? 'dashboard' : 'tickets';
   }, [compact, location.pathname, isAdmin]);
@@ -299,11 +347,16 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     if (isAdmin) {
       void supportApi.developers().then(setDevelopers).catch(() => undefined);
       void supportApi.candidateDevelopers().then(setCandidates).catch(() => undefined);
+      void supportApi.categories().then(setCategories).catch(() => undefined);
       if (tab === 'settings') {
         void supportApi.settings().then(setSettings).catch(() => undefined);
       }
     }
   }, [isAdmin, tab]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter, yearFilter, monthFilter, developerFilter, priorityFilter]);
 
   const loadMessages = useCallback(async () => {
     if (!selectedRef.current) return;
@@ -331,6 +384,8 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     setResolution('');
     setShowHistory(false);
     setShowCloseModal(false);
+    setShowDevFinishModal(false);
+    setShowReworkModal(false);
     if (!selected || newIssue) return;
     void loadMessages();
     const timer = setInterval(() => void loadMessages(), 10000);
@@ -346,7 +401,10 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     setDeveloper(ticket?.DEVELOPER_LOGINID || '');
     setPriority(ticket?.PRIORITY || 'NORMAL');
     setEstimate(String(ticket?.SLA_MINUTES || 480));
-  }, [selected, ticket?.DEVELOPER_LOGINID]);
+    setSelectedCategory(ticket?.CATEGORY_ID || '');
+    setEstDays(ticket?.ESTIMATED_DAYS ?? 1);
+    setEstHours(ticket?.ESTIMATED_HOURS ?? 0);
+  }, [selected, ticket?.DEVELOPER_LOGINID, ticket?.CATEGORY_ID]);
 
   useEffect(() => {
     tail.current?.scrollIntoView({ block: 'nearest' });
@@ -378,11 +436,14 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
 
     void run(async () => {
       if (newIssue) {
+        const detectedMod = detectCurrentModule(location.pathname);
+        const subModMatch = draft.subject.match(/\[([A-Za-z0-9_-]+)\]/);
+        const effectiveMod = subModMatch ? subModMatch[1] : detectedMod;
         const subject = draft.subject.trim() || draft.text.trim().slice(0, 80) || 'Support Request';
         const c = await supportApi.create({
           ...body,
           subject,
-          module: location.pathname.split('/')[2] || 'Workspace',
+          module: effectiveMod || 'Workspace',
           page_url: location.pathname
         });
         setNewIssue(false);
@@ -539,6 +600,19 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     setNewIssue(true);
     setMobileThread(true);
     setNotice('');
+    const detectedMod = detectCurrentModule(location.pathname);
+    setDrafts(d => {
+      const prevSub = d.new?.subject || '';
+      const hasTag = /\[\w+\]/.test(prevSub);
+      return {
+        ...d,
+        new: {
+          text: d.new?.text || '',
+          subject: hasTag ? prevSub : `[${detectedMod}] ${prevSub}`.trim(),
+          files: d.new?.files || []
+        }
+      };
+    });
     setTimeout(() => textInput.current?.focus(), 50);
   };
 
@@ -548,6 +622,13 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const reviewCount = tickets.filter(t => t.STATUS === 'RESOLVED').length;
   const closedCount = tickets.filter(t => t.STATUS === 'CLOSED').length;
   const overdueCount = tickets.filter(overdue).length;
+
+  // Pagination for Tickets Queue
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const paginatedTickets = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return visible.slice(start, start + pageSize);
+  }, [visible, page, pageSize]);
 
   return (
     <section className={`sup ${compact ? 'sup-compact' : ''}`}>
@@ -597,6 +678,48 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
           )}
         </div>
       </header>
+
+      {/* DevAdmin Main Desk Navigation Tabs */}
+      {!compact && isAdmin && (
+        <nav className="sup-nav-tabs">
+          <button
+            className={`sup-nav-tab ${tab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => navigate('/workspace/support/support/dashboard')}
+          >
+            <LayoutDashboard size={14} /> Dashboard
+          </button>
+          <button
+            className={`sup-nav-tab ${tab === 'tickets' ? 'active' : ''}`}
+            onClick={() => navigate('/workspace/support/support/tickets')}
+          >
+            <MessageSquare size={14} /> Ticket Queue
+          </button>
+          <button
+            className={`sup-nav-tab ${tab === 'team' ? 'active' : ''}`}
+            onClick={() => navigate('/workspace/support/support/team')}
+          >
+            <Users size={14} /> Developers
+          </button>
+          <button
+            className={`sup-nav-tab ${tab === 'categories' ? 'active' : ''}`}
+            onClick={() => navigate('/workspace/support/support/categories')}
+          >
+            <Tags size={14} /> Category Master
+          </button>
+          <button
+            className={`sup-nav-tab ${tab === 'reports' ? 'active' : ''}`}
+            onClick={() => navigate('/workspace/support/support/reports')}
+          >
+            <BarChart3 size={14} /> Service Overview
+          </button>
+          <button
+            className={`sup-nav-tab ${tab === 'settings' ? 'active' : ''}`}
+            onClick={() => navigate('/workspace/support/support/settings')}
+          >
+            <Bell size={14} /> Notifications
+          </button>
+        </nav>
+      )}
 
       {/* Notice alert */}
       {notice && (
@@ -1108,6 +1231,221 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
             </table>
           </div>
         </div>
+      ) : tab === 'categories' && isAdmin ? (
+        /* TAB: CATEGORY & SLA MASTER (DEVADMIN) */
+        <div className="sup-settings-wrap">
+          <div className="sup-master-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h2>Support Category & SLA Master</h2>
+              <p style={{ fontSize: 12, color: 'var(--sup-muted)', marginTop: 2 }}>
+                Configure work categories, target SLA days, and hours used for developer assignments and audits.
+              </p>
+            </div>
+            <button
+              className="sup-primary"
+              style={{ fontSize: 12, padding: '6px 14px' }}
+              onClick={() => void supportApi.categories().then(setCategories)}
+              disabled={fetching}
+            >
+              <RefreshCw size={14} className={fetching ? 'sup-spin' : ''} />Refresh Categories
+            </button>
+          </div>
+
+          <div className="sup-cat-grid">
+            {/* Left: Category Table */}
+            <div className="sup-section-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--sup-line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                <h3 style={{ fontSize: 13, margin: 0 }}><Tags size={15} /> Registered Categories ({categories.length})</h3>
+                <div className="sup-search" style={{ maxWidth: 220 }}>
+                  <Search size={13} />
+                  <input
+                    placeholder="Search category..."
+                    value={catSearch}
+                    onChange={e => setCatSearch(e.target.value)}
+                    style={{ padding: '4px 8px', fontSize: 12 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--sup-line)', textAlign: 'left' }}>
+                      <th style={{ padding: '10px 14px' }}>Category Name</th>
+                      <th style={{ padding: '10px 12px' }}>Description</th>
+                      <th style={{ padding: '10px 12px' }}>SLA Target</th>
+                      <th style={{ padding: '10px 12px' }}>Status</th>
+                      <th style={{ padding: '10px 14px', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categories
+                      .filter(c => !catSearch.trim() || c.CATEGORY_NAME.toLowerCase().includes(catSearch.toLowerCase()) || (c.DESCRIPTION || '').toLowerCase().includes(catSearch.toLowerCase()))
+                      .map(c => {
+                        const totalHours = (c.ESTIMATED_DAYS * 24) + c.ESTIMATED_HOURS;
+                        const isInactive = c.ACTIVE_FLAG === 'N';
+                        return (
+                          <tr key={c.CATEGORY_ID} style={{ borderBottom: '1px solid var(--sup-line)', opacity: isInactive ? 0.6 : 1 }}>
+                            <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--sup-ink)' }}>
+                              {c.CATEGORY_NAME}
+                            </td>
+                            <td style={{ padding: '10px 12px', color: 'var(--sup-muted)', maxWidth: 220 }}>
+                              {c.DESCRIPTION || '—'}
+                            </td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span className="sup-cat-sla">
+                                {c.ESTIMATED_DAYS}d {c.ESTIMATED_HOURS}h ({totalHours} hrs)
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span className={`sup-status ${c.ACTIVE_FLAG === 'Y' ? 's-open' : 's-closed'}`}>
+                                {c.ACTIVE_FLAG === 'Y' ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                              <div style={{ display: 'inline-flex', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  style={{ padding: '3px 8px', fontSize: 11 }}
+                                  onClick={() => {
+                                    setEditingCatId(c.CATEGORY_ID);
+                                    setCatNameInput(c.CATEGORY_NAME);
+                                    setCatDescInput(c.DESCRIPTION || '');
+                                    setCatDaysInput(c.ESTIMATED_DAYS);
+                                    setCatHoursInput(c.ESTIMATED_HOURS);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={c.ACTIVE_FLAG === 'Y' ? 'sup-danger' : 'sup-success'}
+                                  style={{ padding: '3px 8px', fontSize: 11 }}
+                                  onClick={() => {
+                                    void run(async () => {
+                                      await supportApi.saveCategory({
+                                        category_id: c.CATEGORY_ID,
+                                        category_name: c.CATEGORY_NAME,
+                                        description: c.DESCRIPTION,
+                                        estimated_days: c.ESTIMATED_DAYS,
+                                        estimated_hours: c.ESTIMATED_HOURS,
+                                        active_flag: c.ACTIVE_FLAG === 'Y' ? 'N' : 'Y'
+                                      });
+                                      setCategories(await supportApi.categories());
+                                    }, `Category ${c.ACTIVE_FLAG === 'Y' ? 'deactivated' : 'activated'}.`);
+                                  }}
+                                >
+                                  {c.ACTIVE_FLAG === 'Y' ? 'Disable' : 'Enable'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Right: Add/Edit Category Form */}
+            <div className="sup-section-card" style={{ height: 'fit-content' }}>
+              <h3><Tags size={15} /> {editingCatId ? 'Edit Category' : 'Create New Category'}</h3>
+              <p style={{ fontSize: 12, color: 'var(--sup-muted)', marginBottom: 12 }}>
+                {editingCatId ? 'Update category name, description, or SLA timing.' : 'Add a new category that will appear in ticket assignments.'}
+              </p>
+
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  if (!catNameInput.trim()) return;
+                  void run(async () => {
+                    await supportApi.saveCategory({
+                      category_id: editingCatId,
+                      category_name: catNameInput.trim(),
+                      description: catDescInput.trim(),
+                      estimated_days: Number(catDaysInput) || 0,
+                      estimated_hours: Number(catHoursInput) || 0,
+                      active_flag: 'Y'
+                    });
+                    setEditingCatId(null);
+                    setCatNameInput('');
+                    setCatDescInput('');
+                    setCatDaysInput(1);
+                    setCatHoursInput(4);
+                    setCategories(await supportApi.categories());
+                  }, editingCatId ? 'Category updated.' : 'Category created.');
+                }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+              >
+                <label>
+                  Category Name <span className="sup-req">*</span>
+                  <input
+                    required
+                    placeholder="e.g. Support, Development, Change Request"
+                    value={catNameInput}
+                    onChange={e => setCatNameInput(e.target.value)}
+                  />
+                </label>
+
+                <label>
+                  Description
+                  <input
+                    placeholder="Brief description of work type"
+                    value={catDescInput}
+                    onChange={e => setCatDescInput(e.target.value)}
+                  />
+                </label>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <label>
+                    Target SLA Days
+                    <input
+                      type="number"
+                      min={0}
+                      max={365}
+                      value={catDaysInput}
+                      onChange={e => setCatDaysInput(Number(e.target.value) || 0)}
+                    />
+                  </label>
+                  <label>
+                    Target SLA Hours
+                    <input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={catHoursInput}
+                      onChange={e => setCatHoursInput(Number(e.target.value) || 0)}
+                    />
+                  </label>
+                </div>
+
+                <div style={{ fontSize: 11.5, color: '#047857', background: '#ecfdf5', padding: '6px 10px', borderRadius: 6 }}>
+                  Total Default SLA: <strong>{catDaysInput} days {catHoursInput} hrs</strong> ({(catDaysInput * 24) + catHoursInput} total hours)
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  {editingCatId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCatId(null);
+                        setCatNameInput('');
+                        setCatDescInput('');
+                        setCatDaysInput(1);
+                        setCatHoursInput(4);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button type="submit" className="sup-primary" disabled={busy || !catNameInput.trim()} style={{ flex: 1 }}>
+                    {editingCatId ? 'Update Category' : 'Save Category'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       ) : tab === 'settings' && isAdmin ? (
         /* TAB: NOTIFICATIONS & ALERT CONFIGURATION (DEVADMIN) */
         <div className="sup-settings-wrap">
@@ -1532,7 +1870,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
 
             {/* Scrollable WhatsApp List */}
             <div className="sup-ticket-list">
-              {visible.map(t => {
+              {paginatedTickets.map(t => {
                 const isSelected = selected === t.TICKET_ID && !newIssue;
                 const initials = getUserInitials(t.REQUESTER_NAME || t.REQUESTER_LOGINID);
 
@@ -1558,6 +1896,11 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       <div className="sup-item-sub">
                         <span className="sup-item-tag">#{t.TICKET_ID}</span>
                         <span>{t.TENANT_ID || t.COMPANY_CODE}</span>
+                        {t.CATEGORY_NAME && (
+                          <span className="sup-cat-badge" style={{ marginLeft: 4 }}>
+                            {t.CATEGORY_NAME}
+                          </span>
+                        )}
                       </div>
 
                       <div className="sup-item-snippet">{t.SUBJECT}</div>
@@ -1584,6 +1927,31 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 </div>
               )}
             </div>
+
+            {/* Pagination Controls */}
+            {visible.length > pageSize && (
+              <div className="sup-pagination">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  className="sup-page-btn"
+                >
+                  ◀ Prev
+                </button>
+                <span className="sup-page-info">
+                  Page {page} of {totalPages} ({visible.length} tickets)
+                </span>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  className="sup-page-btn"
+                >
+                  Next ▶
+                </button>
+              </div>
+            )}
           </aside>
 
           {/* Right Panel: WhatsApp-Style Thread & Chat */}
@@ -1740,6 +2108,44 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   <div className="sup-thread-head-actions">
                     {statusBadge(ticket.STATUS)}
 
+                    {/* Developer Workflow Actions */}
+                    {isDeveloper && ticket.DEVELOPER_LOGINID?.toUpperCase() === user?.loginid?.toUpperCase() && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
+                      <>
+                        {(ticket.STATUS === 'ASSIGNED' || ticket.DEV_STATUS === 'REWORK') && (
+                          <button
+                            type="button"
+                            className="sup-primary"
+                            style={{ padding: '5px 12px', fontSize: 12, background: 'var(--sup-blue)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                            onClick={() => void run(() => supportApi.progress(ticket.TICKET_ID, 'IN_PROGRESS'), 'Started work on ticket.')}
+                            disabled={busy}
+                            title="Start working on this ticket"
+                          >
+                            <Play size={13} />Start Work
+                          </button>
+                        )}
+                        {ticket.STATUS === 'IN_PROGRESS' && ticket.DEV_STATUS !== 'REWORK' && (
+                          <>
+                            <span className="sup-badge-progress">
+                              <span className="sup-pulse-dot" />In Progress
+                            </span>
+                            <button
+                              type="button"
+                              className="sup-primary"
+                              style={{ padding: '5px 12px', fontSize: 12, background: 'var(--sup-blue)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                              onClick={() => {
+                                setDevResolutionInput('');
+                                setShowDevFinishModal(true);
+                              }}
+                              disabled={busy}
+                              title="Finish work and submit resolution to DevAdmin"
+                            >
+                              <CheckCircle2 size={13} />Finish Work
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+
                     {/* Send Reminder button for DEVADMIN */}
                     {isAdmin && ticket.DEVELOPER_LOGINID && ticket.STATUS !== 'CLOSED' && (
                       <button
@@ -1784,6 +2190,16 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 {/* Ticket Meta / Assignment Bar */}
                 <div className="sup-ticket-meta">
                   <span><Users size={13} />{ticket.DEVELOPER_NAME || 'Awaiting Developer Assignment'}</span>
+                  {ticket.CATEGORY_NAME && (
+                    <span className="sup-cat-badge">
+                      <Tags size={12} />{ticket.CATEGORY_NAME}
+                    </span>
+                  )}
+                  {(ticket.ESTIMATED_DAYS != null || ticket.ESTIMATED_HOURS != null) && (
+                    <span className="sup-cat-sla">
+                      <Clock3 size={12} />Est: {ticket.ESTIMATED_DAYS ? `${ticket.ESTIMATED_DAYS}d ` : ''}{ticket.ESTIMATED_HOURS ? `${ticket.ESTIMATED_HOURS}h` : ''}
+                    </span>
+                  )}
                   <span className={overdue(ticket) ? 'sup-overdue' : ''}>
                     <Clock3 size={13} />{ticket.DUE_AT ? `Due ${dateFmt(ticket.DUE_AT)}` : 'No SLA set'}
                   </span>
@@ -1797,6 +2213,17 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                     Activity Log
                   </button>
                 </div>
+
+                {/* Rework comments alert banner if rework required */}
+                {ticket.REWORK_COMMENTS && ticket.STATUS === 'IN_PROGRESS' && (
+                  <div style={{ background: '#fff1f2', border: '1px solid #fda4af', borderRadius: 6, padding: '10px 16px', margin: '8px 20px', color: '#9f1239', fontSize: 12, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ flex: 1 }}>
+                      <strong>Rework Required by DevAdmin:</strong>
+                      <p style={{ margin: '3px 0 0', lineHeight: 1.4 }}>{ticket.REWORK_COMMENTS}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* History popup / drawer */}
                 {showHistory && (
@@ -1853,18 +2280,52 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   </div>
                 )}
 
-                {/* Admin Assignment Section */}
+                {/* Admin Assignment Section with Category Master Integration */}
                 {isAdmin && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
                   <form
                     className="sup-assignment"
                     onSubmit={e => {
                       e.preventDefault();
+                      const slaMin = (Number(estDays) || 0) * 1440 + (Number(estHours) || 0) * 60;
+                      const selectedCatObj = categories.find(c => c.CATEGORY_ID === Number(selectedCategory));
                       void run(
-                        () => supportApi.assign(ticket.TICKET_ID, { developer_loginid: developer, priority, sla_minutes: Number(estimate) }),
-                        'Developer assigned and notified.'
+                        () => supportApi.assign(ticket.TICKET_ID, {
+                          developer_loginid: developer,
+                          priority,
+                          sla_minutes: slaMin > 0 ? slaMin : Number(estimate) || 480,
+                          category_id: selectedCategory ? Number(selectedCategory) : undefined,
+                          category_name: selectedCatObj?.CATEGORY_NAME,
+                          estimated_days: Number(estDays) || 0,
+                          estimated_hours: Number(estHours) || 0
+                        }),
+                        'Developer assigned with Category SLA and notified.'
                       );
                     }}
                   >
+                    <label>
+                      Category Master
+                      <select
+                        value={selectedCategory}
+                        onChange={e => {
+                          const catId = e.target.value ? Number(e.target.value) : '';
+                          setSelectedCategory(catId);
+                          const cat = categories.find(c => c.CATEGORY_ID === catId);
+                          if (cat) {
+                            setEstDays(cat.ESTIMATED_DAYS);
+                            setEstHours(cat.ESTIMATED_HOURS);
+                            setEstimate(String((cat.ESTIMATED_DAYS * 24 * 60) + (cat.ESTIMATED_HOURS * 60)));
+                          }
+                        }}
+                      >
+                        <option value="">-- Select Category --</option>
+                        {categories.filter(c => c.ACTIVE_FLAG === 'Y').map(c => (
+                          <option key={c.CATEGORY_ID} value={c.CATEGORY_ID}>
+                            {c.CATEGORY_NAME} ({c.ESTIMATED_DAYS}d {c.ESTIMATED_HOURS}h)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
                     <label>
                       Assign Developer
                       <select required value={developer} onChange={e => setDeveloper(e.target.value)}>
@@ -1885,9 +2346,34 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       </select>
                     </label>
 
-                    <label>
-                      Estimate (Mins)
-                      <input type="number" min={1} max={43200} value={estimate} onChange={e => setEstimate(e.target.value)} />
+                    <label style={{ maxWidth: 80 }}>
+                      Est Days
+                      <input
+                        type="number"
+                        min={0}
+                        max={365}
+                        value={estDays}
+                        onChange={e => {
+                          const d = Number(e.target.value) || 0;
+                          setEstDays(d);
+                          setEstimate(String((d * 24 * 60) + (Number(estHours) * 60)));
+                        }}
+                      />
+                    </label>
+
+                    <label style={{ maxWidth: 80 }}>
+                      Est Hours
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={estHours}
+                        onChange={e => {
+                          const h = Number(e.target.value) || 0;
+                          setEstHours(h);
+                          setEstimate(String((Number(estDays) * 24 * 60) + (h * 60)));
+                        }}
+                      />
                     </label>
 
                     <button className="sup-primary" disabled={busy || !developer}>Assign</button>
@@ -1927,46 +2413,38 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   <div ref={tail} />
                 </div>
 
-                {/* Developer Work Progress & Resolution Options */}
-                {isDeveloper && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
-                  <div className="sup-progress" style={{ padding: '10px 20px', background: '#f8fafc', borderTop: '1px solid var(--sup-line)' }}>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                      <button disabled={busy} onClick={() => void run(() => supportApi.progress(ticket.TICKET_ID, 'IN_PROGRESS'), 'Started work.')}>
-                        Start Work
-                      </button>
-                      <button disabled={busy} onClick={() => void run(() => supportApi.progress(ticket.TICKET_ID, 'WAITING_INFO'), 'Status: Waiting Info.')}>
-                        Waiting for Info
-                      </button>
-                    </div>
-
-                    <label>
-                      Developer Resolution / Fix Summary (Awaiting Admin Review)
-                      <textarea
-                        value={resolution}
-                        onChange={e => setResolution(e.target.value)}
-                        placeholder="Explain fix details and verified tests..."
-                        style={{ minHeight: 50 }}
-                      />
-                    </label>
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-                      <button className="sup-success" disabled={busy || !resolution.trim()} onClick={() => handleDeveloperResolve(ticket.TICKET_ID)}>
-                        <CheckCircle2 size={14} />Submit Resolution & Close Work
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Admin Approval of Developer Resolution */}
+                {/* Admin Approval & Oppose/Rework of Developer Resolution */}
                 {ticket.STATUS === 'RESOLVED' && isAdmin && (
-                  <div className="sup-resolution" style={{ padding: '10px 20px', background: '#fef9c3', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <strong>Developer has submitted resolution:</strong>
-                      <p style={{ margin: '3px 0' }}>{ticket.RESOLUTION || 'Fix verified by developer.'}</p>
+                  <div className="sup-resolution" style={{ padding: '12px 20px', background: '#fef9c3', borderTop: '1px solid #fde047', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <strong style={{ color: '#854d0e', fontSize: 13 }}>Developer has submitted resolution:</strong>
+                      <p style={{ margin: '4px 0 0', color: '#713f12', fontSize: 12.5 }}>{ticket.RESOLUTION || 'Fix verified by developer.'}</p>
                     </div>
-                    <button className="sup-success" disabled={busy} onClick={() => handleCloseTicket(ticket.TICKET_ID, ticket.RESOLUTION)}>
-                      Approve & Final Close
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        className="sup-danger"
+                        disabled={busy}
+                        onClick={() => {
+                          setReworkCommentsInput('');
+                          setShowReworkModal(true);
+                        }}
+                        style={{ padding: '6px 14px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        title="Reject resolution and send back to developer for rework"
+                      >
+                        <RotateCcw size={13} />Rework Needed (Not Done)
+                      </button>
+                      <button
+                        type="button"
+                        className="sup-success"
+                        disabled={busy}
+                        onClick={() => handleCloseTicket(ticket.TICKET_ID, ticket.RESOLUTION || 'Developer resolution approved.')}
+                        style={{ padding: '6px 14px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        title="Accept resolution and close ticket"
+                      >
+                        <CheckCircle2 size={13} />Approve & Final Close
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -2054,6 +2532,94 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
               </div>
             )}
           </main>
+        </div>
+      )}
+
+      {/* DEVELOPER FINISH WORK MODAL */}
+      {showDevFinishModal && ticket && (
+        <div className="sup-modal-overlay" onClick={() => setShowDevFinishModal(false)}>
+          <div className="sup-modal-box" onClick={e => e.stopPropagation()}>
+            <div className="sup-modal-head">
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 15 }}><CheckCircle2 size={18} color="var(--sup-blue)" /> Finish Work & Submit Resolution</h3>
+              <button onClick={() => setShowDevFinishModal(false)} style={{ border: 0, background: 'transparent', cursor: 'pointer' }}><X size={16} /></button>
+            </div>
+            <div className="sup-modal-body" style={{ padding: '16px 20px' }}>
+              <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--sup-muted)' }}>
+                Please describe the fix details and verified test cases. Once submitted, DevAdmin will review and approve.
+              </p>
+              <textarea
+                autoFocus
+                rows={5}
+                value={devResolutionInput}
+                onChange={e => setDevResolutionInput(e.target.value)}
+                placeholder="Explain fix details and verified tests..."
+                style={{ width: '100%', padding: '10px', borderRadius: 6, border: '1px solid var(--sup-line)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div className="sup-modal-foot" style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid var(--sup-line)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setShowDevFinishModal(false)}>Cancel</button>
+              <button
+                className="sup-primary"
+                style={{ background: 'var(--sup-blue)', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}
+                disabled={busy || !devResolutionInput.trim()}
+                onClick={() => {
+                  void run(
+                    () => supportApi.progress(ticket.TICKET_ID, 'RESOLVED', devResolutionInput.trim()),
+                    'Work finished and resolution submitted to DevAdmin.'
+                  ).then(() => {
+                    setShowDevFinishModal(false);
+                    setDevResolutionInput('');
+                  });
+                }}
+              >
+                Submit Resolution to DevAdmin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DEVADMIN REWORK / OPPOSE MODAL */}
+      {showReworkModal && ticket && (
+        <div className="sup-modal-overlay" onClick={() => setShowReworkModal(false)}>
+          <div className="sup-modal-box" onClick={e => e.stopPropagation()}>
+            <div className="sup-modal-head">
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, color: '#b91c1c' }}><RotateCcw size={18} color="#b91c1c" /> Rework Needed (Oppose Resolution)</h3>
+              <button onClick={() => setShowReworkModal(false)} style={{ border: 0, background: 'transparent', cursor: 'pointer' }}><X size={16} /></button>
+            </div>
+            <div className="sup-modal-body" style={{ padding: '16px 20px' }}>
+              <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--sup-muted)' }}>
+                Explain why the issue is not resolved or what tests failed. The ticket will return to <strong>In Progress (Rework)</strong> and the developer will be notified immediately.
+              </p>
+              <textarea
+                autoFocus
+                rows={4}
+                value={reworkCommentsInput}
+                onChange={e => setReworkCommentsInput(e.target.value)}
+                placeholder="Specify what went wrong or additional requirements..."
+                style={{ width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #fca5a5', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div className="sup-modal-foot" style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid var(--sup-line)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setShowReworkModal(false)}>Cancel</button>
+              <button
+                className="sup-danger"
+                style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}
+                disabled={busy || !reworkCommentsInput.trim()}
+                onClick={() => {
+                  void run(
+                    () => supportApi.rejectReopen(ticket.TICKET_ID, reworkCommentsInput.trim()),
+                    'Ticket returned to developer for rework.'
+                  ).then(() => {
+                    setShowReworkModal(false);
+                    setReworkCommentsInput('');
+                  });
+                }}
+              >
+                Return for Rework
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

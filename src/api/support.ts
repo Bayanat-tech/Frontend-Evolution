@@ -23,6 +23,21 @@ export type Ticket = {
     UNREAD_COUNT: number;
     RESOLUTION?: string;
     SLA_MINUTES?: number;
+    CATEGORY_ID?: number;
+    CATEGORY_NAME?: string;
+    ESTIMATED_DAYS?: number;
+    ESTIMATED_HOURS?: number;
+    REWORK_COMMENTS?: string;
+};
+
+export type SupportCategory = {
+    CATEGORY_ID: number;
+    CATEGORY_NAME: string;
+    DESCRIPTION?: string;
+    ESTIMATED_DAYS: number;
+    ESTIMATED_HOURS: number;
+    ACTIVE_FLAG: string;
+    CREATED_AT?: string;
 };
 
 export type Attachment = {
@@ -71,8 +86,12 @@ export const supportApi = {
     reply: (id: number, body: any) => data(api.post(`/api/support/tickets/${id}/messages`, body)),
     read: (id: number, mid: number) => data(api.post(`/api/support/tickets/${id}/read`, { last_message_id: mid })),
     update: (id: number, body: any) => data(api.patch(`/api/support/tickets/${id}`, body)),
-    progress: (id: number, status: string) => data(api.patch(`/api/support/tickets/${id}/developer-status`, { dev_status: status })),
+    progress: (id: number, status: string, resolution?: string) => data(api.patch(`/api/support/tickets/${id}/developer-status`, { dev_status: status, resolution })),
+    rejectReopen: (id: number, comments: string) => data(api.post(`/api/support/tickets/${id}/reject-reopen`, { comments })),
     assign: (id: number, body: any) => data(api.post(`/api/support/tickets/${id}/assign-developer`, body)),
+    categories: () => data<SupportCategory[]>(api.get('/api/support/categories')),
+    saveCategory: (body: any) => data(api.post('/api/support/categories', body)),
+    deleteCategory: (id: number) => data(api.delete(`/api/support/categories/${id}`)),
     developers: () => data<any[]>(api.get('/api/support/developers')),
     candidateDevelopers: () => data<any[]>(api.get('/api/support/candidate-developers')),
     developer: (body: any) => data(api.post('/api/support/developers', body)),
