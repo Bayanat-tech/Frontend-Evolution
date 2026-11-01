@@ -1114,7 +1114,6 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
           <div className="sup-master-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h2>Support Notifications & Email Alert Configuration</h2>
-              <p>Configure administrators and CC emails notified on ticket creation and resolution, and view live email dispatch logs.</p>
             </div>
             <button
               className="sup-primary"
@@ -1131,7 +1130,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
             <div className="sup-section-card">
               <h3><Mail size={16} />Add Notification Recipient / CC Email</h3>
               <p style={{ fontSize: 12, color: 'var(--sup-muted)', marginBottom: 12 }}>
-                Recipients registered here will receive automatic HTML alerts for new tickets, SLA escalations, and ticket closures.
+                Recipients registered here will receive automatic alerts for new tickets, SLA escalations, and ticket closures.
               </p>
               <form
                 onSubmit={e => {
