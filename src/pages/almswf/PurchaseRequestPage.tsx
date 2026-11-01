@@ -34,6 +34,16 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+// Same as fmtDate, but if the value is not parseable (e.g. API already sends
+// "dd/mm/yyyy"), show the raw string instead of "NA".
+function fmtDateOrRaw(val: unknown): string {
+  const f = fmtDate(val);
+  if (f !== "NA") return f;
+  const raw = String(val ?? "").trim();
+  if (!raw || raw === "null" || raw === "undefined") return "NA";
+  return raw;
+}
+
 function statusOf(row: TPurchaseSummaryTxn): string {
   const cancelFlag = String((row as any).CANCEL_FLAG ?? "").toUpperCase();
   const lastAction = String((row as any).LAST_ACTION ?? "").toUpperCase();
@@ -90,6 +100,11 @@ function pick(obj: any, ...keys: string[]): string {
     }
   }
   return "";
+}
+
+// PR rows use REQUEST_NUMBER, PO Generated rows may only have PR_NUMBER.
+function getRequestNo(row: any): string {
+  return String(row?.REQUEST_NUMBER || row?.PR_NUMBER || "").trim();
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -277,8 +292,18 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     if (!query.trim()) return rows;
     const q = query.toLowerCase();
     if (isPoGeneratedTab) {
-      return (rows as TPPOGenerated[]).filter((row) =>
-        [row.PO_NUMBER, row.PR_NUMBER, row.SUPPLIER_CODE, row.SUPPLIER_NAME, row.PR_DESCRIPTION]
+      return (rows as any[]).filter((row) =>
+        [
+          row.PO_NUMBER,
+          row.PO_NOS,
+          row.PR_NUMBER,
+          row.REQUEST_NUMBER,
+          row.SUPPLIER_CODE,
+          row.SUPPLIER_NAME,
+          row.PR_DESCRIPTION,
+          row.DESCRIPTION,
+          row.CREATE_USER,
+        ]
           .filter(Boolean)
           .some((field) => String(field).toLowerCase().includes(q))
       );
@@ -447,13 +472,16 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   };
 
   const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
+    const reqNo = getRequestNo(row);
     const flowCode = (row as any).FLOW_CODE || "";
     const flowDescription = (row as any).FLOW_DESCRIPTION || "";
+    // Make sure the editor always receives REQUEST_NUMBER (PO rows may only have PR_NUMBER)
+    const normalizedRow = { ...(row as any), REQUEST_NUMBER: reqNo } as TPurchaseSummaryTxn;
     setTaskPopup({
       open: true,
-      title: `${actionType === "edit" ? "Edit" : "View"} PR - ${row.REQUEST_NUMBER}`,
+      title: `${actionType === "edit" ? "Edit" : "View"} PR - ${reqNo}`,
       data: {
-        existingData: row,
+        existingData: normalizedRow,
         isEditMode: actionType === "edit",
         isViewMode: actionType === "view",
         flowCode, flowDescription,
@@ -490,25 +518,36 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     });
   }, []);
 
-  // ── Columns: PR ────────────────────────────────────────────────────────────
+  // ── Columns: PR (used by all tabs; PO tab derives from this) ──────────────
   const prColumns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
     () => [
       {
-        accessorKey: "REQUEST_NUMBER",
+        id: "REQUEST_NUMBER",
+        accessorFn: (row) => getRequestNo(row),
         header: "Request No",
         cell: ({ row }) => (
-          <span className="font-semibold text-[#082A89]">{row.original.REQUEST_NUMBER}</span>
+          <span className="font-semibold text-[#082A89]">
+            {getRequestNo(row.original) || "—"}
+          </span>
         ),
       },
       {
-        accessorKey: "REQUEST_DATE",
+        id: "REQUEST_DATE",
+        accessorFn: (row) => (row as any).REQUEST_DATE ?? (row as any).PR_DATE ?? "",
         header: "Request Date",
-        cell: ({ row }) => fmtDate((row.original as any).REQUEST_DATE),
+        cell: ({ row }) => {
+          const r = row.original as any;
+          return fmtDateOrRaw(r.REQUEST_DATE ?? r.PR_DATE);
+        },
       },
       {
-        accessorKey: "DESCRIPTION",
+        id: "DESCRIPTION",
+        accessorFn: (row) => (row as any).DESCRIPTION || (row as any).PR_DESCRIPTION || "",
         header: "Description",
-        cell: ({ row }) => (row.original as any).DESCRIPTION || "—",
+        cell: ({ row }) => {
+          const r = row.original as any;
+          return r.DESCRIPTION || r.PR_DESCRIPTION || "—";
+        },
       },
       {
         accessorKey: "AMOUNT",
@@ -548,14 +587,14 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       {
         accessorKey: "CREATE_DATE",
         header: "Create Date",
-        cell: ({ row }) => fmtDate((row.original as any).CREATE_DATE),
+        cell: ({ row }) => fmtDateOrRaw((row.original as any).CREATE_DATE),
       },
       {
         id: "status",
-        accessorFn: (row) => statusOf(row),
+        accessorFn: (row) => (isPoGeneratedTab ? "PO GENERATED" : statusOf(row)),
         header: () => <div className="text-center">Status</div>,
         cell: ({ row }) => {
-          const val = statusOf(row.original);
+          const val = isPoGeneratedTab ? "PO GENERATED" : statusOf(row.original);
           const style = getStatusBadgeStyle(val);
           return (
             <div className="flex justify-center">
@@ -639,12 +678,16 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         enableSorting: false,
         cell: ({ row }) => {
           const r = row.original as any;
-          const isFinalApproved = String(r.FINAL_APPROVED || "").toUpperCase() === "Y";
+          const finalApprovedFlag = String(r.FINAL_APPROVED || "").toUpperCase() === "Y";
+          const faUploaded = String(r.FA_UPLOADED || "N").toUpperCase();
+          // Final approved but PO not generated yet (FA_UPLOADED = 'N') => still editable.
+          // Locked only when final approved AND FA_UPLOADED is not 'N'.
+          const isFinalApproved = finalApprovedFlag && faUploaded !== "N";
           const isCancelled =
             String(r.CANCEL_FLAG || "").toUpperCase() === "Y" ||
             String(r.LAST_ACTION || "").toUpperCase() === "CANCELED" ||
             String(r.LAST_ACTION || "").toUpperCase() === "CANCELLED";
-          const requestNo = r.REQUEST_NUMBER;
+          const requestNo = getRequestNo(r);
 
           return (
             <div className="flex items-center gap-1">
@@ -679,46 +722,40 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isPendingTab, loginid, companyCode]
+    [isPendingTab, isPoGeneratedTab, loginid, companyCode]
   );
 
   // ── Columns: PO Generated ──────────────────────────────────────────────────
-  const poColumns = useMemo<ColumnDef<TPPOGenerated>[]>(
-    () => [
+  // Same columns as the other tabs, minus Reason / Next Action By,
+  // plus PO Number & PO Date placed after Status, and Actions at the end.
+  const poColumns = useMemo<ColumnDef<any>[]>(() => {
+    const all = prColumns as ColumnDef<any>[];
+    const base = all.filter(
+      (c) => !["reason", "next_action_by", "actions"].includes(String(c.id ?? ""))
+    );
+    const actionsCol = all.find((c) => c.id === "actions");
+
+    const poExtra: ColumnDef<any>[] = [
       {
-        accessorKey: "PO_NUMBER",
+        id: "PO_NUMBER",
+        // PO tab API returns PR.* from TTE_PREQUEST_HDR, where the PO numbers live in PO_NOS
+        accessorFn: (row) => (row as any).PO_NUMBER || (row as any).PO_NOS || "",
         header: "PO Number",
         cell: ({ row }) => (
-          <span className="font-semibold text-[#082A89]">{row.original.PO_NUMBER}</span>
+          <span className="font-semibold text-[#082A89]">
+            {(row.original as any).PO_NUMBER || (row.original as any).PO_NOS || "—"}
+          </span>
         ),
       },
-      { accessorKey: "PO_DATE", header: "PO Date", cell: ({ row }) => row.original.PO_DATE || "NA" },
       {
-        accessorKey: "SUPPLIER_CODE",
-        header: "Supplier",
-        cell: ({ row }) => {
-          const r = row.original;
-          if (r.SUPPLIER_CODE && r.SUPPLIER_NAME) return `${r.SUPPLIER_CODE} - ${r.SUPPLIER_NAME}`;
-          if (r.SUPPLIER_CODE) return r.SUPPLIER_CODE;
-          return "—";
-        },
+        accessorKey: "PO_DATE",
+        header: "PO Date",
+        cell: ({ row }) => fmtDateOrRaw((row.original as any).PO_DATE),
       },
-      {
-        accessorKey: "PR_NUMBER",
-        header: "PR Number",
-        cell: ({ row }) => (
-          <span className="font-medium text-blue-600">{row.original.PR_NUMBER || "—"}</span>
-        ),
-      },
-      { accessorKey: "PR_DATE", header: "PR Date", cell: ({ row }) => row.original.PR_DATE || "NA" },
-      {
-        accessorKey: "PR_DESCRIPTION",
-        header: "PR Description",
-        cell: ({ row }) => row.original.PR_DESCRIPTION || "—",
-      },
-    ],
-    []
-  );
+    ];
+
+    return [...base, ...poExtra, ...(actionsCol ? [actionsCol] : [])];
+  }, [prColumns]);
 
   const columns = isPoGeneratedTab ? poColumns : prColumns;
 
@@ -730,7 +767,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         isViewMode={taskPopup.data.isViewMode}
         existingData={
           taskPopup.data.existingData
-            ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+            ? { request_number: getRequestNo(taskPopup.data.existingData) }
             : undefined
         }
         flowCode={taskPopup.data.flowCode}
@@ -836,7 +873,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
             setPageSize(nextPageSize);
             setPageIndex(0);
           }}
-          getRowId={(row: any, index) => row.REQUEST_NUMBER || row.PO_NUMBER || `temp-${index}`}
+          getRowId={(row: any, index) => row.PO_NUMBER || row.REQUEST_NUMBER || row.PR_NUMBER || `temp-${index}`}
         />
       </div>
 

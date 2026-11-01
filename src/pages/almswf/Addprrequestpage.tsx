@@ -99,7 +99,7 @@ function computeApprovedQuantity(item: TPRItem): number {
   return isSameUom(item) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 function amountBeforeDisc(item: TPRItem): number { return num(item.ITEM_RATE) * computeQuantity(item); }
-function itemDiscPrice(item: TPRItem): number { return amountBeforeDisc(item) * (num(item.DISCOUNT_AMOUNT) / 100); }
+function itemDiscPrice(item: TPRItem): number { return amountBeforeDisc(item) * (num(item.DISC_PERC) / 100); }
 function itemFinalRate(item: TPRItem): number {
   const qty = computeQuantity(item);
   if (qty === 0) return num(item.ITEM_RATE);
@@ -124,6 +124,7 @@ function recalcItem<T extends Partial<TPRItem>>(item: T, exRate: number): T {
   const taxLcurr = itemTaxLcurrAmount(item as TPRItem, rate);
   const lcurrAfterDisc = itemLcurrAfterDisc(item as TPRItem, rate);
   item.FINAL_RATE = finalRate; item.AMOUNT = amount; item.TX_COMPNT_AMT_1 = taxAmt;
+  item.DISCOUNT_AMOUNT = discPrice;
   (item as any).LCURR_AMT = lcurrAmt; (item as any).TX_COMPNT_LCURAMT_1 = taxLcurr;
   (item as any).LCURR_AFTER_DISCOUNT = lcurrAfterDisc; (item as any).BASE_AMOUNT = lcurrAmt;
   (item as any).FINAL_AMOUNT = lcurrAmt + taxLcurr; (item as any).AMOUNT_BEFORE_DISC = amtBeforeDisc;
@@ -147,7 +148,7 @@ function recalcItemOnApprovedQty<T extends Partial<TPRItem>>(item: T, exRate: nu
   const requestedQty = sameUom ? reqQtyPuom : reqQtyPuom * reqUppp + reqQtyLuom;
   const unitPrice = num(item.ITEM_RATE);
   const amtBeforeDisc = unitPrice * approvedQty;
-  const discPercent = num(item.DISCOUNT_AMOUNT);
+  const discPercent = num(item.DISC_PERC);
   const discPrice = amtBeforeDisc * (discPercent / 100);
   const finalRate = approvedQty === 0 ? unitPrice : unitPrice - (discPrice / approvedQty);
   const amount = finalRate * approvedQty;
@@ -172,7 +173,7 @@ function distributeDiscountToItems(items: TPRItem[], discPercent: number, userAp
   const totalUnitPrice = calculateTotalUnitPrice(items);
   if (totalUnitPrice === 0 || discPercent === 0) {
     return items.map((item) => {
-      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+      const updated = { ...item, DISC_PERC: 0, DISCOUNT_AMOUNT: 0 };
       const exRate = num(updated.CURRENCY_RATE) || 1;
       return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, exRate) : recalcItem(updated, exRate);
     });
@@ -182,7 +183,7 @@ function distributeDiscountToItems(items: TPRItem[], discPercent: number, userAp
     const unitPrice = num(item.ITEM_RATE);
     const itemTotal = unitPrice * itemQtyVal;
     const itemDiscPercent = (itemTotal / totalUnitPrice) * discPercent;
-    const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
+    const updated = { ...item, DISC_PERC: itemDiscPercent };
     const exRate = num(updated.CURRENCY_RATE) || 1;
     return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, exRate) : recalcItem(updated, exRate);
   });
@@ -191,7 +192,7 @@ function distributeDiscountFromAmount(items: TPRItem[], discAmount: number, user
   const totalUnitPrice = calculateTotalUnitPrice(items);
   if (totalUnitPrice === 0 || discAmount === 0) {
     return items.map((item) => {
-      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+      const updated = { ...item, DISC_PERC: 0, DISCOUNT_AMOUNT: 0 };
       const exRate = num(updated.CURRENCY_RATE) || 1;
       return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, exRate) : recalcItem(updated, exRate);
     });
@@ -216,7 +217,7 @@ function cleanNumericData(data: any): any {
     'REQUEST_QUANTITY', 'ALLOCATED_APPROVED_QUANTITY',
     'LCURR_AFTER_DISCOUNT', 'QTY_PUOM', 'QTY_LUOM', 'UPPP',
     'QUANTITY', 'AMOUNT_BEFORE_DISC', 'DISC_PRICE',
-    'APPROVED_QTY_PUOM', 'APPROVED_QTY_LUOM', 'APPROVED_UPPP',
+    'APPROVED_QTY_PUOM', 'APPROVED_QTY_LUOM', 'APPROVED_UPPP','DISC_PERC',
   ];
   if (Array.isArray(data)) return data.map((i) => cleanNumericData(i));
   if (data && typeof data === 'object') {
@@ -241,7 +242,7 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
     REQUEST_NUMBER: requestNumber, ITEM_SRNO: srNo, COMPANY_CODE: companyCode,
     ITEM_CODE: "", ITEM_DESP: "", COST_CODE: "", COST_NAME: "",
     SUPPLIER: "", REQUEST_QUANTITY: 0, ALLOCATED_APPROVED_QUANTITY: 0, ITEM_QTY: 0,
-    ITEM_RATE: 0, DISCOUNT_AMOUNT: 0, FINAL_RATE: 0, AMOUNT: 0,
+    ITEM_RATE: 0, DISCOUNT_AMOUNT: 0, DISC_PERC: 0, FINAL_RATE: 0, AMOUNT: 0,
     LCURR_AMT: 0, BASE_AMOUNT: 0, FINAL_AMOUNT: 0, LCURR_AFTER_DISCOUNT: 0,
     CURR_CODE: hdr.CURR_CODE ?? "", CURR_NAME: hdr.CURR_NAME ?? "",
     CURRENCY_RATE: hdr.CURRENCY_RATE ?? 0,
@@ -386,7 +387,9 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
     }
   }, [requestNumber]);
 
-  const isFinalApproved = String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y";
+  const isFinalApproved =
+  String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y" &&
+  String((header as any).FA_UPLOADED || "N").toUpperCase() !== "N";
   const isCancelled =
     String((header as any).CANCEL_FLAG || "").toUpperCase() === "Y" ||
     String(header.LAST_ACTION || "").toUpperCase() === "CANCELED" ||
@@ -643,6 +646,13 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
         CAPEX_OPEX_NON_OPEX: (row as any).CAPEX || (row as any).CAPEX_OPEX_NON_OPEX || "",
         LCURR_AFTER_DISCOUNT: 0,
         CASH_IND: (row as any).CASH_IND || "",
+        DISC_PERC: (() => {
+  const raw = (row as any).DISC_PERC;
+  if (raw !== null && raw !== undefined && raw !== "") return Number(raw) || 0;
+  const disc = num((row as any).DISCOUNT_AMOUNT);
+  const net = num((row as any).AMOUNT);
+  return disc > 0 && net + disc > 0 ? (disc / (net + disc)) * 100 : 0;
+})(),
         P_UOM: (row as any).P_UOM || "",
         QTY_PUOM: (row as any).QTY_PUOM || 0,
         L_UOM: (row as any).L_UOM || "",
@@ -803,7 +813,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
     const storedPrice = num((item as any).DISC_PRICE);
     if (storedPrice > 0) return sum + storedPrice;
     const qty = isApprovedLevel ? computeApprovedQuantity(item) : computeQuantity(item);
-    return sum + (num(item.ITEM_RATE) * num(item.DISCOUNT_AMOUNT) / 100 * qty);
+    return sum + (num(item.ITEM_RATE) * num(item.DISC_PERC) / 100 * qty);
   }, 0);
 
   useEffect(() => {
@@ -887,7 +897,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
       FLOW_CODE: header.FLOW_CODE || "", FLOW_DESCRIPTION: header.FLOW_DESCRIPTION || "",
       FLOW_LEVEL_INITIAL: header.FLOW_LEVEL_INITIAL || 1,
       FLOW_LEVEL_RUNNING: overrides.FLOW_LEVEL_RUNNING ?? (header.FLOW_LEVEL_RUNNING || 1),
-      FLOW_LEVEL_FINAL: header.FLOW_LEVEL_FINAL || 3,
+      FLOW_LEVEL_FINAL: header.FLOW_LEVEL_FINAL || '',
       CURRENCY_RATE: header.CURRENCY_RATE || 1, USER_DT: new Date().toISOString(), USER_ID: loginid,
       FA_UPLOADED: "", FINAL_APPROVED: header.isFinalApproval ? "Y" : "N",
       TX_CAT_CODE: header.TX_CAT_CODE || "", TX_COMPNTCAT_CODE_1: header.TX_COMPNTCAT_CODE_1 || "",
@@ -941,7 +951,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
       ITEM_SRNO: item.ITEM_SRNO || 0, SUPPLIER_PART_CODE: "", RATE_METHODE: "",
       CASH_IND: item.CASH_IND || "", MAIL_ATTATCH: "", ITEM_CANEL: "",
       SUPPLIER: item.SUPPLIER || "", REF_DOC_NO: 0,
-      DISCOUNT_AMOUNT: item.DISCOUNT_AMOUNT || 0, FINAL_RATE: item.FINAL_RATE || 0,
+      DISCOUNT_AMOUNT: (item as any).DISC_PRICE || 0, DISC_PERC: item.DISC_PERC || 0, FINAL_RATE: item.FINAL_RATE || 0,
       COST_CODE: item.COST_CODE || "", CAPEX: item.CAPEX_OPEX_NON_OPEX,
       BUYER: "", REASON_FOR_PO_MODIFY: "", DOC_TYPE: "PR", DOC_NO: null,
       DOC_DATE: new Date().toISOString(), DIV_CODE: "", SERIAL_NO: 0,
@@ -1303,17 +1313,18 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
         const gross = num(item.ITEM_RATE) * qtyForCalc;
         const newPrice = Number(value) || 0;
         (item as any).DISC_PRICE = newPrice;
-        item.DISCOUNT_AMOUNT = gross > 0 ? (newPrice / gross) * 100 : 0;
+        item.DISC_PERC = gross > 0 ? (newPrice / gross) * 100 : 0;
         const exRate = num(item.CURRENCY_RATE) || 1;
         if (userApprovalLevel >= 2) recalcItemOnApprovedQty(item, exRate);
         else recalcItem(item, exRate);
         (item as any).DISC_PRICE = newPrice;
+        item.DISCOUNT_AMOUNT = newPrice; 
         updated[index] = item;
         return updated;
       }
 
       const approvedFields = ["APPROVED_QTY_PUOM", "APPROVED_QTY_LUOM", "APPROVED_UPPP"];
-      if (["ITEM_RATE", "DISCOUNT_AMOUNT", "QTY_PUOM", "QTY_LUOM", "UPPP", "TX_COMPNT_PERC_1", "CURRENCY_RATE", ...approvedFields].includes(field as string)) {
+      if (["ITEM_RATE", "DISC_PERC", "QTY_PUOM", "QTY_LUOM", "UPPP", "TX_COMPNT_PERC_1", "CURRENCY_RATE", ...approvedFields].includes(field as string)) {
         const exRate = num(item.CURRENCY_RATE) || 1;
         if (userApprovalLevel >= 2) recalcItemOnApprovedQty(item, exRate);
         else recalcItem(item, exRate);
@@ -1369,7 +1380,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
 
   const resetDiscountItems = () =>
     setItems((prev) => prev.map((item) => {
-      const u = { ...item, DISCOUNT_AMOUNT: 0 };
+      const u = { ...item, DISC_PERC: 0, DISCOUNT_AMOUNT: 0 };
       const exRate = num(u.CURRENCY_RATE) || 1;
       return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(u, exRate) : recalcItem(u, exRate);
     }));
@@ -2025,7 +2036,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
                                 <td className={AMOUNT_CELL}>{fmt3(grossAmount)}</td>
 
                                 <td className="px-1 py-1">
-                                  <Input type="number" step="0.001" value={item.DISCOUNT_AMOUNT || ""} onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)} disabled={disabled || discountScope === "PO"} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  <Input type="number" step="0.001" value={item.DISC_PERC || ""} onChange={(e) => updateItemField(itemId, "DISC_PERC", Number(e.target.value) || 0)} disabled={disabled || discountScope === "PO"} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
                                 </td>
 
                                 <td className="px-1 py-1">
