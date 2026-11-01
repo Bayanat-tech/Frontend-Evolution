@@ -18,7 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { useAuth } from "../../state/AuthContext";
-import { FreightDashboardPanel } from "./FreightDashboardPanel";
+import { FreightDashboardPanel, FreightFilterBar} from "./FreightDashboardPanel";
 
 type FreightProcess = "enquiry" | "rfq" | "quotation";
 
@@ -58,9 +58,14 @@ type WorkspaceSummary = {
 
 export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarget }) {
   const [activeView, setActiveView] = useState<"dashboard" | "control-center">("dashboard");
+   const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <section className="freight-workspace-home">
+      <div className="freight-workspace-toolbar">
       <div className="freight-workspace-tabs" role="tablist" aria-label="Freight workspace views">
         <button
           type="button"
@@ -81,12 +86,14 @@ export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarg
           <PanelsTopLeft size={15} /> Control Center
         </button>
       </div>
-      {activeView === "dashboard" ? <FreightDashboardPanel /> : <FreightControlCenter target={target} />}
+      {activeView === "dashboard" && ( <FreightFilterBar year={year} month={month} onYear={setYear} onMonth={setMonth} onRefresh={() => setRefreshKey(k => k + 1)} />)}
+      </div>
+      {activeView === "dashboard" ? <FreightDashboardPanel year={year} month={month} refreshKey={refreshKey} /> : <FreightControlCenter target={target}  />}
     </section>
   );
 }
 
-function FreightControlCenter({ target: _target }: { target?: FreightWorkspaceTarget }) {
+function FreightControlCenter({ target: _target }: { target?: FreightWorkspaceTarget }) { 
   const { user } = useAuth();
   const navigate = useNavigate();
   const [smartSearch, setSmartSearch] = useState("");
@@ -114,7 +121,7 @@ function FreightControlCenter({ target: _target }: { target?: FreightWorkspaceTa
     try {
       const response = await api.post<{ success?: boolean; data?: { summary?: WorkspaceSummary }; message?: string }>(
         "/api/freight/workspace/summary",
-        { company_code: companyCode, user_id: userId },
+        { company_code: companyCode, user_id: userId},
       );
       setSummary(response.data.data?.summary || {});
     } catch (error: any) {
@@ -157,16 +164,16 @@ function FreightControlCenter({ target: _target }: { target?: FreightWorkspaceTa
   return (
     <section className="freight-control-center">
       {/* 1. Master Header Card */}
-      <div className="freight-landing-header flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+       {/* <div className="freight-landing-header flex flex-wrap items-center justify-between gap-3"> */}
+        {/* <div className="flex min-w-0 items-center gap-3">
           <span className="bisc-master-icon-box">
             <Compass size={22} className="text-[#00378C]" />
-          </span>
-          <div className="min-w-0">
+          </span> */}
+          {/* <div className="min-w-0">
             <h1 className="m-0 text-lg font-bold leading-tight text-slate-900">Freight Control Center</h1>
-          </div>
-        </div>
-        <Button
+          </div> */}
+        {/* </div> */} 
+        {/* <Button
           type="button"
           variant="outline"
           size="icon"
@@ -175,8 +182,8 @@ function FreightControlCenter({ target: _target }: { target?: FreightWorkspaceTa
           className="h-8 w-8 rounded-lg border-[#cbd5e1] hover:bg-[#eff6ff] hover:text-[#00378C] text-slate-600 transition-colors cursor-pointer"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-        </Button>
-      </div>
+        </Button> */}
+      {/* </div> */}
 
       {/* 2. KPI Metrics Grid */}
       <div className="freight-kpi-grid">

@@ -556,6 +556,7 @@ const handleSaveRole = async () => {
       loginid: addUserLoginId,
       username: addUserLoginName,
       serial_no_or_role_id: modalRole,
+      company_code: companyCode,
     };
 
     setUserRows((prev) => [...prev, newRow]);

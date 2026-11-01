@@ -1245,7 +1245,7 @@ function buildPacklistSmartChecks(
       });
     }
 
-    // Containers (TF_CONTAINER_DET)
+    // Containers 
     if (containers.length > 0) {
       const emptyCont = containers.some((c) => !c.container_no.trim());
       if (emptyCont) {
@@ -1791,7 +1791,7 @@ function ContainerGrid({ rows, setRows, onSync }: { rows: ContainerLine[]; setRo
             <Ship size={14} />
           </span>
           <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
-            Sea Container Manifest (TF_CONTAINER_DET)
+            Sea Container
           </span>
           <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
             {rows.length} {rows.length === 1 ? "container" : "containers"}
