@@ -981,7 +981,6 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
           >
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) auto', gap: 14, alignItems: 'flex-end' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, fontWeight: 600 }}>
-                Select Developer from User Master (B% / BI%)
                 <select
                   required
                   value={selectedCandidate}
@@ -1001,7 +1000,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   }}
                   style={{ height: 38, padding: '0 10px', borderRadius: 8, border: '1px solid var(--sup-line)', background: 'var(--sup-card-bg)', fontSize: 13 }}
                 >
-                  <option value="">-- Choose Developer from SEC_LOGINTEST --</option>
+                  <option value="">Choose Developer</option>
                   {candidates.map(c => (
                     <option key={c.loginid} value={c.loginid}>
                       {c.username} ({c.loginid}) - {c.email_id} {c.is_registered ? (c.is_active ? '✓ Active' : '⚠ Disabled') : ''}
