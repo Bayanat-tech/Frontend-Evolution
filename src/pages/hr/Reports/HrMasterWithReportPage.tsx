@@ -107,6 +107,7 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
     companyCode,
     editMode: editorMode === "edit",
     rows,
+    form,
   };
 
   const openEditor = (mode: "add" | "edit", row: any = null) => {
@@ -294,11 +295,18 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
                           loadOptions={() => field.lookup!.loadOptions(lookupContext)}
                           disabled={disabled}
                           onChange={(nextValue, selectedRow) =>
-                            setForm((current) => ({
-                              ...current,
-                              [field.name]: nextValue,
-                              ...getLookupDisplayPatch(field, selectedRow),
-                            }))
+                            setForm((current) => {
+                              const next = {
+                                ...current,
+                                [field.name]: nextValue,
+                                ...getLookupDisplayPatch(field, selectedRow),
+                              };
+                              if (field.name === "div_code") {
+                                next.dept_code = "";
+                                next.dept_code_name = "";
+                              }
+                              return next;
+                            })
                           }
                         />
                       ) : field.type === "select" ? (
