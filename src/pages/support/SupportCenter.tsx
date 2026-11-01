@@ -241,6 +241,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const [closingRemark, setClosingRemark] = useState('');
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showReassign, setShowReassign] = useState(false);
   const [mobileThread, setMobileThread] = useState(false);
   const [readingFiles, setReadingFiles] = useState(false);
 
@@ -403,6 +404,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     setShowCloseModal(false);
     setShowDevFinishModal(false);
     setShowReworkModal(false);
+    setShowReassign(false);
     if (!selected || newIssue) return;
     void loadMessages();
     const timer = setInterval(() => void loadMessages(), 10000);
@@ -2128,7 +2130,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                     {/* Developer Workflow Actions */}
                     {isDeveloper && ticket.DEVELOPER_LOGINID?.toUpperCase() === user?.loginid?.toUpperCase() && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
                       <>
-                        {(ticket.STATUS === 'ASSIGNED' || ticket.DEV_STATUS === 'REWORK') && (
+                        {(ticket.STATUS === 'ASSIGNED' || ticket.STATUS === 'REOPENED' || ticket.DEV_STATUS === 'REWORK') && (
                           <button
                             type="button"
                             className="sup-primary"
@@ -2221,13 +2223,29 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                     <Clock3 size={13} />{ticket.DUE_AT ? `Due ${dateFmt(ticket.DUE_AT)}` : 'No SLA set'}
                   </span>
                   <button
-                    style={{ border: 0, background: 'transparent', color: 'var(--sup-blue)', marginLeft: 'auto', cursor: 'pointer' }}
+                    type="button"
+                    style={{
+                      border: '1px solid #bfdbfe',
+                      background: showHistory ? '#dbeafe' : '#eff6ff',
+                      color: 'var(--sup-blue)',
+                      marginLeft: 'auto',
+                      cursor: 'pointer',
+                      padding: '3px 10px',
+                      borderRadius: 14,
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
                     onClick={() => {
                       setShowHistory(v => !v);
-                      void supportApi.events(ticket.TICKET_ID).then(setEvents);
+                      if (!showHistory) {
+                        void supportApi.events(ticket.TICKET_ID).then(setEvents);
+                      }
                     }}
                   >
-                    Activity Log
+                    <Clock3 size={12} /> Activity Log
                   </button>
                 </div>
 
@@ -2345,8 +2363,27 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                   </div>
                 )}
 
+                {/* Reopened Ticket Alert: Previous developer is already assigned and working */}
+                {ticket.STATUS === 'REOPENED' && ticket.DEVELOPER_LOGINID && (
+                  <div style={{ padding: '8px 16px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12.5 }}>
+                    <span style={{ color: '#1e40af', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <RotateCcw size={14} color="#1d4ed8" />
+                      <strong>Ticket Reopened:</strong> Assigned developer <strong>{ticket.DEVELOPER_NAME || ticket.DEVELOPER_LOGINID}</strong> will continue work.
+                    </span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        style={{ padding: '3px 10px', fontSize: 11, background: '#ffffff', border: '1px solid #93c5fd', borderRadius: 4, color: '#1e40af', cursor: 'pointer', fontWeight: 600 }}
+                        onClick={() => setShowReassign(v => !v)}
+                      >
+                        {showReassign ? 'Hide Reassign' : 'Reassign to another developer'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Admin Assignment Section with Category Master Integration */}
-                {isAdmin && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (
+                {isAdmin && !['CLOSED', 'RESOLVED'].includes(ticket.STATUS) && (!ticket.DEVELOPER_LOGINID || showReassign || ticket.STATUS !== 'REOPENED') && (
                   <form
                     className="sup-assignment"
                     onSubmit={e => {
@@ -2364,10 +2401,10 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                           estimated_hours: Number(estHours) || 0
                         }),
                         'Developer assigned with Category SLA and notified.'
-                      );
+                      ).then(() => setShowReassign(false));
                     }}
                   >
-                    <label>
+                    <label className="sup-assign-cat">
                       Category Master
                       <select
                         value={selectedCategory}
@@ -2391,7 +2428,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       </select>
                     </label>
 
-                    <label>
+                    <label className="sup-assign-dev">
                       Assign Developer
                       <select required value={developer} onChange={e => setDeveloper(e.target.value)}>
                         <option value="">Select Developer</option>
@@ -2401,7 +2438,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       </select>
                     </label>
 
-                    <label>
+                    <label className="sup-assign-priority">
                       Priority
                       <select value={priority} onChange={e => setPriority(e.target.value)}>
                         <option value="CRITICAL">Critical</option>
@@ -2411,7 +2448,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       </select>
                     </label>
 
-                    <label style={{ maxWidth: 80 }}>
+                    <label className="sup-assign-num">
                       Est Days
                       <input
                         type="number"
@@ -2426,7 +2463,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       />
                     </label>
 
-                    <label style={{ maxWidth: 80 }}>
+                    <label className="sup-assign-num">
                       Est Hours
                       <input
                         type="number"
@@ -2441,7 +2478,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                       />
                     </label>
 
-                    <button className="sup-primary" disabled={busy || !developer}>Assign</button>
+                    <button className="sup-primary sup-assign-btn" disabled={busy || !developer}>Assign</button>
                   </form>
                 )}
 
@@ -2516,8 +2553,10 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                 {/* Reopen Ticket for User/Admin */}
                 {ticket.STATUS === 'CLOSED' && (
                   <div style={{ padding: '10px 20px', background: '#f1f5f9', borderTop: '1px solid var(--sup-line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12 }}>This ticket is closed. If issue persists:</span>
+                    <span style={{ fontSize: 12.5, color: 'var(--sup-ink)' }}>This ticket is closed. If issue persists or needs further attention:</span>
                     <button
+                      type="button"
+                      className="sup-reopen-btn"
                       onClick={() => {
                         const reason = window.prompt('Please specify reason to reopen:');
                         if (reason) {
@@ -2525,7 +2564,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
                         }
                       }}
                     >
-                      Reopen Ticket
+                      <RotateCcw size={13} /> Reopen Ticket
                     </button>
                   </div>
                 )}
