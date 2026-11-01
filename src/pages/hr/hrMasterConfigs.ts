@@ -754,29 +754,24 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     deleteMode: "master",
   },
 
-  categorymaster: {
+    categorymaster: {
     title: "Category Master",
     subtitle: "Maintain employee category codes, short names, remarks, and active status.",
     master: "categorymaster",
     gmEndpoint: "categorymaster",
     routeKeys: ["categorymaster", "category", "appraisal categories"],
     keyField: "category_code",
+    reportEndpoint: "/api/wms/reports/category/html",
     source: "dynamic",
     listQuery: dynamicList("MST_HR_MS_HR_CATEGORY", true),
-    autoGenerateKey: true,
-    buildSave: (form, context) => ({
-      parameter: "MST_HR_CATEGORY", //ins_upd_category
+    buildDelete: (row, context) => ({
+      parameter: "MST_HR_DEL_CATEGORY",
       loginid: context.loginid,
-      val1s1: context.companyCode,
-      val1s2: text(form, "category_code"),
-      val1s3: text(form, "category_name"),
-      val1s4: text(form, "category_short_name"),
-      val1s5: text(form, "remarks"),
-      val1s6: text(form, "status", "A"),
+      code1: context.companyCode,
+      code2: text(row, "category_code"),
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CATEGORY", loginid: context.loginid, code1: context.companyCode, code2: text(row, "category_code") }),
     fields: [
-      { name: "category_code", label: "Category Code", required: true,disabledOnAdd : true, disabledOnEdit: true, width: 160 },
+      { name: "category_code", label: "Category Code", required: true, disabledOnAdd: true, disabledOnEdit: true, width: 160 },
       { name: "category_name", label: "Category Name", required: true, width: 260 },
       { name: "category_short_name", label: "Short Name", width: 140 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },

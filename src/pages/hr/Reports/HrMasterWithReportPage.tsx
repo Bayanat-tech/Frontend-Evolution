@@ -3,14 +3,16 @@ import { ArrowLeft, Edit2, FileText, Loader2, Plus, Printer, RefreshCw, Save, Tr
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
 import { deleteHrMaster, saveHrGm, getHrMaster } from "../../../api/hr";
-import { getDynamicLookup } from "../../../api/lookups";
+import { executeDynamicDelete, getDynamicLookup, getLookupValue, type LookupRow } from "../../../api/lookups";
 import { useToast } from "../../../components/ui/AlertToast";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
 import { Input } from "../../../components/ui/Input";
+import { LookupField } from "../../../components/ui/LookupField";
 import { NewReportDialog } from "../../../components/new_report_format";
 import { Select } from "../../../components/ui/Select";
+import type { HrMasterContext, HrMasterField } from "../HrMasterPage";
 import { useAuth } from "../../../state/AuthContext";
 
 export type MasterReportConfig = {
@@ -22,11 +24,24 @@ export type MasterReportConfig = {
   source: "dynamic" | "gm";
   gmEndpoint?: string;
   enableDelete?: boolean;
-  fields: { name: string; label: string; required?: boolean; disabledOnEdit?: boolean; disabledOnAdd?: boolean; width?: number; type?: "text" | "select"; options?: { label: string; value: string }[] }[];
+  deleteParameter?: string;
+  fields: HrMasterField[];
   defaults?: Record<string, unknown>;
 };
 
 const PRINT_IFRAME_ID = "master-print-iframe";
+
+function getLookupDisplayPatch(field: HrMasterField, row?: LookupRow | null) {
+  if (!field.lookup) return {};
+  const nameField = `${field.name}_name`;
+  if (!row) return { [nameField]: "" };
+
+  const labelValue = field.lookup.displayFields
+    .filter((displayField) => displayField !== field.lookup?.valueField)
+    .map((displayField) => getLookupValue(row, displayField))
+    .find((value) => String(value ?? "").trim());
+  return { [nameField]: labelValue ?? "" };
+}
 
 const fetchReportHtml = async (url: string, payload: any): Promise<string> => {
   try {
@@ -87,6 +102,12 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
   useEffect(() => { void loadRows(); }, [loadRows]);
 
   const makeEmpty = () => ({ company_code: companyCode, ...config.defaults });
+  const lookupContext: HrMasterContext = {
+    loginid,
+    companyCode,
+    editMode: editorMode === "edit",
+    rows,
+  };
 
   const openEditor = (mode: "add" | "edit", row: any = null) => {
     setEditorMode(mode);
@@ -129,7 +150,16 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
     if (!deleteTarget || !config.enableDelete) return;
     setSaving(true);
     try {
-      await deleteHrMaster(config.gmEndpoint!, [deleteTarget[config.keyField]]);
+      if (config.source === "dynamic" && config.deleteParameter) {
+        await executeDynamicDelete({
+          parameter: config.deleteParameter,
+          loginid,
+          code1: companyCode,
+          code2: String(deleteTarget[config.keyField] ?? ""),
+        });
+      } else {
+        await deleteHrMaster(config.gmEndpoint!, [deleteTarget[config.keyField]]);
+      }
       toast.success(`${config.title} deleted successfully`);
       setDeleteTarget(null);
       await loadRows();
@@ -181,19 +211,68 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-card p-4 border rounded-md">
-          {config.fields.map(f => (
-            <label key={f.name} className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-muted-foreground">{f.label} {f.required && "*"}</span>
-              {f.type === "select" ? (
-                <Select value={String(form[f.name] || "")} onChange={e => setForm({...form, [f.name]: e.target.value})}>
-                  <option value="">Select...</option>
-                  {f.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </Select>
-              ) : (
-                <Input value={String(form[f.name] || "")} disabled={editorMode === "edit" && f.disabledOnEdit} onChange={e => setForm({...form, [f.name]: e.target.value})} />
-              )}
-            </label>
-          ))}
+          {config.fields.map((field) => {
+            if (field.hideOnAdd && editorMode === "add") return null;
+            const disabled = Boolean(
+              (editorMode === "edit" && field.disabledOnEdit) ||
+              (editorMode === "add" && field.disabledOnAdd),
+            );
+            const value = form[field.name];
+
+            return (
+              <label key={field.name} className="flex flex-col gap-1 text-sm">
+                <span className="font-medium text-muted-foreground">
+                  {field.label} {field.required && "*"}
+                </span>
+                {field.lookup ? (
+                  <LookupField
+                    compact
+                    label=""
+                    value={String(value ?? "")}
+                    displayValue={
+                      String(value ?? "")
+                        ? [value, form[`${field.name}_name`]].filter(Boolean).join(" - ") || String(value)
+                        : ""
+                    }
+                    columns={field.lookup.columns}
+                    valueField={field.lookup.valueField}
+                    displayFields={field.lookup.displayFields}
+                    loadOptions={() => field.lookup!.loadOptions(lookupContext)}
+                    disabled={disabled}
+                    onChange={(nextValue, selectedRow) =>
+                      setForm((current) => ({
+                        ...current,
+                        [field.name]: nextValue,
+                        ...getLookupDisplayPatch(field, selectedRow),
+                      }))
+                    }
+                  />
+                ) : field.type === "select" ? (
+                  <Select
+                    value={String(value ?? "")}
+                    disabled={disabled}
+                    onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
+                  >
+                    <option value="">Select {field.label}</option>
+                    {(field.options || []).map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    type={field.type === "email" ? "text" : field.type || "text"}
+                    value={field.type === "date" ? String(value ?? "").slice(0, 10) : String(value ?? "")}
+                    disabled={disabled}
+                    placeholder={field.Placeholder}
+                    onChange={(event) => setForm((current) => ({
+                      ...current,
+                      [field.name]: field.type === "number" ? Number(event.target.value || 0) : event.target.value,
+                    }))}
+                  />
+                )}
+              </label>
+            );
+          })}
         </div>
       </section>
     );
