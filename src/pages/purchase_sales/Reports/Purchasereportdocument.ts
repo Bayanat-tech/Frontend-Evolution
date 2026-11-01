@@ -42,11 +42,18 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     }
   }
 
+let signLabels: string[] = [];
+const signTable = doc.querySelector("table.dn-sign");
+if (signTable) {
+  signLabels = Array.from(signTable.querySelectorAll("td"))
+    .map((td) => (td.textContent || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  signTable.remove();
+}
+
   doc.querySelectorAll("img").forEach((el) => el.remove());
 
-  // Opt-in: title (.pl-title / .report-title / .doc-title) + fakta table.data-table thev.
-  // (report-shell already unwrap zalay, mhanun he aata rarely lagel — purnapane
-  // custom body havi asel tarach vapra.)
+ 
   if (options.stripChrome) {
     const table = doc.querySelector("table.data-table");
     if (table) {
@@ -159,7 +166,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     if (table.classList.contains("grn-two-col")) return;
     const isTotals = table.classList.contains("grand-total-table");
     const columns = Math.max(1, ...Array.from(table.rows).map((row) => Array.from(row.cells).reduce((sum, cell) => sum + cell.colSpan, 0)));
-    const details = table.classList.contains("report-details-table") || isTotals;
+    const details = table.classList.contains("report-details-table") || isTotals || table.classList.contains("dn-sign");
     if (!details) maxColumns = Math.max(maxColumns, columns);
 
     // Column widths based on header text
@@ -197,6 +204,10 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
        widths = ["5%", "26%", "5%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
       //  widths = ["6%", "24%", "6%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
     }
+   else if (table.classList.contains("dn-items")) {
+  // S.No | Product / Description | Unit | Qty
+  widths = ["8%", "62%", "12%", "18%"];
+}
     
     else if (!details && table.rows[0]) {
       widths = ["4%", "18%", "6%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
@@ -240,17 +251,17 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
       widths,
       headerRows: table.tHead?.rows.length || (table.rows[0]?.querySelector("th") ? 1 : 0),
       dontBreakRows: true,
-      layout: details
-        ? "noBorders"
-        : table.classList.contains("pr-title-line")
-          ? "titleLine"
-           : table.classList.contains("si-top-line")
-            ? "blueLine"
-          : table.classList.contains("pr-kv-box")
-            ? "kvBox"
-            : table.classList.contains("pr-title-tight")
-              ? { margin: [0, 2, 0, 0] }
-              : "biscReportTable"
+     layout: details
+  ? "noBorders"
+  : table.classList.contains("pr-title-line")
+    ? "titleLine"
+    : (table.classList.contains("si-top-line") || table.classList.contains("si-top-cancel"))
+      ? "blueLine"
+      : table.classList.contains("pr-kv-box")
+        ? "kvBox"
+        : table.classList.contains("pr-title-tight")
+          ? { margin: [0, 2, 0, 0] }
+          : "biscReportTable"
     }));
     table.querySelectorAll("th").forEach((cell) => {
       cell.style.backgroundColor = "#eaf0f8";
@@ -289,7 +300,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     }
   });
 
-  return { doc, html: doc.body.innerHTML, maxColumns, extractedCompany };
+return { doc, html: doc.body.innerHTML, maxColumns, extractedCompany, signLabels };
 }
 
 export async function buildPurchasePdfDefinition(report: PurchaseReportDocument, identity: ReportIdentity, browserWindow: Window = window): Promise<TDocumentDefinitions> {
@@ -341,6 +352,24 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
     : [];
   const contentWithLine = [...topLine, ...(Array.isArray(content) ? content : [content])] as Content;
 
+
+
+ const signLabels = prepared.signLabels || [];
+const SIGN_H = 50;
+const signColW = (pageWidth - 56) / 4;
+const signBlock: Content | null = signLabels.length
+  ? ({
+      margin: [0, 0, 0, 6],
+      columns: signLabels.map((label) => ({
+        width: "*",
+        stack: [
+          { canvas: [{ type: "line", x1: 12, y1: 0, x2: signColW - 12, y2: 0, lineWidth: 0.7, lineColor: "#64748b" }], margin: [0, 28, 0, 0] },
+          { text: label, alignment: "center", bold: true, fontSize: 8, color: "#334155", margin: [0, 4, 0, 0] },
+        ],
+      })),
+    } as Content)
+  : null;
+
   const styles: StyleDictionary = {
     num: { alignment: "right" }, right: { alignment: "right" }, center: { alignment: "center" },
     "primary-text": { bold: true, color: "#00378c" },
@@ -355,11 +384,14 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
     signature: { margin: [0, 14, 0, 0], alignment: "right" },
     empty: { margin: [0, 12, 0, 12], alignment: "center", color: "#64748b" },
   };
+
+
+
   return {
     info: { title: identity.title, author: identity.company, subject: "Purchase report" },
     pageSize: prepared.maxColumns > 14 ? "A3" : "A4",
     pageOrientation,
-    pageMargins: [28, branded ? 92 : 44, 28, 36],
+   pageMargins: [28, branded ? 92 : 44, 28, 36 + (signBlock ? SIGN_H + 6 : 0)],
     defaultStyle: { font: "Inter", fontSize: prepared.maxColumns > 12 ? 7 : (prepared.maxColumns > 8 ? 7.5 : 8.5), color: "#1e293b", lineHeight: 1.15 },
     styles,
     header: {
@@ -380,19 +412,22 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
         // { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.3, lineColor: "#1455a3" }] },
       ],
     },
-    footer: (page, count) => ({
-      margin: [28, 4, 28, 0], fontSize: 6.5, color: "#64748b",
-      stack: [
-        { canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 0.5, lineColor: "#cbd5e1" }], margin: [0, 0, 0, 5] },
-        {
-          columns: [
-            { text: "Print: " + identity.generatedAt + " | User: " + identity.user },
-            { text: "Report: " + identity.title + " | Powered by Bayanat Technology", alignment: "right" },
-          ]
-        },
-        { text: "Page " + page + " of " + count, alignment: "right", margin: [0, 3, 0, 0] },
+   footer: (page, count) => ({
+  margin: [28, 4, 28, 0], fontSize: 6.5, color: "#64748b",
+  stack: [
+    ...(signBlock
+      ? [page === count ? signBlock : ({ text: " ", margin: [0, SIGN_H, 0, 0] } as Content)]
+      : []),
+    { canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 0.5, lineColor: "#cbd5e1" }], margin: [0, 0, 0, 5] },
+    {
+      columns: [
+        { text: "Print: " + identity.generatedAt + " | User: " + identity.user },
+        { text: "Report: " + identity.title + " | Powered by Bayanat Technology", alignment: "right" },
       ],
-    }),
+    },
+    { text: "Page " + page + " of " + count, alignment: "right", margin: [0, 3, 0, 0] },
+  ],
+}),
     content,
   };
 }
