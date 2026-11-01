@@ -130,6 +130,7 @@ export type HrMasterContext = {
   companyCode: string;
   editMode: boolean;
   rows: Record<string, unknown>[];
+  form?: Record<string, unknown>;
 };
 
 // ── Freight building blocks ───────────────────────────────────────────────────
@@ -232,7 +233,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     company_code: companyCode,
   });
 
-  const buildContext = (mode = editMode): HrMasterContext => ({ loginid, companyCode, editMode: mode, rows });
+  const buildContext = (mode = editMode): HrMasterContext => ({ loginid, companyCode, editMode: mode, rows, form });
 
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
@@ -312,6 +313,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
       // aur auto-print script preview me dikkat karta hai.
       const html = await getHrReportHtml(config.reportEndpoint, {
         company_code: companyCode,
+        print: "false",
         ...extraParams,
       });
       setReportHtml(html);
@@ -638,12 +640,20 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
                           return rest;
                         });
                         setForm((current) => {
-                          if (!field.lookup) return { ...current, [field.name]: value };
-                          return {
+                          const next = {
                             ...current,
                             [field.name]: value,
-                            ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }),
+                            ...(field.lookup
+                              ? row
+                                ? displayPatch(field, row)
+                                : { [`${field.name}_name`]: "" }
+                              : {}),
                           };
+                          if (field.name === "div_code") {
+                            next.dept_code = "";
+                            next.dept_code_name = "";
+                          }
+                          return next;
                         });
                       },
                     )}

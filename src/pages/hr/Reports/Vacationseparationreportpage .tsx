@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
 
 import { Button } from "../../../components/ui/Button";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import { useAuth } from "../../../state/AuthContext";
-
 
 import { NewReportDialog } from "../../../components/new_report_format";
 import { getVacationSeparationReportExcelDownload, getVacationSeparationReportHtml } from "../../../api/transactions";
@@ -30,12 +29,79 @@ const MONTH_OPTIONS = MONTHS.map((m, i) => ({ label: m, value: String(i + 1) }))
 
 // ─── Small UI helpers ─────────────────────────────────────────────────────────
 
+// div (label nahi) use kiya hai taaki andar ke radio <label> nested na hon
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-      {label}
+    <div className="grid min-w-0 gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+      <span>{label}</span>
       {children}
-    </label>
+    </div>
+  );
+}
+
+// Custom radio: inline styles + hidden native input, taaki global CSS
+// (label/input ke styles) isko tod na sake.
+function RadioOption({
+  label,
+  checked,
+  onSelect,
+}: {
+  label: string;
+  checked: boolean;
+  onSelect: () => void;
+}) {
+  // <label>/<input> nahi, <span role="radio"> use kiya hai, kyunki global CSS
+  // label/input par apne styles laga kar text ko radio ke neeche bhej raha tha.
+  return (
+    <span
+      role="radio"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      style={{
+        display: "inline-flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        userSelect: "none",
+        textTransform: "none",
+        fontSize: 13,
+        fontWeight: 500,
+        lineHeight: 1,
+        color: checked ? "#2563eb" : "#0f172a",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          width: 16,
+          height: 16,
+          boxSizing: "border-box",
+          borderRadius: "50%",
+          border: `1.5px solid ${checked ? "#2563eb" : "#94a3b8"}`,
+          background: "#ffffff",
+        }}
+      >
+        {checked ? (
+          <span
+            style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563eb", display: "block" }}
+          />
+        ) : null}
+      </span>
+      {label}
+    </span>
   );
 }
 
@@ -108,6 +174,13 @@ export default function VacationSeparationReportPage() {
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+  // Pay Year increase / decrease (1900 - 2200 ke beech)
+  const changeYear = (delta: number) => {
+    const base = Number.isInteger(yearNum) && yearNum > 0 ? yearNum : now.getFullYear();
+    const next = Math.min(2200, Math.max(1900, base + delta));
+    setPayYear(String(next));
+  };
+
   const handleGenerate = () => {
     if (!inputValid) return;
     fetchReport({ reportType, payMonth: monthNum, payYear: yearNum });
@@ -122,16 +195,16 @@ export default function VacationSeparationReportPage() {
   };
 
   const handleExcel = async () => {
-  if (!lastParamsRef.current) return;
-  setExporting(true);
-  try {
-    await getVacationSeparationReportExcelDownload(buildPayload(lastParamsRef.current));
-  } catch (err) {
-    console.error("Excel export error:", err);
-  } finally {
-    setExporting(false);
-  }
-};
+    if (!lastParamsRef.current) return;
+    setExporting(true);
+    try {
+      await getVacationSeparationReportExcelDownload(buildPayload(lastParamsRef.current));
+    } catch (err) {
+      console.error("Excel export error:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleOpenInNewWindow = () => {
     if (!reportHtml) return;
@@ -199,11 +272,11 @@ export default function VacationSeparationReportPage() {
 
         <ReportFilterHeader onClear={handleClearAll} />
 
-        {/* Row 1: Pay Month / Pay Year */}
-        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+        {/* Single row: Pay Month / Pay Year / Report Type */}
+        <div className="freight-report-fields grid grid-cols-[200px_140px_240px] items-start gap-4 p-3">
           <Field label="Pay Month">
             <select
-              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
               value={payMonth}
               onChange={(e) => setPayMonth(e.target.value)}
             >
@@ -216,37 +289,118 @@ export default function VacationSeparationReportPage() {
           </Field>
 
           <Field label="Pay Year">
-            <input
-              type="number"
-              min={1900}
-              max={2200}
-              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-              value={payYear}
-              onChange={(e) => setPayYear(e.target.value)}
-            />
+            <div className="relative w-full">
+              <input
+                type="number"
+                min={1900}
+                max={2200}
+                className="h-8 w-full rounded-md border bg-background pl-2 pr-7 text-sm font-medium text-foreground shadow-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                value={payYear}
+                onChange={(e) => setPayYear(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    changeYear(1);
+                  } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    changeYear(-1);
+                  }
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  right: 3,
+                  bottom: 3,
+                  width: 20,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label="Increase year"
+                  tabIndex={-1}
+                  onClick={() => changeYear(1)}
+                  disabled={yearNum >= 2200}
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                    margin: 0,
+                    minHeight: 0,
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 3,
+                    background: "#ffffff",
+                    color: "#334155",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  <ChevronUp size={11} strokeWidth={3} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Decrease year"
+                  tabIndex={-1}
+                  onClick={() => changeYear(-1)}
+                  disabled={yearNum <= 1900}
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                    margin: 0,
+                    minHeight: 0,
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 3,
+                    background: "#ffffff",
+                    color: "#334155",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  <ChevronDown size={11} strokeWidth={3} />
+                </button>
+              </div>
+            </div>
           </Field>
-        </div>
 
-        {/* Row 2: Vacation / Separation */}
-        <div className="freight-report-fields flex flex-wrap items-center gap-6 px-3 pb-3 text-sm">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="vacation-separation-type"
-              checked={reportType === "VACATION"}
-              onChange={() => setReportType("VACATION")}
-            />
-            Vacation
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="vacation-separation-type"
-              checked={reportType === "SEPARATION"}
-              onChange={() => setReportType("SEPARATION")}
-            />
-            Separation
-          </label>
+          <Field label="Report Type">
+            {/* Input-field jaisa box (Month/Year jaisa outline, 32px height) */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 20,
+                width: "100%",
+                height: 32,
+                boxSizing: "border-box",
+                padding: "0 12px",
+                borderRadius: 6,
+                border: "1px solid #94a3b8",
+                background: "#f5f8fd",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.06)",
+              }}
+            >
+              <RadioOption
+                label="Vacation"
+                checked={reportType === "VACATION"}
+                onSelect={() => setReportType("VACATION")}
+              />
+              <RadioOption
+                label="Separation"
+                checked={reportType === "SEPARATION"}
+                onSelect={() => setReportType("SEPARATION")}
+              />
+            </div>
+          </Field>
         </div>
 
         {!inputValid && (

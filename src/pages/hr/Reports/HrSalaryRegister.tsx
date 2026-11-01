@@ -209,6 +209,7 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
     const [sectionCode, setSectionCode] = useState("");
     const [sectionDisplay, setSectionDisplay] = useState("");
     const [employeeId, setEmployeeId] = useState("");
+    const [employeeCode, setEmployeeCode] = useState("");
     const [employeeDisplay, setEmployeeDisplay] = useState("");
 
     const [payMonth, setPayMonth] = useState<string>(currentMonth());
@@ -290,6 +291,7 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
       setSectionCode("");
       setSectionDisplay("");
       setEmployeeId("");
+      setEmployeeCode("");
       setEmployeeDisplay("");
     };
 
@@ -307,6 +309,7 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
       setSectionCode("");
       setSectionDisplay("");
       setEmployeeId("");
+      setEmployeeCode("");
       setEmployeeDisplay("");
     };
 
@@ -329,12 +332,14 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
       }
 
       setEmployeeId("");
+      setEmployeeCode("");
       setEmployeeDisplay("");
     };
 
-    const handleEmployeeChange = (value: string, row: LookupRow | null) => {
+        const handleEmployeeChange = (value: string, row: LookupRow | null) => {
       resetMessages();
       setEmployeeId(value);
+      setEmployeeCode(val(row, "EMPLOYEE_CODE", "employee_code"));
 
       const code = val(row, "employee_id", "EMPLOYEE_ID", "employee_code", "EMPLOYEE_CODE");
       const name = val(row, "employee_name", "EMPLOYEE_NAME", "rpt_name", "RPT_NAME");
@@ -365,7 +370,7 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
       div_code: divCode || "All",
       dept_code: deptCode || "All",
       section_code: sectionCode || "All",
-      employee_code: employeeId || "All",
+      employee_code: employeeCode || "All",
       pay_month: payMonth,
       pay_year: payYear,
       earn_ded: earnDed,
@@ -503,6 +508,7 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
       setSectionCode("");
       setSectionDisplay("");
       setEmployeeId("");
+      setEmployeeCode("");
       setEmployeeDisplay("");
       setPayMonth(currentMonth());
       setPayYear(currentYear());

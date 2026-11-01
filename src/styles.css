@@ -7629,9 +7629,15 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   --finance-col-account: 430px;
 }
 
-.finance-lines-table th,
+/* .finance-lines-table th,
 .finance-lines-table td {
   border-right: 1px solid #dbe5f2;
+} */
+
+.finance-lines-table th,
+.finance-lines-table td {
+  border-right: 1px solid #64748b;
+  border-bottom: 1px solid #94a3b8;
 }
 
 .finance-lines-table th:last-child,
@@ -7643,9 +7649,13 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   position: sticky;
   z-index: 4;
   background: #ffffff;
-  box-shadow:
+  /* box-shadow:
     1px 0 0 #c7d5e7,
-    8px 0 14px -14px rgba(15, 23, 42, 0.4);
+    8px 0 14px -14px rgba(15, 23, 42, 0.4); */
+    box-shadow: none;
+   /* box-shadow:
+    1px 0 0 #475569,
+    8px 0 14px -14px rgba(15, 23, 42, 0.4); */
 }
 
 .finance-lines-table thead .finance-sticky-col {
@@ -7866,20 +7876,21 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .commercial-line-description {
   width: 100%;
-  height: 28px;
-  min-height: 28px;
-  max-height: 28px;
-  padding: 4px 9px;
-  overflow: hidden;
-  resize: none;
-  font-size: 13px;
+  height: 48px;
+  min-height: 44px;
+  max-height: 100px;
+  padding: 6px 9px;
+  overflow-y: auto;
+  resize: vertical;
+  font-size: 12px;
   line-height: 18px;
   color: var(--foreground);
   background: #ffffff;
   border: 1px solid #b8c5d8;
   border-radius: 7px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
-  white-space: nowrap;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .commercial-line-description:focus-visible {
@@ -8111,10 +8122,15 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .commercial-document-workbench .commercial-lines-card table .ui-input,
 .commercial-document-workbench .commercial-lines-card table .ui-select,
-.commercial-document-workbench .commercial-lines-card table .field > div,
-.commercial-document-workbench .commercial-line-description {
+.commercial-document-workbench .commercial-lines-card table .field > div {
   height: 24px;
   min-height: 24px;
+}
+
+.commercial-document-workbench .commercial-line-description {
+  height: 48px;
+  min-height: 44px;
+  max-height: 100px;
 }
 
 .commercial-document-workbench .commercial-lines-card table th {
@@ -12136,4 +12152,38 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   .app-launch-grid .app-module-card p {
     display: none;
   }
+}
+
+.freight-job-ops-screen .commercial-lines-card table:not(.finance-lines-table) th,
+.freight-job-ops-screen .commercial-lines-card table:not(.finance-lines-table) td,
+.ui-dialog-content table th,
+.ui-dialog-content table td {
+  border-right: 1px solid #64748b !important;
+  border-bottom: 1px solid #94a3b8 !important;
+}
+.freight-job-ops-screen .commercial-lines-card table:not(.finance-lines-table) :is(th, td):last-child,
+.ui-dialog-content table :is(th, td):last-child {
+  border-right: 0 !important;
+}
+.ui-dialog-content table thead th {
+  border-right-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* Service & Activity Lines: one consistent grid */
+.freight-job-ops-screen .finance-lines-table :is(th, td) {
+  border-right: 1px solid #94a3b8 !important;
+  border-bottom: 1px solid #94a3b8 !important;
+}
+.freight-job-ops-screen .finance-lines-table thead :is(th, td) {
+  border-right: 1px solid rgba(255, 255, 255, 0.55) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.55) !important;
+}
+.freight-job-ops-screen .finance-lines-table tfoot td {
+  border-top: 2px solid #64748b !important;
+}
+.freight-job-ops-screen .finance-lines-table :is(th, td):last-child {
+  border-right: 0 !important;
+}
+.freight-job-ops-screen .finance-lines-table .finance-sticky-col {
+  box-shadow: none !important;
 }

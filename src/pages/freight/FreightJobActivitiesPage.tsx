@@ -664,7 +664,7 @@ export function FreightJobActivitiesPage({
               className="h-7 px-2.5 text-[11px] font-semibold text-[#00378C] border-blue-300 bg-blue-50/70 hover:bg-blue-100 shadow-2xs cursor-pointer whitespace-nowrap shrink-0"
               title="View PowerBuilder dw_3 Cost Booking Breakdown & Purchase Invoices"
             >
-              <Receipt size={12} className="mr-1 text-[#00378C] shrink-0" /> Cost Bookings (dw_3)
+              <Receipt size={12} className="mr-1 text-[#00378C] shrink-0" /> Cost Bookings
             </Button>
 
             <Button
@@ -682,7 +682,7 @@ export function FreightJobActivitiesPage({
 
         {/* Scrollable Table matching Finance Detail Tables */}
         <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-250px)] min-h-[320px]">
-          <table className="finance-lines-table w-full text-xs min-w-[1360px] border-collapse">
+          <table className="finance-lines-table w-full text-xs min-w-[1370px] border-collapse" >
             <thead className="sticky top-0 shadow-md z-10 whitespace-nowrap">
               {/* Tier 1 Header: Group Categories (PB Income & Expense Division) in matching Corporate Navy */}
               <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none bg-[#002d72] text-white border-b border-[#002052]">
@@ -713,18 +713,18 @@ export function FreightJobActivitiesPage({
                 </th>
                 <th className="px-2 py-2 text-center w-9 bg-[#00378C] text-white border-r border-white/15">#</th>
                 <th className="px-2 py-2 text-left min-w-[220px] text-white border-r border-white/15">Activity / Description</th>
-                <th className="px-2 py-2 text-right w-[60px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
+                <th className="px-0.5 py-1 text-right w-[35px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
                 {/* Income Columns */}
-                <th className="px-2 py-2 text-right w-[85px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
-                <th className="px-2 py-2 text-right w-[95px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
+                <th className="px-2 py-2 text-right w-[9550px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
+                <th className="px-2 py-2 text-right w-[200px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
                 {/* Expense Columns */}
-                <th className="px-2 py-2 text-right w-[95px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
+                <th className="px-2 py-2 text-right w-[85px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
                   Other Cost
                 </th>
                 <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Agent</th>
-                <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Agent Price</th>
+                <th className="px-2 py-2 text-right w-[70px] bg-[#002f78] text-white border-r border-white/15">Agent Price</th>
                 <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Transporter</th>
-                <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Transp Price</th>
+                <th className="px-2 py-2 text-right w-[70px] bg-[#002f78] text-white border-r border-white/15">Transp Price</th>
                 {/* Tax */}
                 <th className="px-2 py-2 text-center w-[110px] text-emerald-200 bg-[#00378C] border-r border-white/15">Tax / VAT</th>
                 {/* Customer Sales Invoice (PowerBuilder consolidated_invno) */}
@@ -842,7 +842,7 @@ export function FreightJobActivitiesPage({
                     </td>
 
                     {/* Qty */}
-                    <td className="px-1.5 py-1 w-[55px] border-r border-slate-200">
+                    <td className="px-1.5 py-1 w-[45px] border-r border-slate-200">
                       <MoneyInput
                         value={line.quantity}
                         disabled={isLineLocked}
@@ -852,7 +852,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Rate (OMR) */}
                     <td
-                      className="px-1.5 py-1 w-[85px] border-r border-slate-200"
+                      className="px-1.5 py-1 w-[100px] border-r border-slate-200"
                       title={
                         hasForeignCurrency
                           ? `Base: OMR ${money(line.bill_rate)} | Foreign: ${money(line.bill_rate_oc)} ${line.bill_curr_code} (Ex: ${line.bill_ex_rate})`
@@ -1215,7 +1215,7 @@ export function FreightJobActivitiesPage({
 
           {/* 2D Financial Matrix Card matching PowerBuilder dw_ft_service_activities_dtl */}
           <div className="overflow-x-auto w-full xl:w-auto rounded-md border border-slate-300 bg-white shadow-xs">
-            <table className="text-xs border-collapse font-sans text-right min-w-[580px]">
+            <table className="dark-grid text-xs border-collapse font-sans text-right min-w-[580px]">
               <thead>
                 <tr className="border-b border-slate-300 bg-slate-100/90 text-[11px]">
                   <th className="px-3 py-1 text-left font-bold text-slate-600 border-r border-slate-200">Category</th>
@@ -1764,7 +1764,8 @@ export function FreightJobActivitiesPage({
 
           {/* Table */}
           <div className="rounded-lg border border-slate-200 overflow-hidden shadow-2xs">
-            <table className="w-full text-left text-xs border-collapse">
+            {/* <table className="w-full text-left text-xs border-collapse"> */}
+            <table className="dark-grid w-full text-left text-xs border-collapse">
               <thead className="bg-[#002d72] text-white text-[11px] font-bold uppercase tracking-wider">
                 <tr>
                   <th className="py-2 px-2.5 text-center w-10">#</th>

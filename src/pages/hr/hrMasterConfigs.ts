@@ -79,6 +79,41 @@ const religionLookup = {
     }),
 };
 
+const sectionDivisionLookup = {
+  columns: [
+    { field: "div_code", header: "Division Code" },
+    { field: "div_name", header: "Division Name" },
+  ],
+  valueField: "div_code",
+  displayFields: ["div_code", "div_name"],
+  loadOptions: (context: { loginid: string; companyCode: string }) =>
+    getDynamicLookup({
+      parameter: "MST_HR_ACCOUNT_DIVISION",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: "",
+    }),
+};
+
+const sectionDepartmentLookup = {
+  columns: [
+    { field: "dept_code", header: "Department Code" },
+    { field: "dept_name", header: "Department Name" },
+  ],
+  valueField: "dept_code",
+  displayFields: ["dept_code", "dept_name"],
+  loadOptions: (context: { loginid: string; companyCode: string; form?: Record<string, unknown> }) => {
+    const divisionCode = String(context.form?.div_code ?? "");
+    if (!divisionCode) return Promise.resolve([]);
+    return getDynamicLookup({
+      parameter: "MST_HR_MS_HR_DEPARTMENT",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: divisionCode,
+    });
+  },
+};
+
 export const hrMasterConfigs: Record<string, HrMasterConfig> = {
   department: {
     title: "Department Master",
@@ -187,7 +222,8 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     master: "bank",
     gmEndpoint: "bank",
     routeKeys: ["bank", "bank_master", "banks_master", "main_bank", "main_banks", "hrbank", "hr_bank"],
-    keyField: "main_bank_code",
+    keyField: "main_bank_code", 
+    reportEndpoint: "/wms/main-bank/html",
     source: "dynamic",
     mutationMode: "column90",
     listQuery: (context) => ({
@@ -266,6 +302,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     gmEndpoint: "hrbank",
     routeKeys: ["hrbank", "hr_bank", "bank", "banks"],
     keyField: "bank_code",
+    reportEndpoint: "/wms/bank/html",
     source: "dynamic",
     mutationMode: "column90",
     listQuery: (context) => ({
@@ -339,6 +376,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     gmEndpoint: "sponsor",
     routeKeys: ["sponsor", "hrsponsor", "hr_sponsor"],
     keyField: "sponsor_code",
+    reportEndpoint: "/wms/sponsor/html",
     source: "dynamic",
     mutationMode: "column90",
     listQuery: (context) => ({
@@ -550,6 +588,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     gmEndpoint: "educational_level",
     routeKeys: ["educational_level", "education_level", "edulevel", "edu_level"],
     keyField: "edu_level_code",
+    reportEndpoint: "/wms/edu-level/html",
     source: "dynamic",
     listQuery: dynamicList("HR_EDUCATIONAL_LEVEL_SELECT", true),
     autoGenerateKey: true,
@@ -750,29 +789,24 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     deleteMode: "master",
   },
 
-  categorymaster: {
+    categorymaster: {
     title: "Category Master",
     subtitle: "Maintain employee category codes, short names, remarks, and active status.",
     master: "categorymaster",
     gmEndpoint: "categorymaster",
     routeKeys: ["categorymaster", "category", "appraisal categories"],
     keyField: "category_code",
+    reportEndpoint: "/api/wms/reports/category/html",
     source: "dynamic",
     listQuery: dynamicList("MST_HR_MS_HR_CATEGORY", true),
-    autoGenerateKey: true,
-    buildSave: (form, context) => ({
-      parameter: "MST_HR_CATEGORY", //ins_upd_category
+    buildDelete: (row, context) => ({
+      parameter: "MST_HR_DEL_CATEGORY",
       loginid: context.loginid,
-      val1s1: context.companyCode,
-      val1s2: text(form, "category_code"),
-      val1s3: text(form, "category_name"),
-      val1s4: text(form, "category_short_name"),
-      val1s5: text(form, "remarks"),
-      val1s6: text(form, "status", "A"),
+      code1: context.companyCode,
+      code2: text(row, "category_code"),
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CATEGORY", loginid: context.loginid, code1: context.companyCode, code2: text(row, "category_code") }),
     fields: [
-      { name: "category_code", label: "Category Code", required: true,disabledOnAdd : true, disabledOnEdit: true, width: 160 },
+      { name: "category_code", label: "Category Code", required: true, disabledOnAdd: true, disabledOnEdit: true, width: 160 },
       { name: "category_name", label: "Category Name", required: true, width: 260 },
       { name: "category_short_name", label: "Short Name", width: 140 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
@@ -944,12 +978,12 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       { name: "section_code", label: "Section Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "section_name", label: "Section Name", required: true, width: 260 },
       { name: "section_short_name", label: "Short Name", width: 140 },
-      { name: "div_code", label: "Division Code", required: true, width: 130 },
-      { name: "dept_code", label: "Department Code", required: true, width: 140 },
+      { name: "div_code", label: "Division", required: true, width: 130, lookup: sectionDivisionLookup },
+      { name: "dept_code", label: "Department", required: true, width: 140, lookup: sectionDepartmentLookup },
       { name: "sect_head_id", label: "Section Head", width: 150 },
       { name: "phone", label: "Phone", width: 140 },
       { name: "email", label: "Email", type: "email", width: 220 },
-      { name: "status", label: "Status", type: "select", options: yesNo, width: 120 },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
       { name: "remarks", label: "Remarks", table: false },
       { name: "sect_addr1", label: "Address 1", required: true, table: false },
       { name: "sect_addr2", label: "Address 2", table: false },
@@ -960,7 +994,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       { name: "expense_type", label: "Expense Type", table: false },
       { name: "expense_sub_type", label: "Expense Sub Type", table: false },
     ],
-    defaults: { status: "Y" },
+    defaults: { status: "A" },
     deleteMode: "gm",
   },
 

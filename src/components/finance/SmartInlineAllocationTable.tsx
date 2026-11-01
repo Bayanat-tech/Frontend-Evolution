@@ -61,6 +61,34 @@ export function SmartInlineAllocationTable({
   const diff = parentAmount - totalAllocated;
   const isMatched = Math.abs(diff) < 0.001;
 
+  const handleFifoAllocate = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (parentAmount <= 0) return;
+
+    // Sort rows by inv_date ascending (oldest unpaid invoice first)
+    const sorted = [...rows].sort((a, b) => {
+      const dateA = a.inv_date ? new Date(String(a.inv_date)).getTime() : 0;
+      const dateB = b.inv_date ? new Date(String(b.inv_date)).getTime() : 0;
+      return dateA - dateB;
+    });
+
+    let remaining = parentAmount;
+    sorted.forEach((r) => {
+      const invAmt = Number(r.inv_amt || 0);
+      const rawOutstanding = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : invAmt);
+      const maxAllowed = invAmt > 0 ? Math.min(invAmt, Math.max(0, rawOutstanding)) : Math.max(0, rawOutstanding);
+
+      if (remaining > 0 && maxAllowed > 0) {
+        const toAlloc = Math.min(remaining, maxAllowed);
+        onChange(r.id, { amount: toAlloc });
+        remaining -= toAlloc;
+      } else {
+        onChange(r.id, { amount: 0 });
+      }
+    });
+  };
+
   const handleAllocateAll = (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
@@ -165,6 +193,18 @@ export function SmartInlineAllocationTable({
               </span>
 
               {/* Action Buttons: Auto-Fill & Allocate All */}
+              {childTable === "invoice" && rows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleFifoAllocate}
+                  disabled={disabled}
+                  className="inline-flex items-center gap-1 rounded bg-blue-50 hover:bg-blue-100 text-[#00378C] border border-blue-300 px-2 py-0.5 text-[9.5px] font-bold cursor-pointer transition-colors shadow-2xs"
+                  title="FIFO Auto-Allocate: Automatically allocate payment to the oldest unpaid invoices first"
+                >
+                  <Zap size={10} className="text-amber-500 fill-amber-500" /> FIFO Allocate
+                </button>
+              )}
+
               {childTable === "invoice" && rows.length > 0 && !isMatched && diff > 0 && (
                 <button
                   type="button"

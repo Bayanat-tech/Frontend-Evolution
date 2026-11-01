@@ -432,31 +432,31 @@ export function HrEmpLanguagePage() {
 
   const isEditingRow = !!draft && rows.some((r) => r.id === draft.id);
 
-  /* ── UI ── */
-  return (
-    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
-      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <FileText size={15} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                HR Employee - Language Skills
-              </h1>
-              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                Editing
-              </span>
-              {employee && (
-                <span className="text-xs text-muted-foreground">
-                  {employee.employee_id} - {employee.employee_name}
+    /* ── UI ── */
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* Freight-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                  Language Skills
+                </h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  Editing
                 </span>
-              )}
+                {employee && (
+                  <span className="text-xs text-muted-foreground">
+                    {employee.employee_id} - {employee.employee_name}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
           <Button type="button" size="sm" variant="outline" onClick={reset} disabled={saving}>

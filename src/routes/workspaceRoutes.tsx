@@ -358,7 +358,7 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 
       {
     name: "HR Employee Details",
-    match: ({ pathname }) => isHrEmployeeDetailsRoute(pathname),
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/reports/employee/employee_details_report"),
     element: () => <HrEmployeeDetailsReport />,
     },
 
@@ -608,17 +608,16 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
       element: () => <LeaveResumptionWorkspacePage />,
     },
 
-
+    {
+      name: "Employee Details",
+      match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/employee/employee_details"),
+      element: () => <EmployeeDetailsPage />
+    },
 
     {
       name: "Employee Master",
       match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
       element: () => <EmployeeMasterPage />
-    },
-    {
-      name: "Employee Details",
-      match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/employee/employee_details"),
-      element: () => <EmployeeDetailsPage />
     },
 
     {
@@ -1645,18 +1644,8 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
     keyField: "section_code",
     source: "dynamic",
     gmEndpoint: "section",
-    fields: [
-      { name: "section_code", label: "Section Code", required: true, disabledOnEdit: true },
-      { name: "section_name", label: "Section Name", required: true },
-      { name: "section_short_name", label: "Short Name" },
-      { name: "div_code", label: "Division", required: true },
-      { name: "dept_code", label: "Department", required: true },
-      { name: "sect_head_id", label: "Section Head" },
-      { name: "phone", label: "Phone" },
-      { name: "email", label: "Email" },
-      { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
-    ],
-    defaults: { status: "A" }
+    fields: hrMasterConfigs.section.fields.filter((field) => field.table !== false),
+    defaults: hrMasterConfigs.section.defaults,
     }} />
     ),
     },
@@ -1687,25 +1676,7 @@ import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
                 {
       name: "HR Category Master",
       match: (context) => isHrRoute(context) && isHrCategoryMasterRoute(context),
-      element: () => (
-        <MasterWithReportPage config={{
-          title: "Category Master",
-          // 👇 CHANGE THIS:
-          gridParameter: "MST_HR_MS_HR_CATEGORY", 
-          reportUrl: "/api/wms/reports/category/html",
-          keyField: "category_code",
-          source: "dynamic", // 👈 CHANGE TO DYNAMIC
-          gmEndpoint: "categorymaster",
-          fields: [
-            { name: "category_code", label: "Category Code", required: true, disabledOnEdit: true },
-            { name: "category_name", label: "Category Name", required: true },
-            { name: "category_short_name", label: "Short Name" },
-            { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
-            { name: "remarks", label: "Remarks" },
-          ],
-          defaults: { status: "A" }
-        }} />
-      )
+      element: () => <HrMasterPage config={hrMasterConfigs.categorymaster} />,
     },
 
     {

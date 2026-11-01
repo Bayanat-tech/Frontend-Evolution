@@ -205,22 +205,32 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
     if (isDisabled && open) setOpen(false);
   }, [isDisabled, open]);
 
+  const selectableOptions = useMemo(
+    () =>
+      options.filter(
+        (option) =>
+          String(option.value).trim().toLowerCase() !== allValue.trim().toLowerCase() &&
+          String(option.label).trim().toLowerCase() !== "all" &&
+          String(option.code ?? "").trim().toLowerCase() !== "all"
+      ),
+    [allValue, options]
+  );
   const filteredOptions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter(
+    if (!q) return selectableOptions;
+    return selectableOptions.filter(
       (o) =>
         o.label.toLowerCase().includes(q) ||
         o.value.toLowerCase().includes(q) ||
         (o.code ? o.code.toLowerCase().includes(q) : false)
     );
-  }, [options, searchQuery]);
+  }, [selectableOptions, searchQuery]);
 
   // Items-mode helpers
   const allItemsChecked =
     filteredOptions.length > 0 && filteredOptions.every((o) => value.includes(o.value));
   const everythingSelected =
-    options.length > 0 && options.every((o) => value.includes(o.value));
+    selectableOptions.length > 0 && selectableOptions.every((o) => value.includes(o.value));
   const allRowChecked = itemsMode ? allItemsChecked : isAllSelected;
 
   const toggleOption = (optValue: string) => {
