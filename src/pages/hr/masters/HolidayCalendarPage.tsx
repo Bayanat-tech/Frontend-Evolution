@@ -58,6 +58,13 @@ const WEEKLY_OFF_DAYS: Record<number, "W1" | "W2"> = {
   6: "W2", // Saturday
 };
 
+// Years offered in the Year From / Year To dropdowns: current year back to 1975 (newest first).
+const CURRENT_YEAR = new Date().getFullYear();
+const FIRST_YEAR = 1975;
+const YEAR_LIST = Array.from({ length: CURRENT_YEAR - FIRST_YEAR + 1 }, (_, i) =>
+  String(CURRENT_YEAR - i),
+);
+
 function holidayTypeMeta(code: string | null) {
   return (
     HOLIDAY_TYPES.find((t) => t.code === code) ?? {
@@ -321,8 +328,8 @@ export default function HolidayCalendarPage() {
   const [divDisplay, setDivDisplay] = useState("");
   const [holidayType, setHolidayType] = useState("");
   const [gradeCode, setGradeCode] = useState("");
-  const [yearFrom, setYearFrom] = useState(String(new Date().getFullYear()));
-  const [yearTo, setYearTo] = useState(String(new Date().getFullYear()));
+  const [yearFrom, setYearFrom] = useState(String(CURRENT_YEAR));
+  const [yearTo, setYearTo] = useState(String(CURRENT_YEAR));
 
   const [rows, setRows] = useState<HolidayRow[]>([]);
   const [dirtyDateIds, setDirtyDateIds] = useState<Set<string>>(new Set());
@@ -349,10 +356,6 @@ export default function HolidayCalendarPage() {
 
   const fetchCalendar = useCallback(async () => {
     if (!companyCode || !yearFrom || !yearTo) return;
-    if (Number(yearFrom) > Number(yearTo)) {
-      toast.warning("Year From cannot be greater than Year To");
-      return;
-    }
     setLoading(true);
     try {
       const sql = buildHolidayCalendarQuery({
@@ -385,10 +388,6 @@ export default function HolidayCalendarPage() {
       toast.warning("Select Division, enter Grade Code and a Year range before generating");
       return;
     }
-    if (Number(yearFrom) > Number(yearTo)) {
-      toast.warning("Year From cannot be greater than Year To");
-      return;
-    }
     setGenerating(true);
     try {
       const created = await generateHolidayCalendar({
@@ -412,6 +411,12 @@ export default function HolidayCalendarPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyCode, divCode, gradeCode, yearFrom, yearTo, loginid, fetchCalendar]);
+
+  const handleYearFromChange = (value: string) => {
+    setYearFrom(value);
+    // Year To can never be earlier than Year From
+    if (Number(yearTo) < Number(value)) setYearTo(value);
+  };
 
   const handleTypeChange = useCallback((dateId: string, newType: string) => {
     setRows((prev) => prev.map((r) => (r.DATEID === dateId ? { ...r, HOLIDAY_TYPE: newType } : r)));
@@ -536,9 +541,9 @@ export default function HolidayCalendarPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={handleGenerateCalendar} disabled={busy}>
+          {/* <Button type="button" size="sm" variant="outline" onClick={handleGenerateCalendar} disabled={busy}>
             <Sparkles size={14} /> {generating ? "Generating" : "Generate Calendar"}
-          </Button>
+          </Button> */}
           <Button type="button" size="sm" variant="outline" onClick={() => void fetchCalendar()} disabled={busy}>
             <SearchIcon size={14} /> {loading ? "Searching" : "Search"}
           </Button>
@@ -592,11 +597,23 @@ export default function HolidayCalendarPage() {
           </Field>
 
           <Field label="Year From">
-            <Input type="number" value={yearFrom} onChange={(e) => setYearFrom(e.target.value)} />
+            <Select value={yearFrom} onChange={(e) => handleYearFromChange(e.target.value)}>
+              {YEAR_LIST.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
           </Field>
 
           <Field label="Year To">
-            <Input type="number" value={yearTo} onChange={(e) => setYearTo(e.target.value)} />
+            <Select value={yearTo} onChange={(e) => setYearTo(e.target.value)}>
+              {YEAR_LIST.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
           </Field>
         </div>
       </SectionPanel>
