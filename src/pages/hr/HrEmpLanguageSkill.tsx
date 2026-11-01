@@ -298,10 +298,10 @@ export function HrEmpLanguagePage() {
       toast.warning("Please select an employee");
       return;
     }
-    if (visibleRows.length === 0) {
-      toast.warning("Add at least one language record");
-      return;
-    }
+   if (rows.length === 0) {
+  toast.warning("Add at least one language record");
+  return;
+}
     try {
       const language_details = rows.map((r) => ({
         employee_id: employee.employee_id,
