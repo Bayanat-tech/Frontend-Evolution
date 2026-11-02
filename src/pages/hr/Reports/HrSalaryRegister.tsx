@@ -336,7 +336,7 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
       setEmployeeDisplay("");
     };
 
-        const handleEmployeeChange = (value: string, row: LookupRow | null) => {
+    const handleEmployeeChange = (value: string, row: LookupRow | null) => {
       resetMessages();
       setEmployeeId(value);
       setEmployeeCode(val(row, "EMPLOYEE_CODE", "employee_code"));
@@ -687,12 +687,12 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
               </FloatLabel>
             </div>
 
-            {/* Row 2: Pay Month / Pay Year / Earn-Ded / History */}
+            {/* Row 2: Pay Month / Pay Year / Earn-Ded / Report Type / History */}
             <div
               className="field-row"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
                 gap: 10,
                 marginTop: 10,
               }}
@@ -733,14 +733,35 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
                 </Select>
               </FloatLabel>
 
+              <FloatLabel label="Report Type" bgColor={BG}>
+                <Select
+                  value={reportMode}
+                  onChange={(e) => setReportMode(e.target.value as ReportMode)}
+                  style={{ fontSize: 12 }}
+                >
+                  {REPORT_MODES.map((m) => (
+                    <option key={m.key} value={m.key}>
+                      {m.label}
+                    </option>
+                  ))}
+                </Select>
+              </FloatLabel>
+
               <FloatLabel label="History Report" bgColor={BG}>
                 <label
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
-                    height: 32,
+                    height: 40,
+                    padding: "0 12px",
+                    boxSizing: "border-box",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 6,
+                    background: "#fff",
                     fontSize: 12,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
                     cursor: "pointer",
                   }}
                 >
@@ -748,46 +769,13 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
                     type="checkbox"
                     checked={historyReport}
                     onChange={(e) => setHistoryReport(e.target.checked)}
-                    style={{ width: 16, height: 16 }}
+                    style={{ width: 16, height: 16, flexShrink: 0 }}
                   />
                   <span>Include history</span>
                 </label>
               </FloatLabel>
             </div>
 
-            {/* Row 3: Report type */}
-            <div
-              className="field-row"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-                gap: 10,
-                marginTop: 10,
-              }}
-            >
-              {REPORT_MODES.map((mode) => (
-                <label
-                  key={mode.key}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="hr-salary-register-mode"
-                    value={mode.key}
-                    checked={reportMode === mode.key}
-                    onChange={() => setReportMode(mode.key)}
-                    style={{ width: 16, height: 16 }}
-                  />
-                  <span>{mode.label}</span>
-                </label>
-              ))}
-            </div>
           </div>
 
           {/* Actions */}
@@ -820,7 +808,7 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
             </Button>
           </div>
         </div>
-        
+
         {/* Report preview dialog */}
         <NewReportDialog
           open={reportPreviewOpen}

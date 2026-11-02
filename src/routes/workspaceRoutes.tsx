@@ -286,7 +286,7 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   if (isWmsDev) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <p className="text-lg font-semibold text-red-500">No data found</p>
+        <p className="text-lg font-semibold text-red-500"></p>
       </div>
     );
   }
