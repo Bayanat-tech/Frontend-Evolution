@@ -18,7 +18,11 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { useAuth } from "../../state/AuthContext";
-import { FreightDashboardPanel, FreightFilterBar} from "./FreightDashboardPanel";
+import { FreightDashboardPanel, FreightFilterBar } from "./FreightDashboardPanel";
+import { FreightTrackerDashboardPanel } from "./FreightTrackerDashboardPanel";
+import { FreightProQueuePage } from "./FreightProQueuePage";
+import { FreightDcStationPage } from "./FreightDcStationPage";
+import { FreightNotificationDrawer } from "./FreightNotificationDrawer";
 
 type FreightProcess = "enquiry" | "rfq" | "quotation";
 
@@ -58,6 +62,7 @@ type WorkspaceSummary = {
 
 export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarget }) {
   const [activeView, setActiveView] = useState<"dashboard" | "control-center">("dashboard");
+  const [dashboardTab, setDashboardTab] = useState<"tracker" | "pro-queue" | "dc-station" | "commercial">("tracker");
    const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -86,9 +91,74 @@ export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarg
           <PanelsTopLeft size={15} /> Control Center
         </button>
       </div>
-      {activeView === "dashboard" && ( <FreightFilterBar year={year} month={month} onYear={setYear} onMonth={setMonth} onRefresh={() => setRefreshKey(k => k + 1)} />)}
+      {activeView === "dashboard" && (
+          <div className="flex items-center gap-3">
+            <FreightNotificationDrawer />
+            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-100/80 p-0.5 text-xs font-medium dark:border-slate-800 dark:bg-slate-800">
+              <button
+                type="button"
+                className={`rounded-md px-3 py-1 transition ${
+                  dashboardTab === "tracker"
+                    ? "bg-white text-blue-700 shadow-sm font-bold dark:bg-slate-700 dark:text-blue-300"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-400"
+                }`}
+                onClick={() => setDashboardTab("tracker")}
+              >
+                Operations Tracker
+              </button>
+              <button
+                type="button"
+                className={`rounded-md px-3 py-1 transition ${
+                  dashboardTab === "pro-queue"
+                    ? "bg-white text-blue-700 shadow-sm font-bold dark:bg-slate-700 dark:text-blue-300"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-400"
+                }`}
+                onClick={() => setDashboardTab("pro-queue")}
+              >
+                PRO Queue
+              </button>
+              <button
+                type="button"
+                className={`rounded-md px-3 py-1 transition ${
+                  dashboardTab === "dc-station"
+                    ? "bg-white text-blue-700 shadow-sm font-bold dark:bg-slate-700 dark:text-blue-300"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-400"
+                }`}
+                onClick={() => setDashboardTab("dc-station")}
+              >
+                DC Station
+              </button>
+              <button
+                type="button"
+                className={`rounded-md px-3 py-1 transition ${
+                  dashboardTab === "commercial"
+                    ? "bg-white text-blue-700 shadow-sm font-bold dark:bg-slate-700 dark:text-blue-300"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-400"
+                }`}
+                onClick={() => setDashboardTab("commercial")}
+              >
+                Commercial Overview
+              </button>
+            </div>
+            {dashboardTab === "commercial" && (
+              <FreightFilterBar year={year} month={month} onYear={setYear} onMonth={setMonth} onRefresh={() => setRefreshKey(k => k + 1)} />
+            )}
+          </div>
+        )}
       </div>
-      {activeView === "dashboard" ? <FreightDashboardPanel year={year} month={month} refreshKey={refreshKey} /> : <FreightControlCenter target={target}  />}
+      {activeView === "dashboard" ? (
+        dashboardTab === "tracker" ? (
+          <FreightTrackerDashboardPanel />
+        ) : dashboardTab === "pro-queue" ? (
+          <FreightProQueuePage />
+        ) : dashboardTab === "dc-station" ? (
+          <FreightDcStationPage />
+        ) : (
+          <FreightDashboardPanel year={year} month={month} refreshKey={refreshKey} />
+        )
+      ) : (
+        <FreightControlCenter target={target} />
+      )}
     </section>
   );
 }

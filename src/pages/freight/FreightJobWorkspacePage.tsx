@@ -16,6 +16,7 @@ import { FreightPacklistPage } from "./FreightPacklistPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
 import { FreightJobTrackingTab } from "./FreightJobTrackingTab";
+import { FreightNotificationDrawer } from "./FreightNotificationDrawer";
 import { FreightJobFinancialAuditDialog } from "../../components/freight/FreightJobFinancialAuditDialog";
 
 type JobTab = "job" | "packlist" | "documents" | "activities" | "tracking" | "alerts" | "instructions" | "deposits";
@@ -246,7 +247,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           columns={columns}
           data={filteredRows}
           actionButton={
-            <div className="flex items-center gap-2"><button
+            <div className="flex items-center gap-2"><FreightNotificationDrawer /><button
               type="button"
               onClick={() => openSteps(null, "job")}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
