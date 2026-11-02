@@ -38,6 +38,7 @@ type ActivityLine = {
   partners_price: string;
   transporter_code: string;
   transporter_name?: string;
+  transporter_ac_code?: string;
   vehicle_no: string;
   transport_price: string;
   confirmed: string;
@@ -795,6 +796,9 @@ export function FreightJobActivitiesPage({
                             const txCat = line.tx_cat_code || lookupText(header, "tx_cat_code") || "11";
                             const actName = lookupText(row || undefined, "activity");
 
+                            const rowTaxPerc = lookupText(row || undefined, "tx_compnt_1_perc");
+                            const rowExpmt = lookupText(row || undefined, "tx_compnt_1_expmt");
+
                             let updatedLine: ActivityLine = recalc({
                               ...line,
                               act_code: value,
@@ -806,20 +810,31 @@ export function FreightJobActivitiesPage({
                               tx_cat_code: txCat,
                             });
 
+                            const initialTaxPerc = (rowTaxPerc && Number(rowTaxPerc) > 0) ? rowTaxPerc : (rowExpmt === "S" ? "5" : "0");
+                            const initialExpmt = rowExpmt || (numberValue(initialTaxPerc) > 0 ? "S" : "N");
+                            if (initialExpmt === "S" || numberValue(initialTaxPerc) > 0) {
+                              updatedLine = recalcSalesTax({
+                                ...updatedLine,
+                                tx_compnt_perc_1: initialTaxPerc,
+                                tx_compnt_1_expmt: initialExpmt,
+                              });
+                            }
+
                             if (value && companyCode && divCode && txCat) {
                               try {
                                 const compRows = await freightTaxComponents<LookupRow>(companyCode, divCode, txCat, "", value);
                                 if (compRows.length > 0) {
                                   const firstComp = normalizeLookupRow(compRows[0]);
                                   const taxCode = lookupText(firstComp, "tx_compntcat_code");
-                                  const taxPerc = lookupText(firstComp, "tx_percnt") || "0";
-                                  const isStandard = numberValue(taxPerc) > 0 ? "S" : "N";
+                                  const catTaxPerc = lookupText(firstComp, "tx_percnt") || lookupText(firstComp, "tx_compnt_perc_1") || "";
+                                  const effectiveTaxPerc = (rowTaxPerc && Number(rowTaxPerc) > 0) ? rowTaxPerc : (catTaxPerc || (rowExpmt === "S" ? "5" : "0"));
+                                  const effectiveExpmt = rowExpmt || (numberValue(effectiveTaxPerc) > 0 ? "S" : "N");
                                   updatedLine = recalcSalesTax({
                                     ...updatedLine,
                                     tx_compntcat_code_1: taxCode,
                                     tx_compntcat_name_1: lookupText(firstComp, "tx_compntcat_name"),
-                                    tx_compnt_perc_1: taxPerc,
-                                    tx_compnt_1_expmt: isStandard,
+                                    tx_compnt_perc_1: effectiveTaxPerc,
+                                    tx_compnt_1_expmt: effectiveExpmt,
                                   });
                                 }
                               } catch (err) {
@@ -1011,6 +1026,7 @@ export function FreightJobActivitiesPage({
                           updateLine(index, {
                             transporter_code: val,
                             transporter_name: lookupText(row, "transporter_name") || "",
+                            transporter_ac_code: lookupText(row, "ac_code") || lookupText(row, "transporter_ac_code") || "",
                           });
                         }}
                       />
@@ -2012,9 +2028,12 @@ export function FreightJobActivitiesPage({
                     value={lines[activeTaxIndex].tx_compnt_1_expmt}
                     disabled={isLineLocked}
                     onChange={(treatment) => {
+                      const curPerc = lines[activeTaxIndex].tx_compnt_perc_1;
+                      const nextPerc = treatment === "S" && (!curPerc || Number(curPerc) === 0) ? "5" : curPerc;
                       updateLine(activeTaxIndex, recalcSalesTax({
                         ...lines[activeTaxIndex],
                         tx_compnt_1_expmt: treatment,
+                        tx_compnt_perc_1: nextPerc,
                       }));
                     }}
                   />
@@ -2377,7 +2396,12 @@ function TransporterLookup({
   useEffect(() => {
     if (value && !cachedName && companyCode) {
       loadFreightLookup("freight_transporter", companyCode, value).then((rows) => {
-        const found = rows.find((r) => lookupText(r, "transporter_code") === value);
+        const valTrim = String(value || "").trim();
+        const valNorm = valTrim.replace(/^0+/, "");
+        const found = rows.find((r) => {
+          const code = String(lookupText(r, "transporter_code") || "").trim();
+          return code === valTrim || (valNorm && code.replace(/^0+/, "") === valNorm);
+        });
         if (found) {
           const name = lookupText(found, "transporter_name");
           if (name) setCachedName(name);
@@ -2530,6 +2554,7 @@ function toLine(row: LookupRow, index: number, header?: LookupRow | null): Activ
   // Fallbacks for display names
   line.broker_name = lookupText(row, "broker_name") || lookupText(row, "agent_name") || "";
   line.transporter_name = lookupText(row, "transporter_name") || "";
+  (line as any).transporter_ac_code = lookupText(row, "transporter_ac_code") || lookupText(row, "ac_code") || "";
   line.activity = lookupText(row, "activity") || "";
   line.consolidated_invno = lookupText(row, "consolidated_invno") || lookupText(row, "invoice_no") || "";
   line.pi_no = lookupText(row, "pi_no") || lookupText(row, "booked_pi_no") || lookupText(row, "trans_docno") || "";

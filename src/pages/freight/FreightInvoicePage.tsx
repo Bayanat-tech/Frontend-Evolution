@@ -221,7 +221,16 @@ export function FreightInvoicePage() {
         invoice_no: text(row.invoice_no),
       });
       const header = normalizeRow(response.data.data?.header || row);
-      const jobs = (response.data.data?.jobSelection || []).map(normalizeRow);
+      const rawJobs = (response.data.data?.jobSelection || []).map(normalizeRow);
+      const hasJobRows = rawJobs.some((r) => Boolean(text(r.job_no)));
+      const filteredJobs = hasJobRows ? rawJobs.filter((r) => Boolean(text(r.job_no))) : rawJobs;
+      const seen = new Set<string>();
+      const jobs = filteredJobs.filter((r) => {
+        const key = `${text(r.job_no)}|${text(r.act_code)}|${text(r.srno)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
       setForm({
         invoice_no: text(header.invoice_no),
         invoice_date: inputDate(text(header.invoice_date)) || today,
@@ -763,8 +772,20 @@ export function FreightInvoicePage() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Before Tax {selectedBase.toFixed(3)} / Tax {selectedTax.toFixed(3)}</p>
-                <p className="m-0 text-lg font-bold text-primary">{selectedTotal.toFixed(3)} {form.curr_code || "OMR"}</p>
+                {(() => {
+                  const isFc = form.curr_code && form.curr_code !== "OMR";
+                  const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+                  const fcTotal = isFc ? selectedTotal / exRate : selectedTotal;
+                  const fcBase = isFc ? selectedBase / exRate : selectedBase;
+                  const fcTax = isFc ? selectedTax / exRate : selectedTax;
+                  return (
+                    <>
+                      <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Before Tax {fcBase.toFixed(3)} / Tax {fcTax.toFixed(3)}</p>
+                      <p className="m-0 text-lg font-bold text-primary">{fcTotal.toFixed(3)} {form.curr_code || "OMR"}</p>
+                      {isFc && <p className="m-0 text-[10.5px] text-muted-foreground font-medium">Base: OMR {selectedTotal.toFixed(3)} (Ex: {form.ex_rate})</p>}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <div className="max-h-72 overflow-auto">
@@ -774,28 +795,40 @@ export function FreightInvoicePage() {
                     <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Job</th>
                     <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Activity</th>
                     <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Qty</th>
-                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Rate</th>
-                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Bill</th>
-                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Tax</th>
-                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Total</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Rate {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Bill {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Tax {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Total {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
                     <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Cost</th>
                     {!readOnly && <th className="px-2 py-2 text-right text-slate-700 font-bold">Action</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedRows.map((row) => (
-                    <tr key={lineKey(row)} className="border-t">
-                      <td className="px-2 py-2 font-semibold text-primary">{text(row.job_no)}</td>
-                      <td className="px-2 py-2">{text(row.act_code)} - {text(row.activity)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "quantity").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill_rate").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "tax_amount").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right font-semibold tabular-nums">{(number(row, "bill") + number(row, "tax_amount")).toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
-                      {!readOnly && <td className="px-2 py-2 text-right"><Button type="button" size="icon" variant="ghost" onClick={() => removeSelected(row)}><Trash2 size={14} /></Button></td>}
-                    </tr>
-                  ))}
+                  {selectedRows.map((row) => {
+                    const isFc = form.curr_code && form.curr_code !== "OMR";
+                    const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+                    const baseBill = number(row, "bill");
+                    const baseTax = number(row, "tax_amount");
+                    const baseRate = number(row, "bill_rate");
+                    const qty = number(row, "quantity") || 1;
+                    const rowRate = isFc ? (Number(row.bill_rate_oc) > 0 ? Number(row.bill_rate_oc) : (baseBill / exRate) / qty) : baseRate;
+                    const rowBill = isFc ? (Number(row.bill_oc) > 0 ? Number(row.bill_oc) : baseBill / exRate) : baseBill;
+                    const rowTax = isFc ? baseTax / exRate : baseTax;
+                    const rowTotal = rowBill + rowTax;
+                    return (
+                      <tr key={lineKey(row)} className="border-t">
+                        <td className="px-2 py-2 font-semibold text-primary">{text(row.job_no)}</td>
+                        <td className="px-2 py-2">{text(row.act_code)} - {text(row.activity)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{qty.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums" title={isFc ? `Base Rate: OMR ${baseRate.toFixed(3)}` : undefined}>{rowRate.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums" title={isFc ? `Base Bill: OMR ${baseBill.toFixed(3)}` : undefined}>{rowBill.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{rowTax.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right font-semibold tabular-nums" title={isFc ? `Base Total: OMR ${(baseBill + baseTax).toFixed(3)}` : undefined}>{rowTotal.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
+                        {!readOnly && <td className="px-2 py-2 text-right"><Button type="button" size="icon" variant="ghost" onClick={() => removeSelected(row)}><Trash2 size={14} /></Button></td>}
+                      </tr>
+                    );
+                  })}
                   {!selectedRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={readOnly ? 8 : 9}>No lines selected.</td></tr>}
                 </tbody>
               </table>
