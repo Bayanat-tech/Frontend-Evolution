@@ -203,15 +203,23 @@ if (signTable) {
       // S.No | Product | Unit | Qty | Rate | Disc | Amount | VAT % | Tax Amt | Amount (Inc. Tax)
        widths = ["5%", "26%", "5%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
       //  widths = ["6%", "24%", "6%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
+    }    else if (table.classList.contains("pr-reg-summary")) {
+      // Request No | Request Date | Create User | Description | Currency | EX Rate | Amount
+      // widths = ["15%", "12%", "12%", "35%", "5%", "8%", "14%"];
+        widths = ["13%", "13%", "11%", "32%", "10%", "8%", "13%"];
+    } else if (table.classList.contains("pr-reg-details")) {
+      // Sr No | Item Code | Item Description | Rate | Qty | Currency | EX Rate | Amount
+      widths = ["7%", "14%", "30%", "11%", "9%", "10%", "8%", "11%"];
     }
    else if (table.classList.contains("dn-items")) {
   // S.No | Product / Description | Unit | Qty
   widths = ["8%", "62%", "12%", "18%"];
 }
     
-    else if (!details && table.rows[0]) {
-      widths = ["4%", "18%", "6%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
-    } else if (!details && table.rows[0]) {
+    // else if (!details && table.rows[0]) {
+    //   widths = ["4%", "18%", "6%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
+    // } else if (!details && table.rows[0]) {
+        else if (!details && table.rows[0]) {
       const isGrnKvTable = !!table.closest(".grn-two-col");
       if (isGrnKvTable) {
         widths = ["30%", 12, "*"];
