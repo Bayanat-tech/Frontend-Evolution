@@ -683,7 +683,23 @@ export function FreightJobActivitiesPage({
 
         {/* Scrollable Table matching Finance Detail Tables */}
         <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-250px)] min-h-[320px]">
-          <table className="finance-lines-table w-full text-xs min-w-[1240px] border-collapse" >
+          <table className="finance-lines-table w-full text-xs min-w-[1240px] border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: "26px" }} />
+              <col style={{ width: "26px" }} />
+              <col style={{ width: "210px" }} />
+              <col style={{ width: "42px" }} />
+              <col style={{ width: "68px" }} />
+              <col style={{ width: "72px" }} />
+              <col style={{ width: "88px" }} />
+              <col style={{ width: "165px" }} />
+              <col style={{ width: "68px" }} />
+              <col style={{ width: "220px" }} />
+              <col style={{ width: "68px" }} />
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "96px" }} />
+              <col style={{ width: "58px" }} />
+            </colgroup>
             <thead className="sticky top-0 shadow-md z-10 whitespace-nowrap">
               {/* Tier 1 Header: Group Categories (PB Income & Expense Division) in matching Corporate Navy */}
               <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none bg-[#002d72] text-white border-b border-[#002052]">
@@ -709,17 +725,17 @@ export function FreightJobActivitiesPage({
 
               {/* Tier 2 Header: Optimized compact widths to prevent horizontal scroll & give room to Transporter */}
               <tr className="bg-[#00378C] text-[11px] font-semibold text-white uppercase tracking-wider shadow-xs">
-                <th className="finance-sticky-col finance-col-no px-1 py-1.5 text-center w-[28px] min-w-[28px] max-w-[28px] bg-[#00378C] text-white border-r border-white/15" title="Tick / Select">
-                  <CheckSquare size={13} className="inline opacity-80" />
+                <th className="px-0.5 py-1.5 text-center w-[26px] min-w-[26px] max-w-[26px] bg-[#00378C] text-white border-r border-white/15" title="Tick / Select">
+                  <CheckSquare size={12} className="inline opacity-80" />
                 </th>
-                <th className="px-0.5 py-1.5 text-center w-[28px] min-w-[28px] max-w-[28px] bg-[#00378C] text-white border-r border-white/15">#</th>
+                <th className="px-0.5 py-1.5 text-center w-[26px] min-w-[26px] max-w-[26px] bg-[#00378C] text-white border-r border-white/15">#</th>
                 <th className="px-2 py-1.5 text-left min-w-[190px] w-[210px] text-white border-r border-white/15">Activity / Description</th>
                 <th className="px-1 py-1.5 text-right w-[42px] min-w-[42px] max-w-[45px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Qty</th>
                 {/* Income Columns */}
                 <th className="px-1 py-1.5 text-right w-[68px] min-w-[68px] max-w-[72px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
                 <th className="px-1 py-1.5 text-right w-[72px] min-w-[72px] max-w-[78px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
                 {/* Expense Columns */}
-                <th className="px-1 py-1.5 text-right w-[70px] min-w-[70px] max-w-[75px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
+                <th className="px-1.5 py-1.5 text-right w-[88px] min-w-[85px] max-w-[92px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
                   Other Cost
                 </th>
                 <th className="px-1.5 py-1.5 text-left w-[165px] min-w-[155px] bg-[#002f78] text-white/95 border-r border-white/15">Agent</th>
@@ -767,7 +783,7 @@ export function FreightJobActivitiesPage({
                     }`}
                   >
                     {/* Row Tick & # */}
-                    <td className="finance-sticky-col finance-col-no px-0.5 py-1 text-center w-[28px] min-w-[28px] max-w-[28px] border-r border-slate-200">
+                    <td className="px-0.5 py-1 text-center w-[26px] min-w-[26px] max-w-[26px] border-r border-slate-200">
                       <input
                         type="checkbox"
                         className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
@@ -777,7 +793,7 @@ export function FreightJobActivitiesPage({
                         title="Tick / Confirm line"
                       />
                     </td>
-                    <td className="px-0.5 py-1 text-center font-mono text-[11px] font-semibold text-slate-500 w-[28px] min-w-[28px] max-w-[28px] border-r border-slate-200">
+                    <td className="px-0.5 py-1 text-center font-mono text-[11px] font-semibold text-slate-500 w-[26px] min-w-[26px] max-w-[26px] border-r border-slate-200">
                       {index + 1}
                     </td>
 
@@ -938,7 +954,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Other Cost Amt (OMR) - PB actual_cost with distinct yellow styling */}
                     <td
-                      className="px-1 py-1 w-[70px] min-w-[70px] max-w-[75px] bg-amber-50/60 border-r border-slate-200"
+                      className="px-1 py-1 w-[88px] min-w-[85px] max-w-[92px] bg-amber-50/60 border-r border-slate-200"
                       title={
                         line.ac_curr_code && line.ac_curr_code !== "OMR"
                           ? `Other Cost: OMR ${money(line.actual_cost)} | Foreign: ${money(line.actual_cost_oc)} ${line.ac_curr_code} (Ex: ${line.ac_ex_rate})`
@@ -1171,19 +1187,19 @@ export function FreightJobActivitiesPage({
             {lines.length > 0 && (
               <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-10 whitespace-nowrap">
                 <tr>
-                  <td className="px-0.5 py-1 text-center text-slate-400">-</td>
-                  <td className="px-0.5 py-1 text-center text-slate-400">-</td>
-                  <td className="px-2 py-1 text-left font-extrabold uppercase text-slate-600">
+                  <td className="px-0.5 py-1 text-center text-slate-400 w-[26px] min-w-[26px] max-w-[26px]">-</td>
+                  <td className="px-0.5 py-1 text-center text-slate-400 w-[26px] min-w-[26px] max-w-[26px]">-</td>
+                  <td className="px-2 py-1 text-left font-extrabold uppercase text-slate-600 w-[210px] min-w-[190px]">
                     Totals ({lines.length} {lines.length === 1 ? "line" : "lines"}):
                   </td>
-                  <td className="px-1 py-1 text-right font-mono text-slate-400">-</td>
+                  <td className="px-1 py-1 text-right font-mono text-slate-400 w-[42px] min-w-[42px] max-w-[45px]">-</td>
                   {/* Income Totals */}
-                  <td className="px-1 py-1 text-right font-mono text-slate-400">-</td>
-                  <td className="px-1 py-1 text-right font-mono font-bold text-blue-900 bg-blue-50/70 border-r border-slate-200">
+                  <td className="px-1 py-1 text-right font-mono text-slate-400 w-[68px] min-w-[68px] max-w-[72px]">-</td>
+                  <td className="px-1 py-1 text-right font-mono font-bold text-blue-900 bg-blue-50/70 border-r border-slate-200 w-[72px] min-w-[72px] max-w-[78px]">
                     {money(totals.incomeBill)}
                   </td>
                   {/* Expense Totals */}
-                  <td className="px-1 py-1 text-right font-mono font-bold text-amber-950 bg-amber-100/80 border-r border-amber-300">
+                  <td className="px-1.5 py-1 text-right font-mono font-bold text-amber-950 bg-amber-100/80 border-r border-amber-300 w-[88px] min-w-[85px] max-w-[92px]">
                     {money(totals.expenseOthers)}
                   </td>
                   <td className="px-1 py-1 text-left text-slate-400">-</td>
