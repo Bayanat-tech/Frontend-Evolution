@@ -713,10 +713,10 @@ export function FreightJobActivitiesPage({
                 </th>
                 <th className="px-2 py-2 text-center w-9 bg-[#00378C] text-white border-r border-white/15">#</th>
                 <th className="px-2 py-2 text-left min-w-[220px] text-white border-r border-white/15">Activity / Description</th>
-                <th className="px-0.5 py-1 text-right w-[35px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
+                <th className="px-0.5 py-1 text-right w-[35px] w-[60px] min-w-[60px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
                 {/* Income Columns */}
-                <th className="px-2 py-2 text-right w-[9550px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
-                <th className="px-2 py-2 text-right w-[200px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
+                <th className="px-2 py-2 text-right w-[100px] min-w-[100px] bg-[#003380] text-blue-100 border-r border-white/15"> Rate  </th>
+                <th className="px-2 py-2 text-right w-[100px] min-w-[100px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
                 {/* Expense Columns */}
                 <th className="px-2 py-2 text-right w-[85px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
                   Other Cost
