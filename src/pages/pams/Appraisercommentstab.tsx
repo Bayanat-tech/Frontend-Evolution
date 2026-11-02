@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect } from "../../api/pams";
 
@@ -7,6 +7,8 @@ type Row = Record<string, unknown>;
 interface WeightageConfig {
   taskPct: number;
   charPct: number;
+  goalPct: number;
+  skillPct: number;
   isHrDefined: boolean;
 }
 
@@ -25,6 +27,8 @@ interface Props {
   isVisible?: boolean;
   taskTotal: number;
   characterTotal: number;
+  goalTotal?: number;
+  skillTotal?: number;
   flowLevel?: number;
   userFlowLevel?: number;
   weightageConfig?: WeightageConfig;
@@ -38,72 +42,115 @@ function text(val: unknown): string {
   return String(val);
 }
 
-function calcFinalRatingDisplay(
+// ─── Final Rating (weighted) ──────────────────────────────────────────────
+// Sirf wahi categories calculation me aati hain jinme rating hai (score > 0).
+// Rating nahi hai = N/A = weight/denominator se bahar.
+// Kuch bhi rated nahi hai to null return hota hai (UI me N/A).
+function calcFinalRating(
   taskTotal: number,
-  characterTotal: number,
-  weightageConfig?: WeightageConfig
-): number {
-  const t = Number(taskTotal || 0);
-  const c = Number(characterTotal || 0);
-  if (weightageConfig?.isHrDefined) {
-    const tw = (t * weightageConfig.taskPct) / 100;
-    const cw = (c * weightageConfig.charPct) / 100;
-    return Math.round(tw + cw);
-  }
-  return Math.round((t + c) / 2);
+  charTotal: number,
+  goalTotal: number,
+  skillTotal: number,
+  cfg?: WeightageConfig
+): number | null {
+  const parts = [
+    { score: Number(taskTotal || 0),  pct: Number(cfg?.taskPct)  || 0 },
+    { score: Number(charTotal || 0),  pct: Number(cfg?.charPct)  || 0 },
+    { score: Number(goalTotal || 0),  pct: Number(cfg?.goalPct)  || 0 },
+    { score: Number(skillTotal || 0), pct: Number(cfg?.skillPct) || 0 },
+  ].filter((p) => p.score > 0);
+
+  if (parts.length === 0) return null;
+
+  const totalWt = parts.reduce((a, p) => a + p.pct, 0);
+  const raw =
+    totalWt > 0
+      ? parts.reduce((a, p) => a + p.score * p.pct, 0) / totalWt
+      : parts.reduce((a, p) => a + p.score, 0) / parts.length;
+
+  return Math.round(raw); // ✅ integer
 }
 
+const fmtScore = (v: unknown) => (Number(v || 0) > 0 ? Number(v).toFixed(2) : "N/A");
+
+// ─── Styles ───────────────────────────────────────────────────────────────
 const S = {
-  scoreRow: { display: "flex" as const, gap: "12px", marginBottom: "16px" },
-  scoreBox: (accent: string): React.CSSProperties => ({
-    flex: 1, padding: "12px", borderRadius: "8px", textAlign: "center",
-    border: `1px solid ${accent}40`, background: `${accent}10`,
-  }),
-  scoreLabel: { fontSize: "11px", color: "#6b7280", marginBottom: "4px" },
-  scoreValue: (color: string): React.CSSProperties => ({
-    fontSize: "1.4rem", fontWeight: 800, color,
-  }),
-  grid: { display: "grid" as const, gridTemplateColumns: "1fr 1fr", border: "1px solid #111" },
-  header: {
-    padding: "8px 12px", textAlign: "center" as const,
-    fontWeight: 700, fontSize: "13px", borderBottom: "1px solid #111",
+  scoreRow: {
+    display: "flex" as const,
+    gap: "12px",
+    marginBottom: "16px",
+    flexWrap: "wrap" as const,
   },
-  textarea: (readOnly: boolean): React.CSSProperties => ({
-    width: "100%", minHeight: "160px", padding: "8px",
-    border: "none", outline: "none", resize: "vertical" as const,
-    fontSize: "13px", fontFamily: "inherit",
-    background: readOnly ? "#f5f5f5" : "#fff",
-    color: "#111827", boxSizing: "border-box" as const,
+
+  scoreBox: (accent: string): React.CSSProperties => ({
+    flex: "1 1 0",
+    minWidth: "140px",
+    padding: "14px 12px",
+    borderRadius: "8px",
+    textAlign: "center",
+    border: `1px solid ${accent}40`,
+    background: `${accent}10`,
   }),
+
+  scoreLabel: {
+    fontSize: "12px",
+    color: "#6b7280",
+    marginBottom: "6px",
+    fontWeight: 500,
+  },
+
+  scoreValue: (color: string): React.CSSProperties => ({
+    fontSize: "1.6rem",
+    fontWeight: 800,
+    color,
+    lineHeight: 1.1,
+  }),
+
+  grid: {
+    display: "grid" as const,
+    gridTemplateColumns: "1fr 1fr",
+    border: "1px solid #111",
+  },
+
+  header: {
+    padding: "8px 12px",
+    textAlign: "center" as const,
+    fontWeight: 700,
+    fontSize: "13px",
+    borderBottom: "1px solid #111",
+  },
+
+  textarea: (readOnly: boolean): React.CSSProperties => ({
+    width: "100%",
+    minHeight: "160px",
+    padding: "8px",
+    border: "none",
+    outline: "none",
+    resize: "vertical" as const,
+    fontSize: "13px",
+    fontFamily: "inherit",
+    background: readOnly ? "#f5f5f5" : "#fff",
+    color: "#111827",
+    boxSizing: "border-box" as const,
+  }),
+
   meta: { fontSize: "11px", color: "#6b7280", marginTop: "4px" },
   readOnlyTag: { fontSize: "11px", color: "#ef4444", marginTop: "4px" },
   spinner: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
-  prevBlock: {
-    padding: "8px", marginBottom: "8px", borderRadius: "6px",
-    background: "#f9fafb", border: "1px solid #e5e7eb",
-  },
+  prevBlock: { padding: "8px", marginBottom: "8px", borderRadius: "6px", background: "#f9fafb", border: "1px solid #e5e7eb" },
   prevName: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
-  prevComment: {
-    fontSize: "13px", color: "#4b5563", whiteSpace: "pre-wrap" as const,
-  },
+  prevComment: { fontSize: "13px", color: "#4b5563", whiteSpace: "pre-wrap" as const },
   nameBox: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
-  allCommentsContainer: {
-    maxHeight: "400px",
-    overflowY: "auto" as const,
-  },
+  allCommentsContainer: { maxHeight: "400px", overflowY: "auto" as const },
 };
 
 const AppraiserCommentsTab: React.FC<Props> = ({
-  docNo,
-  employeeCode,
-  taskTotal,
-  characterTotal,
-  flowLevel = 0,
-  userFlowLevel = 0,
-  weightageConfig,
-  showAllComments = false,
-  onAppraiserCommentChange,
-  onAppraiseeCommentChange,
+  docNo, employeeCode,
+  taskTotal, characterTotal,
+  goalTotal = 0, skillTotal = 0,
+  flowLevel = 0, userFlowLevel = 0,
+  weightageConfig, showAllComments = false,
+  onAppraiserCommentChange, onAppraiseeCommentChange,
 }) => {
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
@@ -122,101 +169,125 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const appraiserReadOnly = isEmployee || isFinal || !isCurrentActionUser;
   const appraiseeReadOnly = !isEmployee || isFinal;
 
-  // "myLevel" identifies / saves the CURRENT logged-in user's own appraiser
-  // comment. Must NEVER be hardcoded to 0 -- that previously caused every
-  // approver's comment to be saved under FLOW_LEVEL = 0, so the next
-  // approver's box got pre-filled with the previous approver's text.
-  const myLevel = userFlowLevel === 0 ? flowLevel : userFlowLevel;
-
-  // effectiveLevel is used ONLY for the single-level "show previous level"
-  // block below (showPrevLevel), which is skipped entirely when
-  // showAllComments is true.
+  const actingLevelRef = useRef<number | null>(null);
+  if (actingLevelRef.current === null && flowLevel !== undefined) {
+    actingLevelRef.current = userFlowLevel === 0 ? flowLevel : userFlowLevel;
+  }
+  const myLevel = actingLevelRef.current ?? (userFlowLevel === 0 ? flowLevel : userFlowLevel);
   const effectiveLevel = showAllComments ? 0 : myLevel;
+
+
+  const loadedKeyRef = useRef<string>("");
+
+  useEffect(() => { actingLevelRef.current = null; }, [docNo, employeeCode]);
 
   useEffect(() => {
     if (!docNo) return;
-    setLoading(true);
-    pamsSelect<CommentLogRow>({ parameter: "get_appraisal_comments_log", loginid, code1: docNo })
-      .then((rows) => {
-        setCommentLog(rows || []);
+    let cancelled = false;
 
-        const lvl = String(myLevel);
-        const myAppraiserRow = rows.find(
-          (r) => String(r.FLOW_LEVEL) === lvl && r.COMMENT_TYPE === "APPRAISER"
-        );
-        const appraiseeRow = rows.find(
-          (r) => String(r.FLOW_LEVEL) === "0" && r.COMMENT_TYPE === "APPRAISEE"
-        );
+    const docKey = `${docNo}|${employeeCode}`;
+    const sameDoc = loadedKeyRef.current === docKey;
 
-        const ac = text(myAppraiserRow?.COMMENT_TEXT);
-        const apc = text(appraiseeRow?.COMMENT_TEXT);
 
-        setAppraiserComment(ac);
-        setAppraiseeComment(apc);
-        onAppraiserCommentChange?.(ac, myLevel);
-        onAppraiseeCommentChange?.(apc, 0);
+    if (!sameDoc) {
+      setAppraiserComment("");
+      setAppraiseeComment("");
+      setCommentLog([]);
+      setEmployeeName("");
+      setCurrentActorName("");
+    }
 
-        pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo })
-          .then((res) => {
-            if (res.length > 0) {
-              const row = res[0] as Row;
-              setEmployeeName(text(row.EMPLOYEE_NAME));
-              if (flowLevel === 0) {
-                // Level 0 = nobody has appraised yet. Show the name of
-                // whoever will act next (immediate supervisor / level-1
-                // approver) as a preview.
-                setCurrentActorName(
-                  text(row.APPRAISER_NAME1) ||
-                  text(row.IMMEDIATE_SUPERVISOR_NAME) ||
-                  text(row.NEXT_ACTION_BY_NAME) ||
-                  myName || loginid
-                );
-              } else if (userFlowLevel === 0) {
-                if (isCurrentActionUser) {
-                  setCurrentActorName(text(row.CURRENT_USER_NAME) || myName || loginid);
-                } else if (isEmployee) {
-                  setCurrentActorName(text(row.CREATED_BY_NAME) || myName || loginid);
-                } else {
-                  setCurrentActorName(text(row.NEXT_ACTION_BY_NAME) || myName || loginid);
-                }
-              } else {
-                setCurrentActorName(text(row[`APPRAISER_NAME${userFlowLevel}`]));
-              }
+    const loadComments = async () => {
+      setLoading(true);
+      try {
+        const rows = await pamsSelect<CommentLogRow>({
+          parameter: "get_appraisal_comments_log", loginid, code1: docNo,
+        });
+        if (cancelled) return;
+        const safeRows = rows || [];
+        setCommentLog(safeRows);
+
+        const appraiseeRows = safeRows
+          .filter(r => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISEE" && String(r.FLOW_LEVEL) === "0")
+          .sort((a, b) => new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime());
+        const latestAppraisee = appraiseeRows.length > 0 ? text(appraiseeRows[0].COMMENT_TEXT) : "";
+
+        const currentLevel = String(myLevel);
+        const appraiserRows = safeRows
+          .filter(r => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER" && String(r.FLOW_LEVEL) === currentLevel)
+          .sort((a, b) => new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime());
+        const latestAppraiser = appraiserRows.length > 0 ? text(appraiserRows[0].COMMENT_TEXT) : "";
+
+
+        setAppraiseeComment(prev => (sameDoc && prev.trim() ? prev : latestAppraisee));
+        setAppraiserComment(prev => (sameDoc && prev.trim() ? prev : latestAppraiser));
+
+
+        if (!sameDoc) {
+          onAppraiseeCommentChange?.(latestAppraisee, 0);
+          onAppraiserCommentChange?.(latestAppraiser, myLevel);
+        }
+        loadedKeyRef.current = docKey;
+
+        try {
+          const res = await pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo });
+          if (cancelled) return;
+          if (res.length > 0) {
+            const row = res[0] as Row;
+            setEmployeeName(text(row.EMPLOYEE_NAME));
+            if (flowLevel === 0) {
+              // Doc level 0 pe hai — next reviewer trigger ke routing se aata hai
+              // (self-created => COO, warna immediate supervisor).
+              setCurrentActorName(text(row.NEXT_REVIEWER_NAME));
+            } else if (userFlowLevel === 0) {
+              if (isCurrentActionUser) setCurrentActorName(text(row.CURRENT_USER_NAME) || myName || loginid);
+              else if (isEmployee) setCurrentActorName(text(row.CREATED_BY_NAME) || myName || loginid);
+              else setCurrentActorName(text(row.NEXT_ACTION_BY_NAME) || myName || loginid);
+            } else {
+              setCurrentActorName(text(row[`APPRAISER_NAME${userFlowLevel}`]));
             }
-          })
-          .catch(() => {});
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [docNo, loginid, flowLevel, userFlowLevel, myLevel]);
+          }
+        } catch { /* fail-safe */ }
+      } catch { /* fail-safe */ }
+      finally { if (!cancelled) setLoading(false); }
+    };
+
+    void loadComments();
+    return () => { cancelled = true; };
+  }, [docNo, loginid, employeeCode, flowLevel, userFlowLevel, myLevel, isEmployee, isCurrentActionUser, myName, onAppraiserCommentChange, onAppraiseeCommentChange]);
 
   const prevLevelNum = effectiveLevel - 1;
-  const prevLevelRow = commentLog.find(
-    (r) => String(r.FLOW_LEVEL) === String(prevLevelNum) && r.COMMENT_TYPE === "APPRAISER"
-  );
+  const prevLevelRow = commentLog.find(r => String(r.FLOW_LEVEL) === String(prevLevelNum) && String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER");
   const prevLevelComment = text(prevLevelRow?.COMMENT_TEXT).trim();
   const showPrevLevel = !showAllComments && effectiveLevel >= 2 && prevLevelComment.length > 0;
   const prevLevelName = text(prevLevelRow?.COMMENT_BY_NAME) || `Level ${prevLevelNum}`;
 
-  const myAppraiserRow = commentLog.find(
-    (r) => String(r.FLOW_LEVEL) === String(myLevel) && r.COMMENT_TYPE === "APPRAISER"
-  );
-  const appraiseeRow = commentLog.find(
-    (r) => String(r.FLOW_LEVEL) === "0" && r.COMMENT_TYPE === "APPRAISEE"
-  );
+  const myAppraiserRow = commentLog.find(r => String(r.FLOW_LEVEL) === String(myLevel) && String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER");
+  const appraiseeRow = commentLog.find(r => String(r.FLOW_LEVEL) === "0" && String(r.COMMENT_TYPE).toUpperCase() === "APPRAISEE");
 
-  const allAppraiserComments = commentLog
-    .filter(r => r.COMMENT_TYPE === "APPRAISER")
-    .sort((a, b) => Number(a.FLOW_LEVEL) - Number(b.FLOW_LEVEL));
+  const allAppraiserComments = useMemo(() => {
+    const map = new Map<string, CommentLogRow>();
+    commentLog
+      .filter(r => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER")
+      .forEach(r => {
+        const key = String(r.FLOW_LEVEL);
+        const existing = map.get(key);
+        if (!existing || (r.COMMENT_DATE && r.COMMENT_DATE > existing.COMMENT_DATE)) map.set(key, r);
+      });
+    return Array.from(map.values())
+      .filter(r => String(r.FLOW_LEVEL) !== String(myLevel))
+      .sort((a, b) => Number(a.FLOW_LEVEL) - Number(b.FLOW_LEVEL));
+  }, [commentLog, myLevel]);
 
-  // At flow level 0 (employee self-rating stage), no appraiser has acted
-  // yet. Show the upcoming reviewer's name with an empty, disabled box
-  // instead of showing nothing at all.
-  const showNextReviewerPreview =
-    flowLevel === 0 &&
-    !myAppraiserRow &&
-    allAppraiserComments.length === 0 &&
-    !!currentActorName;
+  const showNextReviewerPreview = flowLevel === 0 && !myAppraiserRow && allAppraiserComments.length === 0 && !!currentActorName;
+
+  const finalRating = calcFinalRating(
+    taskTotal,
+    characterTotal,
+    goalTotal,
+    skillTotal,
+    weightageConfig
+  );
 
   if (loading) return <div style={S.spinner}>Loading comments...</div>;
 
@@ -224,17 +295,29 @@ const AppraiserCommentsTab: React.FC<Props> = ({
     <div>
       <div style={S.scoreRow}>
         <div style={S.scoreBox("#1976d2")}>
-          <div style={S.scoreLabel}>Task Score</div>
-          <div style={S.scoreValue("#1976d2")}>{Math.round(taskTotal)}</div>
+          <div style={S.scoreLabel}>Task Score ({weightageConfig?.taskPct ?? 0}%)</div>
+          <div style={S.scoreValue("#1976d2")}>{fmtScore(taskTotal)}</div>
         </div>
+
         <div style={S.scoreBox("#9c27b0")}>
-          <div style={S.scoreLabel}>Character Score</div>
-          <div style={S.scoreValue("#9c27b0")}>{Math.round(characterTotal)}</div>
+          <div style={S.scoreLabel}>Character Score ({weightageConfig?.charPct ?? 0}%)</div>
+          <div style={S.scoreValue("#9c27b0")}>{fmtScore(characterTotal)}</div>
         </div>
+
+        <div style={S.scoreBox("#ef6c00")}>
+          <div style={S.scoreLabel}>Goal Score ({weightageConfig?.goalPct ?? 0}%)</div>
+          <div style={S.scoreValue("#ef6c00")}>{fmtScore(goalTotal)}</div>
+        </div>
+
+        <div style={S.scoreBox("#00897b")}>
+          <div style={S.scoreLabel}>Skill Score ({weightageConfig?.skillPct ?? 0}%)</div>
+          <div style={S.scoreValue("#00897b")}>{fmtScore(skillTotal)}</div>
+        </div>
+
         <div style={S.scoreBox("#2e7d32")}>
           <div style={S.scoreLabel}>Final Rating</div>
           <div style={S.scoreValue("#2e7d32")}>
-            {calcFinalRatingDisplay(taskTotal, characterTotal, weightageConfig)}
+            {finalRating === null ? "N/A" : finalRating.toFixed(2)}
           </div>
         </div>
       </div>
@@ -253,44 +336,27 @@ const AppraiserCommentsTab: React.FC<Props> = ({
 
           {showAllComments ? (
             <div style={S.allCommentsContainer}>
-              {allAppraiserComments.length > 0 && (
-    <>
-      {allAppraiserComments.map((row, idx) => (
-        <div key={idx} style={S.prevBlock}>
-          <div style={S.prevName}>
-            {row.COMMENT_BY_NAME || `Level ${row.FLOW_LEVEL}`}
-          </div>
-          <div style={S.prevComment}>{row.COMMENT_TEXT || "No comment"}</div>
-          {row.COMMENT_DATE && (
-            <div style={S.meta}>Saved: {row.COMMENT_DATE}</div>
-          )}
-        </div>
-      ))}
-    </>
-  )}
+              {allAppraiserComments.map((row, idx) => (
+                <div key={idx} style={S.prevBlock}>
+                  <div style={S.prevName}>{row.COMMENT_BY_NAME || `Level ${row.FLOW_LEVEL}`}</div>
+                  <div style={S.prevComment}>{row.COMMENT_TEXT || "No comment"}</div>
+                  {row.COMMENT_DATE && <div style={S.meta}>Saved: {row.COMMENT_DATE}</div>}
+                </div>
+              ))}
 
-              {/* Level 0 preview -- next reviewer's name, empty & non-editable */}
               {showNextReviewerPreview && (
                 <>
                   <div style={{ ...S.nameBox, marginTop: allAppraiserComments.length > 0 ? "12px" : 0 }}>
                     {currentActorName}
                   </div>
-                  <textarea
-                    style={S.textarea(true)}
-                    value=""
-                    readOnly
-                    placeholder="next reviewer will comment here"
-                  />
+                  <textarea style={S.textarea(true)} value="" readOnly placeholder="next reviewer will comment here" />
                   <div style={S.readOnlyTag}>View only</div>
                 </>
               )}
 
-              {/* CURRENT USER KA TEXTAREA -- Show always if not readonly */}
               {!appraiserReadOnly && (
                 <>
-                  <div style={{ ...S.nameBox, marginTop: "12px" }}>
-                    {currentActorName || "You"} 
-                  </div>
+                  <div style={{ ...S.nameBox, marginTop: "12px" }}>{currentActorName || "You"}</div>
                   <textarea
                     style={S.textarea(appraiserReadOnly)}
                     value={appraiserComment}
@@ -298,13 +364,12 @@ const AppraiserCommentsTab: React.FC<Props> = ({
                     placeholder="Enter appraiser comments..."
                     onChange={(e) => {
                       if (appraiserReadOnly) return;
-                      setAppraiserComment(e.target.value);
-                      onAppraiserCommentChange?.(e.target.value, myLevel);
+                      const value = e.target.value;
+                      setAppraiserComment(value);
+                      onAppraiserCommentChange?.(value, myLevel);
                     }}
                   />
-                  {myAppraiserRow?.COMMENT_DATE && (
-                    <div style={S.meta}>Last saved: {myAppraiserRow.COMMENT_DATE}</div>
-                  )}
+                  {myAppraiserRow?.COMMENT_DATE && <div style={S.meta}>Last saved: {myAppraiserRow.COMMENT_DATE}</div>}
                 </>
               )}
             </div>
@@ -318,13 +383,12 @@ const AppraiserCommentsTab: React.FC<Props> = ({
                 placeholder={appraiserReadOnly ? "" : "Enter appraiser comments..."}
                 onChange={(e) => {
                   if (appraiserReadOnly) return;
-                  setAppraiserComment(e.target.value);
-                  onAppraiserCommentChange?.(e.target.value, myLevel);
+                  const value = e.target.value;
+                  setAppraiserComment(value);
+                  onAppraiserCommentChange?.(value, myLevel);
                 }}
               />
-              {myAppraiserRow?.COMMENT_DATE && (
-                <div style={S.meta}>Last saved: {myAppraiserRow.COMMENT_DATE}</div>
-              )}
+              {myAppraiserRow?.COMMENT_DATE && <div style={S.meta}>Last saved: {myAppraiserRow.COMMENT_DATE}</div>}
               {appraiserReadOnly && <div style={S.readOnlyTag}>View only</div>}
             </>
           )}
@@ -339,13 +403,12 @@ const AppraiserCommentsTab: React.FC<Props> = ({
             placeholder={appraiseeReadOnly ? "" : "Enter appraisee comments..."}
             onChange={(e) => {
               if (appraiseeReadOnly) return;
-              setAppraiseeComment(e.target.value);
-              onAppraiseeCommentChange?.(e.target.value, 0);
+              const value = e.target.value;
+              setAppraiseeComment(value);
+              onAppraiseeCommentChange?.(value, 0);
             }}
           />
-          {appraiseeRow?.COMMENT_DATE && (
-            <div style={S.meta}>Last saved: {appraiseeRow.COMMENT_DATE}</div>
-          )}
+          {appraiseeRow?.COMMENT_DATE && <div style={S.meta}>Last saved: {appraiseeRow.COMMENT_DATE}</div>}
           {appraiseeReadOnly && <div style={S.readOnlyTag}>View only</div>}
         </div>
       </div>

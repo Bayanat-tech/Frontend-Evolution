@@ -1,7 +1,10 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import {
+  ArrowLeft, Edit2, FileText, Plus, RefreshCw, Printer, Save, Trash2, X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { deleteHrGm, deleteHrMaster, getHrMaster, saveHrGm } from "../../api/hr";
+import { deleteHrGm, deleteHrMaster, getHrMaster, getHrReportHtml, saveHrGm } from "../../api/hr";
 import {
   DynamicDeleteParams,
   DynamicMutationParams,
@@ -14,15 +17,69 @@ import {
   LookupRow,
   postFinance,
 } from "../../api/lookups";
+import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
-import { NoticeToast } from "../../components/ui/NoticeToast";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
+import { NewReportDialog } from "../../components/new_report_format";
+
+// ── Validation helpers ────────────────────────────────────────────────────────
+
+type FieldErrors = Record<string, string>;
+
+// local@domain.tld (tld kam se kam 2 letters)
+const EMAIL_STRICT = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+// local@domain (tld ki zaroorat nahi)
+const EMAIL_LOOSE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/;
+
+function isValidEmail(value: string, allowNoTld = false): boolean {
+  const v = value.trim();
+  if (!v || v.includes("..") || v.startsWith(".") || v.includes(".@")) return false;
+  return (allowNoTld ? EMAIL_LOOSE : EMAIL_STRICT).test(v);
+}
+
+/** Required + email format + max length. Har field ka sirf pehla error. */
+function validateFields(
+  fields: HrMasterField[],
+  form: Record<string, unknown>,
+  isEdit: boolean,
+  opts: { allowNoTld?: boolean } = {},
+): FieldErrors {
+  const errors: FieldErrors = {};
+  for (const f of fields) {
+    if (f.hideOnAdd && !isEdit) continue;
+    const value = String(form[f.name] ?? "");
+    const trimmed = value.trim();
+
+    if (f.required && !trimmed) {
+      errors[f.name] = `${f.label} is required.`;
+      continue;
+    }
+    if (!trimmed) continue;
+
+    if (f.type === "email" && !isValidEmail(trimmed, opts.allowNoTld)) {
+      errors[f.name] = "Please enter a valid email address (e.g. name@example.com).";
+      continue;
+    }
+    if (f.limit && value.length > f.limit) {
+      errors[f.name] = `${f.label} cannot exceed ${f.limit} characters (currently ${value.length}).`;
+    }
+  }
+  return errors;
+}
+
+/** DB "value too large" error ko friendly message mein badalta hai. */
+function friendlyDbError(message: string): string {
+  const m = message.match(/\(actual:\s*(\d+),\s*maximum:\s*(\d+)\)/i);
+  if (m) return `A field is too long (entered ${m[1]}, maximum ${m[2]} characters). Please shorten it.`;
+  return message || "Unable to save. Please check the entered values.";
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type HrMasterField = {
   name: string;
@@ -34,7 +91,7 @@ export type HrMasterField = {
   disabledOnEdit?: boolean;
   disabledOnAdd?: boolean;
   type?: "text" | "number" | "select" | "email" | "date";
-   limit?: number;
+  limit?: number;
   options?: { label: string; value: string }[];
   lookup?: {
     columns: { field: string; header: string }[];
@@ -53,6 +110,8 @@ export type HrMasterConfig = {
   gmEndpoint: string;
   routeKeys?: string[];
   keyField: string;
+  /** Backend report URL, e.g. "/hr/reports/designation". When set, Print opens this report. */
+  reportEndpoint?: string;
   fields: HrMasterField[];
   defaults?: Record<string, unknown>;
   deleteMode?: "master" | "gm" | "disabled";
@@ -73,8 +132,76 @@ export type HrMasterContext = {
   rows: Record<string, unknown>[];
 };
 
+// ── Freight building blocks ───────────────────────────────────────────────────
+// (Same as in the Grade / Product forms — worth moving to components/ui later.)
+
+function SectionPanel({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="freight-section-icon">
+            <Icon size={16} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
+          </div>
+        </div>
+      </div>
+      <div className="freight-panel-body p-3">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  required,
+  helperText,
+  error,
+  children,
+  className,
+}: {
+  label: string;
+  required?: boolean;
+  helperText?: string;
+  error?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label
+      className={`freight-field-label group flex flex-col gap-0.5 ${
+        error ? "[&_input]:!border-red-500 [&_select]:!border-red-500" : ""
+      } ${className ?? ""}`}
+    >
+      <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
+        {label}
+        {required && <strong className="text-red-600 ml-0.5 font-bold"> *</strong>}
+      </span>
+      {children}
+      {error ? (
+        <span className="text-[10.5px] font-medium text-red-600">{error}</span>
+      ) : (
+        helperText && <span className="text-[10.5px] text-muted-foreground">{helperText}</span>
+      )}
+    </label>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const { user } = useAuth();
+  const { toast } = useToast();
+
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -83,13 +210,19 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [formOpen, setFormOpen] = useState(false);
+
+  // view state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const tableFields = config.fields.filter((field) => field.table !== false);
+  const tableFields = useMemo(() => config.fields.filter((field) => field.table !== false), [config]);
   const loginid = user?.loginid || "ADMIN";
   const companyCode = user?.company_code || "";
 
@@ -101,9 +234,8 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
 
   const buildContext = (mode = editMode): HrMasterContext => ({ loginid, companyCode, editMode: mode, rows });
 
-  const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize, clearNotice = true) => {
+  const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
-    if (clearNotice) setNotice(null);
     try {
       const isDynamic = config.source === "dynamic" || config.source === "finance";
       const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
@@ -127,15 +259,168 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         setTotalRows(response.count || response.tableData.length);
       }
     } catch (error) {
-  setNotice({ type: "error", message: getErrorMessage(error, `Unable to load ${config.title}`) });
-  } finally {
+      toast.error(getErrorMessage(error, `Unable to load ${config.title}`));
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
     void loadRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.master, pageIndex, pageSize, query, columnFilters]);
+
+  // Switching to a different master (route change) always lands on the list
+  useEffect(() => {
+    setView("list");
+    setEditMode(false);
+    setForm({});
+    setFieldErrors({});
+  }, [config.master]);
+
+  /* ── Navigation handlers ── */
+  const openAdd = () => {
+    setFieldErrors({});
+    setEditMode(false);
+    const empty = makeEmpty();
+    if (config.autoGenerateKey) empty[config.keyField] = nextCode(rows, config.keyField);
+    setForm(empty);
+    setView("editor");
+  };
+
+  const openEdit = (row: Record<string, unknown>) => {
+    setFieldErrors({});
+    setEditMode(true);
+    setForm({ ...makeEmpty(), ...row, _edit_key: row[config.keyField], company_code: row.company_code || companyCode });
+    setView("editor");
+  };
+
+  /* ── Print ──
+     1) config.reportEndpoint set  -> open the formatted backend report
+     2) otherwise                  -> old simple "record details" print      */
+
+  const openBackendReport = async (extraParams: Record<string, unknown>) => {
+    if (!config.reportEndpoint) return;
+
+    setReportHtml(null);
+    setReportError("");
+    setReportLoading(true);
+    setPreviewOpen(true); // dialog turant khulega, andar "Generating report…" dikhega
+
+    try {
+      // NOTE: print:"true" mat bhejo. Dialog ka apna Print button hai,
+      // aur auto-print script preview me dikkat karta hai.
+      const html = await getHrReportHtml(config.reportEndpoint, {
+        company_code: companyCode,
+        print: "false",
+        ...extraParams,
+      });
+      setReportHtml(html);
+    } catch (error) {
+      setReportError(getErrorMessage(error, `Unable to open ${config.title} report`));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    setPreviewOpen(false);
+    setReportHtml(null);
+    setReportError("");
+  };
+
+  const openReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    if (!win) toast.error("Please allow pop-ups to open the report");
+  };
+
+  const printRecordLocal = (record: Record<string, unknown>) => {
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+
+    if (!printWindow) {
+      toast.error("Please allow pop-ups to print this record");
+      return;
+    }
+
+    const escapeHtml = (value: unknown) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const fieldsHtml = tableFields
+      .map(
+        (field) => `
+        <tr>
+          <th>${escapeHtml(field.label)}</th>
+          <td>${escapeHtml(formatValue(record[field.name]))}</td>
+        </tr>
+      `,
+      )
+      .join("");
+
+    printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${escapeHtml(config.title)} - Print</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #222; }
+          h2 { text-align: center; margin-bottom: 8px; }
+          p { text-align: center; color: #666; margin-bottom: 24px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 13px; }
+          th { width: 35%; background: #f3f4f6; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <h2>${escapeHtml(config.title)}</h2>
+        <p>Record Details</p>
+        <table>
+          <tbody>${fieldsHtml}</tbody>
+        </table>
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+    </html>
+  `);
+
+    printWindow.document.close();
+  };
+
+  // Print one record
+  const printRecord = (record: Record<string, unknown>) => {
+    if (config.reportEndpoint) {
+      void openBackendReport({
+        code2: String(record[config.keyField] ?? "").trim() || "All",
+        religion_code: record.religion_code ?? undefined, // only used by the caste report
+      });
+      return;
+    }
+    printRecordLocal(record);
+  };
+
+  // Print the whole list
+  const printAll = () => {
+    void openBackendReport({ code2: "All" });
+  };
+
+  const handleCloseEditor = () => {
+    setFieldErrors({});
+    setView("list");
+    setEditMode(false);
+    setForm({});
+  };
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
@@ -151,125 +436,250 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         size: 90,
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" title={`Edit ${config.title}`} onClick={() => openEdit(row.original)}>
-              <Edit2 size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              disabled={config.deleteMode === "disabled"}
-              title={config.deleteMode === "disabled" ? "Delete is not configured" : `Delete ${config.title}`}
-              onClick={() => setDeleteTarget(row.original)}
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => printRecord(row.original)}
+              title={`Print ${config.title}`}
             >
-              <Trash2 size={14} />
-            </Button>
+              <Printer size={13} />
+            </button>
+
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEdit(row.original)}
+              title={`Edit ${config.title}`}
+            >
+              <Edit2 size={13} />
+            </button>
+
+            <button
+              type="button"
+              disabled={config.deleteMode === "disabled"}
+              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+              onClick={() => setDeleteTarget(row.original)}
+              title={config.deleteMode === "disabled" ? "Delete is not configured" : `Delete ${config.title}`}
+            >
+              <Trash2 size={13} />
+            </button>
           </div>
         ),
       },
     ],
-    [config, tableFields],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [config, tableFields, companyCode],
   );
 
-  const openAdd = () => {
-    setEditMode(false);
-    const empty = makeEmpty();
-    if (config.autoGenerateKey) empty[config.keyField] = nextCode(rows, config.keyField);
-    setForm(empty);
-    setFormOpen(true);
-    setNotice(null);
-  };
+  /* ── Save (header Save button + Enter key inside the form) ── */
+  const saveRecord = async (event?: FormEvent) => {
+    event?.preventDefault();
 
-  const openEdit = (row: Record<string, unknown>) => {
-    setEditMode(true);
-    setForm({ ...makeEmpty(), ...row, _edit_key: row[config.keyField], company_code: row.company_code || companyCode });
-    setFormOpen(true);
-    setNotice(null);
-  };
-
-  const saveRecord = async (event: FormEvent) => {
-    event.preventDefault();
-  
-    const missing = config.fields.find(
-  (field) => field.required && !field.hideOnAdd && !String(form[field.name] ?? "").trim());
-    if (missing) {
-      setNotice({ type: "error", message: `${missing.label} is required` });
-      return;
+    // 1) Required + email + limit validation
+    const errors = validateFields(config.fields, form, editMode);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);                  // field red + message niche
+      toast.warning(Object.values(errors)[0]); // pehla error toast mein
+      return;                                  // API call nahi hogi
     }
+    setFieldErrors({});
+
+    // 2) Email fields ko trim karke bhejo
+    const data: Record<string, unknown> = { ...form };
+    config.fields
+      .filter((f) => f.type === "email")
+      .forEach((f) => {
+        data[f.name] = String(form[f.name] ?? "").trim();
+      });
+
     setSaving(true);
-    setNotice(null);
     try {
       if (config.source === "dynamic" && config.buildSave) {
-        const payload = config.buildSave(form, buildContext()) as DynamicMutationParams;
+        const payload = config.buildSave(data, buildContext()) as DynamicMutationParams;
         if (config.mutationMode === "column90") await executeDynamicMutationColumn90(payload);
         else await executeDynamicMutation(payload);
       } else if (config.source === "finance" && config.buildSave && config.financeSaveEndpoint) {
-        await postFinance(config.financeSaveEndpoint, cleanPayload(config.buildSave(form, buildContext()) as Record<string, unknown>));
-    } else {
-  let payload: Record<string, unknown>;
+        await postFinance(
+          config.financeSaveEndpoint,
+          cleanPayload(config.buildSave(data, buildContext()) as Record<string, unknown>),
+        );
+      } else {
+        let payload: Record<string, unknown>;
 
-  if (config.buildSave) {
-    payload = config.buildSave(form, buildContext()) as Record<string, unknown>;
-  } else if (config.stripEditKeyOnSave) {
-    const { _edit_key, ...rest } = form;
-    payload = rest;
-  } else {
-    payload = form;
-  }
+        if (config.buildSave) {
+          payload = config.buildSave(data, buildContext()) as Record<string, unknown>;
+        } else if (config.stripEditKeyOnSave) {
+          const { _edit_key, ...rest } = data;
+          payload = rest;
+        } else {
+          payload = data;
+        }
 
-  await saveHrGm(
-    config.gmEndpoint,
-    cleanPayload({ ...payload, company_code: form.company_code || companyCode }),
-    editMode ? "put" : "post"
-  );
-}
-      setFormOpen(false);
-      setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "created"} successfully.` });
-      await loadRows(pageIndex, pageSize, false);
+        const savePayload: Record<string, unknown> = {
+          ...payload,
+          ...(config.gmEndpoint === "formaldesignation" ? {} : { company_code: form.company_code || companyCode }),
+        };
+        const finalPayload = { ...savePayload };
+        delete finalPayload._edit_key;
+
+        await saveHrGm(
+          config.gmEndpoint,
+          cleanPayload(finalPayload),
+          editMode ? "put" : "post",
+          config.gmEndpoint === "formaldesignation" ? { omitUser: true } : undefined,
+        );
+      }
+      toast.success(`${config.title} ${editMode ? "updated" : "created"} successfully`);
+      handleCloseEditor();
+      await loadRows(pageIndex, pageSize);
     } catch (error) {
-  setNotice({ type: "error", message: getErrorMessage(error, `Unable to save ${config.title}`) });
+      // "Save Failed" ki jagah clear message
+      toast.error(friendlyDbError(getErrorMessage(error, `Unable to save ${config.title}`)));
     } finally {
       setSaving(false);
     }
   };
 
+  /* ── Delete ── */
   const confirmDelete = async () => {
+    console.log("1. Delete clicked!");
     if (!deleteTarget || config.deleteMode === "disabled") return;
     setSaving(true);
-    setNotice(null);
     try {
+      console.log("2. Target row:", deleteTarget);
       const id = deleteTarget[config.keyField];
+      console.log("3. Extracted ID:", id, "KeyField was:", config.keyField);
+      console.log("Delete ID being sent:", config.master, id);
       if ((config.source === "dynamic" || config.source === "finance") && config.buildDelete) {
         await executeDynamicDelete(config.buildDelete(deleteTarget, buildContext()));
       } else if (config.deleteMode === "gm") await deleteHrGm(config.gmEndpoint, [id]);
       else await deleteHrMaster(config.master, [id]);
       setDeleteTarget(null);
-      setNotice({ type: "success", message: `${config.title} deleted successfully.` });
-      await loadRows(pageIndex, pageSize, false);
+      toast.success(`${config.title} deleted successfully`);
+      await loadRows(pageIndex, pageSize);
     } catch (error) {
-  setNotice({ type: "error", message: getErrorMessage(error, `Unable to delete ${config.title}`) });
-  } finally {
+      toast.error(getErrorMessage(error, `Unable to delete ${config.title}`));
+    } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">{config.title}</h1>
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Full-page, Freight-style header (with Save button)
+     ───────────────────────────────────────────────────────── */
+  if (view === "editor") {
+    const keyValue = editMode ? String(form[config.keyField] ?? "") : "";
+
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* Freight-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                  {editMode ? `Edit ${config.title}` : `New ${config.title}`}
+                </h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {editMode ? "Editing" : "Draft"}
+                </span>
+                {keyValue && <span className="text-xs text-muted-foreground">{keyValue}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Actions: List / Close / Save */}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <ArrowLeft size={14} /> List
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <X size={14} /> Close
+            </Button>
+            <Button type="button" size="sm" onClick={() => void saveRecord()} disabled={saving}>
+              <Save size={14} /> {saving ? "Saving" : "Save"}
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={`Add ${config.title}`} onClick={openAdd}>
-            <Plus size={15} /> Add
-          </Button>
+
+        {/* Form content — noValidate: browser ka native email popup band */}
+        <form onSubmit={saveRecord} noValidate>
+          <SectionPanel title="Basic Information" icon={FileText}>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {config.fields.map((field) => {
+                if (field.hideOnAdd && !editMode) return null;
+
+                const disabled = Boolean(
+                  (editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd),
+                );
+
+                return (
+                  <Field
+                    key={field.name}
+                    label={field.label}
+                    required={field.required}
+                    helperText={field.helperText}
+                    error={fieldErrors[field.name]}
+                  >
+                    {renderInput(
+                      field,
+                      form[field.name],
+                      form[`${field.name}_name`],
+                      disabled,
+                      buildContext(),
+                      (value, row) => {
+                        // user edit kare to is field ka error hata do
+                        setFieldErrors((prev) => {
+                          if (!prev[field.name]) return prev;
+                          const { [field.name]: _removed, ...rest } = prev;
+                          return rest;
+                        });
+                        setForm((current) => {
+                          if (!field.lookup) return { ...current, [field.name]: value };
+                          return {
+                            ...current,
+                            [field.name]: value,
+                            ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }),
+                          };
+                        });
+                      },
+                    )}
+                  </Field>
+                );
+              })}
+            </div>
+          </SectionPanel>
+          {/* hidden submit so Enter inside a text input saves */}
+          <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
+        </form>
+      </section>
+    );
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — Freight style (buttons inside DataTable toolbar)
+     ───────────────────────────────────────────────────────── */
+  const hasActiveSearch = Boolean(
+    query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()),
+  );
+
+  return (
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Page title only — buttons live inside the DataTable toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            {config.title}
+          </h2>
         </div>
       </div>
-
-      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       <DataTable
         columns={columns}
@@ -288,7 +698,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 170))}
         density="grid"
         enablePagination
-        manualPagination={config.source !== "dynamic" && config.source !== "finance" && !(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()))}
+        manualPagination={config.source !== "dynamic" && config.source !== "finance" && !hasActiveSearch}
         manualFiltering={false}
         pageIndex={pageIndex}
         pageSize={pageSize}
@@ -304,53 +714,46 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
           setPageIndex(0);
         }}
         getRowId={(row, index) => String(row[config.keyField] || `${config.master}_${index}`)}
+        enableExport
+        exportFilename={`hr-${config.master}-list.csv`}
+        toolbar={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void loadRows()}
+              title="Refresh"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+
+            {config.reportEndpoint && (
+              <button
+                type="button"
+                onClick={printAll}
+                title={`Print all ${config.title}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
+              >
+                <Printer size={14} />
+                Print All
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={openAdd}
+              title={`Add ${config.title}`}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add
+            </button>
+          </div>
+        }
       />
 
-      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} wide onClose={() => setFormOpen(false)}>
-        <form className="grid gap-4" onSubmit={saveRecord}>
-          <Card>
-            <CardHeader>
-              <div>
-                <p className="eyebrow">Details</p>
-                <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
-              </div>
-            </CardHeader>
-           
-
-
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-  {config.fields.map((field, index) => {
-    
-    if (field.hideOnAdd && !editMode) return null;
-
-    return (
-      <label className="field" key={field.name}>
-        <span>{field.label}{field.required ? <strong className="text-destructive"> *</strong> : null}</span>
-        {renderInput(field, form[field.name], form[`${field.name}_name`], Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)), buildContext(), 
-      (value, row) => setForm((current) => {
-  if (!field.lookup) return { ...current, [field.name]: value };
-  return {
-    ...current,
-    [field.name]: value,
-    ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }),
-  };
-}))}
-      </label>
-    );
-  })}
-</CardContent>
-          </Card>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-              <X size={15} /> Cancel
-            </Button>
-            <Button type="submit" disabled={saving}>
-              <Save size={15} /> {saving ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
-
+      {/* Delete confirmation dialog */}
       <Dialog
         open={Boolean(deleteTarget)}
         title={`Delete ${config.title}`}
@@ -360,18 +763,49 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Close</Button>
-            <Button variant="destructive" disabled={saving} onClick={confirmDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={saving} onClick={confirmDelete}>
+              {saving ? "Deleting..." : "Delete"}
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">Confirm delete for <strong>{String(deleteTarget?.[config.keyField] || "")}</strong>.</p>
+        <p className="m-0 text-sm text-muted-foreground">
+          Confirm delete for <strong>{String(deleteTarget?.[config.keyField] || "")}</strong>.
+        </p>
       </Dialog>
+
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closeReportPreview}
+        title={config.title}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError || null}
+        meta={{
+          companyName: companyCode,
+          user: loginid,
+          period: "All",
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onOpenInNewWindow={openReportInNewWindow}
+      />
     </section>
   );
 }
 
-function renderInput(field: HrMasterField, value: unknown, selectedLabel: unknown, disabled: boolean, context: HrMasterContext, onChange: (value: unknown, row?: LookupRow | null) => void) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function renderInput(
+  field: HrMasterField,
+  value: unknown,
+  selectedLabel: unknown,
+  disabled: boolean,
+  context: HrMasterContext,
+  onChange: (value: unknown, row?: LookupRow | null) => void,
+) {
   if (field.lookup) {
     const displayValue = String(value ?? "")
       ? [value, selectedLabel].filter(Boolean).join(" - ") || String(value ?? "")
@@ -379,7 +813,7 @@ function renderInput(field: HrMasterField, value: unknown, selectedLabel: unknow
     return (
       <LookupField
         compact
-        label={field.label}
+        label="" // label is rendered by <Field>
         value={String(value ?? "")}
         displayValue={displayValue}
         columns={field.lookup.columns}
@@ -395,21 +829,26 @@ function renderInput(field: HrMasterField, value: unknown, selectedLabel: unknow
     return (
       <Select value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
         <option value="">Select {field.label}</option>
-        {(field.options || []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        {(field.options || []).map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
       </Select>
     );
   }
 
+  // NOTE: maxLength / slice jaan-bujhkar hata diya hai, taaki user limit se zyada
+  // type kar sake aur Save par proper "limit exceed" error dikhe.
   return (
     <Input
-      type={field.type || "text"}
+      type={field.type === "email" ? "text" : field.type || "text"}
       value={field.type === "date" ? toDateInputValue(value) : String(value ?? "")}
       disabled={disabled}
-      maxLength={field.limit}
+      placeholder={field.Placeholder}
       onChange={(event) => {
         const raw = event.target.value;
-        const trimmed = field.limit ? raw.slice(0, field.limit) : raw;
-        onChange(field.type === "number" ? Number(trimmed || 0) : trimmed);
+        onChange(field.type === "number" ? Number(raw || 0) : raw);
       }}
     />
   );
@@ -448,14 +887,10 @@ function cleanPayload(payload: Record<string, unknown>) {
   return next;
 }
 
-
 function getErrorMessage(error: unknown, fallback: string) {
   if (error && typeof error === "object") {
     const anyErr = error as any;
-    const backendMessage =
-      anyErr.response?.data?.message ||
-      anyErr.data?.message ||
-      anyErr.message;
+    const backendMessage = anyErr.response?.data?.message || anyErr.data?.message || anyErr.message;
     if (backendMessage && typeof backendMessage === "string") return backendMessage;
   }
   if (error instanceof Error) return error.message;
@@ -463,9 +898,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 function nextCode(rows: Record<string, unknown>[], keyField: string) {
-  const values = rows
-    .map((row) => Number(row[keyField]))
-    .filter((value) => Number.isFinite(value));
+  const values = rows.map((row) => Number(row[keyField])).filter((value) => Number.isFinite(value));
   const next = (values.length ? Math.max(...values) : 0) + 1;
   return String(next).padStart(3, "0");
 }
@@ -478,7 +911,3 @@ function toDateInputValue(input: unknown) {
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 10);
 }
-
-
-
-

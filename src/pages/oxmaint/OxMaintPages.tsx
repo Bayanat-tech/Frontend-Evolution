@@ -255,7 +255,7 @@ function SimpleMasterEditor({
       onClose={onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose}><X size={15} /> {readOnly ? "Close" : "Cancel"}</Button>
+          <Button variant="outline" onClick={onClose}>{readOnly ? "Close" : "Cancel"}</Button>
           {!readOnly && <Button type="submit" form="ox-simple-editor" disabled={saving}><Save size={15} /> Save</Button>}
         </>
       }
@@ -428,7 +428,7 @@ function AssetInventoryEditor({ editor, onClose, onSaved }: { editor: EditorStat
   };
 
   return (
-    <Dialog open={Boolean(editor)} title={`${editor.mode === "create" ? "Add" : editor.mode === "edit" ? "Edit" : "View"} Asset Inventory`} wide onClose={onClose} footer={<><Button variant="outline" onClick={onClose}><X size={15} /> Close</Button>{!readOnly && <Button type="submit" form="asset-inventory-editor" disabled={saving}><Save size={15} /> Save</Button>}</>}>
+    <Dialog open={Boolean(editor)} title={`${editor.mode === "create" ? "Add" : editor.mode === "edit" ? "Edit" : "View"} Asset Inventory`} wide onClose={onClose} footer={<><Button variant="outline" onClick={onClose}>Close</Button>{!readOnly && <Button type="submit" form="asset-inventory-editor" disabled={saving}><Save size={15} /> Save</Button>}</>}>
       <form id="asset-inventory-editor" className="grid gap-4" onSubmit={submit}>
         <div className="rounded-lg border">
           <div className="border-b p-4"><p className="eyebrow">Asset</p><h3 className="m-0 text-base font-semibold">Inventory Information</h3></div>

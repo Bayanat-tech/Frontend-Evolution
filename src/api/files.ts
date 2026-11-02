@@ -126,8 +126,9 @@ export async function renameFreightAccountFile(requestNumber: string, srNo: numb
   return response.data;
 }
 
-export async function deleteAccountFile(requestNumber: string, srNo: number, awsFileLocn: string) {
-  const response = await api.delete<ApiResponse<unknown>>(`/api/files/deleteAF/${encodeProxySafePathSegment(requestNumber)}/${srNo}`, {
+export async function deleteAccountFile(requestNumber: string, srNo: number | undefined, awsFileLocn: string) {
+  const srPath = srNo === undefined ? "" : `/${srNo}`;
+  const response = await api.delete<ApiResponse<unknown>>(`/api/files/deleteAF/${encodeProxySafePathSegment(requestNumber)}${srPath}`, {
     data: { aws_file_locn: awsFileLocn },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete file");

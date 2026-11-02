@@ -313,7 +313,7 @@ export async function fetchexpenseDetailsDetail(
     });
 }
 
-export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
+export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType, rows?: PurchaseOrderLineRow[]) {
     const poForm = form as PurchaseOrderForm & {
         quotn_no?: string | number;
         quotn_date?: string | number | Date;
@@ -365,6 +365,9 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
         sentback_reason: form.sentback_reason || undefined,
         reject_reason: form.reject_reason || undefined,
         flow_level_running: form.flow_level_running || 0,
+        warranty_period: form.warranty_period,
+        warranty_uom: form.warranty_uom,
+        warranty_desc: form.warranty_desc,
     };
 }
 
@@ -496,7 +499,7 @@ export async function runWorkflow(
 ) {
     return upsertBulkJobProductionEntryApi(
         {
-            header: buildHeaderPayload(form, companyCode, loginid, docType),
+            header: buildHeaderPayload(form, companyCode, loginid, docType, rows),
             details: buildDetailsPayload(rows),
             jmiConsumDetails: buildTteJmiConsumPayload(subrow),
             expenseDetails: buildExpensePayload(expenserow),

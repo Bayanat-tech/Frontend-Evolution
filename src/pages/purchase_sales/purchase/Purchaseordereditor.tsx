@@ -1,5 +1,5 @@
-import { Download, Loader2, Paperclip, Printer, Save, Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, Download, Loader2, Paperclip, Printer, Save, Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
@@ -46,7 +46,17 @@ import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getPoOrderReportHtml } from "../../../api/transactions";
+import {
+  getPoOrderReportHtml,
+  getPoOrderReportExcel,
+} from "../../../api/transactions";
+
+import { NewReportDialog } from "../../../components/new_report_format";
+import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
+import { createPortal } from "react-dom";
+
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 
 export type { PurchaseOrderEditorState };
@@ -90,9 +100,17 @@ export function PurchaseOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+
+
+  // ---- Report Preview state ----
+
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
-
+  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+  const submitBtnRef = useRef<HTMLDivElement>(null);
+  const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     if (!editor) return;
@@ -109,18 +127,27 @@ export function PurchaseOrderEditor({
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
 
         return updatedRow;
       })
     );
+
+
   }, [
     form.tx_compntcat_code_1,
     form.tx_cat_code,
@@ -140,6 +167,22 @@ export function PurchaseOrderEditor({
           fetchPurchaseOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
           fetchPurchaseOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
+        let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -151,17 +194,24 @@ export function PurchaseOrderEditor({
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
-          ac_name: text(headerRaw.ac_name || current.ac_name),
-          party_address: text(headerRaw.address || current.party_address),
-          credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
-          party_phone: text(headerRaw.tel || current.party_phone),
-          party_fax: text(headerRaw.fax || current.party_fax),
+          ac_name: text(headerRaw.ac_name || acRow?.ac_name || current.ac_name),
+          party_address: text(headerRaw.address || acRow?.party_address || current.party_address),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
+          credit_period: Number(headerRaw.credit_period || acRow?.credit_period || current.credit_period || 0),
+          party_phone: text(headerRaw.tel || acRow?.party_phone || current.party_phone),
+          party_fax: text(headerRaw.fax || acRow?.party_fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
-          ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
+          curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
+          ex_rate: Number(headerRaw.ex_rate || acRow?.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
           dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
@@ -181,6 +231,7 @@ export function PurchaseOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
           discount_scoope:
@@ -228,7 +279,8 @@ export function PurchaseOrderEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
   console.log("ROWS DEBUG:", rows.map(r => ({
@@ -237,12 +289,18 @@ export function PurchaseOrderEditor({
     computedQty: computeQuantity(r),
     lineTotal: Totalunitprice(r)
   })));
-  const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-  })();
+
+  const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
+  const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
+  const baseTotalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const totalDiscountAmt = TotalDiscAmount(rows);
+  const amountBeforeTax = baseTotalAmount - totalDiscountAmt;
+  const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const amountAfterTax = amountBeforeTax + totalTaxAmt;
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+  const finalTotal = grandTotal + totalTaxAmount;
 
   // const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
   //   setForm((current) => {
@@ -370,56 +428,146 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handlePrint = () => {
+  // ---- Report Preview ----
+  const handlePrint = async () => {
     if (!form.doc_no) return;
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setError("Popup blocked — please allow popups to print.");
-      return;
-    }
-    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
-
-    getPoOrderReportHtml({
+    const params = {
       company_code: user?.company_code,
       doc_type: PO_DOC_TYPE.LPO,
       doc_no: form.doc_no,
-    })
-      .then((html) => {
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
-      })
-      .catch((printError) => {
-        printWindow.document.open();
-        printWindow.document.write(
-          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
-          }</p>`
-        );
-        printWindow.document.close();
+    };
+    const preview = openPurchaseReport(`Purchase Order ${form.doc_no}`.trim());
+
+    try {
+      const html = await getPoOrderReportHtml(params);
+      preview.ready({
+        html,
+        filename: `purchase_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await getPoOrderReportExcel(params);
+        },
       });
+    } catch (error) {
+      preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+    }
+  };
+
+
+  const handleReportPreviewExcel = async () => {
+    if (!form.doc_no) return;
+
+    setReportPreviewExporting(true);
+    setReportPreviewError("");
+
+    try {
+      await getPoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.LPO,
+        doc_no: form.doc_no,
+      });
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : "Unable to export report"
+      );
+    } finally {
+      setReportPreviewExporting(false);
+    }
   };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  const hasValidLinesforprod = rows.some((row) => text(row.prod_code).trim().length > 0);
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
+
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
   };
 
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+  //   const invalidRow = rows.find((row) => {
+  //     const qtyPuom = numberOrZero(row.qty_puom);
+  //     const uppp = numberOrZero(row.uppp);
+  //     const qtyLuom = numberOrZero(row.qty_luom);
+  //     const unitPrice = numberOrZero(row.unit_price);
+  //     const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+  //     return !(total > 0);
+  //   });
+  //   if (invalidRow) {
+  //     return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+  //   }
+  //   const rect = submitBtnRef.current?.getBoundingClientRect();
+  //   if (rect) {
+  //     setSubmitConfirmPos({
+  //       top: rect.bottom + 8,
+  //       right: window.innerWidth - rect.right,
+  //     });
+  //   }
+  //   setShowSubmitConfirm(true);
+  // };
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
-    setShowSubmitConfirm(true);
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
+
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
@@ -511,18 +659,31 @@ export function PurchaseOrderEditor({
     }, "Purchase order sent back");
   };
 
+  const handleExcel = async () => {
+    if (!form.doc_no) return;
+    try {
+      await getPoOrderReportExcel({
+        doc_no: String(form.doc_no),
+        company_code: user?.company_code,
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Excel export failed");
+    }
+  };
+
   const actionBarBusy = actionLoading !== null || saving;
   console.log("flowLevelRunning------------------>", flowLevelRunning)
 
   return (
     <>
-      <form
-        className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => { event.preventDefault(); handleSubmitClick(); }}
-      >
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+      <div className="finance-document-ui finance-document-editor commercial-editor payment-workbench flex h-screen flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm px-4 py-2">
+        <form
+          data-header-expanded={showHeaderDetails} className={` finance-document-ui payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+          onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
+        >
+          <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+            <div className="flex min-h-10 items-center justify-between gap-3">
+              {/* <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                   {editMode ? "Edit Purchase Order" : "New Purchase Order"}
@@ -550,130 +711,277 @@ export function PurchaseOrderEditor({
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
                 </div>
               )}
-            </div>
+            </div> */}
 
-
-            <div className="flex items-center gap-2">
-              {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-              {form.doc_no && (
-                <>
-                  <Button type="button" variant="secondary" onClick={handlePrint}>
-                    <Printer size={15} /> Print
-                  </Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-                </>
-              )}
-              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                <Paperclip size={15} /> Files
-              </Button>
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
-            </div>
-          </div>
-        </CardHeader>
-
-        {isCancelled && (
-          <div className="cancelled-document-banner" role="status">
-            <div>
-              <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Purchase Order"}</strong>
-            </div>
-            <p>This purchase order is cancelled and opened in read-only mode.</p>
-          </div>
-        )}
-
-        <CardContent className="min-h-0 overflow-auto p-3">
-          {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading purchase order...</div>
-          ) : (
-            <div className="grid gap-3">
-              <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
-
-              <PurchaseOrderHeaderForm
-                form={form}
-                docType={config.docType}
-                setForm={setForm}
-                updateField={updateField}
-                disabled={disabled}
-                headerAndLineDisabled={headerAndLineDisabled}
-                editMode={editMode}
-                companyCode={user?.company_code}
-                loginid={user?.loginid || user?.username}
-                rows={rows}
-                setdetails={setRows}
-                calculateDiscount={applyDiscountCalculation}
+              <FinanceDocumentIdentity
+                title="Purchase Order"
+                documentNo={form.doc_no}
+                documentDate={form.doc_date}
+                total={formatAmount(finalTotal)}
+                divCode={form.div_code}
+                divName={form.div_name}
+                onBack={onClose}
+                headerExpanded={showHeaderDetails}
+                onToggleHeader={() => setShowHeaderDetails(value => !value)}
               />
+              <div className="flex items-center gap-2">
+                {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
 
-              <PurchaseOrderLinesTable
-                rows={rows}
-                form={form}
-                setdetails={setRows}
-                docType={config.docType}
-                updateRow={updateRow}
-                addRow={addRow}
-                removeRow={removeRow}
-                ex_rate={form.ex_rate}
-                headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_price}
-                companyCode={user?.company_code}
-                loginid={user?.loginid || user?.username}
 
-              />
+                <div className="flex items-center gap-2">
+                  {isPendingTab && (
+                    <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                      {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                      {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                    </Button>
+                  )}
+                  {/* <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
+                    {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
+                    {showSubmitConfirm &&
+                      createPortal(
+                        <div
+                          style={{ position: "fixed", top: submitConfirmPos.top, right: submitConfirmPos.right }}
+                          className="z-[9999] w-56 rounded-lg border border-slate-200 bg-white p-3 text-black shadow-xl"
+                        >
+                          <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                          <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>
+                              No
+                            </Button>
+                            <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>
+                              Yes
+                            </Button>
+                          </div>
+                        </div>,
+                        document.body
+                      )}
+                  </div> */}
+                  {isPendingTab && (
+                    <Button
+                      type="button"
+                      onClick={handleSubmitClick}
+                      disabled={actionDisabled || actionBarBusy}
+                    >
+                      {actionLoading === "submit" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="mr-2 h-4 w-4" />
+                      )}
+                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                    </Button>
+                  )}
+
+                  {isPendingTab && canSendBackOrReject && (
+                    <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                      {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                    </Button>
+                  )}
+
+                  {isPendingTab && canSendBackOrReject && (
+                    <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                      {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </Button>
+                  )}
+                  {isPendingTab  && form.doc_no &&  (
+                    <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                      {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                    </Button>
+                  )}
+
+                </div>
+                {form.doc_no && (
+                  <>
+                    <Button type="button" variant="secondary" onClick={handlePrint}>
+                      <Printer size={15} /> Print
+                    </Button>
+                    {/* <Button
+                      aria-label="Excel"
+                      title="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => void handleReportPreviewExcel()}
+                      disabled={reportPreviewExporting}
+                    >
+                      <Download size={15} />
+                    </Button> */}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleExcel()}
+                    >
+                      <Download size={15} />
+                      Excel
+                    </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
+                {/* <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button> */}
+              </div>
+            </div>
+          </CardHeader>
+
+          {isCancelled && (
+            <div className="cancelled-document-banner" role="status">
+              <div>
+                <span className="cancelled-document-kicker">Cancelled Document</span>
+                <strong>{form.doc_no || "Purchase Order"}</strong>
+              </div>
+              <p>This purchase order is cancelled and opened in read-only mode.</p>
             </div>
           )}
-        </CardContent>
 
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-            {isPendingTab && (
-              <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-              </Button>
-            )}
-            {isPendingTab && (
-              <div className="relative">
-                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                </Button>
-                {showSubmitConfirm && (
-                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
-                    <p className="mb-2 text-sm text-gray-700">Submit this Purchase Order?</p>
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
-                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+          <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
+            {loading ? (
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Order...</div>
+            ) : (
+              <div className="commercial-editor-sections grid gap-3 min-w-0">
+                <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+
+                {!showHeaderDetails ? (
+                  <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
+                    <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Doc Date:</span>
+                        <span className="font-medium">{form.doc_date}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Division:</span>
+                        <span className="font-medium">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 truncate">
+                        <span className="font-semibold text-[#00378C]">A/c Code:</span>
+                        <span className="font-medium truncate">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "Not selected"}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Currency:</span>
+                        <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
+                      </span>
                     </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer"
+                      onClick={() => setShowHeaderDetails(true)}
+                    >
+                      Show Header Fields <ChevronDown size={13} className="ml-1" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
+                    <PurchaseOrderHeaderForm
+                      form={form}
+                      docType={config.docType}
+                      setForm={setForm}
+                      updateField={updateField}
+                      disabled={disabled}
+                      headerAndLineDisabled={headerAndLineDisabled}
+                      editMode={editMode}
+                      companyCode={user?.company_code}
+                      loginid={user?.loginid || user?.username}
+                      rows={rows}
+                      setdetails={setRows}
+                      calculateDiscount={applyDiscountCalculation}
+                    />
                   </div>
                 )}
+
+                <PurchaseOrderLinesTable
+                  rows={rows}
+                  form={form}
+                  setdetails={setRows}
+                  docType={config.docType}
+                  updateRow={updateRow}
+                  addRow={addRow}
+                  removeRow={removeRow}
+                  ex_rate={form.ex_rate}
+                  headerAndLineDisabled={headerAndLineDisabled}
+                  discAmt={form.disc_price}
+                  companyCode={user?.company_code}
+                  loginid={user?.loginid || user?.username}
+
+                />
               </div>
             )}
+          </CardContent>
 
-            {isPendingTab && canSendBackOrReject && (
-              <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
-                {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
-              </Button>
-            )}
+          {/* ← paste the new totals bar here */}
 
-            {isPendingTab && canSendBackOrReject && (
-              <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
-                {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-              </Button>
-            )}
-            {isPendingTab &&
-              <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-              </Button>}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrint} disabled={!form.doc_no}>
-              <Printer size={15} />
-            </Button>
-            <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
-            <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
-            <Button type="button" variant="outline" onClick={onClose}>Close</Button>
-          </div>
-        </div>
-      </form>
+
+
+
+          {/* <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs shadow-2xs">
+                <span className="text-[11px] font-medium text-slate-500">Total Amount</span>
+                <strong className="font-mono text-xs text-slate-900">{formatAmount(finalTotal)}</strong>
+              </div>
+
+
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isPendingTab && (
+                <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                  {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                </Button>
+              )}
+              {isPendingTab && (
+                <div className="relative">
+                  <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy}>
+                    {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                  </Button>
+                  {showSubmitConfirm && (
+                    <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                      <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                        <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isPendingTab && canSendBackOrReject && (
+                <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                  {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                </Button>
+              )}
+
+              {isPendingTab && canSendBackOrReject && (
+                <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                </Button>
+              )}
+              {isPendingTab && (
+                <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                  {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                </Button>
+              )}
+
+            </div>
+          </div> */}
+        </form>
+      </div>
 
       <SendBackDialog
         open={sendBackDialogOpen}
@@ -715,7 +1023,11 @@ export function PurchaseOrderEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
+          readOnly={!isPendingTab || isCancelled} 
       />
+
+
+      <PurchaseReportPreview />
     </>
   );
 }

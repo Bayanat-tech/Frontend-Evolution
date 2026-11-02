@@ -10,7 +10,9 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { BudgetEditorState, BudgetRequestEditor } from "./BudgetRequestEditor";
 import {  getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
+import { DivisionPickerDialog } from "../../../components/finance/DivisionPickerDialog";
+import { formatDate } from "../../../utils/date";
+import { TabStrip } from "../../../components/commonComponents";
 
 
 // TODO: replace with the real budget-request row shape once the backend contract is confirmed.
@@ -145,7 +147,7 @@ useEffect(() => {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
             <Edit2 size={15} />
           </Button>
           <Button size="icon" variant="ghost" title="Print / PDF">
@@ -160,12 +162,13 @@ useEffect(() => {
   ], []);
 
   const openCreateForDivision = (division: Division) => {
+    setNotice(null);
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
 
   return (
-    <section className="finance-list-page grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Budget Request</h1>
@@ -240,7 +243,10 @@ useEffect(() => {
             key={editor?.mode === "edit" ? editor.row.request_number : editor?.mode || "create"}
             editor={editor}
             isPendingTab={isPendingTab}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
@@ -250,35 +256,16 @@ useEffect(() => {
         </div>
       )}
 
-      <Dialog
+      <DivisionPickerDialog
         open={divisionPicker}
-        title="Select Division"
-        description="Choose the division before opening the budget request form."
+        divisions={divisions}
+        onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+        description="Choose the division before opening the budget request form."
+      />
     </section>
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}
+
 

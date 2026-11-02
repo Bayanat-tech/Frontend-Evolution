@@ -92,7 +92,7 @@ export async function buildFinancePdfDefinition(report: FinanceReportDocument, i
 }
 
 let fontPromise: Promise<Record<string, string>> | undefined;
-async function fontVfs() {
+export async function fontVfs() {
   fontPromise ??= Promise.all(["Regular", "Bold"].map(async (weight) => {
     const name = `Inter-${weight}.ttf`;
     const response = await fetch(`${import.meta.env.BASE_URL}fonts/reports/${name}`);

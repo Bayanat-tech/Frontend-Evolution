@@ -1,13 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Eye, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
-import { NoticeToast } from "../../../components/ui/NoticeToast";
 import { useAuth } from "../../../state/AuthContext";
 import { getAllInvoices } from "../../../api/billing";
 import InvoiceForm from "./InvoiceForm";
-import { Badge } from "../../../components/ui/Badge";
+import { useToast } from "../../../components/ui/AlertToast";
 
 type WmsRow = Record<string, unknown>;
 
@@ -22,20 +21,27 @@ function formatDate(input: string) {
   return date.toLocaleDateString("en-GB");
 }
 
+// Define tabs exactly like Inbound (using allocated status as an example)
+const listTabs = [
+  { key: "all", label: "All Invoices" },
+  { key: "allocated", label: "Allocated" },
+  { key: "unallocated", label: "Unallocated" },
+];
+
 export function InvoicePage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<WmsRow | null>(null);
   const [viewMode, setViewMode] = useState(false);
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [activeTab, setActiveTab] = useState("all");
 
-  const loadRows = async (clearNotice = true) => {
+  const loadRows = async () => {
     if (!user?.company_code) return;
     setLoading(true);
-    if (clearNotice) setNotice(null);
     try {
       const data = await getAllInvoices(user.company_code, user.loginid ?? "");
       const normalized = (data as any[]).map((row) => {
@@ -45,13 +51,13 @@ export function InvoicePage() {
       });
       setRows(normalized);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load invoices." });
+      toast.error(error instanceof Error ? error.message : "Unable to load invoices.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { void loadRows(); }, [user?.company_code]);
+  useEffect(() => { void loadRows(); }, [user?.company_code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openForm = (row: WmsRow | null, view: boolean) => {
     setEditingRow(row);
@@ -59,29 +65,38 @@ export function InvoicePage() {
     setFormOpen(true);
   };
 
-//   const handleDelete = async (row: WmsRow) => {
-//     if (!window.confirm("Delete this invoice?")) return;
-//     try {
-//       await deleteInvoice({
-//         loginid: user?.loginid ?? "",
-//         company_code: user?.company_code ?? "",
-//         invoice_no: val(row, "invoice_no"),
-//         prin_code: val(row, "prin_code"),
-//       });
-//       setNotice({ type: "success", message: "Invoice deleted." });
-//       void loadRows(false);
-//     } catch (error) {
-//       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete invoice." });
-//     }
-//   };
+  // Filter rows based on active tab
+  const filteredRows = useMemo(() => {
+    if (activeTab === "all") return rows;
+    return rows.filter((row) => {
+      const allocated = val(row, "allocated");
+      if (activeTab === "allocated") return allocated === "Y";
+      if (activeTab === "unallocated") return allocated !== "Y";
+      return true;
+    });
+  }, [rows, activeTab]);
 
-const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
+  // Count for tabs
+  const getTabCount = (tabKey: string) => {
+    if (tabKey === "all") return rows.length;
+    return rows.filter((row) => {
+      const allocated = val(row, "allocated");
+      if (tabKey === "allocated") return allocated === "Y";
+      if (tabKey === "unallocated") return allocated !== "Y";
+      return false;
+    }).length;
+  };
+
+  const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
     {
       accessorKey: "invoice_no",
       header: "Invoice No",
       size: 130,
       cell: ({ row }) => (
-        <button className="font-semibold text-primary hover:underline" onClick={() => openForm(row.original, true)}>
+        <button
+          className="font-semibold text-primary hover:underline text-[11.5px] text-left cursor-pointer"
+          onClick={() => openForm(row.original, true)}
+        >
           {val(row.original, "invoice_no")}
         </button>
       ),
@@ -90,7 +105,7 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
       accessorKey: "invoice_date",
       header: "Invoice Date",
       size: 120,
-      cell: ({ row }) => formatDate(val(row.original, "invoice_date")),
+      cell: ({ row }) => <span className="text-[11.5px] text-foreground">{formatDate(val(row.original, "invoice_date"))}</span>,
     },
     {
       id: "principal",
@@ -99,7 +114,7 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
       cell: ({ row }) => {
         const code = val(row.original, "prin_code");
         const name = val(row.original, "prin_name");
-        return [code, name].filter(Boolean).join(" - ") || "-";
+        return <span className="text-[11.5px] text-foreground">{[code, name].filter(Boolean).join(" - ") || "-"}</span>;
       },
     },
     {
@@ -109,165 +124,139 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
       cell: ({ row }) => {
         const code = val(row.original, "div_code");
         const name = val(row.original, "div_name");
-        return [code, name].filter(Boolean).join(" - ") || "-";
+        return <span className="text-[11.5px] text-foreground">{[code, name].filter(Boolean).join(" - ") || "-"}</span>;
       },
     },
-    { accessorKey: "job_no", header: "Job No", size: 110, cell: ({ row }) => val(row.original, "job_no") || "-" },
-    // { accessorKey: "other_job", header: "Other Job", size: 110, cell: ({ row }) => val(row.original, "other_job") || "-" },
-    { accessorKey: "cust_code", header: "Customer Code", size: 120, cell: ({ row }) => val(row.original, "cust_code") || "-" },
-    // { accessorKey: "inv_to", header: "Invoice To", size: 160, cell: ({ row }) => val(row.original, "inv_to") || "-" },
-    // { accessorKey: "inv_type", header: "Invoice Type", size: 110, cell: ({ row }) => val(row.original, "inv_type") || "-" },
-    // { accessorKey: "inv_mode", header: "Invoice Mode", size: 110, cell: ({ row }) => val(row.original, "inv_mode") || "-" },
-    // { accessorKey: "curr_code", header: "Currency", size: 90, cell: ({ row }) => val(row.original, "curr_code") || "-" },
-    // {
-    //   accessorKey: "ex_rate",
-    //   header: "Exchange Rate",
-    //   size: 110,
-    //   cell: ({ row }) => <span className="block text-right tabular-nums">{val(row.original, "ex_rate") ?? "-"}</span>,
-    // },
     {
       accessorKey: "inv_amount",
       header: "Invoice Amount",
       size: 130,
-      cell: ({ row }) => <span className="block text-right tabular-nums">{val(row.original, "inv_amount")}</span>,
+      cell: ({ row }) => <span className="block text-right tabular-nums text-[11.5px] text-foreground">{val(row.original, "inv_amount")}</span>,
     },
-    // { accessorKey: "crdr", header: "Cr/Dr", size: 80, cell: ({ row }) => val(row.original, "crdr") || "-" },
-    { accessorKey: "inv_status", header: "Status", size: 90 },
-    // {
-    //   accessorKey: "allocated",
-    //   header: "Allocated",
-    //   size: 100,
-    //   cell: ({ row }) => {
-    //     const value = val(row.original, "allocated");
-    //     return (
-    //       <Badge variant={value === "Y" ? "default" : "secondary"}>
-    //         {value === "Y" ? "Yes" : "No"}
-    //       </Badge>
-    //     );
-    //   },
-    // },
-    // {
-    //   accessorKey: "allocated_date",
-    //   header: "Allocated Date",
-    //   size: 130,
-    //   cell: ({ row }) => formatDate(val(row.original, "allocated_date")),
-    // },
-    // {
-    //   accessorKey: "despatched",
-    //   header: "Despatched",
-    //   size: 100,
-    //   cell: ({ row }) => {
-    //     const value = val(row.original, "despatched");
-    //     return (
-    //       <Badge variant={value === "Y" ? "default" : "secondary"}>
-    //         {value === "Y" ? "Yes" : "No"}
-    //       </Badge>
-    //     );
-    //   },
-    // },
-    // {
-    //   accessorKey: "desp_date",
-    //   header: "Despatch Date",
-    //   size: 130,
-    //   cell: ({ row }) => formatDate(val(row.original, "desp_date")),
-    // },
-    // { accessorKey: "awb_no", header: "AWB No", size: 120, cell: ({ row }) => val(row.original, "awb_no") || "-" },
-    // { accessorKey: "stmt_actno", header: "Statement A/C No", size: 140, cell: ({ row }) => val(row.original, "stmt_actno") || "-" },
-    // { accessorKey: "account_ref", header: "Account Ref", size: 130, cell: ({ row }) => val(row.original, "account_ref") || "-" },
-    // { accessorKey: "party", header: "Party", size: 150, cell: ({ row }) => val(row.original, "party") || "-" },
-    // { accessorKey: "inv_desc1", header: "Description 1", size: 180, cell: ({ row }) => val(row.original, "inv_desc1") || "-" },
-    // { accessorKey: "inv_desc2", header: "Description 2", size: 180, cell: ({ row }) => val(row.original, "inv_desc2") || "-" },
-    // { accessorKey: "prin_ref1", header: "Principal Ref 1", size: 140, cell: ({ row }) => val(row.original, "prin_ref1") || "-" },
-    // { accessorKey: "prin_ref2", header: "Principal Ref 2", size: 140, cell: ({ row }) => val(row.original, "prin_ref2") || "-" },
-    // { accessorKey: "credit_note_no", header: "Credit Note No", size: 130, cell: ({ row }) => val(row.original, "credit_note_no") || "-" },
-    // {
-    //   accessorKey: "credit_note_date",
-    //   header: "Credit Note Date",
-    //   size: 140,
-    //   cell: ({ row }) => formatDate(val(row.original, "credit_note_date")),
-    // },
     {
       id: "actions",
-      header: "Actions",
-      size: 110,
+      header: "ACTIONS",
+      size: 125,
       enableColumnFilter: false,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" title="View invoice" onClick={() => openForm(row.original, true)}>
-            <Eye size={14} />
-          </Button>
-          <Button size="icon" variant="ghost" title="Edit invoice" onClick={() => openForm(row.original, false)}>
-            <Pencil size={14} />
-          </Button>
-          {/* <Button size="icon" variant="ghost" title="Delete invoice" onClick={() => handleDelete(row.original)}>
-            <Trash2 size={14} />
-          </Button> */}
+        <div className="flex items-center justify-center gap-1">
+          <button
+            type="button"
+            className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+            title="View invoice"
+            onClick={(event) => {
+              event.stopPropagation();
+              openForm(row.original, true);
+            }}
+          >
+            <Eye size={13} />
+          </button>
+          <button
+            type="button"
+            className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+            title="Edit invoice"
+            onClick={(event) => {
+              event.stopPropagation();
+              openForm(row.original, false);
+            }}
+          >
+            <Pencil size={13} />
+          </button>
         </div>
       ),
     },
   ], []);
 
-  // NOTE: this used to render InvoiceForm as an overlay Dialog on top of the
-  // listing. Per request, the form is now an in-page view — this component
-  // swaps its ENTIRE body between the listing and the form instead, so the
-  // page's own sidebar/breadcrumb chrome (rendered by the layout around
-  // InvoicePage) stays visible and untouched the whole time, same as
-  // switching from "Normal Sales Transaction" to "Modify Normal Sales
-  // Transaction" in the reference app.
+  // Page-style form replaces the listing entirely while adding/editing an invoice
   if (formOpen) {
     return (
-      <section className="grid gap-4">
-        <InvoiceForm
-          // companyCode={user?.company_code ?? ""}
-          existingData={editingRow ?? undefined}
-          viewMode={viewMode}
-          onClose={(shouldRefetch) => {
-            setFormOpen(false);
-            if (shouldRefetch) {
-              void loadRows(false);
-              setNotice({ type: "success", message: "Invoice saved successfully." });
-            }
-          }}
-        />
-      </section>
+      <InvoiceForm
+        existingData={editingRow ?? undefined}
+        viewMode={viewMode}
+        onClose={(shouldRefetch) => {
+          setFormOpen(false);
+          if (shouldRefetch) {
+            void loadRows();
+            toast.success("Invoice saved successfully.");
+          }
+        }}
+      />
     );
   }
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Invoice Listing</h1>
-          {/* <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Create and manage principal billing invoices.
-          </p> */}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => openForm(null, false)}><Plus size={15} /> Create Invoice</Button>
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Invoice Listing
+          </h2>
         </div>
       </div>
 
-      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+      {/* Tabs with counts
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {listTabs.map((tab) => {
+          const count = getTabCount(tab.key);
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                active
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div> */}
 
+      {/* Table */}
       <DataTable
         columns={columns}
-        data={rows}
-        subtitle="Invoices"
+        data={filteredRows}
+        toolbar={
+          <button
+            type="button"
+            onClick={() => openForm(null, false)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            Create Invoice
+          </button>
+        }
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search invoice no, principal..."
         loading={loading}
-        height="calc(100vh - 260px)"
-        minWidth={1000}
+        height="calc(100vh - 180px)"
         density="grid"
         enablePagination
         pageSize={50}
+        enableExport
+        exportFilename="invoices-list.csv"
         getRowId={(row, index) => {
           const inv = val(row, "invoice_no");
           const prin = val(row, "prin_code");
           const co = val(row, "company_code");
           return inv ? `${co}-${prin}-${inv}` : String(index);
+        }}
+        rowClassName={(row) => {
+          // Apply row colors based on status, matching Inbound design pattern
+          if (val(row, "allocated") === "Y") return "[&>td]:bg-emerald-50/70"; // Allocated -> Light Green
+          return "[&>td]:bg-amber-50/70"; // Unallocated -> Light Yellow
         }}
       />
     </section>

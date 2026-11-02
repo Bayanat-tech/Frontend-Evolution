@@ -1,16 +1,26 @@
+import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { amountInWords } from "../../utils/amountInWords";
+import { ColumnModeToggle } from "../../components/ui/ColumnModeToggle";
+import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
+import { taxTreatmentFromMaster } from "../../utils/financeTaxTreatment";
+import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { AlertCircle, Ban, Building2, CheckCircle2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Zap, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
 import {
   cancelTransactionDocument,
   deleteTransactionDocument,
   Division,
   FyPeriod,
+  getCompanyInfo,
+  getDefaultFyPeriod,
   getCheque,
   getChildTableName,
   getDivisions,
   getDocAccounts,
+  getAccountLiveBalance,
   getFinanceMasterRows,
   getFyPeriods,
   getTransactionChildren,
@@ -26,10 +36,11 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
-  openDocumentReport,
+  FinanceOutstandingBalance,
   downloadDocumentReportExcel,
+  openDocumentReportv1,
 } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -40,7 +51,18 @@ import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { useAuth } from "../../state/AuthContext";
+import { NewReportDialog } from "../../components/new_report_format";
+import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
+import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { formatDate } from "../../utils/date";
+import { formatDocNo } from "../../utils/docNo";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -81,13 +103,38 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([{ id: "canceled", value: "N" }]);
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportTitle, setReportTitle] = useState("Document Report");
+
+  const handleOpenReport = async (docType: string, docNo: string, title?: string) => {
+    if (!docNo) return;
+
+    setReportTitle(title || `${docType} ${docNo}`);
+    setReportOpen(true);
+    setReportLoading(true);
+    setReportError(null);
+    setReportHtml(null);
+
+    try {
+      const html = await openDocumentReportv1(docType, docNo);
+      setReportHtml(html);
+    } catch (err) {
+      setReportError(err instanceof Error ? err.message : "Unable to load report");
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   const loadLookups = async () => {
-    const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
+    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || fyData[0]?.fy_period || "");
+    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
@@ -95,12 +142,23 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const activeFilters = nextColumnFilters
+        .map((filter) => {
+          const val = filter.value;
+          if (val && typeof val === "object") {
+            const range = val as { from?: string; to?: string };
+            if (range.from || range.to) {
+              return { field: filter.id, values: JSON.stringify(range) };
+            }
+            return null;
+          }
+          const strVal = String(val ?? "").trim();
+          return strVal ? { field: filter.id, values: strVal } : null;
+        })
+        .filter((f): f is { field: string; values: string } => Boolean(f));
+      const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
       const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = nextColumnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
       const params: Record<string, any> = {};
       if (query.trim()) params.search = query.trim();
       if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
@@ -131,46 +189,76 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
     {
       accessorKey: "doc_no",
       header: "Doc No",
-      cell: ({ row }) => <span className="font-semibold">{row.original.doc_no}</span>,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          title={`Open ${row.original.doc_no}`}
+        >
+          {formatDocNo(row.original.doc_no)}
+        </button>
+      ),
     },
-    { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
-    { accessorKey: "ac_name", header: "Account Name" },
+    {
+      accessorKey: "doc_date",
+      header: () => <div className="text-center font-bold">Date</div>,
+      cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
+    },
+    // { accessorKey: "ac_name", header: "Account Name" },
     ...(docType === "CP" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "remarks", header: "Description" },
-    ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
-    { accessorKey: "div_code", header: "Div" },
+    {
+      accessorKey: "amount",
+      header: () => <div className="text-right font-bold">Amount</div>,
+      cell: ({ getValue }) => {
+        const val = Number(getValue() || 0);
+        return <div className="text-right font-mono tabular-nums font-semibold text-slate-800">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
+      },
+    },
+    {
+      accessorKey: "div_code",
+      header: () => <div className="text-center font-bold">Div</div>,
+      cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
+      size: 40,
+    },
     {
       accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
+      header: () => <div className="text-center font-bold">Status</div>,
+      cell: ({ getValue }) => (
+        <div className="flex justify-center">
+          <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+        </div>
+      ),
     },
     {
       id: "actions",
-      header: "Actions",
+      header: () => <div className="text-center font-bold">Actions</div>,
       enableSorting: false,
+      size: 155,
+      minSize: 155,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => window.print()} title="Print">
-            <Printer size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)} title="Delete">
-            <Trash2 size={15} />
-          </Button>
-        </div>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          onDelete={() => setDeleteTarget(row.original)}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], [docType, columnFilters]);
 
   const openCreateForDivision = (division: Division) => {
+    setNotice(null);
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
@@ -201,79 +289,94 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
 
 
   return (
-    <section className="finance-list-page grid gap-4">
-      <div className="finance-list-heading">
-        <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
-        </div>
-        <div className="finance-list-actions">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        </div>
-      </div>
-
-      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-
-      <div className="min-h-[650px]">
-        <DataTable
-          columns={columns}
-          data={rows}
-          title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-          subtitle={`${meta.title} List`}
-          searchValue={query}
-          onSearchChange={(value) => {
-            setQuery(value);
-            setPageIndex(0);
-          }}
-          searchPlaceholder="Search document, account, reference..."
-          loading={loading}
-          emptyText="No documents found"
-          height={620}
-          minWidth={1120}
-          density="grid"
-          enablePagination
-          manualPagination
-          manualFiltering
-          toolbar={
-            <div className="finance-list-controls">
-              <label className="finance-period-control">
-                <span>FY</span>
-                <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-                {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-                </Select>
-              </label>
+    <section className={`finance-list-page grid gap-4 ${editor ? "finance-document-ui finance-document-editing" : ""}`}>
+      {!editor && (
+        <>
+          <div className="finance-list-heading flex items-center justify-between gap-3">
+            <div className="finance-list-title flex items-center gap-2.5">
+              <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{meta.title}</h1>
+              {fyPeriod && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#00378C] border border-blue-200 shadow-2xs">
+                  FY {fyPeriod}
+                </span>
+              )}
             </div>
-          }
-          enableExport
-          exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
-          pageIndex={pageIndex}
-          pageSize={pageSize}
-          totalRows={totalRows}
-          columnFilters={columnFilters}
-          onColumnFiltersChange={(filters) => {
-            setColumnFilters(filters);
-            setPageIndex(0);
-          }}
-          onPageChange={setPageIndex}
-          onPageSizeChange={(nextPageSize) => {
-            setPageSize(nextPageSize);
-            setPageIndex(0);
-          }}
-          getRowId={(row, index) => `${row.doc_no}_${index}`}
-        />
-      </div>
+          </div>
+
+          <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+          <div className="min-h-[650px]">
+            <DataTable
+              columns={columns}
+              data={rows}
+              title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
+              searchValue={query}
+              onSearchChange={(value) => {
+                setQuery(value);
+                setPageIndex(0);
+              }}
+              searchPlaceholder="Search document, account, reference..."
+              loading={loading}
+              emptyText="No documents found"
+              height={620}
+              minWidth={1120}
+              density="grid"
+              enablePagination
+              manualPagination
+              enableExport={false}
+              actionButton={
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                    title={meta.addLabel}
+                    onClick={() => setDivisionPicker(true)}
+                  >
+                    <Plus size={14} /> Add
+                  </Button>
+                  <FinanceListActionsMenu
+                    fyPeriod={fyPeriod}
+                    fyPeriods={fyPeriods}
+                    onFyPeriodChange={(val) => {
+                      setFyPeriod(val);
+                      setPageIndex(0);
+                    }}
+                    onExport={() => exportToCsv(rows, columns, `${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`)}
+                    onRefresh={() => void loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false)}
+                  />
+                </div>
+              }
+              exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
+              pageIndex={pageIndex}
+              pageSize={pageSize}
+              totalRows={totalRows}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={(filters) => {
+                setColumnFilters(filters);
+                setPageIndex(0);
+              }}
+              onPageChange={setPageIndex}
+              onPageSizeChange={(nextPageSize) => {
+                setPageSize(nextPageSize);
+                setPageIndex(0);
+              }}
+              rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
+              getRowId={(row, index) => `${row.doc_no}_${index}`}
+            />
+          </div>
+        </>
+      )}
 
       {editor && (
-        <div className="fixed inset-0 z-50 bg-background">
+        <div className="finance-document-editor finance-payment-editor finance-document-ui">
           <JVDocument
             docType={docType}
             editor={editor}
-            onClose={() => setEditor(null)}
+            fyPeriod={fyPeriod}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
@@ -283,27 +386,12 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
         </div>
       )}
 
-      <Dialog
+      <DivisionPickerDialog
         open={divisionPicker}
-        title="Select Division"
-        description="Choose the division before opening the document form."
+        divisions={divisions}
+        onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+      />
 
       <ConfirmDialog
         open={Boolean(cancelTarget)}
@@ -323,6 +411,18 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void confirmDelete()}
       />
+      <NewReportDialog
+        open={reportOpen}
+        onClose={() => {
+          setReportOpen(false);
+          setReportHtml(null);
+          setReportError(null);
+        }}
+        title={reportTitle}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError}
+      />
     </section>
   );
 }
@@ -330,17 +430,22 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
 function JVDocument({
   docType,
   editor,
+  fyPeriod,
   onClose,
   onSaved,
 }: {
   docType: TransactionType;
   editor: EditorState;
+  fyPeriod?: string;
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const taxLabels = useFinanceTaxLabels();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const gst = useFinanceGst(form, docType, editMode);
+  const [currencyDecimals, setCurrencyDecimals] = useState<number>(2);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -348,7 +453,246 @@ function JVDocument({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
-  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
+  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+  const [showAllColumns, setShowAllColumns] = useState(true);
+  const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
+
+  const toggleRowExpanded = (id: string) => {
+    setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const [accountBalances, setAccountBalances] = useState<Record<string, { formatted: string; sign: string }>>({});
+  const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
+  const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+  const [taxTypeMap, setTaxTypeMap] = useState<Record<string, string>>({});
+
+  const loadTaxOptions = async () => {
+    let rows: LookupRow[] = [];
+    try {
+      rows = await getFinanceTaxList();
+    } catch {
+      // fallback
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicFinanceLookup({
+          parameter: "Account_Tax_Search",
+          code1: user?.company_code || "",
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        // fallback
+      }
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicLookup({
+          parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        rows = [];
+      }
+    }
+    const rMap: Record<string, number> = {};
+    const tMap: Record<string, string> = {};
+    (rows || []).forEach((r) => {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const rawRate = Number(
+        getLookupValue(r, "tx_percnt") ??
+        getLookupValue(r, "tx_compnt_perc_1") ??
+        getLookupValue(r, "perc") ??
+        getLookupValue(r, "tax_percnt") ??
+        getLookupValue(r, "tax_rate") ??
+        getLookupValue(r, "rate") ??
+        0
+      );
+      const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
+      if (code) {
+        rMap[code] = rawRate;
+        tMap[code] = taxTreatmentFromMaster(rawType, rawRate);
+      }
+    });
+    setTaxRateMap((prev) => ({ ...prev, ...rMap }));
+    setTaxTypeMap((prev) => ({ ...prev, ...tMap }));
+    return rows;
+  };
+
+  const getTaxPercForCode = (code: string): number => {
+    const trimmed = (code || "").trim();
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
+      return taxRateMap[trimmed];
+    }
+    return 0;
+  };
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportTitle, setReportTitle] = useState("Document Report");
+
+  const handleOpenReport = async (docType: string, docNo: string, title?: string) => {
+    if (!docNo) return;
+
+    setReportTitle(title || `${docType} ${docNo}`);
+    setReportOpen(true);
+    setReportLoading(true);
+    setReportError(null);
+    setReportHtml(null);
+
+    try {
+      const html = await openDocumentReportv1(docType, docNo);
+      setReportHtml(html);
+    } catch (err) {
+      setReportError(err instanceof Error ? err.message : "Unable to load report");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const [sourceJvDocNo, setSourceJvDocNo] = useState("");
+  const [reversing, setReversing] = useState(false);
+  const [successNotice, setSuccessNotice] = useState("");
+
+  const loadJvOptions = async (searchQuery?: string) => {
+    try {
+      const activeFy = (form as any).fy_period || fyPeriod || undefined;
+      const res = await getTransactionDocuments(
+        "JV",
+        activeFy,
+        searchQuery?.trim() || undefined,
+        1,
+        100,
+        [{ field: "canceled", values: "N" }]
+      );
+      const tableData = res?.tableData || [];
+      return tableData.map((row: any) => {
+        const rawDocNo = String(row.doc_no || "").trim();
+        const formattedDocNo = rawDocNo.toUpperCase().startsWith("JV") ? rawDocNo : `JV${rawDocNo}`;
+        const formattedDate = formatDate(row.doc_date);
+        const amt = Number(row.amount ?? row.resolved_amount ?? 0);
+        return {
+          ...row,
+          doc_no: rawDocNo,
+          formatted_doc_no: formattedDocNo,
+          formatted_date: formattedDate,
+          formatted_amount: formatAmount(amt, currencyDecimals),
+          remarks: row.remarks || "Journal Voucher",
+          curr_code: row.curr_code || form.curr_code || "INR",
+        };
+      });
+    } catch (err) {
+      console.error("Failed to load JVs for reversal:", err);
+      return [];
+    }
+  };
+
+  const handleReverseJV = async (jvDocNo: string) => {
+    const cleanDocNo = jvDocNo.trim();
+    if (!cleanDocNo) {
+      setError("Please enter or select a JV Document Number to reverse");
+      return;
+    }
+    setReversing(true);
+    setError("");
+    setSuccessNotice("");
+    try {
+      const numOnly = cleanDocNo.replace(/^[A-Za-z]+/, "");
+      let headerRaw: any = null;
+      let detailRaw: any = null;
+
+      try {
+        [headerRaw, detailRaw] = await Promise.all([
+          getTransactionHeader(cleanDocNo, "JV"),
+          getTransactionDetail(cleanDocNo, form.div_code, "JV"),
+        ]);
+      } catch (err1) {
+        if (numOnly && numOnly !== cleanDocNo) {
+          [headerRaw, detailRaw] = await Promise.all([
+            getTransactionHeader(numOnly, "JV"),
+            getTransactionDetail(numOnly, form.div_code, "JV"),
+          ]);
+        } else {
+          throw err1;
+        }
+      }
+
+      if ((!headerRaw || !headerRaw.doc_no) && numOnly && numOnly !== cleanDocNo) {
+        try {
+          const [h2, d2] = await Promise.all([
+            getTransactionHeader(numOnly, "JV"),
+            getTransactionDetail(numOnly, form.div_code, "JV"),
+          ]);
+          if (h2 && (h2.doc_no || (Array.isArray(d2) && d2.length))) {
+            headerRaw = h2;
+            detailRaw = d2;
+          }
+        } catch {
+          // ignore fallback error
+        }
+      }
+
+      if (!headerRaw) {
+        setError(`JV Document ${cleanDocNo} not found`);
+        return;
+      }
+
+      const rawDetails = Array.isArray(detailRaw) ? detailRaw : (detailRaw as any)?.data || [];
+      if (!rawDetails.length) {
+        setError(`No detail lines found in JV ${cleanDocNo}`);
+        return;
+      }
+
+      const mappedDetails: TransactionDetail[] = rawDetails.map((d: any, idx: number) => {
+        const origSign = Number(d.sign_ind ?? d.SIGN_IND ?? 1);
+        const reversedSign: 1 | -1 = origSign === 1 ? -1 : 1;
+        const lineAmt = Number(d.amount ?? d.AMOUNT ?? 0);
+        const lineExRate = Number(d.ex_rate ?? d.EX_RATE ?? headerRaw.ex_rate ?? form.ex_rate ?? 1);
+        return {
+          id: newId(),
+          serial_no: idx + 1,
+          doc_type: "RJV" as TransactionType,
+          doc_no: form.doc_no || "0",
+          ac_code: text(d.ac_code ?? d.AC_CODE ?? ""),
+          ac_name: text(d.ac_name ?? d.AC_NAME ?? ""),
+          remarks: text(d.remarks ?? d.REMARKS ?? `Reversal of line ${idx + 1}`),
+          amount: lineAmt,
+          sign_ind: reversedSign,
+          curr_code: text(d.curr_code ?? d.CURR_CODE ?? form.curr_code),
+          curr_name: text(d.curr_name ?? d.CURR_NAME ?? form.curr_name),
+          ex_rate: lineExRate,
+          lcur_amount: Number((lineAmt * lineExRate).toFixed(currencyDecimals)),
+          job_no: text(d.job_no ?? d.JOB_NO ?? ""),
+          dept_code: text(d.dept_code ?? d.DEPT_CODE ?? ""),
+          cost_code: text(d.cost_code ?? d.COST_CODE ?? ""),
+          child_table: "",
+          child_code: "",
+        };
+      });
+
+      const formattedSelected = cleanDocNo.toUpperCase().startsWith("JV") ? cleanDocNo : `JV${cleanDocNo}`;
+      setSourceJvDocNo(formattedSelected);
+
+      setForm((current) => ({
+        ...current,
+        ref_no: formattedSelected,
+        ref_doc_no: formattedSelected,
+        curr_code: text(headerRaw.curr_code ?? current.curr_code),
+        curr_name: text(headerRaw.curr_name ?? current.curr_name),
+        ex_rate: Number(headerRaw.ex_rate ?? current.ex_rate ?? 1),
+        remarks: `Reversal of JV ${formattedSelected}${headerRaw.remarks ? " - " + headerRaw.remarks : ""}`,
+        detail: mappedDetails,
+      }));
+
+      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from JV ${formattedSelected}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to load JV ${cleanDocNo}`);
+    } finally {
+      setReversing(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -365,24 +709,41 @@ function JVDocument({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
                       if (balance) {
-                        childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
+                        if (balance.error || (balance as any).is_cancelled) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: 0,
+                            c_bal_amt_org: 0,
+                            paid_amt: 0,
+                          } as TransactionChildRow;
+                        } else if (balance.original_amount > 0) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: balance.original_amount,
+                            c_bal_amt_org: balance.outstanding_amount,
+                            paid_amt: balance.paid_amount,
+                          } as TransactionChildRow;
+                        }
                       }
                     } catch {
                       // ignore individual failures
@@ -391,20 +752,30 @@ function JVDocument({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
+          if (defaults.lcur_decimal_nos != null) {
+            setCurrencyDecimals(Number(defaults.lcur_decimal_nos));
+          } else {
+            getCompanyInfo().then((ci) => {
+              if (mounted && ci) {
+                const d = Number(ci.lcur_decimal_nos ?? ci.decimals ?? (ci.currency === "OMR" ? 3 : 2));
+                if (Number.isFinite(d) && d > 0) setCurrencyDecimals(d);
+              }
+            }).catch(() => {});
+          }
           setForm((current) => ({
             ...current,
             ac_code: text(defaults.ac_code ?? defaults.Account?.ac_code ?? current.ac_code),
-            ac_name: text(defaults.Account?.ac_name ?? current.ac_name),
+            ac_name: text(defaults.ac_name ?? defaults.Account?.ac_name ?? current.ac_name),
             curr_code: text(defaults.curr_code ?? defaults.Currency?.curr_code ?? current.curr_code),
-            curr_name: text(defaults.Currency?.curr_name ?? current.curr_name),
+            curr_name: text(defaults.curr_name ?? defaults.Currency?.curr_name ?? current.curr_name),
             ex_rate: Number(defaults.ex_rate ?? current.ex_rate ?? 1),
             bank_ac_code: text(defaults.bank_ac_code ?? defaults.MS_AC_BANKCODE?.ac_code ?? current.bank_ac_code),
             bank_ac_name: text(defaults.bank_ac_name ?? defaults.MS_AC_BANKCODE?.Account?.ac_name ?? defaults.MS_AC_BANKCODE?.ac_name ?? current.bank_ac_name),
@@ -416,6 +787,7 @@ function JVDocument({
         if (mounted) setLoading(false);
       }
     }
+    void loadTaxOptions();
     void loadForm();
     return () => {
       mounted = false;
@@ -423,36 +795,82 @@ function JVDocument({
   }, [docType, editMode, editor]);
 
   useEffect(() => {
+    if (editMode) return;
     setForm((current) => ({
       ...current,
       detail: current.detail.map((d) => {
         if (d.tx_compnt_1_expmt !== "S") return d;
-        const taxAmt = (Number(d.amount) || 0) * ((Number(d.tx_compnt_perc_1) || 5) / 100);
+        const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
+        const taxAmt = Number((((Number(d.amount) || 0) * perc) / 100).toFixed(4));
         return { ...d, tx_compnt_amt_1: taxAmt };
       }),
     }));
-  }, [form.detail.map((d) => d.amount).join(",")]);
+  }, [editMode, form.detail.map((d) => d.amount).join(","), taxRateMap]);
 
   const disabled = form.canceled === "Y" || saving;
   const isCancelled = form.canceled === "Y";
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
-  const creditTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === -1 ? Number(row.amount) || 0 : 0), 0);
-  const debitTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === 1 ? Number(row.amount) || 0 : 0), 0);
+
+  const cancelCurrentDocument = async () => {
+    if (!form.doc_no || form.doc_no === "0" || form.canceled === "Y") return;
+    setSaving(true);
+    setError("");
+    try {
+      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      setCancelConfirmOpen(false);
+      await onSaved("Document cancelled successfully");
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Unable to cancel document");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const creditTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === -1 ? (Number(row.amount) || 0) + (gst.enabled ? Number(row.tx_compnt_amt_1 || 0) : 0) : 0), 0);
+  const debitTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === 1 ? (Number(row.amount) || 0) + (gst.enabled ? Number(row.tx_compnt_amt_1 || 0) : 0) : 0), 0);
+
+  const [lineSearch, setLineSearch] = useState("");
+  const filteredDetail = useMemo(() => {
+    const q = lineSearch.trim().toLowerCase();
+    if (!q) return form.detail;
+    return form.detail.filter((d) =>
+      String(d.serial_no).includes(q) ||
+      (d.ac_code && d.ac_code.toLowerCase().includes(q)) ||
+      (d.ac_name && d.ac_name.toLowerCase().includes(q)) ||
+      (d.remarks && d.remarks.toLowerCase().includes(q)) ||
+      (d.job_no && d.job_no.toLowerCase().includes(q)) ||
+      (d.amount !== undefined && String(d.amount).includes(q))
+    );
+  }, [form.detail, lineSearch]);
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
   const updateDetail = (id: string, patch: Partial<TransactionDetail>) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => ({
       ...current,
-      detail: current.detail.map((row) => row.id === id ? { ...row, ...patch } : row),
+      detail: current.detail.map((row) => {
+        if (row.id !== id) return row;
+        const merged = { ...row, ...patch };
+        const isTaxable = merged.tx_compnt_1_expmt ? merged.tx_compnt_1_expmt === "S" : Number(merged.tx_compnt_perc_1 || 0) > 0;
+        const perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : getTaxPercForCode(merged.tx_compntcat_code_1 || "");
+        const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(4)) : 0;
+        const effectiveRate = Number(merged.ex_rate || current.ex_rate || 1);
+        const lcurAmt = Math.abs(Number(merged.amount || 0)) * effectiveRate * Number(merged.sign_ind || 1);
+        return { ...merged, tx_compnt_amt_1: taxAmt, lcur_amount: lcurAmt };
+      }),
     }));
   };
 
-  // REPLACE WITH:
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
+    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: false }));
     const acName = text(getLookupValue(row || {}, "ac_name"));
     updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
     if (docType === "CP") {
@@ -465,6 +883,15 @@ function JVDocument({
       const childTable = child?.table || "";
       const childCode = child?.code || "";
       updateDetail(detail.id, { child_table: childTable, child_code: childCode });
+
+      if (childTable === "invoice") {
+        await loadChildrenForDetail({
+          ...detail,
+          ac_code: value,
+          child_table: childTable,
+          child_code: childCode,
+        });
+      }
 
       if (childTable === "expense" && childCode) {
         setForm((current) => {
@@ -509,25 +936,52 @@ function JVDocument({
   };
 
   const addDetailRow = () => {
-    setForm((current) => ({
-      ...current,
-      detail: [
-        ...current.detail,
-        {
-          ...emptyDetailRow({
-            docType,
-            docNo: current.doc_no || "1",
-            docDate: current.doc_date,
-            divCode: current.div_code,
-            currCode: current.curr_code,
-            currName: current.curr_name,
-            companyCode: user?.company_code,
-          }),
-          serial_no: current.detail.length + 1,
-        },
-      ],
-    }));
+    setForm((current) => {
+      let curDr = 0;
+      let curCr = 0;
+      current.detail.forEach((d) => {
+        const amt = Number(d.amount) || 0;
+        if (Number(d.sign_ind) === 1) curDr += amt;
+        else if (Number(d.sign_ind) === -1) curCr += amt;
+      });
+      const diff = Number((curDr - curCr).toFixed(3));
+      const suggestedSign: 1 | -1 = current.detail.length === 0 ? 1 : diff > 0 ? -1 : 1;
+      const suggestedAmount = Math.abs(diff) > 0 ? Math.abs(diff) : 0;
+
+      return {
+        ...current,
+        detail: [
+          ...current.detail,
+          {
+            ...emptyDetailRow({
+              docType,
+              docNo: current.doc_no || "1",
+              docDate: current.doc_date,
+              divCode: current.div_code,
+              currCode: current.curr_code,
+              currName: current.curr_name,
+              companyCode: user?.company_code,
+            }),
+            serial_no: current.detail.length + 1,
+            sign_ind: suggestedSign,
+            amount: suggestedAmount,
+          },
+        ],
+      };
+    });
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || !form.div_code || !form.curr_code) return;
+      if (e.key === "Insert" || (e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        addDetailRow();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [disabled, form.div_code, form.curr_code, form.detail.length, docType, user?.company_code]);
 
   const removeDetailRow = (id: string) => {
     setForm((current) => ({
@@ -539,21 +993,27 @@ function JVDocument({
   };
 
   const selectedDetail = form.detail.find((row) => row.id === selectedDetailId) || form.detail[0];
-  const selectedChildren = selectedDetail ? (form.children[selectedDetail.id] as TransactionChildRow[] | undefined) || [] : [];
 
   const loadChildrenForDetail = async (detail: TransactionDetail) => {
     if (!detail.child_table) return;
     setChildLoading(true);
     setError("");
     try {
+      const divCode = detail.div_code || form.div_code;
       const rows = await getFinanceMasterRows(detail.child_table, {
         code: detail.ac_code,
-        extra_param1: form.div_code,
+        extra_param1: divCode,
         extra_param2: docType,
-        extra_param3: form.doc_no || "1",
-        extra_param4: String(detail.serial_no),
+        extra_param3: form.doc_no || "0",
+        extra_param4: String(detail.serial_no || 1),
       });
-      let mapped = rows.map((row, index) => mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1));
+      let mapped = rows.map((row, index) => {
+        const m = mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1);
+        return {
+          ...m,
+          amount: 0,
+        };
+      });
       // if invoice child rows, fetch outstanding balances for each invoice and populate amounts
       if (detail.child_table === "invoice") {
         mapped = await Promise.all(
@@ -561,17 +1021,49 @@ function JVDocument({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(form.div_code, invNo);
+              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
-              if (balance) {
-                return { ...m, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount } as TransactionChildRow;
+              if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
+                return {
+                  ...m,
+                  inv_no: balance.inv_no || (m as Record<string, unknown>).inv_no,
+                  ref_no: balance.doc_no || (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
+                  inv_amt: balance.original_amount,
+                  c_bal_amt_org: balance.outstanding_amount,
+                } as TransactionChildRow;
               }
-              return m;
+              return {
+                ...m,
+                inv_amt: 0,
+                c_bal_amt_org: 0,
+              } as TransactionChildRow;
             } catch {
               return m;
             }
           }),
         );
+
+        // Filter out fully paid invoices (outstanding <= 0 and not allocated) when creating a new transaction
+        if (!editMode) {
+          mapped = mapped.filter((m) => {
+            const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
+            return bal > 0.001 || Number(m.amount || 0) > 0.001;
+          });
+        }
+
+        // Auto-allocate if detail line already has an amount
+        const parentAmt = Number(detail.amount || 0);
+        if (parentAmt > 0) {
+          let remaining = parentAmt;
+          mapped = mapped.map((row) => {
+            if (remaining <= 0) return { ...row, amount: 0 };
+            const maxAllowed = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+            if (maxAllowed <= 0.001) return { ...row, amount: 0 };
+            const allocated = Math.min(remaining, maxAllowed);
+            remaining -= allocated;
+            return { ...row, amount: allocated };
+          });
+        }
       }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
     } catch (loadError) {
@@ -581,50 +1073,67 @@ function JVDocument({
     }
   };
 
-  const addChildRow = () => {
-    if (!selectedDetail?.child_table) return;
+  const addChildRow = (targetDetail?: TransactionDetail) => {
+    const detail = targetDetail || selectedDetail;
+    if (!detail) return;
+    if (!detail.child_table) {
+      updateDetail(detail.id, { child_table: "job" });
+    }
     setForm((current) => {
-      const currentRows = ((current.children[selectedDetail.id] || []) as TransactionChildRow[]);
+      const currentRows = ((current.children[detail.id] || []) as TransactionChildRow[]);
       const nextRows = [
         ...currentRows,
-        emptyChildRow(selectedDetail, current, docType, user?.company_code || "", currentRows.length + 1),
+        emptyChildRow(detail, current, docType, user?.company_code || "", currentRows.length + 1),
       ];
-      return { ...current, children: { ...current.children, [selectedDetail.id]: nextRows } };
+      return { ...current, children: { ...current.children, [detail.id]: nextRows } };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
   };
 
-  const updateChildRow = (childId: string, patch: Partial<TransactionChildRow>) => {
-    if (!selectedDetail) return;
+  const updateChildRow = (childId: string, patch: Partial<TransactionChildRow>, targetDetailId?: string) => {
+    const dId = targetDetailId || selectedDetail?.id;
+    if (!dId) return;
     setForm((current) => {
-      const rows = ((current.children[selectedDetail.id] || []) as TransactionChildRow[]).map((row) =>
+      const rows = ((current.children[dId] || []) as TransactionChildRow[]).map((row) =>
         row.id === childId ? { ...row, ...patch } : row,
       );
       const childTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
       return {
         ...current,
-        children: { ...current.children, [selectedDetail.id]: rows },
-        detail: current.detail.map((d) =>
-          d.id === selectedDetail.id ? { ...d, amount: childTotal } : d,
-        ),
+        children: { ...current.children, [dId]: rows },
+        detail: current.detail.map((d) => {
+          if (d.id !== dId) return d;
+          const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
+          const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
+          return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
-  const removeChildRow = (childId: string) => {
-    if (!selectedDetail) return;
+  const removeChildRow = (childId: string, targetDetailId?: string) => {
+    const dId = targetDetailId || selectedDetail?.id;
+    if (!dId) return;
     setForm((current) => {
-      const rows = ((current.children[selectedDetail.id] || []) as TransactionChildRow[])
+      const rows = ((current.children[dId] || []) as TransactionChildRow[])
         .filter((row) => row.id !== childId)
         .map((row, index) => ({ ...row, dtl_sr_no: index + 1 }));
       const childTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
       return {
         ...current,
-        children: { ...current.children, [selectedDetail.id]: rows },
-        detail: current.detail.map((d) =>
-          d.id === selectedDetail.id ? { ...d, amount: childTotal } : d,
-        ),
+        children: { ...current.children, [dId]: rows },
+        detail: current.detail.map((d) => {
+          if (d.id !== dId) return d;
+          const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
+          const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(4)) : (Number(d.tx_compnt_amt_1) || 0);
+          return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const submit = async (event: FormEvent) => {
@@ -633,6 +1142,92 @@ function JVDocument({
     if (!form.div_code) return setError("Division is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
+
+    // Character limit validations
+    if (form.ref_no && form.ref_no.length > 30) {
+      return setError("You have exceeded the character limit for Ref No.");
+    }
+    if (form.cheque_no && form.cheque_no.length > 20) {
+      return setError("You have exceeded the character limit for Cheque No.");
+    }
+    if (form.remarks && form.remarks.length > 250) {
+      return setError("You have exceeded the character limit for Remarks.");
+    }
+
+    if (!form.detail || form.detail.length === 0) return setError("Kindly fill in the missing fields: Add at least one detail line.");
+
+    // Check line character limits
+    for (const d of form.detail) {
+      if (d.remarks && d.remarks.length > 250) {
+        return setError("You have exceeded the character limit for Remarks.");
+      }
+    }
+
+    // Missing field validation on lines (new row without details / missing account or zero amount)
+    const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
+    if (invalidLines.length > 0) {
+      setInvalidLineIds(new Set(invalidLines.map((d) => d.id)));
+      const firstInvalid = invalidLines[0];
+      const missingParts: string[] = [];
+      if (!firstInvalid.ac_code?.trim()) missingParts.push("Account");
+      if (!firstInvalid.amount || Number(firstInvalid.amount) <= 0) missingParts.push("Amount");
+      return setError(`Kindly fill in the missing fields: ${missingParts.join(" and ")} on Line #${firstInvalid.serial_no || 1}.`);
+    }
+
+    const divMismatch = form.detail.find((d) => d.div_code && d.div_code !== form.div_code);
+    if (divMismatch) return setError(`Division mismatch on line #${divMismatch.serial_no}: detail division (${divMismatch.div_code}) must match header division (${form.div_code})`);
+
+    const diff = Math.abs(Number(debitTotal.toFixed(currencyDecimals)) - Number(creditTotal.toFixed(currencyDecimals)));
+    if (diff > (currencyDecimals === 3 ? 0.001 : 0.01)) {
+      return setError(`Reverse Journal Voucher must balance to zero! Debit: ${formatAmount(debitTotal, currencyDecimals)}, Credit: ${formatAmount(creditTotal, currencyDecimals)} (Difference: ${formatAmount(diff, currencyDecimals)})`);
+    }
+
+    // Validation on child allocations (Expense, Invoice, Job)
+    for (const d of form.detail) {
+      const children = (form.children[d.id] || []) as TransactionChildRow[];
+      if (children.length > 0) {
+        for (const [idx, c] of children.entries()) {
+          const rowNum = c.dtl_sr_no || idx + 1;
+          const missingFields: string[] = [];
+          if (d.child_table === "expense") {
+            if (!c.exp_type_code?.trim()) missingFields.push("Expense Type");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "job") {
+            if (!c.job_no?.trim()) missingFields.push("Job No");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "invoice") {
+            const amt = Number(c.amount || 0);
+            if (amt < 0) {
+              missingFields.push("Valid Allocated Amount");
+            } else if (amt > 0) {
+              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
+              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
+              if (maxAllowed > 0 && amt > maxAllowed + (currencyDecimals === 3 ? 0.001 : 0.01)) {
+                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${formatAmount(maxAllowed, currencyDecimals)}`);
+              }
+            }
+          }
+
+          if (missingFields.length > 0) {
+            setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+            setSelectedDetailId(d.id);
+            return setError(
+              `Kindly fill in the missing fields: ${missingFields.join(" and ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
+            );
+          }
+        }
+
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(currencyDecimals));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(currencyDecimals));
+        if (Math.abs(childSum - lineAmt) > (currencyDecimals === 3 ? 0.001 : 0.01)) {
+          setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+          setSelectedDetailId(d.id);
+          return setError(`Allocated amount (${formatAmount(childSum, currencyDecimals)}) does not match line amount (${formatAmount(lineAmt, currencyDecimals)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+        }
+      }
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -640,6 +1235,7 @@ function JVDocument({
       console.log("detail child_table:", form.detail.map(d => ({ ac: d.ac_code, table: d.child_table, children: form.children[d.id] })));
       const bulkPayload = buildBulkAccountEntryPayload(form, docType, user?.company_code || "", user?.loginid || "");
       console.log("Bulk payload header:", bulkPayload.header);
+      gst.attachToHeader(bulkPayload.header);
       await upsertBulkAccountEntryApi(bulkPayload);
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
@@ -649,11 +1245,11 @@ function JVDocument({
     }
   };
 
-  const fetchOutstanding = async (invNo: string) => {
+  const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
-      console.log("fetchOutstanding called", { div: form.div_code, invNo });
-      const response = await getFinanceOutstanding(form.div_code, invNo);
-      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode, docType });
+      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType, editMode ? form.doc_no : undefined);
+      return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
       return { balances: [] };
@@ -663,19 +1259,46 @@ function JVDocument({
   const handleInvNoBlur = (childId: string, invNo: string, parentIdArg?: string) => {
     console.log("handleInvNoBlur called", { childId, invNo, selectedDetailId, parentIdArg });
     if (!invNo) return;
-    // prefer provided parent id (from table) else find the parent detail id that contains this child row
     const parentDetailId = parentIdArg || Object.keys(form.children || {}).find((key) => ((form.children as Record<string, TransactionChildRow[]>)[key] || []).some((r) => r.id === childId));
     if (!parentDetailId) {
       console.log("handleInvNoBlur: parent detail not found for child", childId);
       return;
     }
-    void fetchOutstanding(invNo).then((data) => {
+    const parentDetail = form.detail.find((d) => d.id === parentDetailId);
+    void fetchOutstanding(invNo, parentDetail?.ac_code).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance) return;
+      if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
+        const errMsg = balance?.error || (balance as any)?.is_cancelled
+          ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no open balance.`)
+          : `Invoice "${invNo}" not found for account ${parentDetail?.ac_code || ""}.`;
+        setError(errMsg);
+        // If invoice is not found or does not belong to this account, clear invalid invoice amount
+        setForm((current) => {
+          const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
+            row.id === childId
+              ? {
+                  ...row,
+                  inv_amt: null,
+                  c_bal_amt_org: null,
+                  ref_no: "",
+                }
+              : row,
+          );
+          return { ...current, children: { ...current.children, [parentDetailId]: rows } };
+        });
+        return;
+      }
+      setError("");
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
-            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
+            ? {
+                ...row,
+                inv_no: balance.inv_no || row.inv_no,
+                ref_no: balance.doc_no || (balance as any).ref_no || row.ref_no || "",
+                inv_amt: balance.original_amount,
+                c_bal_amt_org: balance.outstanding_amount,
+              }
             : row,
         );
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
@@ -683,303 +1306,649 @@ function JVDocument({
     });
   };
   const isBalanced =
-    Number(creditTotal.toFixed(3)) ===
-    Number(debitTotal.toFixed(3));
-  console.log({
-    disabled,
-    loading,
-    detailLength: form.detail.length,
-    creditTotal,
-    debitTotal,
-  });
+    Number(creditTotal.toFixed(currencyDecimals)) ===
+    Number(debitTotal.toFixed(currencyDecimals));
 
   return (
- <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
-      <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
-        <div className="flex min-h-12 items-center justify-between gap-4">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-            <div>
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                {editMode ? "Edit Document" : "New Document"}
-              </p>
-              <h2 className="m-0 text-lg font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
-            </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
-            </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
-            </div>
-          </div>
+    <form
+      data-header-expanded={showHeaderDetails}
+      className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`}
+      onSubmit={submit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.target as HTMLElement)?.tagName !== "TEXTAREA") {
+          const targetType = (e.target as HTMLElement)?.getAttribute("type");
+          if (targetType !== "submit" && (e.target as HTMLElement)?.tagName !== "BUTTON") {
+            e.preventDefault();
+          }
+        }
+      }}
+    >
+      <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
+        <div className="flex min-h-10 items-center justify-between gap-3">
+          <FinanceDocumentIdentity
+            title={DOCUMENT_META[docType].title}
+            documentNo={form.doc_no}
+            documentDate={form.doc_date}
+            total={formatAmount(debitTotal > 0 ? debitTotal : total + totalTax)}
+            divCode={form.div_code}
+            divName={form.div_name}
+            onBack={onClose}
+            headerExpanded={showHeaderDetails}
+            onToggleHeader={() => setShowHeaderDetails(value => !value)}
+          />
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
+            {form.doc_no && form.doc_no !== "0" && (
+              <>
+                <Button type="button" variant="secondary" onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "")}>
+                  <Printer size={15} /> Print
+                </Button>
+                <Button type="button" variant="secondary" title="Export to Excel" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} /> Excel
+                </Button>
+                {form.canceled !== "Y" && (
+                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
+                    <Ban size={15} /> Cancel
+                  </Button>
+                )}
+              </>
+            )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+            <Button disabled={disabled || loading || form.detail.length === 0 || !isBalanced} type="submit">
+            <Save size={15} /> {saving ? "Saving..." : "Save"}
+          </Button>
+            <Button
+              disabled={saving}
+              aria-label="Close"
+              type="button"
+              variant="secondary"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              Close
+            </Button>
           </div>
         </div>
+      <FinanceGstPanel editor={gst} disabled={saving || form.canceled === "Y"} />
       </CardHeader>
+      {isCancelled && (
+        <div className="cancelled-document-banner" role="status">
+          <div>
+            <span className="cancelled-document-kicker">Cancelled Document</span>
+            <strong>{form.doc_no || DOCUMENT_META[docType].title}</strong>
+          </div>
+          <p>This document is cancelled and opened in read-only mode. You can still print, export, and view attachments.</p>
+        </div>
+      )}
 
-      <CardContent className="min-h-0 overflow-auto p-3">
+      <CardContent className="commercial-editor-body min-h-0 overflow-auto p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading voucher...</div>
         ) : (
-          <div className="shrink-0 border-b bg-background ">
+          <div className="commercial-editor-sections">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+            <AutoDismissAlert notice={successNotice ? { type: "success", message: successNotice } : null} onClose={() => setSuccessNotice("")} />
 
-            <div className="commercial-header-shell rounded-md border bg-card">
-              <div className="commercial-section-title">
-                <div>
-                  <p className="eyebrow m-0">Header</p>
-                   <h3 className="m-0 text-sm font-semibold leading-tight">RJV Information</h3>
+            {/* Smart Collapsible RJV Header */}
+            {!showHeaderDetails ? (
+              <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs mb-3">
+                <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="font-semibold text-[#00378C]">Doc Date:</span>
+                    <span className="font-medium">{formatDate(form.doc_date)}</span>
+                  </span>
+                  {(sourceJvDocNo || form.ref_no) && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-[#00378C]">Ref JV:</span>
+                      <span className="font-medium bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono">{sourceJvDocNo || form.ref_no}</span>
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="font-semibold text-[#00378C]">Currency:</span>
+                    <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
+                  </span>
+                  {form.remarks && (
+                    <span className="inline-flex items-center gap-1.5 truncate max-w-md">
+                      <span className="font-semibold text-[#00378C]">Remarks:</span>
+                      <span className="font-medium truncate">{form.remarks}</span>
+                    </span>
+                  )}
                 </div>
-                <span></span>
-              </div>
-              <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-4 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
-                {editMode && (
-                  <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>
-                )}
-                <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
-                <LookupField
-                  label="Division"
-                  value={form.div_code}
-                  displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                  columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                  valueField="div_code"
-                  displayFields={["div_code", "div_name"]}
-                  loadOptions={() => getDynamicLookup({ parameter: "Account_division", code1: user?.company_code, loginid: user?.loginid || user?.username || "ADMIN" })}
-                  disabled={disabled}
-                  onChange={async (value, row) => {
-                    setForm((current) => ({ ...current, div_code: value, div_name: text(getLookupValue(row || {}, "div_name")) }));
-                  }}
-                />
-                <LookupField
-                  label="Currency"  
-                  value={form.curr_code}
-                  displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                  columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                  valueField="curr_code"
-                  displayFields={["curr_code", "curr_name"]}
-                  loadOptions={getCurrencyRows}
-                  disabled={disabled}
-                  onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? 1) }))}
-                />
-                <Field label="Exchange Rate"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
-                <label className="field col-span-2 max-md:col-span-1">
-                  <span>Remarks</span>
-                  <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
-                </label>
-              </div>
-              <div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
-                <div className="min-w-0 truncate text-xs text-muted-foreground">
-                  <span>Doc: {form.doc_no || "-"}</span>
-                </div>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setShowHeaderDetails((value) => !value)}>
-                  {showHeaderDetails ? "Hide Details" : "Show Details"}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer"
+                  onClick={() => setShowHeaderDetails(true)}
+                >
+                  Show Header Fields <ChevronDown size={13} className="ml-1" />
                 </Button>
               </div>
-            </div>
-
-            <div className="rounded-md border bg-card">
-              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-2">
-                <div>
-                  <p className="eyebrow">Details</p>
-                  <h3 className="m-0 text-sm font-semibold">Reverse Jv Lines</h3>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                {/* Card 1: Reversal & Document Details */}
+                <div className="finance-payment-header-block flex flex-col h-full">
+                  <div className="finance-section-title flex items-center">
+                    <span className="finance-section-icon"><FileText size={11} /></span>
+                    <span>Reversal & Document Details</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-1.5">
+                    <Field label="Doc Date" required>
+                      <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
+                    </Field>
+                    <Field label="Source JV No (To Reverse)">
+                      <div className="flex gap-1.5 items-center w-full min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <LookupField
+                            compact
+                            dense
+                            disabled={disabled || editMode}
+                            placeholder="Select JV to reverse..."
+                            value={sourceJvDocNo || form.ref_no || ""}
+                            displayValue={
+                              sourceJvDocNo || form.ref_no
+                                ? (String(sourceJvDocNo || form.ref_no).toUpperCase().startsWith("JV") ? String(sourceJvDocNo || form.ref_no) : `JV${sourceJvDocNo || form.ref_no}`)
+                                : ""
+                            }
+                            columns={[
+                              { field: "formatted_doc_no", header: "JV No" },
+                              { field: "formatted_date", header: "Date" },
+                              { field: "remarks", header: "Narration / Remarks" },
+                              { field: "formatted_amount", header: "Amount" },
+                              { field: "curr_code", header: "Currency" },
+                            ]}
+                            valueField="doc_no"
+                            displayFields={["formatted_doc_no", "formatted_date", "remarks"]}
+                            popoverWidth={620}
+                            loadOptions={loadJvOptions}
+                            onChange={(value, row) => {
+                              const selectedDoc = String(value || (row as any)?.doc_no || (row as any)?.formatted_doc_no || "").trim();
+                              if (selectedDoc) {
+                                void handleReverseJV(selectedDoc);
+                              } else {
+                                setSourceJvDocNo("");
+                                setForm((cur) => ({ ...cur, ref_no: "", ref_doc_no: "" }));
+                              }
+                            }}
+                          />
+                        </div>
+                        {!editMode && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={disabled || reversing || !(sourceJvDocNo || form.ref_no)}
+                            onClick={() => void handleReverseJV(sourceJvDocNo || form.ref_no || "")}
+                            title="Auto-Reverse / Reload lines from selected JV"
+                            className="shrink-0 h-7 px-2.5 text-xs bg-[#00378C] text-white hover:bg-[#002b6d] cursor-pointer"
+                          >
+                            <RefreshCw size={12} className={reversing ? "animate-spin mr-1" : "mr-1"} />
+                            {reversing ? "Reversing..." : "Auto-Reverse"}
+                          </Button>
+                        )}
+                      </div>
+                    </Field>
+                    <Field
+                      label="Remarks"
+                      className="col-span-2"
+                      error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
+                    >
+                      <Input
+                        disabled={disabled}
+                        value={form.remarks || ""}
+                        maxLength={250}
+                        placeholder="Reversal Remarks / Notes"
+                        className={`h-7 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                        onChange={(event) => updateField("remarks", event.target.value)}
+                      />
+                    </Field>
+                  </div>
                 </div>
-                <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled}>
-                  <Plus size={14} /> Add Line
-                </Button>
+
+                {/* Card 2: Currency & Rate */}
+                <div className="finance-payment-header-block flex flex-col h-full">
+                  <div className="finance-section-title flex items-center">
+                    <span className="finance-section-icon"><Coins size={11} /></span>
+                    <span>Currency & Rate</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-1.5">
+                    <div>
+                      <LookupField
+                        label="Currency *"
+                        required
+                        enforceRequired
+                        value={form.curr_code}
+                        displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                        columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                        valueField="curr_code"
+                        displayFields={["curr_code", "curr_name"]}
+                        loadOptions={() => getDynamicLookup({
+                          parameter: "Account_Currency_CODE_Serach",
+                          code1: user?.company_code,
+                          loginid: user?.loginid || user?.username || "ADMIN"
+                        })}
+                        disabled={disabled}
+                        onChange={(value, row) => {
+                          const newRate = Number(
+                            getLookupValue(row || {}, "ex_rate") ||
+                            (row as any)?.ex_rate ||
+                            (row as any)?.EX_RATE ||
+                            1
+                          );
+                          const validRate = Number.isFinite(newRate) && newRate > 0 ? newRate : 1;
+                          const currName = text(getLookupValue(row || {}, "curr_name"));
+                          setForm((current) => ({
+                            ...current,
+                            curr_code: value,
+                            curr_name: currName,
+                            ex_rate: validRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? {
+                                    ...d,
+                                    curr_code: value,
+                                    curr_name: currName,
+                                    ex_rate: validRate,
+                                    lcur_amount: Math.abs(Number(d.amount || 0)) * validRate * Number(d.sign_ind || 1),
+                                  }
+                                : d
+                            ),
+                          }));
+                        }}
+                      />
+                    </div>
+                    <Field label="Exchange Rate *" required>
+                      <ExchangeRateInput
+                        disabled={disabled}
+                        required
+                        className="h-7 text-xs font-mono"
+                        value={form.ex_rate}
+                        onChange={(newRate) => {
+                          setForm((current) => ({
+                            ...current,
+                            ex_rate: newRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? {
+                                    ...d,
+                                    ex_rate: newRate,
+                                    lcur_amount: Math.abs(Number(d.amount || 0)) * newRate * Number(d.sign_ind || 1),
+                                  }
+                                : d
+                            ),
+                          }));
+                        }}
+                      />
+                    </Field>
+                  </div>
+                </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
-                <table className="finance-lines-table w-full min-w-[2000px] text-sm">
-                  <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
+            )}
+
+            <div className="commercial-lines-card rounded-md border bg-card">
+              <div className="finance-line-actions">
+                <div className="finance-line-actions-left">
+                  <span className="finance-line-actions-icon"><List size={14} /></span>
+                  <span className="finance-line-actions-title">Accounting Lines</span>
+                  <span className="finance-line-actions-badge">
+                    {lineSearch.trim()
+                      ? `${filteredDetail.length} of ${form.detail.length} lines`
+                      : `${form.detail.length} ${form.detail.length === 1 ? "line" : "lines"}`}
+                  </span>
+                  {lineSearch.trim() && (
+                    <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      Filtered ({filteredDetail.length})
+                    </span>
+                  )}
+                  {form.detail.length > 0 && (
+                    isBalanced ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-300 px-3 py-0.5 text-xs font-bold text-emerald-700 shadow-2xs">
+                        <CheckCircle2 size={13} className="text-emerald-600" /> Balanced (Dr = Cr = {formatAmount(debitTotal)})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-300 px-3 py-0.5 text-xs font-bold text-amber-800 shadow-2xs">
+                        <AlertCircle size={13} className="text-amber-600" /> Dr: {formatAmount(debitTotal)} | Cr: {formatAmount(creditTotal)} (Diff: {formatAmount(Math.abs(debitTotal - creditTotal))})
+                      </span>
+                    )
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <ColumnModeToggle showAllColumns={showAllColumns} onChange={setShowAllColumns} />
+
+                  <div className="bisc-table-search">
+                    <Search size={13} className="bisc-table-search-icon" />
+                    <input
+                      className="bisc-search-input"
+                      type="text"
+                      value={lineSearch}
+                      onChange={(e) => setLineSearch(e.target.value)}
+                      placeholder="Search lines..."
+                    />
+                    {lineSearch && (
+                      <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <Button size="sm" type="button" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line (Alt + A)">
+                    <Plus size={14} /> Add Line
+                  </Button>
+                </div>
+              </div>
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
+                <table className={`finance-lines-table finance-detail-table w-full text-xs ${showAllColumns ? "min-w-[2140px]" : "min-w-full"}`}>
+                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
-                      <th className="finance-sticky-col finance-col-div px-2 py-2 text-left">Division</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
-                      <th className="px-2 py-2 text-left">Select</th>
+                      <th className="px-2 py-2 text-center w-[110px]">Allocations</th>
                       <th className="px-2 py-2 text-left">Description</th>
-                      <th className="px-2 py-2 text-left">Currency</th>
-                      <th className="px-2 py-2 text-left">Ex Rate</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
-                      <th className="px-2 py-2 text-left">Cr/Dr</th>
-                      <th className="px-2 py-2 text-left">Tax Type</th>
-                      <th className="px-2 py-2 text-left">Job No</th>
-                      <th className="px-2 py-2 text-left">Dept</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
-                      <th className="px-2 py-2 text-left">Action</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
+                      <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-center w-24">Cr/Dr</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Dept</th>}
+                      {showAllColumns && <th className="finance-th-base-amt finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      <th className="px-2 py-2 text-center w-14">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={13}>No detail lines yet</td></tr>
-                    ) : form.detail.map((detail) => (
-                      <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
-                        <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
-                        <td className="finance-sticky-col finance-col-div w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
-                        <td className="finance-sticky-col finance-col-account finance-account-cell w-[430px] px-2 py-1">
-                          <LookupField
-                            label="Detail Account"
-                            compact
-                            placeholder="A/c code"
-                            value={detail.ac_code}
-                            displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
-                            valueField="ac_code"
-                            displayFields={["ac_code", "ac_name", "curr_code"]}
-                            loadOptions={() => getDynamicLookup({
-                              parameter: "Account_AC_CODE_Serach_HDR",
-                              code1: user?.company_code,
-                              code2: "D",
-                              code3: form.doc_type,
-                              code4: form.div_code
-                            })}
-                            disabled={disabled}
-                            onChange={(value, row) => void selectDetailAccount(detail, value, row)}
-                          />
-                        </td>
-                        <td className="px-2 py-1 text-center">
-                          <input
-                            checked={selectedDetail?.id === detail.id}
-                            className="h-4 w-4 accent-[var(--primary)]"
-                            disabled={!detail.ac_code}
-                            onChange={() => setSelectedDetailId(detail.id)}
-                            type="radio"
-                          />
-                        </td>
-                        <td className="w-[220px] px-2 py-1"><Input disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
-                        <td className="w-[210px] px-2 py-1">
-                          <LookupField
-                            label="Currency"
-                            compact
-                            placeholder="Currency"
-                            value={detail.curr_code || form.curr_code}
-                            displayValue={detail.curr_name ? `${detail.curr_code} - ${detail.curr_name}` : detail.curr_code || form.curr_code}
-                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                            valueField="curr_code"
-                            displayFields={["curr_code", "curr_name"]}
-                            loadOptions={() => getDynamicLookup({
-                              parameter: "Account_Currency_CODE_Serach",
-                              code1: user?.company_code,
-                              loginid: user?.loginid || user?.username || "ADMIN"
-                            })}
-                            disabled={disabled}
-                            onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
-                          />
-                        </td>
-                        <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
-                        <td className="w-28 px-2 py-1">
-                          <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                            <option value={1}>Dr</option>
-                            <option value={-1}>Cr</option>
-                          </Select>
-                        </td>
-                        <td className="w-28 px-2 py-1">
-                          <Select
-                            disabled={disabled}
-                            value={detail.tx_compnt_1_expmt || "N"}
-                            onChange={(event) => {
-                              const taxType = event.target.value;
-                              const taxPerc = taxType === "S" ? 5 : 0;
-                              const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
-                              updateDetail(detail.id, {
-                                tx_compnt_1_expmt: taxType,
-                                tx_compnt_perc_1: taxPerc,
-                                tx_compnt_amt_1: taxAmt,
-                              });
-                            }}
-                          >
-                            <option value="N">No Tax</option>
-                            <option value="S">Std Tax</option>
-                            <option value="Z">Zero</option>
-                            <option value="E">Exempt</option>
-                          </Select>
-                        </td>
-                        <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
-                        <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1))} /></td>
-                        <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
-                      </tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 13 : 7}>No detail lines yet — click "Add Line" to get started</td></tr>
+                    ) : filteredDetail.length === 0 ? (
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 13 : 7}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+                    ) : filteredDetail.map((detail, index) => (
+                      <>
+                        <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
+                          <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
+                          <td className="finance-sticky-col finance-col-account finance-account-cell w-[430px] px-2 py-1">
+                            <div className={`w-full max-w-[460px] truncate ${invalidLineIds.has(detail.id) && !detail.ac_code?.trim() ? "ring-2 ring-rose-400 rounded-md" : ""}`}>
+                              <LookupField
+                                label="Detail Account"
+                                compact
+                                placeholder="A/c code"
+                                value={detail.ac_code}
+                                displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                                valueField="ac_code"
+                                displayFields={["ac_code", "ac_name", "curr_code"]}
+                                loadOptions={() => getDynamicLookup({
+                                  parameter: "Account_AC_CODE_Serach_HDR",
+                                  code1: user?.company_code,
+                                  code2: "D",
+                                  code3: form.doc_type,
+                                  code4: form.div_code
+                                })}
+                                disabled={disabled}
+                                onChange={(value, row) => {
+                                  void selectDetailAccount(detail, value, row);
+                                  if (value) {
+                                    void getAccountLiveBalance(value, form.div_code)
+                                      .then((b) => { if (b) setAccountBalances((p) => ({ ...p, [value]: { formatted: b.formatted, sign: b.sign } })); })
+                                      .catch(() => {});
+                                  }
+                                }}
+                              />
+                            </div>
+                          </td>
+                          <td className="px-2 py-1 text-center whitespace-nowrap">
+                            {detail.ac_code ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDetailId(detail.id);
+                                  toggleRowExpanded(detail.id);
+                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-2xs ${
+                                  expandedRowIds[detail.id]
+                                    ? "bg-[#00378C] text-white"
+                                    : (form.children[detail.id] || []).length > 0
+                                      ? "bg-blue-50 text-[#00378C] border border-blue-300 hover:bg-blue-100"
+                                      : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+                                }`}
+                                title={expandedRowIds[detail.id] ? "Collapse allocation" : "Expand allocation details"}
+                              >
+                                {expandedRowIds[detail.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                <span>
+                                  {detail.child_table === "invoice"
+                                    ? `Inv (${(form.children[detail.id] || []).length})`
+                                    : detail.child_table === "job"
+                                      ? `Job (${(form.children[detail.id] || []).length})`
+                                      : detail.child_table === "expense"
+                                        ? `Exp (${(form.children[detail.id] || []).length})`
+                                        : (form.children[detail.id] || []).length > 0
+                                          ? `Alloc (${(form.children[detail.id] || []).length})`
+                                          : "+ Alloc"}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </td>
+                          <td className="w-[200px] max-w-[240px] px-1 py-1">
+                            <Textarea maxLength={250}
+                              disabled={disabled}
+                              className={`commercial-line-description ${detail.remarks && detail.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              title={detail.remarks && detail.remarks.length > 250 ? `Character limit exceeded (${detail.remarks.length}/250)` : (detail.remarks || "")}
+                              rows={1}
+                              value={detail.remarks || ""}
+                              onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })}
+                              placeholder="Line remarks"
+                            />
+                          </td>
+                          {showAllColumns && (
+                            <td className="w-[210px] px-2 py-1">
+                              <LookupField
+                                label="Currency"
+                                compact
+                                placeholder="Currency"
+                                value={detail.curr_code || form.curr_code}
+                                displayValue={detail.curr_name ? `${detail.curr_code} - ${detail.curr_name}` : detail.curr_code || form.curr_code}
+                                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                                valueField="curr_code"
+                                displayFields={["curr_code", "curr_name"]}
+                                loadOptions={() => getDynamicLookup({
+                                  parameter: "Account_Currency_CODE_Serach",
+                                  code1: user?.company_code,
+                                  loginid: user?.loginid || user?.username || "ADMIN"
+                                })}
+                                disabled={disabled}
+                                onChange={(value, row) => {
+                                  const lineRate = Number(
+                                    getLookupValue(row || {}, "ex_rate") ||
+                                    (row as any)?.ex_rate ||
+                                    (row as any)?.EX_RATE ||
+                                    (value === form.curr_code ? form.ex_rate : 1)
+                                  );
+                                  const validLineRate = Number.isFinite(lineRate) && lineRate > 0 ? lineRate : 1;
+                                  const lineCurrName = text(getLookupValue(row || {}, "curr_name"));
+                                  updateDetail(detail.id, {
+                                    curr_code: value,
+                                    curr_name: lineCurrName,
+                                    ex_rate: validLineRate,
+                                  });
+                                }}
+                              />
+                            </td>
+                          )}
+                          {showAllColumns && (
+                            <td className="w-28 px-2 py-1">
+                              <ExchangeRateInput
+                                disabled={disabled}
+                                className="finance-money-input h-7 text-xs font-mono"
+                                value={detail.ex_rate}
+                                onChange={(newRate) => updateDetail(detail.id, { ex_rate: newRate })}
+                              />
+                            </td>
+                          )}
+                          <td className="finance-amount-cell w-36 px-2 py-1">
+                            <Input
+                              className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              disabled={disabled}
+                              type="number"
+                              step={currencyDecimals === 3 ? "0.001" : "0.01"}
+                              style={{ textAlign: "right" }}
+                              value={detail.amount}
+                              onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })}
+                            />
+                          </td>
+                          <td className="w-24 px-2 py-1 text-center">
+                            <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: 1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === 1
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Debit (Dr)"
+                              >
+                                Dr
+                              </button>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: -1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === -1
+                                    ? "bg-[#00378C] text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Credit (Cr)"
+                              >
+                                Cr
+                              </button>
+                            </div>
+                          </td>
+                          {showAllColumns && (
+                            <td className="w-28 px-2 py-1">
+                              <Select
+                                disabled={disabled}
+                                value={detail.tx_compnt_1_expmt || "N"}
+                                onChange={(event) => {
+                                  const taxType = event.target.value;
+                                  const lineAmt = Number(detail.amount) || 0;
+                                  const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : getTaxPercForCode(detail.tx_compntcat_code_1 || "")) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(4)) : 0;
+                                  updateDetail(detail.id, {
+                                    tx_compnt_1_expmt: taxType,
+                                    tx_compnt_perc_1: taxPerc,
+                                    tx_compnt_amt_1: taxAmt,
+                                  });
+                                }}
+                              >
+                                <option value="N">{taxLabels.N}</option>
+                                <option value="S">{taxLabels.S}</option>
+                                <option value="Z">{taxLabels.Z}</option>
+                                <option value="E">{taxLabels.E}</option>
+                              </Select>
+                            </td>
+                          )}
+                          {showAllColumns && (
+                            <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
+                          )}
+                          {showAllColumns && (
+                            <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
+                          )}
+                          {showAllColumns && (
+                            <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input commercial-base-amount-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/60 !border-blue-200 text-right" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                          )}
+                          <td className="px-2 py-1 text-center">
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              title="Delete line"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                              onClick={() => removeDetailRow(detail.id)}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                        {expandedRowIds[detail.id] && (
+                          <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
+                            <td colSpan={showAllColumns ? 13 : 7} className="finance-allocation-cell">
+                              <div className="finance-allocation-branch">
+                              <SmartInlineAllocationTable
+                                detail={detail}
+                                rows={(form.children[detail.id] || []) as TransactionChildRow[]}
+                                loading={childLoading && selectedDetailId === detail.id}
+                                disabled={disabled}
+                                formatAmount={formatAmount}
+                                onChange={(childId, patch) => updateChildRow(childId, patch, detail.id)}
+                                onRemove={(childId) => removeChildRow(childId, detail.id)}
+                                onAdd={() => addChildRow(detail)}
+                                onSetChildTable={(table) => updateDetail(detail.id, { child_table: table })}
+                                onRefreshInvoices={() => void loadChildrenForDetail(detail)}
+                                onInvNoBlur={handleInvNoBlur}
+                                onClose={() => toggleRowExpanded(detail.id)}
+                              />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Balance</span>
-                <strong className={Math.abs(total) > 0.001 ? "text-destructive" : "text-emerald-600"}>
-                  {formatAmount(total)}
-                </strong>
-
-              </div>
-              <div className="flex items-center justify-end gap-8  px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Tax</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(totalTax)}</strong>
-              </div>
-              <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Net Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{(formatAmount(total + totalTax))}</strong>
-              </div>
-            </div>
-            <div className="rounded-md border bg-card">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-secondary/40 px-3 py-1.5">
-                <div>
-                  <p className="eyebrow m-0">Allocations</p>
-                  <h3 className="m-0 text-sm font-semibold leading-tight">
-                    {selectedDetail?.child_table ? `${titleCase(selectedDetail.child_table)} Allocation` : "Select a detail account"}
-                  </h3>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-between gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-slate-200/90 shadow-2xs text-xs max-w-xl">
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-slate-500 whitespace-nowrap">Amount in Words:</span>
+                  <span className="font-semibold text-[#00378C] italic">{amountInWords(debitTotal, form.curr_code)}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Select
-                    className="w-56"
-                    value={selectedDetail?.id || ""}
-                    onChange={(event) => setSelectedDetailId(event.target.value)}
-                  >
-                    {form.detail.map((detail) => (
-                      <option key={detail.id} value={detail.id}>
-                        {detail.serial_no}. {detail.ac_code || "No account"} {detail.child_table ? `- ${detail.child_table}` : ""}
-                      </option>
-                    ))}
-                  </Select>
-                  {selectedDetail?.child_table === "invoice" && (
-                    <Button disabled={disabled || childLoading} size="sm" type="button" variant="outline" onClick={() => selectedDetail && void loadChildrenForDetail(selectedDetail)}>
-                      <RefreshCw size={14} /> Load
-                    </Button>
+                  {isBalanced ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Balanced Reverse Journal Voucher
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs">
+                      <span className="h-2 w-2 rounded-full bg-rose-500" />
+                      Out of Balance: Difference {formatAmount(Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3))))}
+                    </span>
                   )}
-                  <Button disabled={disabled || !selectedDetail?.child_table} size="sm" type="button" variant="outline" onClick={addChildRow}>
-                    <Plus size={14} /> Add
-                  </Button>
+                </div>
+
+                <div className="commercial-line-totals flex items-center gap-2.5">
+                  <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Debit</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-emerald-700">{formatAmount(debitTotal)}</strong>
+                  </div>
+                  <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Credit</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-blue-700">{formatAmount(creditTotal)}</strong>
+                  </div>
+                  {totalTax > 0 && (
+                    <div className="flex min-h-9 items-center gap-2 rounded-md border border-amber-300 bg-amber-50/90 px-3 py-1 text-amber-900 shadow-2xs">
+                      <span className="text-xs font-semibold text-amber-800">Tax / VAT</span>
+                      <strong className="font-mono text-sm font-bold tabular-nums text-amber-700">{formatAmount(totalTax)}</strong>
+                    </div>
+                  )}
+                  <div className={`flex min-h-9 items-center gap-2 rounded-md border px-3 py-1 shadow-2xs ${
+                    isBalanced ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-rose-300 bg-rose-50 text-rose-800"
+                  }`}>
+                    <span className="text-xs font-bold">Difference</span>
+                    <strong className="font-mono text-sm font-extrabold tabular-nums">
+                      {formatAmount(Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3))))}
+                    </strong>
+                  </div>
                 </div>
               </div>
-              <ChildAllocationTable
-                childTable={selectedDetail?.child_table || ""}
-                parentId={selectedDetail?.id}
-                disabled={disabled}
-                loading={childLoading}
-                rows={selectedChildren}
-                onChange={updateChildRow}
-                onRemove={removeChildRow}
-                onInvNoBlur={handleInvNoBlur}
-              />
             </div>
           </div>
         )}
       </CardContent>
 
-      <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-        <div className="text-sm text-muted-foreground">
-          Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={disabled || loading || form.detail.length === 0 || !isBalanced} type="submit">
-            <Save size={15} /> {saving ? "Saving..." : "Save"}
-          </Button>
-        </div>
-      </div>
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
@@ -992,277 +1961,43 @@ function JVDocument({
         flowLevel={2}
         readOnly={form.canceled === "Y"}
       />
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        tone="danger"
+        title="Cancel Document"
+        description="This will mark the current document as cancelled."
+        actionLabel="Cancel Document"
+        onClose={() => setCancelConfirmOpen(false)}
+        onConfirm={() => void cancelCurrentDocument()}
+      />
+      <NewReportDialog
+        open={reportOpen}
+        onClose={() => {
+          setReportOpen(false);
+          setReportHtml(null);
+          setReportError(null);
+        }}
+        title={reportTitle}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError}
+      />
     </form>
   );
 }
 
-function ConfirmDialog({
-  open,
-  title,
-  description,
-  actionLabel,
-  tone,
-  onClose,
-  onConfirm,
-}: {
-  open: boolean;
-  title: string;
-  description: string;
-  actionLabel: string;
-  tone?: "default" | "danger";
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
+function Field({ label, required, children, className, error }: { label: string; required?: boolean; children: ReactNode; className?: string; error?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
   return (
-    <Dialog
-      compact
-      open={open}
-      tone={tone}
-      title={title}
-      description={description}
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button variant={tone === "danger" ? "destructive" : "default"} onClick={onConfirm}>{actionLabel}</Button>
-        </>
-      }
-    >
-      <p className="m-0 text-sm text-muted-foreground">Please confirm to continue.</p>
-    </Dialog>
-  );
-}
-
-function ChildAllocationTable({
-  childTable,
-  rows,
-  loading,
-  disabled,
-  onChange,
-  onRemove,
-  onInvNoBlur,
-  parentId,
-}: {
-  childTable: TransactionDetail["child_table"];
-  rows: TransactionChildRow[];
-  loading: boolean;
-  disabled: boolean;
-  onChange: (id: string, patch: Partial<TransactionChildRow>) => void;
-  onRemove: (id: string) => void;
-  onInvNoBlur?: (childId: string, invNo: string, parentId?: string) => void;
-  parentId?: string;
-
-}) {
-  if (!childTable) {
-    return <div className="grid min-h-[120px] place-items-center p-6 text-center text-sm text-muted-foreground">This detail account has no allocation table.</div>;
-  }
-
-  const headers =
-    childTable === "invoice"
-      ? ["No", "Invoice", "Invoice Date", "Invoice Amount", "Outstanding", "Amount", "Paid Amount", "Action"]
-      : childTable === "job"
-        ? ["No", "Job No", "Doc Ref", "Doc Ref 2", "Amount", "Action"]
-        : ["No", "Expense Type Code ", "Expense Subtype Code", "Description", "Job No", "Amount", "Action"];
-
-  const user = useAuth()
-
-  return (
-    <div className="max-h-[31vh] overflow-auto">
-      <table className="w-full min-w-[1180px] text-sm">
-        <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
-          <tr>{headers.map((header) => <th className="px-2 py-2 text-left" key={header}>{header}</th>)}</tr>
-        </thead>
-        <tbody>
-          {loading ? (
-            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={headers.length}>Loading allocations...</td></tr>
-          ) : rows.length === 0 ? (
-            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={headers.length}>No allocation rows</td></tr>
-          ) : rows.map((row) => (
-            <tr className="border-t" key={row.id}>
-              <td className="px-2 py-1 text-xs">{row.dtl_sr_no}</td>
-              {childTable === "invoice" ? (
-                <>
-                  <td className="px-2 py-1">
-                    <input
-                      className="h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
-                      disabled={disabled}
-                      value={text(row.inv_no)}
-                      onChange={(event) => onChange(row.id, { inv_no: event.target.value })}
-                      onBlur={(event) => {
-                        console.log("ChildAllocationTable onBlur", { childId: row.id, parentId, value: event.target.value });
-                        onInvNoBlur?.(row.id, event.target.value, parentId);
-                      }}
-                    />
-                  </td>
-                  <td className="px-2 py-1">
-                    <Input disabled={disabled} type="date" value={dateInput(row.inv_date)} onChange={(event) => onChange(row.id, { inv_date: event.target.value })} />
-                  </td>
-                  <td className="px-2 py-1"><Input disabled value={text(row.inv_amt)} /></td>
-                  <td className="px-2 py-1"><Input disabled value={text(row.c_bal_amt_org)} /></td>
-                  <td className="w-32 px-2 py-1">
-                    <div className="flex flex-col gap-1">
-                      <Input
-                        disabled={disabled}
-                        type="number"
-                        step="0.001"
-                        value={Number(row.amount || 0)}
-                        onChange={(event) =>
-                          onChange(row.id, {
-                            amount: Number(event.target.value || 0),
-                          })
-                        }
-                        color={
-                          Number(row.amount || 0) > Number(row.c_bal_amt_org || 0)
-                            ? "danger"
-                            : "neutral"
-                        }
-                      />
-
-                      {Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) && (
-                        <span className="text-xs text-red-500">
-                          Amount exceeds available balance
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </>
-              ) : childTable === "job" ? (
-                <>
-                  <td className="px-2 py-1">
-                    <LookupField
-                      label="Job No"
-                      compact
-                      placeholder="Job No"
-                      value={text(row.job_no)}
-                      displayValue={text(row.job_no)}
-                      columns={[{ field: "job_no", header: "Job No" }, { field: "job_date", header: "Job Date" }, { field: "confrim_date", header: "Confirm Date" }, { field: "prin_code", header: "Principal Code" }]}
-                      valueField="job_no"
-                      displayFields={["job_no", "job_date", "confrim_date", "prin_code"]}
-                      loadOptions={() => getDynamicLookup({
-                        parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
-                        loginid: user?.user?.loginid ?? "",
-                        code1: user?.user?.company_code ?? "",
-                      })}
-                      disabled={disabled}
-                      onChange={(value) => onChange(row.id, { job_no: value })}
-                    />
-                  </td>
-                  <td className="px-2 py-1"><Input disabled={disabled} value={text(row.doc_refno)} onChange={(event) => onChange(row.id, { doc_refno: event.target.value })} /></td>
-                  <td className="px-2 py-1"><Input disabled={disabled} value={text(row.doc_refno_2)} onChange={(event) => onChange(row.id, { doc_refno_2: event.target.value })} /></td>
-                </>
-              ) : (
-                <>
-                  <td className="px-2 py-1">
-                    <LookupField
-                      label="Expense type"
-                      compact
-                      placeholder="Expense type"
-                      value={text(row.exp_type_code)}
-                      displayValue={
-                        text(row.exp_type_code)
-                          ? `${row.exp_type_code} - ${row.exp_type_description}`
-                          : ""
-                      }
-                      columns={[
-                        { field: "exp_type_code", header: "Expense Type Code" },
-                        { field: "exp_description", header: "Expense Type Description" }
-                      ]}
-                      valueField="exp_type_code"
-                      displayFields={["exp_type_code", "exp_type_description"]}
-                      loadOptions={() =>
-                        getDynamicLookup({
-                          parameter: "AC_BP_BR_EXP_TYPE_CODE",
-                          loginid: user?.user?.loginid ?? "",
-                          code1: user?.user?.company_code ?? "",
-                        })
-                      }
-                      disabled={disabled}
-                      onChange={(value, lookupRow) =>
-                        onChange(row.id, {
-                          exp_type_code: value,
-                          exp_type_description: value
-                            ? text(getLookupValue(lookupRow || {}, "exp_type_description"))
-                            : "",
-                          exp_subtype_code: "",
-                          exp_subtype_description: "",
-                        })
-                      }
-                    />
-                  </td>
-
-                  <td className="px-2 py-1">
-                    <LookupField
-                      key={`subtype-${row.id}-${row.exp_type_code || "none"}`}
-                      label="Expense subtype"
-                      compact
-                      placeholder="Expense subtype"
-                      value={text(row.exp_subtype_description)}
-                      displayValue={
-                        text(row.exp_subtype_code)
-                          ? `${row.exp_subtype_code} - ${row.exp_subtype_description}`
-                          : ""
-                      }
-                      columns={[
-                        { field: "exp_subtype_code", header: "Expense Subtype Code" },
-                        {
-                          field: "exp_subtype_description",
-                          header: "Expense Subtype Description"
-                        }
-                      ]}
-                      valueField="exp_subtype_code"
-                      displayFields={[
-                        "exp_subtype_code",
-                        "exp_subtype_description"
-                      ]}
-                      loadOptions={() => {
-                        const currentExpType = text(row.exp_type_code);
-                        if (!currentExpType) return Promise.resolve([]);
-                        return getDynamicLookup({
-                          parameter: "AC_BP_BR_EXP_SUBTYPE_CODE",
-                          loginid: user?.user?.loginid ?? "",
-                          code1: user?.user?.company_code ?? "",
-                          code2: currentExpType,
-                        });
-                      }}
-                      disabled={disabled || !row.exp_type_code}
-                      onChange={(value, lookupRow) =>
-                        onChange(row.id, {
-                          exp_subtype_code: value,
-                          exp_subtype_description: value
-                            ? text(
-                              getLookupValue(
-                                lookupRow || {},
-                                "exp_subtype_description"
-                              )
-                            )
-                            : "",
-                        })
-                      }
-                    />
-                  </td>
-                  <td className="px-2 py-1"><Input disabled={disabled} value={text(row.exp_description)} onChange={(event) => onChange(row.id, { exp_description: event.target.value })} /></td>
-
-                  <td className="px-2 py-1"><Input disabled={disabled} value={text(row.job_no)} onChange={(event) => onChange(row.id, { job_no: event.target.value })} /></td>
-                </>
-              )}
-
-              {childTable !== "invoice" && <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>}
-              {childTable === "invoice" && <td className="w-32 px-2 py-1"><Input disabled value={Number(row.paid_amt || 0)} /></td>}
-              <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => onRemove(row.id)}><X size={14} /></Button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
-  return (
-    <label className="field">
-      <span>
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+    <label className={`field ${className || ""}`}>
+      <span className="flex items-center justify-between">
+        <span>
+          {cleanLabel}
+          {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
+        </span>
+        {error && <span className="text-[10px] text-destructive font-medium ml-1" style={{ color: "#E24B4A" }}>{error}</span>}
       </span>
       {children}
     </label>
@@ -1321,7 +2056,7 @@ function emptyDetailRow({
     ex_rate: 1,
     amount: 0,
     sign_ind: docType === "CP" ? 1 : -1,
-    tx_compntcat_code_1: "11100",
+    tx_compntcat_code_1: "",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
     tx_compnt_lcuramt_1: null,
@@ -1412,7 +2147,13 @@ function mapExistingDocument(
   childrenRaw: { invoice?: Record<string, unknown>[]; job?: Record<string, unknown>[]; expense?: Record<string, unknown>[] } = {},
 ): TransactionHeader {
   const header = lowerRecord(headerRaw);
-  const detail = detailRaw.map((raw, index) => {
+  // Exclude system-generated balancing rows (e.g. 9010 Tax row, 9001 Control row) so tax is not double-counted
+  const userRows = detailRaw.filter((raw) => {
+    const sn = Number(lowerRecord(raw).serial_no || 0);
+    return sn === 0 || sn < 9000;
+  });
+  const detailToMap = userRows.length > 0 ? userRows : detailRaw;
+  const detail = detailToMap.map((raw, index) => {
     const row = lowerRecord(raw);
     const serialNo = Number(row.serial_no || index + 1);
     const table = inferChildTable(serialNo, childrenRaw);
@@ -1510,7 +2251,7 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
         ex_rate: Number(row.ex_rate || form.ex_rate || 1),
         amount: Math.abs(Number(row.amount || 0)),
         sign_ind: row.sign_ind,
-        tx_compntcat_code_1: row.tx_compntcat_code_1 || "11100",
+        tx_compntcat_code_1: row.tx_compntcat_code_1 || "",
         tx_compnt_1_expmt: row.tx_compnt_1_expmt || "N",
         tx_compnt_perc_1: row.tx_compnt_perc_1 ?? null,
         tx_compnt_amt_1: row.tx_compnt_amt_1 ?? null,
@@ -1575,7 +2316,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     header_ac_code: originalForm.ac_code,
     curr_code: row.curr_code || originalForm.curr_code,
     ex_rate: Number(row.ex_rate || originalForm.ex_rate || 1),
-    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || originalForm.ex_rate || 1) * Number(row.sign_ind || 1)),
+    lcur_amount: Math.abs(Number(row.lcur_amount ?? (Number(row.amount || 0) * Number(row.ex_rate || originalForm.ex_rate || 1)))),
     div_code: row.div_code || originalForm.div_code,
   }));
 
@@ -1607,7 +2348,7 @@ function groupChildren(form: TransactionHeader) {
     if (!detail.child_table || !["invoice", "job", "expense"].includes(detail.child_table)) return;
     const table = detail.child_table as "invoice" | "job" | "expense";
     const rows = (form.children?.[detail.id] || []) as TransactionChildRow[];
-    rows.forEach((row) => {
+    rows.forEach((row, childIndex) => {
       if (table === "invoice" && Number(row.amount || 0) === 0) return;
       const cleaned: Record<string, unknown> = { ...row };
       delete cleaned.id;
@@ -1620,7 +2361,7 @@ function groupChildren(form: TransactionHeader) {
       cleaned.doc_type = form.doc_type;
       cleaned.doc_no = form.doc_no || cleaned.doc_no || "1";
       cleaned.serial_no = detail.serial_no;
-      cleaned.dtl_sr_no = Number(cleaned.dtl_sr_no || grouped[table].length + 1);
+      cleaned.dtl_sr_no = childIndex + 1;
       cleaned.doc_date = form.doc_date;
       cleaned.div_code = form.div_code;
       cleaned.ac_code = detail.ac_code;
@@ -1629,6 +2370,9 @@ function groupChildren(form: TransactionHeader) {
       cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
       cleaned.amount = Number(cleaned.amount || 0);
       cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+      if (table === "invoice") {
+        cleaned.indicator_origin = "N";
+      }
       grouped[table].push(cleaned);
     });
   });
@@ -1637,6 +2381,14 @@ function groupChildren(form: TransactionHeader) {
 }
 
 async function getCurrencyRows(): Promise<LookupRow[]> {
+  try {
+    const rows = await getDynamicLookup({
+      parameter: "Account_Currency_CODE_Serach",
+      code1: "10",
+      loginid: "ADMIN"
+    });
+    if (rows && rows.length > 0) return rows;
+  } catch {}
   const response = await api.get("/api/wms/currency", { params: { page: 1, limit: 1000 } });
   if (!response.data.success) throw new Error(response.data.message || "Unable to load currencies");
   return response.data.data?.tableData || response.data.data || [];
@@ -1674,22 +2426,17 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatDate(value: unknown) {
-  const date = dateInput(value);
-  return date || "";
-}
-
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals = 2) {
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
 function formatExRate(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   return value < 0 ? `(${amount})` : amount;
 }
 
-function formatNumber(value: number) {
-  if (!Number.isFinite(value)) return "0.000";
-  return value.toFixed(3);
+function formatNumber(value: number, decimals = 2) {
+  if (!Number.isFinite(value)) return (0).toFixed(decimals);
+  return value.toFixed(decimals);
 }

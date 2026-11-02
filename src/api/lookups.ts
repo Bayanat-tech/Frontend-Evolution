@@ -159,7 +159,8 @@ function extractApiErrorMessage(error: unknown, fallback: string) {
 
 export async function getMasterLookup(appCode: string, master: string) {
   try {
-    const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}`);
+    // const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}`);
+    const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}?limit=5000`);
     if (!response.data.success) throw new Error(response.data.details || response.data.message || `Unable to load ${master}`);
     return response.data.data?.tableData || [];
   } catch (error) {
@@ -194,6 +195,18 @@ export async function getDynamicFinanceLookup(params: DynamicQueryParams) {
     return response.data.data || [];
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, "Unable to load Financelookup data"));
+  }
+}
+
+export async function getFinanceTaxList(): Promise<LookupRow[]> {
+  try {
+    const response = await api.get<ApiResponse<LookupRow[]>>("/api/finance/tax?limit=500");
+    if (response.data?.data && Array.isArray(response.data.data)) {
+      return response.data.data;
+    }
+    return [];
+  } catch {
+    return [];
   }
 }
 

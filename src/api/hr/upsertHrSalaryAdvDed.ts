@@ -4,7 +4,7 @@ import { api } from "../client";
 export type THrSalaryAdvDedHeader = {
   company_code: string;
   doc_type: string;
-  doc_no?: number;
+  doc_no?: number | null;
 
   doc_date?: string;
   ref_no?: string;
@@ -54,7 +54,7 @@ export type THrSalaryAdvDedHeader = {
 export type THrSalaryAdvDedDetail = {
   company_code: string;
   doc_type: string;
-  doc_no?: number;
+  doc_no?: number |null;
 
   employee_id?: string;
   emplyee_code?: string;

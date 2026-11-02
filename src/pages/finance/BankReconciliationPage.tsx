@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { RefreshCw, Save, Search } from "lucide-react";
+import { AlertCircle, RefreshCw, Save, Search } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { getDynamicLookupaccount, getLookupValue, LookupRow } from "../../api/lookups";
@@ -56,6 +56,7 @@ export function BankReconciliationPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_DOCUMENT_TYPE", loginid: user?.loginid || "", code1: user?.company_code || "" })
@@ -65,6 +66,12 @@ export function BankReconciliationPage() {
 
   const retrieve = async (event?: FormEvent) => {
     event?.preventDefault();
+    if (!filters.division) {
+      setFieldErrors({ division: "Division is required" });
+      setNotice({ type: "error", message: "Please select a Division first" });
+      return;
+    }
+    setFieldErrors({});
     setLoading(true);
     setNotice(null);
     try {
@@ -72,13 +79,13 @@ export function BankReconciliationPage() {
         parameter: "BANK_RECONCILIATION_GET_DETAIL_DATA",
         loginid: user?.loginid || "",
         code1: user?.company_code || "",
-        code2: filters.docType,
-        code3: filters.bankAccount,
+        code2: filters.docType || "All",
+        code3: filters.bankAccount || "All",
         code4: filters.division,
-        code5: filters.docDateFrom,
-        code6: filters.docDateTo,
-        code7: filters.chequeDateFrom,
-        code8: filters.chequeDateTo,
+        code5: filters.docDateFrom || "1900-01-01",
+        code6: filters.docDateTo || "2099-12-31",
+        code7: filters.chequeDateFrom || "1900-01-01",
+        code8: filters.chequeDateTo || "2099-12-31",
       });
       setRows(data.map(mapRecon));
     } catch (error) {
@@ -110,6 +117,20 @@ export function BankReconciliationPage() {
       });
       if (!response.data?.success) throw new Error(response.data?.message || "Unable to update reconciliation");
       setNotice({ type: "success", message: response.data.message || "Reconciliation updated successfully" });
+      // Re-retrieve to automatically remove newly reconciled items from the grid
+      const remainingData = await getDynamicLookupaccount({
+        parameter: "BANK_RECONCILIATION_GET_DETAIL_DATA",
+        loginid: user?.loginid || "",
+        code1: user?.company_code || "",
+        code2: filters.docType || "All",
+        code3: filters.bankAccount || "All",
+        code4: filters.division,
+        code5: filters.docDateFrom || "1900-01-01",
+        code6: filters.docDateTo || "2099-12-31",
+        code7: filters.chequeDateFrom || "1900-01-01",
+        code8: filters.chequeDateTo || "2099-12-31",
+      });
+      setRows(remainingData.map(mapRecon));
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save reconciliation" });
     } finally {
@@ -149,11 +170,10 @@ export function BankReconciliationPage() {
   ], []);
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Bank Reconciliation</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Retrieve cheque transactions and update reconciliation status.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => void retrieve()}><RefreshCw size={15} /> Retrieve</Button>
@@ -165,16 +185,29 @@ export function BankReconciliationPage() {
 
       <Card className="p-4">
         <form className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1" onSubmit={retrieve}>
+         <div>
           <LookupField
-            label="Division"
+            label="Division *"
+            required
+            enforceRequired
             value={filters.division}
             displayValue={filters.divisionName ? `${filters.division} - ${filters.divisionName}` : filters.division}
             columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
             valueField="div_code"
             displayFields={["div_code", "div_name"]}
             loadOptions={() => getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_DIVISION", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-            onChange={(value, row) => setFilters((current) => ({ ...current, division: value, divisionName: String(getLookupValue(row || {}, "div_name") || "") }))}
+            // onChange={(value, row) => setFilters((current) => ({ ...current, division: value, divisionName: String(getLookupValue(row || {}, "div_name") || "") }))}
+            onChange={(value, row) => {
+              setFieldErrors((e) => ({ ...e, division: "" }));
+              setFilters((current) => ({ ...current, division: value, divisionName: String(getLookupValue(row || {}, "div_name") || "") }));
+            }}
           />
+          {fieldErrors.division && (
+            <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+              <AlertCircle size={11} /> {fieldErrors.division}
+            </span>
+          )}
+         </div>
           <LookupField
             label="Bank Account"
             value={filters.bankAccount}

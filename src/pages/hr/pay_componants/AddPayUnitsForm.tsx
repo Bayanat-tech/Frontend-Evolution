@@ -1,15 +1,21 @@
+// src/pages/hr/payunits/AddPayUnitsForm.tsx
+//
+// Pay Unit form — new UI (modelled on ProductWmsForm):
+//  • forwardRef + useImperativeHandle → page header Save / Attach buttons call save() / attach()
+//  • No fixed full-screen overlay, own header or bottom action bar — the page header owns those
+//  • Header / Dependents child forms render their own Freight SectionPanels
+//  • toast feedback instead of AutoDismissAlert
+
 import { useFormik } from 'formik';
-import { useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, Printer, Paperclip, X } from 'lucide-react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup } from '../../../api/lookups';
+import { useToast } from '../../../components/ui/AlertToast';
 import PayUnitHeaderForm from './PayUnitHeaderForm';
 import PayUnitDetailForm from './PayUnitDetailForm';
 import hrPayComponentServiceInstance from './upsertHrPayComponent';
-import { Button } from '../../../components/ui/Button';
-import { AutoDismissAlert } from '../../../components/ui/AutoDismissAlert';
-import { CardHeader } from '../../../components/ui/Card';
+
 function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
@@ -60,12 +66,17 @@ export type TPayUnitFormValues = {
   detail: TPayUnitDetail[];
 };
 
+/* ✅ Expose save() / attach() to the parent (header buttons) */
+export type PayUnitFormHandle = {
+  save: () => Promise<void>;
+  attach: () => void;
+};
+
 type TProps = {
   onClose: (refetchData?: boolean) => void;
   isEdit: boolean;
   isViewMode?: boolean;
   pay_comp_id?: string;
-  onDivisionChange?: (divCode: string) => void;
   div_code?: string;
   div_name?: string;
 };
@@ -148,15 +159,16 @@ const normalizeHeader = (h: any): Partial<TPayUnitFormValues> => ({
   div_name: h.DIV_NAME ?? h.div_name ?? ''
 });
 
-// ===================== MAIN COMPONENT =====================
-const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div_code, div_name }: TProps) => {
+// ===================== MAIN COMPONENT (forwardRef so parent can trigger save / attach) =====================
+const AddPayUnitsForm = forwardRef<PayUnitFormHandle, TProps>(function AddPayUnitsForm(
+  { onClose, isEdit, isViewMode = false, pay_comp_id, div_code, div_name },
+  ref
+) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [queryId] = useState(() => Date.now());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isDisabled = isViewMode;
-
-
-  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const resolvedPayCompId =
     pay_comp_id && typeof pay_comp_id === 'string' && pay_comp_id.trim().length > 0 ? pay_comp_id.trim() : undefined;
@@ -166,10 +178,9 @@ const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div
   // ===================== FILE UPLOAD =====================
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0] ?? null;
-    if (selectedFile) handleFileUpload(selectedFile);
+    if (selectedFile) void handleFileUpload(selectedFile);
+    event.target.value = ''; // allow re-selecting the same file
   };
-
-  const handleUploadPopup = () => fileInputRef.current?.click();
 
   const handleFileUpload = async (file: File) => {
     const formData = new FormData();
@@ -177,10 +188,10 @@ const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div
     try {
       const response = await fetch('/api/upload', { method: 'POST', body: formData });
       if (!response.ok) throw new Error('Upload failed!');
-      const result = await response.json();
-      console.log('Upload successful:', result);
+      await response.json();
+      toast.success(`${file.name} uploaded successfully`);
     } catch (error) {
-      console.error('Error during upload:', error);
+      toast.error(error instanceof Error ? error.message : 'Upload failed');
     }
   };
 
@@ -197,7 +208,7 @@ const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div
     try {
       const resolvedDivCode = values.div_code || div_code || '';
       if (!resolvedDivCode) {
-        setNotice({ type: 'error', message: 'Division Code is missing. Please select a division.' });
+        toast.warning('Division Code is missing. Please select a division.');
         return;
       }
 
@@ -240,16 +251,29 @@ const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div
 
       const result = await hrPayComponentServiceInstance.insUpdHrPayComponent(payload);
       if (result.success) {
-        setNotice({ type: 'success', message: 'Saved successfully.' });
+        toast.success('Pay unit saved successfully');
         onClose(true);
       } else {
-        setNotice({ type: 'error', message: result.message || 'Failed to save.' });
+        toast.error(result.message || 'Failed to save pay unit');
       }
     } catch (err) {
       console.error('handleSubmit error:', err);
-      setNotice({ type: 'error', message: 'An unexpected error occurred.' });
+      toast.error(err instanceof Error ? err.message : 'An unexpected error occurred');
     }
   }
+
+  /* ✅ Expose save() / attach() to parent.
+     save() validates first so a failed validation surfaces as a toast
+     (formik.submitForm then marks every field touched so inline errors show). */
+  useImperativeHandle(ref, () => ({
+    save: async () => {
+      const errors = await formik.validateForm();
+      const first = Object.values(errors)[0];
+      if (first) toast.warning(String(first));
+      await formik.submitForm();
+    },
+    attach: () => fileInputRef.current?.click()
+  }));
 
   // ===================== SET COMPANY + DIV on mount (ADD mode only) =====================
   useEffect(() => {
@@ -261,7 +285,7 @@ const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div
       if (div_code) formik.setFieldValue('div_code', div_code);
       if (div_name) formik.setFieldValue('div_name', div_name);
     }
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ===================== FETCH HEADER =====================
@@ -326,7 +350,7 @@ const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div
       company_code: normalized.company_code || user?.company_code || '',
       detail: formik.values.detail
     });
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerSuccess, payUnitHeaderData]);
 
   // ===================== POPULATE FORM FROM DETAIL DATA =====================
@@ -343,6 +367,7 @@ const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div
       country_name: row.COUNTRY_NAME ?? row.country_name ?? ''
     }));
     formik.setFieldValue('detail', details);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailSuccess, payUnitDetailData]);
 
   // ===================== LOADING STATE =====================
@@ -350,78 +375,25 @@ const AddPayUnitsForm = ({ onClose, isEdit, isViewMode = false, pay_comp_id, div
 
   // ===================== RENDER =====================
   return (
-    <div className="fixed inset-0 z-50 bg-background">
-      <section className="commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
-        <CardHeader className="border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
-            <div>
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                {isViewMode ? 'View Document' : isEdit ? 'Edit Document' : 'New Document'}
-              </p>
-              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">
-                Pay Unit {resolvedPayCompId ? `— ${resolvedPayCompId}` : ''}
-              </h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="secondary" onClick={handleUploadPopup}>
-                <Paperclip size={15} /> Attach
-              </Button>
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
-                <X size={16} />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-
-        <div className="min-h-0 overflow-auto p-3">
-          <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-
-          {isLoadingData ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">
-              Loading document...
-            </div>
-          ) : (
-            <form id="pay-unit-form" onSubmit={formik.handleSubmit} className="w-full">
-              <div className="w-full space-y-3">
-                {/* ===== Header Section ===== */}
-                <div className="w-full rounded-md border bg-card">
-                  <div className="border-b bg-secondary/40 px-3 py-1.5">
-                    <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Header</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight">Pay Unit Information</h3>
-                  </div>
-                  <div className="grid w-full grid-cols-12 gap-4 p-3">
-                    <PayUnitHeaderForm formik={formik} isEdit={isEdit} disabled={isDisabled} />
-                  </div>
-                </div>
-
-                {/* ===== Details Section ===== */}
-                <div className="w-full rounded-md border bg-card">
-                  <div className="border-b bg-secondary/40 px-3 py-1.5">
-                    <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Details</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight">Pay Unit Dependents</h3>
-                  </div>
-                  <div className="grid w-full grid-cols-12 gap-4 p-3">
-                    <PayUnitDetailForm formik={formik} disabled={isDisabled} />
-                  </div>
-                </div>
-              </div>
-            </form>
-          )}
+    <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
+      {isLoadingData ? (
+        <div className="grid min-h-[420px] place-items-center rounded-md border bg-card text-sm text-muted-foreground shadow-sm">
+          Loading document...
         </div>
+      ) : (
+        <form id="pay-unit-form" onSubmit={formik.handleSubmit} className="grid w-full gap-3">
+          {/* Header + Dependents render their own Freight SectionPanels */}
+          <PayUnitHeaderForm formik={formik} isEdit={isEdit} disabled={isDisabled} />
+          <PayUnitDetailForm formik={formik} disabled={isDisabled} />
 
-        {/* Bottom action bar */}
-        <div className="flex items-center justify-end gap-2 border-t bg-secondary/60 px-4 py-2">
-          {!isViewMode && (
-            <Button type="submit" form="pay-unit-form" variant="default" disabled={isDisabled || formik.isSubmitting}>
-              {formik.isSubmitting ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />} Submit
-            </Button>
-          )}
-        </div>
+          {/* hidden submit so Enter inside a text input saves */}
+          <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
+        </form>
+      )}
 
-        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-      </section>
+      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
     </div>
   );
-};
+});
 
 export default AddPayUnitsForm;

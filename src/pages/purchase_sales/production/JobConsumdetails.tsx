@@ -1,10 +1,10 @@
-import React from "react";
-import { Plus, X } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Columns3, List, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
-import { TteJmiConsumType } from "../purchase/Purchaseordertypes";
+import { PurchaseOrderLineRow, TteJmiConsumType } from "../purchase/Purchaseordertypes";
 import {
     computeQuantity,
     formatAmount,
@@ -46,96 +46,143 @@ export function JobconsumLinesTable({
 }) {
     const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
     const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
+    const [lineSearch, setLineSearch] = useState("");
+    const [showAllColumns, setShowAllColumns] = useState(false);
+    const filteredRows = useMemo(() => {
+        const q = lineSearch.trim().toLowerCase();
+        if (!q) return rows;
+        return rows.filter((r) =>
+            r.prod_name?.toLowerCase().includes(q) ||
+            r.prod_code?.toLowerCase().includes(q) ||
+            r.line_remarks?.toLowerCase().includes(q)
 
+        );
+    }, [rows, lineSearch]);
     return (
-        <div className="commercial-lines-card rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-                <div>
-                    <p className="eyebrow m-0">Lines</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight"></h3>
+        <div
+            className="commercial-lines-card rounded-md border bg-card min-w-0"
+            style={{ height: "auto", minHeight: 0, maxHeight: "none", overflow: "visible", display: "block" }}
+        >
+            <div className="finance-line-actions">
+                <div className="finance-line-actions-left">
+                    <span className="finance-line-actions-icon"><List size={14} /></span>
+                    <span className="finance-line-actions-title">Accounting Lines</span>
+                    <span className="finance-line-actions-badge">
+                        {lineSearch.trim()
+                            ? `${filteredRows.length} of ${rows.length} lines`
+                            : `${rows.length} ${rows.length === 1 ? "line" : "lines"}`}
+                    </span>
+                    {lineSearch.trim() && (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            Filtered ({filteredRows.length})
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
+                    <button
+                        type="button"
+                        onClick={() => setShowAllColumns(!showAllColumns)}
+                        className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${showAllColumns
+                            ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
+                            : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                            }`}
+                        title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
+                    >
+                        <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
+                        <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+                    </button>
+
+                    <div className="bisc-table-search">
+                        <Search size={13} className="bisc-table-search-icon" />
+                        <input
+                            className="bisc-search-input"
+                            type="text"
+                            value={lineSearch}
+                            onChange={(e) => setLineSearch(e.target.value)}
+                            placeholder="Search lines..."
+                        />
+                        {lineSearch && (
+                            <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
+                                <X size={11} />
+                            </button>
+                        )}
+                    </div>
+                    <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow} className="commercial-add-line-btn">
                         <Plus size={14} /> Add Line
                     </Button>
                 </div>
             </div>
-            <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-                <table className="finance-lines-table w-full min-w-[2600px] text-sm">
-                    <thead className="text-xs text-primary-foreground">
+            <div className="commercial-lines-scroll max-h-[43vh] overflow-auto min-w-0">
+                <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
+                    <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                         <tr>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "48px", minWidth: "48px", maxWidth: "48px" }}
+                                style={{ ...plainHeaderStyle, width: "10px", minWidth: "10px", maxWidth: "10px" }}
                             >
                                 SNo
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "180px", minWidth: "180px", maxWidth: "180px" }}
+                                style={{ ...plainHeaderStyle, width: "140px", minWidth: "140px", maxWidth: "140px" }}
                             >
                                 Product Code
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "140px", minWidth: "140px", maxWidth: "140px" }}
+                                style={{ ...plainHeaderStyle, width: "20px", minWidth: "20px", maxWidth: "20px" }}
                             >
                                 P Uom
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "100px", minWidth: "100px", maxWidth: "100px" }}
+                                style={{ ...plainHeaderStyle, width: "60px", minWidth: "60px", maxWidth: "60px" }}
                             >
                                 Qty Puom
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "140px", minWidth: "140px", maxWidth: "140px" }}
+                                style={{ ...plainHeaderStyle, width: "20px", minWidth: "20px", maxWidth: "20px" }}
                             >
                                 L Uom
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "100px", minWidth: "100px", maxWidth: "100px" }}
+                                style={{ ...plainHeaderStyle, width: "60px", minWidth: "60px", maxWidth: "60px" }}
                             >
                                 Qty Luom
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "140px", minWidth: "140px", maxWidth: "140px" }}
+                                style={{ ...plainHeaderStyle, width: "10px", minWidth: "10px", maxWidth: "10px" }}
                             >
                                 Uppp
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "100px", minWidth: "100px", maxWidth: "100px" }}
+                                style={{ ...plainHeaderStyle, width: "60px", minWidth: "60px", maxWidth: "60px" }}
                             >
                                 Quantity
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "120px", minWidth: "120px", maxWidth: "120px" }}
+                                style={{ ...plainHeaderStyle, width: "60px", minWidth: "60px", maxWidth: "60px" }}
                             >
                                 Qty Used L Uom
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "120px", minWidth: "120px", maxWidth: "120px" }}
+                                style={{ ...plainHeaderStyle, width: "60px", minWidth: "60px", maxWidth: "60px" }}
                             >
                                 Scrap Qty L Uom
                             </th>
                             <th
                                 className="px-2 py-2 text-left"
-                                style={{ ...plainHeaderStyle, width: "100px", minWidth: "100px", maxWidth: "100px" }}
+                                style={{ ...plainHeaderStyle, width: "60px", minWidth: "60px", maxWidth: "60px" }}
                             >
                                 Cost Total
                             </th>
-                            <th
-                                className="px-2 py-2 text-center"
-                                style={{ ...plainHeaderStyle, width: "70px", minWidth: "70px", maxWidth: "70px" }}
-                            >
-                                Action
-                            </th>
+                            <th className="finance-sticky-col-right px-2 py-2 text-center" >Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -146,7 +193,7 @@ export function JobconsumLinesTable({
                                 </td>
                             </tr>
                         ) : (
-                            rows.map((row:any, index) => {
+                            rows.map((row: any, index) => {
                                 const qtyPuomNum = numberOrZero(row.qty_puom);
                                 const qtyLuomNum = numberOrZero(row.qty_luom);
                                 const sameUom = isSameUom(row);
@@ -155,7 +202,7 @@ export function JobconsumLinesTable({
                                     <tr className="border-t odd:bg-muted/20" key={row.id}>
                                         <td className="px-2 py-1 text-xs w-18">{index + 1}</td>
 
-                                        <td className="finance-account-cell bg-card px-2 py-1">
+                                        <td className="cell bg-card px-2 py-1">
                                             <LookupField
                                                 label=""
                                                 value={row.prod_code || ""}
@@ -211,123 +258,76 @@ export function JobconsumLinesTable({
                                             />
                                         </td>
 
-                                        <td className="w-28 px-2 py-1">
-                                            <LookupField
-                                                label=""
+                                        <td className="px-2 py-1">
+                                            <Input
+                                                className="finance-money-input w-full"
+                                                disabled
                                                 value={row.p_uom || ""}
-                                                displayValue={row.p_uom}
-                                                columns={[
-                                                    { field: "uom_code", header: "Code" },
-                                                    { field: "uom_name", header: "Name" },
-                                                    { field: "unit_price", header: "Unit Price" },
-                                                ]}
-                                                valueField="uom_code"
-                                                displayFields={["uom_code", "uom_name"]}
-                                                loadOptions={() =>
-                                                    getDynamicLookup({
-                                                        parameter: "PS_POORDER_ENTRY_UOM_LIST",
-                                                        code1: companyCode,
-                                                        loginid: loginid || "ADMIN",
-                                                    })
-                                                }
+                                                readOnly
+                                            />
+                                        </td>
+
+                                        <td className=" px-2 py-1">
+                                            <Input
+                                                className="finance-money-input"
                                                 disabled={headerAndLineDisabled}
-                                                onChange={(value, selectedRow) => {
-                                                    const patch: Partial<TteJmiConsumType> = {
-                                                        p_uom: value,
-                                                        uom_name:
-                                                            text(getLookupValue(selectedRow || {}, "uom_name")) ||
-                                                            row.uom_name,
+                                                type="number"
+                                                style={{ textAlign: "right" }}
+                                                step="0.001"
+
+                                                value={row.qty_puom}
+                                                onChange={(event) => {
+                                                    const newQtyPuom = Number(event.target.value || 0);
+
+                                                    const patch: Partial<PurchaseOrderLineRow> = {
+                                                        qty_puom: newQtyPuom,
                                                     };
-                                                    const merged = { ...row, ...patch };
-                                                    if (isSameUom(merged)) {
-                                                        patch.qty_puom = row.qty_luom;
-                                                    }
-                                                    patch.quantity = computeQuantity({ ...row, ...patch });
+
+                                                    patch.quantity = computeQuantity({
+                                                        ...row,
+                                                        ...patch,
+                                                    });
+
                                                     updateRow(row.id, patch);
                                                 }}
                                             />
                                         </td>
 
-                                        <td className="finance-amount-cell px-2 py-1">
+                                        <td className="px-2 py-1" >
+                                            <Input
+                                                className="finance-money-input w-full"
+                                                disabled
+                                                value={row.l_uom || ""}
+                                                readOnly
+                                            />
+                                        </td>
+
+                                        <td className="  px-2 py-1">
                                             <Input
                                                 className="finance-money-input"
                                                 disabled={headerAndLineDisabled || sameUom}
                                                 type="number"
                                                 style={{ textAlign: "right" }}
                                                 step="0.001"
-                                                value={sameUom ? qtyLuomNum : row.qty_puom}
-                                                onChange={(event) => {
-                                                    const newQtyPuom = Number(event.target.value || 0);
-                                                    const patch = { qty_puom: newQtyPuom };
-                                                    updateRow(row.id, {
-                                                        ...patch,
-                                                        quantity: computeQuantity({ ...row, ...patch }),
-                                                    });
-                                                }}
-                                            />
-                                        </td>
-
-                                        <td className="w-64 px-2 py-1">
-                                            <LookupField
-                                                label=""
-                                                value={row.l_uom || ""}
-                                                displayValue={row.l_uom}
-                                                columns={[
-                                                    { field: "uom_code", header: "Code" },
-                                                    { field: "uom_name", header: "Name" },
-                                                    { field: "unit_price", header: "Unit Price" },
-                                                ]}
-                                                valueField="uom_code"
-                                                displayFields={["uom_code", "uom_name"]}
-                                                loadOptions={() =>
-                                                    getDynamicLookup({
-                                                        parameter: "PS_POORDER_ENTRY_UOM_LIST",
-                                                        code1: companyCode,
-                                                        loginid: loginid || "ADMIN",
-                                                    })
-                                                }
-                                                disabled={headerAndLineDisabled}
-                                                onChange={(value, selectedRow) => {
-                                                    const patch: Partial<TteJmiConsumType> = {
-                                                        l_uom: value,
-                                                        uom_name:
-                                                            text(getLookupValue(selectedRow || {}, "uom_name")) ||
-                                                            row.uom_name,
-                                                    };
-                                                    const merged = { ...row, ...patch };
-                                                    if (isSameUom(merged)) {
-                                                        // When l_uom becomes equal to p_uom, qty_puom should follow qty_luom
-                                                        patch.qty_puom = qtyLuomNum;
-                                                    }
-                                                    patch.quantity = computeQuantity({ ...row, ...patch });
-                                                    updateRow(row.id, patch);
-                                                }}
-                                            />
-                                        </td>
-
-                                        <td className="finance-amount-cell w-24 px-2 py-1">
-                                            <Input
-                                                className="finance-money-input"
-                                                disabled={headerAndLineDisabled}
-                                                type="number"
-                                                style={{ textAlign: "right" }}
-                                                step="0.001"
-                                                value={row.qty_luom}
+                                                value={sameUom ? 0 : row.qty_luom}
                                                 onChange={(event) => {
                                                     const newQtyLuom = Number(event.target.value || 0);
-                                                    const patch: Partial<TteJmiConsumType> = { qty_luom: newQtyLuom };
-                                                    if (sameUom) {
-                                                        patch.qty_puom = newQtyLuom;
-                                                        patch.quantity = newQtyLuom;
-                                                    } else {
-                                                        patch.quantity = computeQuantity({ ...row, ...patch });
-                                                    }
+
+                                                    const patch: Partial<PurchaseOrderLineRow> = {
+                                                        qty_luom: newQtyLuom,
+                                                    };
+
+                                                    patch.quantity = computeQuantity({
+                                                        ...row,
+                                                        ...patch,
+                                                    });
+
                                                     updateRow(row.id, patch);
                                                 }}
                                             />
                                         </td>
 
-                                        <td className="finance-amount-cell px-2 py-1">
+                                        <td className=" px-2 py-1">
                                             <Input
                                                 className="finance-money-input"
                                                 disabled={headerAndLineDisabled}
@@ -345,11 +345,11 @@ export function JobconsumLinesTable({
                                             />
                                         </td>
 
-                                        <td className="finance-amount-cell px-2 py-1 text-right">
+                                        <td className=" px-2 py-1 text-right">
                                             {formatAmount(computeQuantity(row))}
                                         </td>
 
-                                        <td className="finance-amount-cell w-28 px-2 py-1">
+                                        <td className="  px-2 py-1">
                                             <Input
                                                 className="finance-money-input"
                                                 disabled={headerAndLineDisabled}
@@ -365,7 +365,7 @@ export function JobconsumLinesTable({
                                             />
                                         </td>
 
-                                        <td className="finance-amount-cell w-28 px-2 py-1">
+                                        <td className="  px-2 py-1">
                                             <Input
                                                 className="finance-money-input"
                                                 disabled={headerAndLineDisabled}
@@ -381,7 +381,7 @@ export function JobconsumLinesTable({
                                             />
                                         </td>
 
-                                        <td className="finance-amount-cell w-28 px-2 py-1">
+                                        <td className="  px-2 py-1">
                                             <Input
                                                 className="finance-money-input"
                                                 disabled={headerAndLineDisabled}
@@ -397,16 +397,16 @@ export function JobconsumLinesTable({
                                             />
                                         </td>
 
-                                        <td className="px-2 py-1">
-                                            <Button
-                                                disabled={headerAndLineDisabled}
-                                                size="icon"
+                                        <td className="finance-sticky-col-right px-1 py-1 text-center">
+                                            <button
                                                 type="button"
-                                                variant="ghost"
+                                                disabled={headerAndLineDisabled}
+                                                title="Delete row"
+                                                className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
                                                 onClick={() => removeRow(row.id)}
                                             >
-                                                <X size={14} />
-                                            </Button>
+                                                <Trash2 size={13} />
+                                            </button>
                                         </td>
                                     </tr>
                                 );
@@ -415,7 +415,17 @@ export function JobconsumLinesTable({
                     </tbody>
                 </table>
             </div>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-1 border-t px-3 py-2 text-sm max-md:grid-cols-1">
+        <div
+        className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] px-3 py-2 gap-3"
+        style={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 10,
+          backgroundColor: "#f8fafc",
+          boxShadow: "0 -2px 6px rgba(0,0,0,0.06)",
+          fontSize:14
+        }}
+      >
                 <div className="flex items-center justify-end gap-8">
                     <span className="text-muted-foreground">Total Qty (Puom)</span>
                     <strong>

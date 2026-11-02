@@ -1,10 +1,16 @@
+// src/pages/hr/payunits/PayUnitHeaderForm.tsx
+//
+// Pay Unit header — new UI: two Freight SectionPanels (Pay Unit Info /
+// Payroll Parameter), shared Field wrapper, and one reusable CodeSelectField
+// replacing the eight copy-pasted code-list <Select> blocks.
+
 import { FormikProps } from 'formik';
-import { TPayUnitFormValues } from './AddPayUnitsForm';
-import { useEffect, useState } from 'react';
-import { useAuth } from '../../../state/AuthContext';
-import { getDynamicLookup } from '../../../api/lookups';
+import { IdCard, SlidersHorizontal } from 'lucide-react';
+import type { TPayUnitFormValues } from './AddPayUnitsForm';
+import { Field, SectionPanel } from '../../../components/ui/Freightpanel';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
+import { useCodeOptions } from '../../../components/ui/Usecodeoptions';
 
 type TProps = {
   formik: FormikProps<TPayUnitFormValues>;
@@ -16,137 +22,118 @@ const PAY_COMP_TYPE_OPTIONS = [
   { label: 'Fixed', value: 'F' },
   { label: 'Variable', value: 'V' }
 ];
-const YES_NO_OPTIONS = ['Y', 'N'];
 
+const YES_NO_OPTIONS = [
+  { label: 'Yes', value: 'Y' },
+  { label: 'No', value: 'N' }
+];
 
-type TCodeOption = { value_code: string; value_desc: string };
+// ── Code-list select: loads VALUE_CODE / VALUE_DESC options for `parameter`,
+//    and (optionally) writes the selected description into `descField`.
+function CodeSelectField({
+  formik,
+  name,
+  label,
+  parameter,
+  descField,
+  disabled
+}: {
+  formik: FormikProps<TPayUnitFormValues>;
+  name: keyof TPayUnitFormValues;
+  label: string;
+  parameter: string;
+  descField?: keyof TPayUnitFormValues;
+  disabled?: boolean;
+}) {
+  const options = useCodeOptions(parameter);
+  const { values, errors, touched, handleChange, handleBlur } = formik;
+  const fieldName = String(name);
+  const error =
+    (touched as Record<string, unknown>)[fieldName] && (errors as Record<string, unknown>)[fieldName]
+      ? String((errors as Record<string, unknown>)[fieldName])
+      : undefined;
 
-
-const useCodeOptions = (parameter: string) => {
-  const { user } = useAuth();
-  const [options, setOptions] = useState<TCodeOption[]>([]);
-
-  useEffect(() => {
-    const fetchOptions = async () => {
-      try {
-        const response = await getDynamicLookup({
-          parameter,
-          loginid: user?.loginid ?? '',
-          code1: user?.company_code ?? ''
-        });
-        if (Array.isArray(response)) {
-          setOptions(
-            response.map((row: any) => ({
-              value_code: row.VALUE_CODE ?? row.value_code ?? '',
-              value_desc: row.VALUE_DESC ?? row.value_desc ?? ''
-            }))
-          );
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    if (user?.company_code) fetchOptions();
-  }, [user?.company_code, parameter]);
-
-  return options;
-};
-
-// ── Small helper: label + error/helper text under a field ──────────────────
-function FieldHint({ error, helper }: { error?: string; helper?: string }) {
-  if (error) return <p className="mt-1 text-xs text-destructive">{error}</p>;
-  if (helper) return <p className="mt-1 text-xs text-muted-foreground">{helper}</p>;
-  return null;
+  return (
+    <Field label={label} error={error}>
+      <Select
+        name={fieldName}
+        value={String(values[name] ?? '')}
+        onChange={(e) => {
+          handleChange(e);
+          if (descField) {
+            const selected = options.find((opt) => opt.value_code === e.target.value);
+            void formik.setFieldValue(String(descField), selected?.value_desc ?? '');
+          }
+        }}
+        onBlur={handleBlur}
+        disabled={disabled}
+      >
+        <option value="">Select</option>
+        {options.map((opt) => (
+          <option key={opt.value_code} value={opt.value_code}>
+            {opt.value_code} - {opt.value_desc}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  );
 }
 
 // ===================== MAIN COMPONENT =====================
 const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
   const { values, errors, touched, handleChange, handleBlur } = formik;
 
-  const earnDedOptions = useCodeOptions('PAY_COMPONENT_EAR_DED_CodeValue');
-  const payCompDependentOptions = useCodeOptions('PAY_COMPONENT_DEPENDENT_CodeValue');
-  const periodicityOptions = useCodeOptions('PAY_COMPONENT_PERIODICITY_CodeValue');
-  const attendDepOptions = useCodeOptions('PAY_COMPONENT_ATTENDANCE_DEP_CodeValue');
-  const taxableOptions = useCodeOptions('PAY_COMPONENT_TAXABLE_CodeValue');
-  const payFlagOptions = useCodeOptions('PAY_COMPONENT_PAY_FLAG_CodeValue');
-  const roundOffOptions = useCodeOptions('PAY_COMPONENT_ROUND_OFF_CodeValue');
-  const statusOptions = useCodeOptions('PAY_COMPONENT_STATUS_CodeValue');
+  const fieldError = (name: keyof TPayUnitFormValues) =>
+    touched[name] && errors[name] ? String(errors[name]) : undefined;
 
   return (
-    <div className="col-span-12 grid gap-3">
+    <>
       {/* ===================== PAY UNIT INFO ===================== */}
-      <div className="flex flex-col gap-2 rounded-lg border border-[#d0dcf5] bg-[#f0f5ff] p-2">
-        <p className="m-0 text-[0.68rem] font-bold uppercase tracking-wide text-[#082A89]">PayUnit Info</p>
-
+      <SectionPanel title="Pay Unit Info" icon={IdCard}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
-          {/* Division */}
-          <label className="field">
-            <span>Division Code</span>
+          {/* Division — auto-filled from the picker */}
+          <Field label="Division Code" helperText="Auto-filled from division selection">
             <Input
               disabled
               readOnly
-              className="bg-white"
-              value={values.div_code && values.div_name ? `${values.div_code} - ${values.div_name}` : values.div_code || ''}
+              value={
+                values.div_code && values.div_name ? `${values.div_code} - ${values.div_name}` : values.div_code || ''
+              }
             />
-            <FieldHint helper="Auto-filled from division selection" />
-          </label>
+          </Field>
 
           {/* PAY_COMP_ID — auto-generated by DB trigger, read-only */}
-          <label className="field">
-            <span>Pay Component ID</span>
-            <Input
-              className="bg-white"
-              name="pay_comp_id"
-              value={values.pay_comp_id}
-              placeholder="Auto-generated"
-              disabled
-              readOnly
-            />
-            <FieldHint helper="Auto-generated on save" />
-          </label>
+          <Field label="Pay Component ID" helperText="Auto-generated on save">
+            <Input name="pay_comp_id" value={values.pay_comp_id} placeholder="Auto-generated" disabled readOnly />
+          </Field>
 
-          {/* PAY_COMP_DESC */}
-          <label className="field">
-            <span>Pay Unit name</span>
+          <Field label="Pay Unit Name" required error={fieldError('pay_comp_desc')}>
             <Input
-              className="bg-white"
               name="pay_comp_desc"
               value={values.pay_comp_desc}
               onChange={handleChange}
               onBlur={handleBlur}
               disabled={disabled}
             />
-            <FieldHint error={touched.pay_comp_desc && errors.pay_comp_desc ? String(errors.pay_comp_desc) : undefined} />
-          </label>
+          </Field>
 
-          {/* PAY_COMP_SHORT_DESC */}
-          <label className="field">
-            <span>Short Description</span>
+          <Field label="Short Description" error={fieldError('pay_comp_short_desc')}>
             <Input
-              className="bg-white"
               name="pay_comp_short_desc"
               value={values.pay_comp_short_desc}
               onChange={handleChange}
               onBlur={handleBlur}
               disabled={disabled}
             />
-            <FieldHint
-              error={touched.pay_comp_short_desc && errors.pay_comp_short_desc ? String(errors.pay_comp_short_desc) : undefined}
-            />
-          </label>
+          </Field>
         </div>
-      </div>
+      </SectionPanel>
 
       {/* ===================== PAYROLL PARAMETER ===================== */}
-      <div className="flex flex-col gap-2 rounded-lg border border-[#d0dcf5] bg-[#f0f5ff] p-2">
-        <p className="m-0 text-[0.68rem] font-bold uppercase tracking-wide text-[#082A89]">Payroll Parameter</p>
-
+      <SectionPanel title="Payroll Parameter" icon={SlidersHorizontal}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
-          {/* PAY_COMP_TYPE */}
-          <label className="field">
-            <span>Pay Unit Type</span>
+          <Field label="Pay Unit Type" error={fieldError('pay_comp_type')}>
             <Select
-              className="bg-white"
               name="pay_comp_type"
               value={values.pay_comp_type}
               onChange={handleChange}
@@ -160,182 +147,70 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
                 </option>
               ))}
             </Select>
-            <FieldHint error={touched.pay_comp_type && errors.pay_comp_type ? String(errors.pay_comp_type) : undefined} />
-          </label>
+          </Field>
 
-          {/* PAY_COMP_EARN_DED — dynamic dropdown */}
-          <label className="field">
-            <span>Earning / Deduction</span>
-            <Select
-              className="bg-white"
-              name="pay_comp_earn_ded"
-              value={values.pay_comp_earn_ded}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              disabled={disabled}
-            >
-              <option value="">Select</option>
-              {earnDedOptions.map((opt) => (
-                <option key={opt.value_code} value={opt.value_code}>
-                  {opt.value_code} - {opt.value_desc}
-                </option>
-              ))}
-            </Select>
-            <FieldHint
-              error={touched.pay_comp_earn_ded && errors.pay_comp_earn_ded ? String(errors.pay_comp_earn_ded) : undefined}
-            />
-          </label>
+          <CodeSelectField
+            formik={formik}
+            disabled={disabled}
+            name="pay_comp_earn_ded"
+            label="Earning / Deduction"
+            parameter="PAY_COMPONENT_EAR_DED_CodeValue"
+          />
 
-          <label className="field">
-            <span>Pay Component Dependent</span>
-            <Select
-              className="bg-white"
-              name="pay_comp_dependent"
-              value={values.pay_comp_dependent || ''}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              disabled={disabled}
-            >
-              <option value="">Select</option>
-              {payCompDependentOptions.map((opt) => (
-                <option key={opt.value_code} value={opt.value_code}>
-                  {opt.value_code} - {opt.value_desc}
-                </option>
-              ))}
-            </Select>
-            <FieldHint
-              error={touched.pay_comp_dependent && errors.pay_comp_dependent ? String(errors.pay_comp_dependent) : undefined}
-            />
-          </label>
+          <CodeSelectField
+            formik={formik}
+            disabled={disabled}
+            name="pay_comp_dependent"
+            label="Pay Component Dependent"
+            parameter="PAY_COMPONENT_DEPENDENT_CodeValue"
+          />
 
-          <label className="field">
-            <span>Periodicity</span>
-            <Select
-              className="bg-white"
-              name="periodicity"
-              value={values.periodicity || ''}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              disabled={disabled}
-            >
-              <option value="">Select</option>
-              {periodicityOptions.map((opt) => (
-                <option key={opt.value_code} value={opt.value_code}>
-                  {opt.value_code} - {opt.value_desc}
-                </option>
-              ))}
-            </Select>
-            <FieldHint error={touched.periodicity && errors.periodicity ? String(errors.periodicity) : undefined} />
-          </label>
+          <CodeSelectField
+            formik={formik}
+            disabled={disabled}
+            name="periodicity"
+            label="Periodicity"
+            parameter="PAY_COMPONENT_PERIODICITY_CodeValue"
+          />
 
-          <label className="field">
-            <span>Attendance Dependency</span>
-            <Select
-              className="bg-white"
-              name="attendance_dependency"
-              value={values.attendance_dependency || ''}
-              onChange={(e) => {
-                const code = e.target.value;
-                handleChange(e);
-                const selected = attendDepOptions.find((opt) => opt.value_code === code);
-                formik.setFieldValue('attendance_dependency_desc', selected?.value_desc ?? '');
-              }}
-              onBlur={handleBlur}
-              disabled={disabled}
-            >
-              <option value="">Select</option>
-              {attendDepOptions.map((opt) => (
-                <option key={opt.value_code} value={opt.value_code}>
-                  {opt.value_code} - {opt.value_desc}
-                </option>
-              ))}
-            </Select>
-            <FieldHint
-              error={touched.attendance_dependency && errors.attendance_dependency ? String(errors.attendance_dependency) : undefined}
-            />
-          </label>
+          <CodeSelectField
+            formik={formik}
+            disabled={disabled}
+            name="attendance_dependency"
+            descField="attendance_dependency_desc"
+            label="Attendance Dependency"
+            parameter="PAY_COMPONENT_ATTENDANCE_DEP_CodeValue"
+          />
 
-          <label className="field">
-            <span>Taxable</span>
-            <Select
-              className="bg-white"
-              name="taxable"
-              value={values.taxable || ''}
-              onChange={(e) => {
-                const code = e.target.value;
-                handleChange(e);
-                const selected = taxableOptions.find((opt) => opt.value_code === code);
-                formik.setFieldValue('taxable_desc', selected?.value_desc ?? '');
-              }}
-              onBlur={handleBlur}
-              disabled={disabled}
-            >
-              <option value="">Select</option>
-              {taxableOptions.map((opt) => (
-                <option key={opt.value_code} value={opt.value_code}>
-                  {opt.value_code} - {opt.value_desc}
-                </option>
-              ))}
-            </Select>
-            <FieldHint error={touched.taxable && errors.taxable ? String(errors.taxable) : undefined} />
-          </label>
+          <CodeSelectField
+            formik={formik}
+            disabled={disabled}
+            name="taxable"
+            descField="taxable_desc"
+            label="Taxable"
+            parameter="PAY_COMPONENT_TAXABLE_CodeValue"
+          />
 
-          {/* PAY UNIT CATEGORY */}
-          <label className="field">
-            <span>Pay Unit Category</span>
-            <Select
-              className="bg-white"
-              name="pay_flag"
-              value={values.pay_flag || ''}
-              onChange={(e) => {
-                const code = e.target.value;
-                handleChange(e);
-                const selected = payFlagOptions.find((opt) => opt.value_code === code);
-                formik.setFieldValue('pay_flag_desc', selected?.value_desc ?? '');
-              }}
-              onBlur={handleBlur}
-              disabled={disabled}
-            >
-              <option value="">Select </option>
-              {payFlagOptions.map((opt) => (
-                <option key={opt.value_code} value={opt.value_code}>
-                  {opt.value_code} - {opt.value_desc}
-                </option>
-              ))}
-            </Select>
-            <FieldHint error={touched.pay_flag && errors.pay_flag ? String(errors.pay_flag) : undefined} />
-          </label>
+          <CodeSelectField
+            formik={formik}
+            disabled={disabled}
+            name="pay_flag"
+            descField="pay_flag_desc"
+            label="Pay Unit Category"
+            parameter="PAY_COMPONENT_PAY_FLAG_CodeValue"
+          />
 
-          <label className="field">
-            <span>Round Off To</span>
-            <Select
-              className="bg-white"
-              name="round_off_to"
-              value={values.round_off_to || ''}
-              onChange={(e) => {
-                const code = e.target.value;
-                handleChange(e);
-                const selected = roundOffOptions.find((opt) => opt.value_code === code);
-                formik.setFieldValue('round_off_to_desc', selected?.value_desc ?? '');
-              }}
-              onBlur={handleBlur}
-              disabled={disabled}
-            >
-              <option value="">Select</option>
-              {roundOffOptions.map((opt) => (
-                <option key={opt.value_code} value={opt.value_code}>
-                  {opt.value_code} - {opt.value_desc}
-                </option>
-              ))}
-            </Select>
-            <FieldHint error={touched.round_off_to && errors.round_off_to ? String(errors.round_off_to) : undefined} />
-          </label>
+          <CodeSelectField
+            formik={formik}
+            disabled={disabled}
+            name="round_off_to"
+            descField="round_off_to_desc"
+            label="Round Off To"
+            parameter="PAY_COMPONENT_ROUND_OFF_CodeValue"
+          />
 
-          {/* LEAVE_PAID */}
-          <label className="field">
-            <span>Leave Paid</span>
+          <Field label="Leave Paid" error={fieldError('leave_paid')}>
             <Select
-              className="bg-white"
               name="leave_paid"
               value={values.leave_paid}
               onChange={handleChange}
@@ -343,19 +218,15 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               disabled={disabled}
             >
               {YES_NO_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt === 'Y' ? 'Yes' : 'No'}
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </Select>
-            <FieldHint error={touched.leave_paid && errors.leave_paid ? String(errors.leave_paid) : undefined} />
-          </label>
+          </Field>
 
-          {/* SALARY_LINK */}
-          <label className="field">
-            <span>Salary Link</span>
+          <Field label="Salary Link" error={fieldError('salary_link')}>
             <Select
-              className="bg-white"
               name="salary_link"
               value={values.salary_link}
               onChange={handleChange}
@@ -363,56 +234,38 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               disabled={disabled}
             >
               {YES_NO_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt === 'Y' ? 'Yes' : 'No'}
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </Select>
-            <FieldHint error={touched.salary_link && errors.salary_link ? String(errors.salary_link) : undefined} />
-          </label>
+          </Field>
 
-          <label className="field">
-            <span>Status</span>
-            <Select
-              className="bg-white"
-              name="status"
-              value={values.status || ''}
-              onChange={(e) => {
-                const code = e.target.value;
-                handleChange(e);
-                const selected = statusOptions.find((opt) => opt.value_code === code);
-                formik.setFieldValue('status_desc', selected?.value_desc ?? '');
-              }}
-              onBlur={handleBlur}
-              disabled={disabled}
-            >
-              <option value="">Select</option>
-              {statusOptions.map((opt) => (
-                <option key={opt.value_code} value={opt.value_code}>
-                  {opt.value_code} - {opt.value_desc}
-                </option>
-              ))}
-            </Select>
-            <FieldHint error={touched.status && errors.status ? String(errors.status) : undefined} />
-          </label>
+          <CodeSelectField
+            formik={formik}
+            disabled={disabled}
+            name="status"
+            descField="status_desc"
+            label="Status"
+            parameter="PAY_COMPONENT_STATUS_CodeValue"
+          />
 
           {/* REMARKS — full width */}
-          <label className="field col-span-1 sm:col-span-1 md:col-span-4">
-            <span>Remarks</span>
+          <Field label="Remarks" error={fieldError('remarks')} className="sm:col-span-2 md:col-span-4">
             <textarea
-              className="w-full rounded-md border bg-white px-2 py-1 text-sm"
+              className="input"
               rows={2}
               name="remarks"
               value={values.remarks}
               onChange={handleChange}
               onBlur={handleBlur}
               disabled={disabled}
+              style={{ resize: 'vertical', fontFamily: 'inherit' }}
             />
-            <FieldHint error={touched.remarks && errors.remarks ? String(errors.remarks) : undefined} />
-          </label>
+          </Field>
         </div>
-      </div>
-    </div>
+      </SectionPanel>
+    </>
   );
 };
 

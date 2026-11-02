@@ -1,37 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  BadgeCheck,
-  Car,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Contact,
-  Home,
-  MapPin,
-  ShieldAlert,
-  User,
+  BookOpen, Car, Contact, Home, MapPin, ShieldAlert, User, Users,
 } from "lucide-react";
+import type { ReactNode } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useAuth } from "../../../state/AuthContext";
 import { useToast } from "../../../components/ui/AlertToast";
-import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { LookupField } from "../../../components/ui/LookupField";
-
-import { getDynamicLookup} from "../../../api/lookups";
-import { TEmployeeDetails } from "./EmployeeDetails.types";
+import { getDynamicLookup } from "../../../api/lookups";
+import type { TEmployeeDetails } from "./EmployeeDetails.types";
 import { UpdHrEmployee } from "../../../api/hr";
+
+export type EmployeeFormHandle = {
+  save: () => Promise<void>;
+  toggleAll: () => void;
+};
 
 interface EditEmployeeDetailsFormProps {
   existingData: TEmployeeDetails;
   onClose: (refetch?: boolean) => void;
+  onAllOpenChange?: (allOpen: boolean) => void;
 }
 
 const OT_APPLICABLE_OPTIONS = [
   { label: "Yes", value: "Y" },
   { label: "No", value: "N" },
 ];
-
 
 const LOOKUP_PARAMS = {
   title: "MS_HR_EMPDETAIL_TITLE",
@@ -40,12 +35,23 @@ const LOOKUP_PARAMS = {
   religion: "MS_HR_EMPDETAIL_RELIGION",
   caste: "MS_HR_EMPDETAIL_CASTE",
   marital: "MS_HR_EMPDETAIL_MARITAL",
+  supervisor: "HR_DROPDOWN_MS_HR_EMPLOYEE",
 } as const;
 
 type LookupKey = keyof typeof LOOKUP_PARAMS;
 type LookupRow = Record<string, unknown>;
 
-// dd/mm/yyyy <-> yyyy-mm-dd (native <input type="date"> value format)
+type TextKey = {
+  [K in keyof TEmployeeDetails]-?: [NonNullable<TEmployeeDetails[K]>] extends [never]
+    ? never
+    : [NonNullable<TEmployeeDetails[K]>] extends [string]
+      ? K
+      : never;
+}[keyof TEmployeeDetails];
+
+const CTL = "h-7 text-xs";
+
+/* ── date helpers ─────────────────────────────────────────────── */
 function toInputDate(value: Date | null): string {
   if (!value) return "";
   const d = value instanceof Date ? value : new Date(value);
@@ -62,148 +68,177 @@ function fromInputDate(value: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function FormRow({
-  label,
-  required,
-  className,
-  children,
+/* ── UI primitives (mirrors AddEmployeeHrForm) ────────────────── */
+function HeaderBlock({
+  label, icon, children, gridCols = "grid-cols-2", bodyClass, className = "",
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+  bodyClass?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`overflow-hidden rounded-md border border-[#cbd5e1] bg-card ${className}`}>
+      <div className="flex items-center gap-2 border-b border-[#cbd5e1] bg-slate-50 px-2.5 py-1">
+        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
+          {icon}
+        </span>
+        <span className="text-xs font-bold text-[#00378C]">{label}</span>
+      </div>
+      <div
+        className={
+          bodyClass ?? `grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CField({
+  label, required, className = "", children,
 }: {
   label: string;
   required?: boolean;
   className?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <div className={`grid gap-1 ${className ?? ""}`}>
-      <label className="text-xs font-medium text-muted-foreground">
+    <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
         {label}
-        {required && <span className="text-destructive"> *</span>}
-      </label>
+        {required && <span className="ml-1 text-destructive">*</span>}
+      </span>
       {children}
-    </div>
+    </label>
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-sm text-foreground">{value || "—"}</span>
-    </div>
-  );
-}
+/* ─────────────────────────────────────────────────────────────
+   Main Form
+   ───────────────────────────────────────────────────────────── */
+export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmployeeDetailsFormProps>(
+  function EditEmployeeDetailsForm({ existingData, onClose, onAllOpenChange }, ref) {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [form, setForm] = useState<TEmployeeDetails>(existingData);
 
+    const [lookupOptions, setLookupOptions] = useState<Record<LookupKey, LookupRow[]>>({
+      title: [], gender: [], blood: [], religion: [], caste: [], marital: [], supervisor: [],
+    });
 
-interface StepConfig {
-  id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-function StepperHeader({
-  steps,
-  activeStep,
-  onStepClick,
-}: {
-  steps: StepConfig[];
-  activeStep: number;
-  onStepClick: (index: number) => void;
-}) {
-  return (
-    <div className="flex items-start  rounded-lg border border-border bg-muted/30 px-4 py-3">
-      {steps.map((step, index) => {
-        const isActive = index === activeStep;
-        const isDone = index < activeStep;
-        const Icon = step.icon;
-        return (
-          <div key={step.id} className="flex flex-1 items-start last:flex-none">
-           
-            <button
-              type="button"
-              onClick={() => onStepClick(index)}
-              className="flex flex-col items-center gap-1.5 focus:outline-none"
-            >
-              <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                  isActive
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : isDone
-                      ? "border-primary/60 bg-primary/10 text-primary"
-                      : "border-border bg-background text-muted-foreground"
-                }`}
-              >
-                {isDone ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-              </span>
-              <span
-                className={`w-20 text-center text-[10px] font-medium leading-tight ${
-                  isActive ? "text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                {step.label}
-              </span>
-            </button>
-            {index < steps.length - 1 && (
-              <div className={`mt-4 h-0.5 flex-1 ${isDone ? "bg-primary/60" : "bg-border"}`} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-export function EditEmployeeDetailsForm({ existingData, onClose }: EditEmployeeDetailsFormProps) {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<TEmployeeDetails>(existingData);
-  const [activeStep, setActiveStep] = useState(0);
-
-  const [lookupOptions, setLookupOptions] = useState<Record<LookupKey, LookupRow[]>>({
-    title: [],
-    gender: [],
-    blood: [],
-    religion: [],
-    caste: [],
-    marital: [],
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const entries = await Promise.all(
-          (Object.entries(LOOKUP_PARAMS) as [LookupKey, string][]).map(async ([key, parameter]) => {
-            const res = await getDynamicLookup({
-              parameter,
-              loginid: user?.loginid ?? "",
-              code1: user?.company_code ?? "",
-            });
-            return [key, Array.isArray(res) ? (res as LookupRow[]) : []] as const;
-          }),
-        );
-        if (!cancelled) {
-          setLookupOptions(Object.fromEntries(entries) as Record<LookupKey, LookupRow[]>);
+    useEffect(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const entries = await Promise.all(
+            (Object.entries(LOOKUP_PARAMS) as [LookupKey, string][]).map(async ([key, parameter]) => {
+              const res = await getDynamicLookup({
+                parameter,
+                loginid: user?.loginid ?? "",
+                code1: user?.company_code ?? "",
+              });
+              return [key, Array.isArray(res) ? (res as LookupRow[]) : []] as const;
+            }),
+          );
+          if (!cancelled) {
+            setLookupOptions(Object.fromEntries(entries) as Record<LookupKey, LookupRow[]>);
+          }
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Unable to load dropdown options");
         }
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Unable to load dropdown options");
-      }
-    })();
-    return () => {
-      cancelled = true;
+      })();
+      return () => { cancelled = true; };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Notify parent once — sections are always visually open now.
+    useEffect(() => {
+      onAllOpenChange?.(true);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const loadCached = (key: LookupKey) => async () => lookupOptions[key];
+
+    const set = <K extends keyof TEmployeeDetails>(key: K, value: TEmployeeDetails[K]) =>
+      setForm((prev) => ({ ...prev, [key]: value }));
+
+    /* ── Field builders (add-form visual language) ──────────── */
+    const textField = (
+      key: TextKey,
+      label: string,
+      opts?: { required?: boolean; className?: string; type?: string },
+    ) => (
+      <CField label={label} required={opts?.required} className={opts?.className}>
+        <Input
+          type={opts?.type}
+          className={CTL}
+          value={String(form[key] ?? "")}
+          onChange={(e) => set(key, e.target.value as never)}
+        />
+      </CField>
+    );
+
+    const dateField = (
+      key: "health_expiry" | "ppt_valid_from" | "ppt_valid_to" | "dl_issue_date" | "dl_valid_upto",
+      label: string,
+      className?: string,
+    ) => (
+      <CField label={label} className={className}>
+        <Input
+          type="date"
+          className={CTL}
+          value={toInputDate(form[key])}
+          onChange={(e) => set(key, fromInputDate(e.target.value))}
+        />
+      </CField>
+    );
+
+    const lookupField = (
+      key: TextKey,
+      label: string,
+      lookupKey: LookupKey,
+      codeField: string,
+      nameField: string,
+      required?: boolean,
+      className?: string,
+    ) => (
+      <CField label={label} required={required} className={className}>
+        <LookupField
+          compact
+          dense
+          value={String(form[key] ?? "")}
+          valueField={codeField}
+          displayFields={[codeField, nameField]}
+          columns={[
+            { field: codeField, header: "Code" },
+            { field: nameField, header: label },
+          ]}
+          loadOptions={loadCached(lookupKey)}
+          onChange={(value) => set(key, value as never)}
+          placeholder={`Select ${label.toLowerCase()}`}
+        />
+      </CField>
+    );
+
+    /* ── Validation ─────────────────────────────────────────── */
+    const validate = (): string | null => {
+      if (!form.title) return "Title is required";
+      if (!form.first_name?.trim()) return "First Name is required";
+      if (!form.gender) return "Gender is required";
+      return null;
     };
-  }, []);
 
-  const loadCached = (key: LookupKey) => async () => lookupOptions[key];
+    /* ── Save ───────────────────────────────────────────────── */
+    const handleSubmit = async () => {
+      const error = validate();
+      if (error) { toast.warning(error); return; }
 
-  const set = <K extends keyof TEmployeeDetails>(key: K, value: TEmployeeDetails[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try { 
-      const finalPayload ={
+      try {
+        const finalPayload = {
           COMPANY_CODE: user?.company_code,
           EMPLOYEE_CODE: form.employee_code,
           ALTERNATE_ID: form.alternate_id,
@@ -225,11 +260,11 @@ export function EditEmployeeDetailsForm({ existingData, onClose }: EditEmployeeD
           SPOUSE_NAME: form.spouse_name,
           NO_OF_CHILDREN: form.no_of_children,
           BLOOD_GROUP: form.blood_group,
-          NATIONALITY: form.nationality,
+          // NATIONALITY: form.nationality,
           RELIGION_CODE: form.religion_code,
           CASTE_CODE: form.caste_code,
-          COUNTRY_CODE: form.country_code,
-          COUNTRY_LIVING_IN: form.country_living_in,
+          // COUNTRY_CODE: form.country_code,
+          // COUNTRY_LIVING_IN: form.country_living_in,
 
           PPT_NAME: form.ppt_name,
           PPT_NO: form.ppt_no,
@@ -278,380 +313,159 @@ export function EditEmployeeDetailsForm({ existingData, onClose }: EditEmployeeD
           MANAGER_CODE: form.manager_code,
         };
 
-      await UpdHrEmployee(finalPayload);
-      toast.success("Employee details updated successfully");
-      onClose(true);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to update employee details");
-    } finally {
-      setSaving(false);
-    }
-  };
+        await UpdHrEmployee(finalPayload);
+        toast.success("Employee details updated successfully");
+        onClose(true);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to update employee details");
+      }
+    };
 
-  const steps: StepConfig[] = [
-    { id: "personal", label: "Personal", icon: User },
-    { id: "passport", label: "Passport", icon: BadgeCheck },
-    { id: "contact", label: "Contact", icon: Contact },
-    { id: "permanent", label: "Permanent Addr.", icon: Home },
-    { id: "local", label: "Local Addr.", icon: MapPin },
-    { id: "emergency", label: "Emergency", icon: ShieldAlert },
-    { id: "licence", label: "Driving Licence", icon: Car },
-  ];
+    useImperativeHandle(ref, () => ({
+      save: handleSubmit,
+      toggleAll: () => {}, // no-op — sections are always open now
+    }));
 
-  const isLastStep = activeStep === steps.length - 1;
-  const ActiveIcon = steps[activeStep].icon;
+    /* ── Render ─────────────────────────────────────────────── */
+    return (
+      <div
+        style={{ zoom: 0.8 }}
+        className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-1.5"
+      >
+        {/* ══════════ TOP HALF ══════════ */}
+        <div className="grid items-start gap-1.5 xl:grid-cols-2">
+          {/* Personal Information (2 cols) */}
+          <div className="xl:col-span-2">
+            <HeaderBlock
+              label="Personal Information"
+              icon={<User size={11} />}
+              bodyClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-3 gap-y-2 p-2"
+            >
+              {/* Row 1 */}
+              {lookupField("title", "Title", "title", "value_code", "value_desc", true)}
+              {textField("first_name", "First Name", { required: true })}
+              {textField("second_name", "Second Name")}
+              {textField("third_name", "Third Name")}
 
-  const goNext = () => setActiveStep((s) => Math.min(s + 1, steps.length - 1));
-  const goPrev = () => setActiveStep((s) => Math.max(s - 1, 0));
+              {/* Row 2 */}
+              {textField("fourth_name", "Fourth Name")}
+              {textField("last_name", "Last Name")}
+              {textField("family_name", "Family Name")}
 
-  const stepContent = useMemo(() => {
-    switch (steps[activeStep].id) {
-      case "personal":
-        return (
-          <div className="grid grid-cols-4 gap-4">
-            <LookupField
-              label="Title"
-              value={form.title ?? ""}
-              valueField="value_code"
-              displayFields={["value_code", "value_desc"]}
-              columns={[
-                { field: "value_code", header: "Code" },
-                { field: "value_desc", header: "Title" },
-              ]}
-              loadOptions={loadCached("title")}
-              onChange={(value) => set("title", value)}
-              required
-            />
-            <FormRow label="First Name" required>
-              <Input value={form.first_name} onChange={(e) => set("first_name", e.target.value)} />
-            </FormRow>
-            <FormRow label="Second Name">
-              <Input value={form.second_name} onChange={(e) => set("second_name", e.target.value)} />
-            </FormRow>
-            <FormRow label="Third Name">
-              <Input value={form.third_name} onChange={(e) => set("third_name", e.target.value)} />
-            </FormRow>
+              {/* Row 3 */}
+              {lookupField("gender", "Gender", "gender", "value_code", "value_desc", true)}
+              {lookupField("religion_code", "Religion", "religion", "religion_code", "religion_name")}
+              {textField("birth_place", "Place of Birth")}
+              {lookupField("blood_group", "Blood Group", "blood", "value_code", "value_desc")}
+              {lookupField("caste_code", "Caste", "caste", "caste_code", "caste_name")}
 
-            <FormRow label="Fourth Name">
-              <Input value={form.fourth_name} onChange={(e) => set("fourth_name", e.target.value)} />
-            </FormRow>
-            <FormRow label="Last Name">
-              <Input value={form.last_name} onChange={(e) => set("last_name", e.target.value)} />
-            </FormRow>
-            <FormRow label="Family Name">
-              <Input value={form.family_name} onChange={(e) => set("family_name", e.target.value)} />
-            </FormRow>
-            <FormRow label="Alias Name">
-              <Input value={form.alias_name} onChange={(e) => set("alias_name", e.target.value)} />
-            </FormRow>
+              {/* Row 4 */}
+              {textField("father_name", "Father's Name")}
+              {textField("mother_name", "Mother's Name")}
 
-            <LookupField
-              label="Gender"
-              value={form.gender ?? ""}
-              valueField="value_code"
-              displayFields={["value_code", "value_desc"]}
-              columns={[
-                { field: "value_code", header: "Code" },
-                { field: "value_desc", header: "Gender" },
-              ]}
-              loadOptions={loadCached("gender")}
-              onChange={(value) => set("gender", value)}
-              required
-            />
-            <FormRow label="Date of Birth">
-              <Input type="date" value={toInputDate(form.birth_date)} onChange={(e) => set("birth_date", fromInputDate(e.target.value))} />
-            </FormRow>
-            <FormRow label="Place of Birth">
-              <Input value={form.birth_place} onChange={(e) => set("birth_place", e.target.value)} />
-            </FormRow>
-            <LookupField
-              label="Blood Group"
-              value={form.blood_group ?? ""}
-              valueField="value_code"
-              displayFields={["value_code", "value_desc"]}
-              columns={[
-                { field: "value_code", header: "Code" },
-                { field: "value_desc", header: "Blood Group" },
-              ]}
-              loadOptions={loadCached("blood")}
-              onChange={(value) => set("blood_group", value)}
-            />
-
-            <FormRow label="Father's Name">
-              <Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} />
-            </FormRow>
-            <FormRow label="Mother's Name">
-              <Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} />
-            </FormRow>
-            <LookupField
-              label="Religion"
-              value={form.religion_code ?? ""}
-              valueField="religion_code"
-              displayFields={["religion_code", "religion_name"]}
-              columns={[
-                { field: "religion_code", header: "Code" },
-                { field: "religion_name", header: "Religion" },
-              ]}
-              loadOptions={loadCached("religion")}
-              onChange={(value) => set("religion_code", value)}
-            />
-            <LookupField
-              label="Caste"
-              value={form.caste_code ?? ""}
-              valueField="caste_code"
-              displayFields={["caste_code", "caste_name"]}
-              columns={[
-                { field: "caste_code", header: "Code" },
-                { field: "caste_name", header: "Caste" },
-              ]}
-              loadOptions={loadCached("caste")}
-              onChange={(value) => set("caste_code", value)}
-            />
-
-            <LookupField
-              label="Marital Status"
-              value={form.marrital_status ?? ""}
-              valueField="value_code"
-              displayFields={["value_code", "value_desc"]}
-              columns={[
-                { field: "value_code", header: "Code" },
-                { field: "value_desc", header: "Marital Status" },
-              ]}
-              loadOptions={loadCached("marital")}
-              onChange={(value) => set("marrital_status", value)}
-            />
-            <FormRow label="Spouse Name">
-              <Input value={form.spouse_name} onChange={(e) => set("spouse_name", e.target.value)} />
-            </FormRow>
-            <FormRow label="No. of Children">
-              <Input type="number" value={String(form.no_of_children)} onChange={(e) => set("no_of_children", Number(e.target.value) || 0)} />
-            </FormRow>
-            <FormRow label="Nationality">
-              <Input value={form.nationality} onChange={(e) => set("nationality", e.target.value)} />
-            </FormRow>
-
-            <FormRow label="Country">
-              <Input value={form.country_code} onChange={(e) => set("country_code", e.target.value)} />
-            </FormRow>
-            <FormRow label="Country Living In">
-              <Input value={form.country_living_in} onChange={(e) => set("country_living_in", e.target.value)} />
-            </FormRow>
-            <FormRow label="OT Applicable">
-              <Select value={form.ot_applicable} onChange={(e) => set("ot_applicable", e.target.value)}>
-                <option value="">Select...</option>
-                {OT_APPLICABLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </Select>
-            </FormRow>
-            <FormRow label="Health Card Expiry">
-              <Input type="date" value={toInputDate(form.health_expiry)} onChange={(e) => set("health_expiry", fromInputDate(e.target.value))} />
-            </FormRow>
+              {/* Row 5 */}
+              {lookupField("marrital_status", "Marital Status", "marital", "value_code", "value_desc")}
+              {textField("spouse_name", "Spouse Name")}
+              <CField label="Children">
+                <Input
+                  type="number"
+                  className={CTL}
+                  value={String(form.no_of_children)}
+                  onChange={(e) => set("no_of_children", Number(e.target.value) || 0)}
+                />
+              </CField>
+              {dateField("health_expiry", "Health Card Expiry")}
+              {textField("mobile_no", "Mobile No")}
+              {textField("mobile_no2", "Mobile Alt")}
+              {textField("email_official", "Email", { type: "email" })}
+              <CField label="OT Applicable">
+                <Select
+                  className={CTL}
+                  value={form.ot_applicable}
+                  onChange={(e) => set("ot_applicable", e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  {OT_APPLICABLE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </Select>
+              </CField>
+              {lookupField("supervisor_empid", "Supervisor", "supervisor", "employee_id", "rpt_name", true,)}
+              {lookupField("dept_head_emp_id", "Dept Head", "supervisor", "employee_id", "rpt_name", true,)}
+              {lookupField("manager_code", "Manager Code", "supervisor", "employee_id", "rpt_name", true,)}
+            </HeaderBlock>
           </div>
-        );
 
-      case "passport":
-        return (
-          <div className="grid grid-cols-4 gap-4">
-            <FormRow label="Passport Name">
-              <Input value={form.ppt_name} onChange={(e) => set("ppt_name", e.target.value)} />
-            </FormRow>
-            <FormRow label="Passport No">
-              <Input value={form.ppt_no} onChange={(e) => set("ppt_no", e.target.value)} />
-            </FormRow>
-            <FormRow label="Passport Country">
-              <Input value={form.ppt_country} onChange={(e) => set("ppt_country", e.target.value)} />
-            </FormRow>
-            <FormRow label="Passport Status">
-              <Input value={form.ppt_status} onChange={(e) => set("ppt_status", e.target.value)} />
-            </FormRow>
-
-            <FormRow label="Passport Valid From">
-              <Input type="date" value={toInputDate(form.ppt_valid_from)} onChange={(e) => set("ppt_valid_from", fromInputDate(e.target.value))} />
-            </FormRow>
-            <FormRow label="Passport Valid To">
-              <Input type="date" value={toInputDate(form.ppt_valid_to)} onChange={(e) => set("ppt_valid_to", fromInputDate(e.target.value))} />
-            </FormRow>
-            <FormRow label="Passport With">
-              <Input value={form.passport_with} onChange={(e) => set("passport_with", e.target.value)} />
-            </FormRow>
-          </div>
-        );
-
-      case "contact":
-        return (
-          <div className="grid grid-cols-4 gap-4">
-            <FormRow label="Mobile No">
-              <Input value={form.mobile_no} onChange={(e) => set("mobile_no", e.target.value)} />
-            </FormRow>
-            <FormRow label="Mobile No (Alt)">
-              <Input value={form.mobile_no2} onChange={(e) => set("mobile_no2", e.target.value)} />
-            </FormRow>
-            <FormRow label="Office Phone">
-              <Input value={form.phone_office} onChange={(e) => set("phone_office", e.target.value)} />
-            </FormRow>
-            <FormRow label="Office Phone Extn">
-              <Input value={form.phone_office_extn} onChange={(e) => set("phone_office_extn", e.target.value)} />
-            </FormRow>
-
-            <FormRow label="Official Email">
-              <Input type="email" value={form.email_official} onChange={(e) => set("email_official", e.target.value)} />
-            </FormRow>
-            <FormRow label="Personal Email">
-              <Input type="email" value={form.email_personal} onChange={(e) => set("email_personal", e.target.value)} />
-            </FormRow>
-            <FormRow label="Dept Head (Emp ID)">
-              <Input value={form.dept_head_emp_id} onChange={(e) => set("dept_head_emp_id", e.target.value)} />
-            </FormRow>
-            <FormRow label="Supervisor (Emp ID)">
-              <Input value={form.supervisor_empid} onChange={(e) => set("supervisor_empid", e.target.value)} />
-            </FormRow>
-
-            <FormRow label="Manager Code">
-              <Input value={form.manager_code} onChange={(e) => set("manager_code", e.target.value)} />
-            </FormRow>
-          </div>
-        );
-
-      case "permanent":
-        return (
-          <div className="grid grid-cols-4 gap-4">
-            <FormRow label="Address Line 1" className="col-span-2">
-              <Input value={form.perm_address1} onChange={(e) => set("perm_address1", e.target.value)} />
-            </FormRow>
-            <FormRow label="Address Line 2" className="col-span-2">
-              <Input value={form.perm_address2} onChange={(e) => set("perm_address2", e.target.value)} />
-            </FormRow>
-            <FormRow label="Address Line 3" className="col-span-2">
-              <Input value={form.perm_address3} onChange={(e) => set("perm_address3", e.target.value)} />
-            </FormRow>
-            <FormRow label="Phone">
-              <Input value={form.perm_phone} onChange={(e) => set("perm_phone", e.target.value)} />
-            </FormRow>
-            <FormRow label="Mobile">
-              <Input value={form.perm_mobile} onChange={(e) => set("perm_mobile", e.target.value)} />
-            </FormRow>
-          </div>
-        );
-
-      case "local":
-        return (
-          <div className="grid grid-cols-4 gap-4">
-            <FormRow label="Address Line 1" className="col-span-2">
-              <Input value={form.local_address1} onChange={(e) => set("local_address1", e.target.value)} />
-            </FormRow>
-            <FormRow label="Address Line 2" className="col-span-2">
-              <Input value={form.local_address2} onChange={(e) => set("local_address2", e.target.value)} />
-            </FormRow>
-            <FormRow label="Address Line 3" className="col-span-2">
-              <Input value={form.local_address3} onChange={(e) => set("local_address3", e.target.value)} />
-            </FormRow>
-            <FormRow label="Phone">
-              <Input value={form.local_phone} onChange={(e) => set("local_phone", e.target.value)} />
-            </FormRow>
-            <FormRow label="Mobile">
-              <Input value={form.local_mobile} onChange={(e) => set("local_mobile", e.target.value)} />
-            </FormRow>
-          </div>
-        );
-
-      case "emergency":
-        return (
-          <div className="grid grid-cols-4 gap-4">
-            <FormRow label="Address Line 1" className="col-span-2">
-              <Input value={form.emgr_address1} onChange={(e) => set("emgr_address1", e.target.value)} />
-            </FormRow>
-            <FormRow label="Address Line 2" className="col-span-2">
-              <Input value={form.emgr_address2} onChange={(e) => set("emgr_address2", e.target.value)} />
-            </FormRow>
-            <FormRow label="Address Line 3" className="col-span-2">
-              <Input value={form.emgr_address3} onChange={(e) => set("emgr_address3", e.target.value)} />
-            </FormRow>
-            <FormRow label="Phone">
-              <Input value={form.emgr_phone} onChange={(e) => set("emgr_phone", e.target.value)} />
-            </FormRow>
-            <FormRow label="Mobile">
-              <Input value={form.emgr_mobile} onChange={(e) => set("emgr_mobile", e.target.value)} />
-            </FormRow>
-            <FormRow label="Contact Person" className="col-span-2">
-              <Input value={form.emgr_contact_person} onChange={(e) => set("emgr_contact_person", e.target.value)} />
-            </FormRow>
-          </div>
-        );
-
-      case "licence":
-        return (
-          <div className="grid grid-cols-4 gap-4">
-            <FormRow label="Licence No">
-              <Input value={form.driving_license_no} onChange={(e) => set("driving_license_no", e.target.value)} />
-            </FormRow>
-            <FormRow label="Place of Issue">
-              <Input value={form.dl_issue_place} onChange={(e) => set("dl_issue_place", e.target.value)} />
-            </FormRow>
-            <FormRow label="Date of Issue">
-              <Input type="date" value={toInputDate(form.dl_issue_date)} onChange={(e) => set("dl_issue_date", fromInputDate(e.target.value))} />
-            </FormRow>
-            <FormRow label="Valid Upto">
-              <Input type="date" value={toInputDate(form.dl_valid_upto)} onChange={(e) => set("dl_valid_upto", fromInputDate(e.target.value))} />
-            </FormRow>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  }, [activeStep, form, lookupOptions]);
-
-  return (
-    <form onSubmit={handleSubmit} className="flex max-h-[78vh] flex-col gap-4">
-      {/* ── Employee context (read-only) ── */}
-      {/* <div className="grid grid-cols-4 gap-3 rounded-lg border border-border bg-muted/40 p-3 pb-0">
-        <ReadOnlyField label="Employee Code" value={form.employee_code} />
-        <ReadOnlyField label="Employee ID" value={form.employee_id} />
-        <ReadOnlyField label="Department" value={form.dept_code} />
-        <ReadOnlyField label="Section" value={form.section_code} />
-      </div> */}
-
-      {/* ── Stepper ── */}
-      <StepperHeader steps={steps} activeStep={activeStep} onStepClick={setActiveStep} />
-
-      {/* ── Active step card ── */}
-      <div className="flex-1  rounded-lg border border-border p-3 shadow-sm">
-        <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <ActiveIcon className="h-4 w-4" />
-          </span>
-          <h3 className="text-sm font-semibold text-foreground">{steps[activeStep].label} Details</h3>
-          <span className="ml-auto text-xs text-muted-foreground">
-            Step {activeStep + 1} of {steps.length}
-          </span>
         </div>
-        {stepContent}
-      </div>
 
-      {/* ── Navigation + actions ── */}
-      <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-border bg-background pt-3 ">
-        <Button type="button" variant="outline" onClick={goPrev} disabled={activeStep === 0}>
-          <ChevronLeft size={15} /> Previous
-        </Button>
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => onClose()} disabled={saving}>
-            Cancel
-          </Button>
-          {!isLastStep && (
-            <Button type="button" onClick={goNext}>
-              Next <ChevronRight size={15} />
-            </Button>
-          )}
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving..." : "Save Changes"}
-          </Button>
+        {/* ══════════ BOTTOM HALF (4 Columns) ══════════ */}
+        <div className="grid gap-1.5 xl:grid-cols-4">
+
+          {/* Col 2: Permanent + Driving Licence */}
+          <div className="flex h-full flex-col gap-1.5">
+            <HeaderBlock
+              className="flex-1"
+              label="Permanent Address"
+              icon={<Home size={11} />} 
+              gridCols="grid-cols-1 sm:grid-cols-2"
+            >
+              {textField("perm_address1", "Address Line 1", { className: "sm:col-span-2" })}
+              {textField("perm_address2", "", { className: "sm:col-span-2" })}
+              {textField("perm_address3", "", { className: "sm:col-span-2" })}
+              {textField("perm_phone", "Phone")}
+              {textField("perm_mobile", "Mobile")}
+            </HeaderBlock>
+          </div>
+
+          {/* Col 3: Local Address */}
+          <div className="flex h-full flex-col gap-1.5">
+            <HeaderBlock
+              className="flex-1"
+              label="Local Address"
+              icon={<MapPin size={11} />}
+              gridCols="grid-cols-1 sm:grid-cols-2"
+            >
+              {textField("local_address1", "Address Line 1", { className: "sm:col-span-2" })}
+              {textField("local_address2", "", { className: "sm:col-span-2" })}
+              {textField("local_address3", "", { className: "sm:col-span-2" })}
+              {textField("local_phone", "Phone")}
+              {textField("local_mobile", "Mobile")}
+            </HeaderBlock>
+          </div>
+
+          {/* Col 4: Emergency Contact */}
+          <div className="flex h-full flex-col gap-1.5">
+            <HeaderBlock
+              className="flex-1"
+              label="Emergency Contact"
+              icon={<ShieldAlert size={11} />}
+              gridCols="grid-cols-1 sm:grid-cols-2"
+            >
+              {textField("emgr_address1", "Address Line 1", { className: "sm:col-span-2" })}
+              {textField("emgr_address2", "", { className: "sm:col-span-2" })}
+              {textField("emgr_address3", "", { className: "sm:col-span-2" })}
+              {textField("emgr_phone", "Phone")}
+              {textField("emgr_mobile", "Mobile")}
+              {textField("emgr_contact_person", "Contact Person", { className: "sm:col-span-2" })}
+            </HeaderBlock>
+          </div>
+
+          <HeaderBlock
+              className="flex-1"
+              label="Driving Licence"
+              icon={<Car size={11} />}
+              gridCols="grid-cols-1 sm:grid-cols-2"
+            >
+              {textField("driving_license_no", "Licence No", { className: "sm:col-span-2" })}
+              {textField("dl_issue_place", "Place of Issue", { className: "sm:col-span-2" })}
+              {dateField("dl_issue_date", "Date of Issue")}
+              {dateField("dl_valid_upto", "Valid Upto")}
+          </HeaderBlock>
+          
         </div>
       </div>
-    </form>
-  );
-}
+    );
+  },
+);
 
 export default EditEmployeeDetailsForm;

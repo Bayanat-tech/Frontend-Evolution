@@ -1,28 +1,27 @@
 import { ArrowRight, FileText, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getHrEmployees, type HrEmployee } from "../../../api/hr";
+import {  getHrEmployees,getPayslipreport , type HrEmployee } from "../../../api/hr";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
 import { Select } from "../../../components/ui/Select";
 import { Input } from "../../../components/ui/Input";
 import { useAuth } from "../../../state/AuthContext";
+import { openPayslipReport } from "./payslipPreviewStore";
+import { PayslipReportPreview } from "./PayslipReportPreview";
 
 export function EmployeePayslipPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
   const [employees, setEmployees] = useState<HrEmployee[]>([]);
   const [employeeId, setEmployeeId] = useState("");
-  const [period, setPeriod] = useState(currentPeriod());
+  const [period, setPeriod] = useState(previousMonthPeriod());
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<ToastNotice>(null);
-
+  
   const bounds = useMemo(() => {
     const now = new Date();
-    const currentYear = now.getFullYear();
     return {
-      min: `${currentYear - 1}-01`,
-      max: `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+      min: `${now.getFullYear() - 1}-01`,
+      max: previousMonthPeriod(), 
     };
   }, []);
 
@@ -41,13 +40,47 @@ export function EmployeePayslipPage() {
       .finally(() => setLoading(false));
   }, [loginId]);
 
-  const viewPayslip = () => {
+  const viewPayslip = async () => {
     if (!employeeId || !period) {
       setNotice({ type: "error", message: "Select employee and pay period" });
       return;
     }
+
+    if (period > bounds.max || period < bounds.min) {
+    setNotice({ type: "error", message: "Selected pay period is not available." });
+    return;
+    }
+
     const [year, month] = period.split("-");
-    navigate(`/workspace/ems/ems/activity/request/employee_payslip_view/${employeeId}/${month}/${year}`);
+
+    const preview = openPayslipReport("Employee Payslip");
+    const filename = `Payslip_${employeeId}_${month}_${year}`;
+    setLoading(true);
+    try {
+      const html = await getPayslipreport({ loginid: loginId, employeeId, month, year, embed: true });
+      if (!html.includes('id="payslip-content"')) {
+        setNotice({ type: "error", message: "No data found" });
+        preview.fail("No data found");  
+        return;
+      }
+      preview.ready({ html, filename, orientation: "portrait" });
+    } catch (error: any) {
+        const body = error?.response?.data;
+        let message = error instanceof Error ? error.message : "Unable to generate payslip.";
+
+        if (body && typeof body === "object" && body.message) {
+          message = body.message;
+        } else if (typeof body === "string" && body.trimStart().startsWith("{")) {
+          try { message = JSON.parse(body).message || message; } catch { /* keep default */ }
+        }
+
+        if (error?.response?.status === 404) message = "No data found";
+
+        setNotice({ type: "error", message });
+        preview.fail(message);
+      } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -103,7 +136,14 @@ export function EmployeePayslipPage() {
               value={period}
               min={bounds.min}
               max={bounds.max}
-              onChange={(event) => setPeriod(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value && value > bounds.max) {
+                  setNotice({ type: "error", message: "Current month's payslip is not available yet." });
+                  return;
+                }
+                setPeriod(value);
+              }}
               className="rounded-xl h-10 text-xs"
             />
           </label>
@@ -120,12 +160,20 @@ export function EmployeePayslipPage() {
           <ArrowRight size={14} />
         </button>
       </div>
+      <PayslipReportPreview />
     </section>
   );
 }
 
-function currentPeriod() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
+// function currentPeriod() {
+//   const now = new Date();
+//   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+// }
 
+
+// helper: previous month as "YYYY-MM" (handles January -> December of last year)
+function previousMonthPeriod() {
+  const now = new Date();
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+}

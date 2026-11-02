@@ -225,6 +225,27 @@ export async function processStockAdjustment(payload: ProcessStockAdjustmentPayl
 export async function confirmStockAdjustment(payload: ConfirmStockAdjustmentPayload) {
   return postWmsStockAdjustment("confirm-adj-detail", payload as unknown as Record<string, unknown>);
 }
+// In wms.ts
+
+export async function fetchHrDashboardData(params: {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  number1?: number;
+  number2?: number;
+}) {
+  // Point to the new API endpoint
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/hr/dashboard/summary", 
+    params
+  );
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load HR Dashboard data");
+  }
+  
+  return response.data.data || [];
+}
 
 /** GET all stock adjustment reports for the print dialog */
 export async function getAllStockAdjReports() {
@@ -974,6 +995,17 @@ export async function getInvocieDetailReport(prin_code: string, invoice_no: stri
     { responseType: "text" }
   );
   if (!response.data) throw new Error("Unable to fetch Invoice Detail Report");
+  return response.data;
+}
+// Add this new function next to your existing getInvocieDetailReport
+export async function getInvoiceDetailStandardReport(prin_code: string, invoice_no: string, company_code: string): Promise<string> {
+  // Assuming your Express route for the new standard report is "/api/wms/inbound/reports/invoice-report-standard"
+  // You will need to make sure this route is mapped in your backend routes file!
+  const response = await api.get(
+    `/api/wms/inbound/reports/invoice-report-standard?prin_code=${prin_code}&invoice_no=${invoice_no}&company_code=${company_code}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Standard Invoice Detail Report");
   return response.data;
 }
 

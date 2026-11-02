@@ -1,13 +1,17 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import {
+  ArrowLeft, FileText,
+  Save, Send, CheckCircle2, XCircle, Undo2, Printer,
+} from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsUpdateRatings } from "../../api/pams";
-import TaskDetailsAppraisalTab   from "./Taskdetailsappraisaltab";
+import TaskDetailsAppraisalTab from "./Taskdetailsappraisaltab";
 import TaskCharacterAppraisalTab from "./Taskcharacterappraisaltab";
-import TaskGoalAppraisalTab      from "./Taskgoalappraisaltab";
-import TaskSkillAppraisalTab     from "./Taskskillappraisaltab";
-import AppraiserCommentsTab      from "./Appraisercommentstab";
-import PerformanceReportDesign   from "./Performancereportdesign";
+import TaskGoalAppraisalTab from "./Taskgoalappraisaltab";
+import TaskSkillAppraisalTab from "./Taskskillappraisaltab";
+import AppraiserCommentsTab from "./Appraisercommentstab";
+import PerformanceReportDesign from "./Performancereportdesign";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -17,6 +21,8 @@ type Row = Record<string, unknown>;
 interface WeightageConfig {
   taskPct: number;
   charPct: number;
+  goalPct: number;
+  skillPct: number;
   isHrDefined: boolean;
 }
 
@@ -25,27 +31,37 @@ function text(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
 }
-
 function num(val: unknown): number {
   const n = Number(val);
   return isFinite(n) ? n : 0;
 }
 
-function calcFinalRating(taskTotal: number, charTotal: number, cfg: WeightageConfig): number {
-  if (taskTotal === 0 && charTotal === 0) return 0;
-  if (cfg.isHrDefined) {
-    return Math.round((taskTotal * cfg.taskPct) / 100 + (charTotal * cfg.charPct) / 100);
-  }
-  return Math.round((taskTotal + charTotal) / 2);
+function calcFinalRating(
+  taskTotal: number, charTotal: number, goalTotal: number, skillTotal: number,
+  cfg?: WeightageConfig
+): number | null {
+  const parts = [
+    { score: Number(taskTotal || 0),  pct: Number(cfg?.taskPct)  || 0 },
+    { score: Number(charTotal || 0),  pct: Number(cfg?.charPct)  || 0 },
+    { score: Number(goalTotal || 0),  pct: Number(cfg?.goalPct)  || 0 },
+    { score: Number(skillTotal || 0), pct: Number(cfg?.skillPct) || 0 },
+  ].filter((p) => p.score > 0);
+
+  if (parts.length === 0) return null;
+  const totalWt = parts.reduce((a, p) => a + p.pct, 0);
+  const raw = totalWt > 0
+    ? parts.reduce((a, p) => a + p.score * p.pct, 0) / totalWt
+    : parts.reduce((a, p) => a + p.score, 0) / parts.length;
+  return Math.round(raw);
 }
 
 function getRatingMeta(rating: number): { label: string; numColor: string; labelColor: string } {
-  if (rating === 5) return { label: "Exceptional",        numColor: "#16a34a", labelColor: "#16a34a" };
-  if (rating === 4) return { label: "Above Expectation", numColor: "#2563eb", labelColor: "#2563eb" };
-  if (rating === 3) return { label: "Meets Expectation", numColor: "#7c3aed", labelColor: "#7c3aed" };
-  if (rating === 2) return { label: "Below Expectation", numColor: "#d97706", labelColor: "#d97706" };
-  if (rating === 1) return { label: "Unsatisfactory",     numColor: "#dc2626", labelColor: "#dc2626" };
-  return             { label: "—",                        numColor: "#6b7280", labelColor: "#6b7280" };
+  if (rating >= 4.5) return { label: "Exceptional", numColor: "#16a34a", labelColor: "#16a34a" };
+  if (rating >= 3.5) return { label: "Above Expectation", numColor: "#2563eb", labelColor: "#2563eb" };
+  if (rating >= 2.5) return { label: "Meets Expectation", numColor: "#7c3aed", labelColor: "#7c3aed" };
+  if (rating >= 1.5) return { label: "Below Expectation", numColor: "#d97706", labelColor: "#d97706" };
+  if (rating >= 1) return { label: "Unsatisfactory", numColor: "#dc2626", labelColor: "#dc2626" };
+  return { label: "—", numColor: "#6b7280", labelColor: "#6b7280" };
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -55,16 +71,24 @@ const S = {
     padding: "12px",
     fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
-  header: {
+  headerBar: {
+    position: "relative" as const,
+    background: "linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%)",
+    borderRadius: "10px",
+    border: "1px solid #d8e3ff",
+    boxShadow: "0 2px 10px rgba(8,42,137,0.08)",
+    marginBottom: "10px",
+    overflow: "hidden" as const,
+  },
+  headerAccent: {
+    height: "3px",
+    background: "linear-gradient(90deg, #082A89 0%, #2563eb 45%, #38bdf8 100%)",
+  },
+  headerInner: {
     display: "flex" as const,
     alignItems: "center" as const,
     gap: "10px",
-    marginBottom: "10px",
     padding: "8px 14px",
-    borderRadius: "10px",
-    background: "#E8F0FF",
-    border: "1px solid #c7d9ff",
-    boxShadow: "0 2px 8px rgba(8,42,137,0.10)",
     minHeight: "52px",
     flexWrap: "wrap" as const,
   },
@@ -74,27 +98,29 @@ const S = {
     justifyContent: "center" as const,
     width: "30px",
     height: "30px",
-    borderRadius: "50%",
-    background: "rgba(8,42,137,0.10)",
-    border: "1.5px solid rgba(8,42,137,0.20)",
-    cursor: "pointer" as const,
+    borderRadius: "8px",
+    background: "#E8F0FF",
+    border: "1px solid #c7d9ff",
     color: "#082A89",
-    fontSize: "16px",
-    fontWeight: 700,
+    cursor: "pointer" as const,
     flexShrink: 0,
     transition: "background 0.15s",
   },
-  docTitle: {
-    fontSize: "0.85rem",
+  title: {
+    display: "inline-flex" as const,
+    alignItems: "center" as const,
+    gap: "6px",
+    fontSize: "0.9rem",
     fontWeight: 700,
     color: "#082A89",
-    flexShrink: 0,
     letterSpacing: "0.01em",
+    flexShrink: 0,
   },
+  titleIcon: { color: "#2563eb" },
   divider: {
     width: "1px",
-    height: "28px",
-    background: "rgba(8,42,137,0.20)",
+    height: "26px",
+    background: "rgba(8,42,137,0.25)",
     margin: "0 2px",
     flexShrink: 0,
   },
@@ -124,17 +150,39 @@ const S = {
     whiteSpace: "nowrap" as const,
     fontWeight: 500,
   },
-  ratingChipWrap: { marginLeft: "auto", flexShrink: 0 },
-  weightageInfo: {
+  viewOnlyBadge: {
     fontSize: "0.68rem",
-    fontWeight: 600,
-    color: "#082A89",
-    background: "rgba(8,42,137,0.08)",
-    border: "1px solid rgba(8,42,137,0.15)",
-    borderRadius: "6px",
-    padding: "3px 8px",
+    fontWeight: 700,
+    color: "#92400e",
+    background: "#fff4e5",
+    border: "1px solid #fcd38a",
+    padding: "2px 10px",
+    borderRadius: "999px",
     whiteSpace: "nowrap" as const,
     flexShrink: 0,
+  },
+  ratingChipWrap: { marginLeft: "10px", flexShrink: 0 },
+  actions: {
+    marginLeft: "auto",
+    display: "flex" as const,
+    alignItems: "center" as const,
+    gap: "8px",
+    flexWrap: "wrap" as const,
+  },
+  actionBtn: {
+    display: "inline-flex" as const,
+    alignItems: "center" as const,
+    gap: "6px",
+    padding: "7px 14px",
+    background: "#082A89",
+    color: "#fff",
+    border: "none",
+    borderRadius: "7px",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer" as const,
+    whiteSpace: "nowrap" as const,
+    transition: "background 0.18s, transform 0.1s",
   },
   tabBar: {
     background: "#f8fafc",
@@ -167,15 +215,6 @@ const S = {
     boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
     marginBottom: "10px",
   },
-  btnRow: {
-    display: "flex" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    gap: "8px",
-    flexWrap: "wrap" as const,
-    marginTop: "8px",
-  },
-  btnGroup: { display: "flex" as const, gap: "8px", flexWrap: "wrap" as const },
   solidBtn: (color = "#E8F0FF"): React.CSSProperties => ({
     display: "inline-flex",
     alignItems: "center",
@@ -260,51 +299,6 @@ const S = {
     justifyContent: "flex-end" as const,
     gap: "8px",
   },
-  reportModalOverlay: {
-    position: "fixed" as const,
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    display: "flex" as const,
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
-    zIndex: 10000,
-    padding: "20px",
-  },
-  reportModalContent: {
-    backgroundColor: "#fff",
-    borderRadius: "8px",
-    width: "90%",
-    maxWidth: "1200px",
-    height: "90%",
-    display: "flex" as const,
-    flexDirection: "column" as const,
-    overflow: "hidden" as const,
-  },
-  reportModalHeader: {
-    display: "flex" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    padding: "15px 20px",
-    borderBottom: "1px solid #e5e7eb",
-    backgroundColor: "#f8fafc",
-  },
-  reportModalBody: { flex: 1, overflow: "auto" as const, padding: "20px" },
-  reportModalFooter: {
-    padding: "15px 20px",
-    borderTop: "1px solid #e5e7eb",
-    display: "flex" as const,
-    justifyContent: "flex-end" as const,
-    gap: "10px",
-  },
-  closeModalBtn: {
-    background: "none",
-    border: "none",
-    fontSize: "24px",
-    cursor: "pointer" as const,
-    color: "#6b7280",
-    padding: "0 8px",
-    lineHeight: 1,
-  },
 };
 
 // ─── Final Rating Chip ────────────────────────────────────────────────────────
@@ -312,7 +306,9 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
   rating,
   weightageConfig,
 }) => {
-  const meta = getRatingMeta(rating);
+  const safeRating = Math.round(Number(rating || 0));
+  const meta = getRatingMeta(safeRating);
+
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: "6px",
@@ -323,49 +319,26 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
         Final Rating:
       </span>
       <span style={{ fontSize: "1.05rem", fontWeight: 800, color: meta.numColor, lineHeight: 1, minWidth: "14px", textAlign: "center" }}>
-        {rating}
+        {safeRating}
       </span>
       <span style={{ fontSize: "0.72rem", fontWeight: 700, color: meta.labelColor, borderLeft: "1px solid rgba(8,42,137,0.20)", paddingLeft: "8px", letterSpacing: "0.02em" }}>
         {meta.label}
       </span>
-      <span style={{ fontSize: "0.62rem", color: "#082A89", opacity: 0.55, borderLeft: "1px solid rgba(8,42,137,0.15)", paddingLeft: "8px" }}>
-        {weightageConfig.isHrDefined ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}%` : ""}
-      </span>
+      {/* <span style={{ fontSize: "0.62rem", color: "#082A89", opacity: 0.55, borderLeft: "1px solid rgba(8,42,137,0.15)", paddingLeft: "8px" }}>
+        {weightageConfig.isHrDefined
+          ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}% / G${weightageConfig.goalPct}% / S${weightageConfig.skillPct}%`
+          : ""}
+      </span> */}
     </div>
   );
 };
 
-// ─── Skeleton loader — tabs ke saath instant UI ───────────────────────────────
-const HeaderSkeleton: React.FC<{ docNo: string; employeeName: string; employeeCode: string }> = ({
-  docNo, employeeName, employeeCode,
-}) => (
-  <div style={S.header}>
-    <div style={{ ...S.backBtn, opacity: 0.4, cursor: "default" }}>←</div>
-    <span style={S.docTitle}>Appraisal: {docNo}</span>
-    <span style={S.divider} />
-    <div style={S.avatar}>
-      {(employeeName?.[0] ?? employeeCode?.[0] ?? "?").toUpperCase()}
-    </div>
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", minWidth: 0, flex: 1 }}>
-      <span style={S.empName}>{employeeName || employeeCode || "—"}</span>
-      {employeeCode && <span style={S.empId}>ID: {employeeCode}</span>}
-    </div>
-    {/* Rating chip placeholder */}
-    <div style={{
-      marginLeft: "auto", height: "30px", width: "160px",
-      borderRadius: "10px", background: "rgba(8,42,137,0.08)",
-      animation: "pulse 1.5s ease-in-out infinite",
-    }} />
-  </div>
-);
-
 // ─── Component ────────────────────────────────────────────────────────────────
 const AppraisalViewTabsPage: React.FC = () => {
-  const navigate       = useNavigate();
-  const location       = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  // ── Prefetched row from MyTaskPage navigate state ──────────────────────────
   const prefetchedRow = (location.state as { prefetchedRow?: Row } | null)?.prefetchedRow;
 
   const getDocNoFromPath = () => {
@@ -373,124 +346,131 @@ const AppraisalViewTabsPage: React.FC = () => {
     return match ? match[1] : "";
   };
 
-  const docNo        = getDocNoFromPath();
+  const docNo = getDocNoFromPath();
   const employeeCode = searchParams.get("employee_code") ?? "";
   const employeeName = searchParams.get("employee_name") ?? "";
-  const { user }    = useAuth();
-  const loginid     = user?.loginid || user?.username || "";
+  const sourceTab = (searchParams.get("source_tab") ?? "").toUpperCase();
+  const mode = (searchParams.get("mode") ?? "").toLowerCase(); // "view" | "edit"
+  const { user } = useAuth();
+  const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
-  const [selectedTab,    setSelectedTab]    = useState<SelectedTab>("task_details");
-  const [flowLevel,      setFlowLevel]      = useState<number>(
+
+  const [selectedTab, setSelectedTab] = useState<SelectedTab>("task_details");
+  const [flowLevel, setFlowLevel] = useState<number>(
     prefetchedRow ? num(prefetchedRow.FLOW_LEVEL_RUNNING) : 0
   );
-  const [finalApproved,  setFinalApproved]  = useState<string>(
+  const [finalApproved, setFinalApproved] = useState<string>(
     prefetchedRow ? (text(prefetchedRow.FINAL_APPROVED) || "NO") : "NO"
   );
-  // NEW: doc's creator — used to detect the "employee is their own HOD"
-  // self-rating case (CREATED_BY === EMPLOYEE_CODE). Backend's
-  // 'get_appraisal_flow_level' select must return CREATED_BY for this to work.
-  const [createdBy,      setCreatedBy]      = useState<string>(
+  const [createdBy, setCreatedBy] = useState<string>(
     prefetchedRow ? text(prefetchedRow.CREATED_BY) : ""
   );
-  const [taskTotal,      setTaskTotal]      = useState<number>(0);
+
+  // ─── Totals (all four categories) ───
+  const [taskTotal, setTaskTotal] = useState<number>(0);
   const [characterTotal, setCharacterTotal] = useState<number>(0);
-  const [sentBackPopup,  setSentBackPopup]  = useState(false);
-  const [sentBackLevel,  setSentBackLevel]  = useState("1");
+  const [goalTotal, setGoalTotal] = useState<number>(0);
+  const [skillTotal, setSkillTotal] = useState<number>(0);
+
+  const [sentBackPopup, setSentBackPopup] = useState(false);
+  const [sentBackLevel, setSentBackLevel] = useState("1");
   const [sentBackReason, setSentBackReason] = useState("");
   const [sentBackLevels, setSentBackLevels] = useState<Row[]>([]);
-  const [notice,         setNotice]         = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
-  // ── KEY CHANGE: prefetchedRow hai to loading=false se start karo ───────────
-  const [loading,        setLoading]        = useState(!prefetchedRow);
+  const [loading, setLoading] = useState(!prefetchedRow);
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
 
-  const [showReportModal,setShowReportModal]= useState(false);
-  const [userFlowLevel,  setUserFlowLevel]  = useState<number>(0);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
 
+  // ─── Default weightage (70/10/10/10) ───
   const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
-    taskPct: 50,
-    charPct: 50,
+    taskPct: 70,
+    charPct: 10,
+    goalPct: 10,
+    skillPct: 10,
     isHrDefined: false,
   });
 
-  // ── Refs ───────────────────────────────────────────────────────────────────
-  const taskRowsRef         = useRef<Row[]>([]);
-  const charRowsRef         = useRef<Row[]>([]);
-  const goalRowsRef         = useRef<Row[]>([]);
-  const skillRowsRef        = useRef<Row[]>([]);
+  const taskRowsRef = useRef<Row[]>([]);
+  const charRowsRef = useRef<Row[]>([]);
+  const goalRowsRef = useRef<Row[]>([]);
+  const skillRowsRef = useRef<Row[]>([]);
   const appraiserCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
   const appraiseeCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
-  const reportPrintRef      = useRef<HTMLDivElement>(null);
 
-  // ── Derived ────────────────────────────────────────────────────────────────
   const isFinalized = finalApproved === "YES";
-
-  // Employee is their own creator/HOD -> only Level 0 (their own self-rating
-  // fill) is a Draft/Submit step. From Level 1 onward (COO, CEO, HR) it's
-  // pure Approve/Sent Back/Reject, because Level 1's approver there is the
-  // COO, not a second rating step.
-  // Normal employee -> Level 0 (employee) and Level 1 (supervisor) are both
-  // Draft/Submit steps; Level 2 onward is Approve/Sent Back/Reject.
   const employeeIsHOD =
     !!createdBy && createdBy.trim().toUpperCase() === employeeCode.trim().toUpperCase();
 
+  // Read-only: view mode, ya Pending ke alawa kisi bhi tab se aaye ho.
+  // Read-only me koi edit / Save / Submit / Approve / Reject / Send Back nahi.
+  const isReadOnly =
+    mode === "view" || (sourceTab !== "" && sourceTab !== "PENDING");
+
+  const showActionButtons = !isReadOnly;
   const showSaveSubmitButtons =
-  !isFinalized && (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
-const showApproveRejectButtons =
-  !isFinalized && (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
+    showActionButtons && !isFinalized &&
+    (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
+  const showApproveRejectButtons =
+    showActionButtons && !isFinalized &&
+    (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
 
-  const finalRating              = calcFinalRating(taskTotal, characterTotal, weightageConfig);
-  const showFinalRating          = taskTotal > 0 && characterTotal > 0;
-  const [reportReady, setReportReady] = useState(false);
+  const finalRating = calcFinalRating(taskTotal, characterTotal, goalTotal, skillTotal, weightageConfig);
+  const showFinalRating = finalRating !== null;
 
-  // ── Fetch — prefetchedRow hai to background mein, nahi to blocking ─────────
+  // ── Fetch ──
   useEffect(() => {
     if (!docNo || !employeeCode) { setLoading(false); return; }
-
     const fetchInitialData = async () => {
-      if (!prefetchedRow) setLoading(true);
-      else setBackgroundRefreshing(true);
-
+      if (!prefetchedRow) setLoading(true); else setBackgroundRefreshing(true);
       try {
-        const [flowRes, levelRes, commentRes, historyRes, weightageRes] = await Promise.all([
-          pamsSelect({ parameter: "get_appraisal_flow_level",    loginid, code1: docNo }),
-          pamsSelect({ parameter: "sentback_levels",              loginid, code1: docNo }),
-          pamsSelect({ parameter: "appraisal_comments",           loginid, code1: docNo }),
+        const periodNumber = prefetchedRow ? text(prefetchedRow.PERIOD_NUMBER) : "";
+
+        const [flowRes, levelRes, commentRes, historyRes] = await Promise.all([
+          pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
+          pamsSelect({ parameter: "sentback_levels", loginid, code1: docNo }),
+          pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
           pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
-          pamsSelect({
-            parameter: "appraisal_weightage_active",
-            loginid,
-            code1: companyCode,
-            code2: "ALL",
-          }),
         ]);
 
-        let currentFlowLevel = 0;
-        let nextActionBy     = "";
+        const docPeriod = text(flowRes[0]?.PERIOD_NUMBER) || periodNumber;
+        const weightageRes = await pamsSelect({
+          parameter: "Trn_weightage", loginid, code1: companyCode, code2: docPeriod,
+        });
 
+        let currentFlowLevel = 0, nextActionBy = "";
         if (flowRes.length > 0) {
           currentFlowLevel = num(flowRes[0].FLOW_LEVEL_RUNNING);
-          nextActionBy     = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
+          nextActionBy = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
           setFlowLevel(currentFlowLevel);
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
           setCreatedBy(text(flowRes[0].CREATED_BY));
         }
 
         if (weightageRes.length > 0) {
-          const wRow = weightageRes[0];
-          setWeightageConfig({
-            taskPct:     num(wRow.TASK_PCT),
-            charPct:     num(wRow.CHARACTER_PCT),
-            isHrDefined: true,
-          });
-        } else {
-          setWeightageConfig({ taskPct: 50, charPct: 50, isHrDefined: false });
+          const w = weightageRes[0] as Row;
+          const taskPct = num(w.TASK_WEIGHTAGE);
+          const charPct = num(w.CHARACTER_WEIGHTAGE);
+          const goalPct = num(w.GOAL_WEIGHTAGE);
+          const skillPct = num(w.SKILL_WEIGHTAGE);
+          const sum = taskPct + charPct + goalPct + skillPct;
+
+          if (sum > 0) {
+            setWeightageConfig({
+              taskPct,
+              charPct,
+              goalPct,
+              skillPct,
+              isHrDefined: true,
+            });
+          }
         }
 
         const isMyTurn = nextActionBy === loginid.trim().toUpperCase();
-        if (isMyTurn) {
-          setUserFlowLevel(0);
-        } else {
+        if (isMyTurn) setUserFlowLevel(0);
+        else {
           const histRows = historyRes as Row[];
           const myAction = histRows.find(
             (h) => text(h.ACTION_BY).trim().toUpperCase() === loginid.trim().toUpperCase()
@@ -499,125 +479,99 @@ const showApproveRejectButtons =
         }
 
         setSentBackLevels(levelRes as Row[]);
-        if (levelRes.length > 0)
-          setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
+        if (levelRes.length > 0) setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
 
         if (commentRes.length > 0) {
-          appraiserCommentRef.current = { text: text(commentRes[0].APPRAISER_COMMENTS), level: num(commentRes[0].APPRAISER_COMMENT_LEVEL) };
-          appraiseeCommentRef.current = { text: text(commentRes[0].APPRAISEE_COMMENTS), level: num(commentRes[0].APPRAISEE_COMMENT_LEVEL) };
+          appraiserCommentRef.current = {
+            text: text(commentRes[0].APPRAISER_COMMENTS),
+            level: num(commentRes[0].APPRAISER_COMMENT_LEVEL),
+          };
+          appraiseeCommentRef.current = {
+            text: text(commentRes[0].APPRAISEE_COMMENTS),
+            level: num(commentRes[0].APPRAISEE_COMMENT_LEVEL),
+          };
         }
-        
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-        setBackgroundRefreshing(false);
-      }
+      } catch { /* silent */ }
+      finally { setLoading(false); setBackgroundRefreshing(false); }
     };
-
     void fetchInitialData();
-  }, [docNo, employeeCode, loginid, companyCode]); // prefetchedRow intentionally excluded
+  }, [docNo, employeeCode, loginid, companyCode]);
 
-  // ── Validation ─────────────────────────────────────────────────────────────
-  const validateBeforeSubmit = (): string[] => {
-  const missing: string[] = [];
-  
-  // 🔹 RATING VALIDATIONS
-  const emptyTask = taskRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-  if (emptyTask.length) missing.push(`Task Details — Rating missing for ${emptyTask.length} KPI(s)`);
-  
-  const emptyChar = charRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-  if (emptyChar.length) missing.push(`Characteristics — Rating missing for ${emptyChar.length} KPI(s)`);
-  
-  const emptyGoal = goalRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-  if (emptyGoal.length) missing.push(`Goals — Rating missing for ${emptyGoal.length} KPI(s)`);
-  
-  const emptySkill = skillRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-  if (emptySkill.length) missing.push(`Skill — Rating missing for ${emptySkill.length} KPI(s)`);
+  // ── Validation ──
+  const validateBeforeSubmit = async (): Promise<string[]> => {
+    const missing: string[] = [];
+    const emptyTask = taskRowsRef.current.filter(r => !r.RATING || Number(r.RATING) === 0);
+    if (emptyTask.length) missing.push(`Task Details — Rating missing for ${emptyTask.length} KPI(s)`);
+    const emptyChar = charRowsRef.current.filter(r => !r.RATING || Number(r.RATING) === 0);
+    if (emptyChar.length) missing.push(`Characteristics — Rating missing for ${emptyChar.length} KPI(s)`);
+    const emptyGoal = goalRowsRef.current.filter(r => !r.RATING || Number(r.RATING) === 0);
+    if (emptyGoal.length) missing.push(`Goals — Rating missing for ${emptyGoal.length} KPI(s)`);
+    const emptySkill = skillRowsRef.current.filter(r => !r.RATING || Number(r.RATING) === 0);
+    if (emptySkill.length) missing.push(`Skill — Rating missing for ${emptySkill.length} KPI(s)`);
 
-  // 🔹 COMMENT VALIDATION
-  const isEmployee = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
-  
-  if (isEmployee) {
-    // Self-rating: Appraisee comment required
-    if (!appraiseeCommentRef.current.text || !appraiseeCommentRef.current.text.trim()) {
-      missing.push("Comments — Appraisee comment is required");
-    }
-  } else {
-    // Appraiser: Appraiser comment required
-    if (!appraiserCommentRef.current.text || !appraiserCommentRef.current.text.trim()) {
-      missing.push("Comments — Appraiser comment is required");
-    }
-  }
-  
-  return missing;
-};
+    const isEmployee = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
+    let appraiseeComment = appraiseeCommentRef.current.text?.trim() || "";
+    let appraiserComment = appraiserCommentRef.current.text?.trim() || "";
+    try {
+      const commentLog = await pamsSelect<{ FLOW_LEVEL: number | string; COMMENT_TYPE: string; COMMENT_TEXT: string; COMMENT_DATE?: string; }>({
+        parameter: "get_appraisal_comments_log", loginid, code1: docNo,
+      });
+      const rows = commentLog || [];
+      const appraiseeRows = rows
+        .filter(r => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISEE" && String(r.FLOW_LEVEL) === "0")
+        .sort((a, b) => new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime());
+      const currentAppraiserLevel = appraiserCommentRef.current.level || flowLevel;
+      const appraiserRows = rows
+        .filter(r => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER" && String(r.FLOW_LEVEL) === String(currentAppraiserLevel))
+        .sort((a, b) => new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime());
+      if (!appraiseeComment && appraiseeRows.length > 0) {
+        appraiseeComment = String(appraiseeRows[0].COMMENT_TEXT || "").trim();
+        appraiseeCommentRef.current = { text: appraiseeComment, level: 0 };
+      }
+      if (!appraiserComment && appraiserRows.length > 0) {
+        appraiserComment = String(appraiserRows[0].COMMENT_TEXT || "").trim();
+        appraiserCommentRef.current = { text: appraiserComment, level: currentAppraiserLevel };
+      }
+    } catch (error) { console.error("Failed to load comments for validation:", error); }
 
-  // ── Action ─────────────────────────────────────────────────────────────────
+    if (isEmployee) { if (!appraiseeComment) missing.push("Comments — Appraisee comment is required"); }
+    else { if (!appraiserComment) missing.push("Comments — Appraiser comment is required"); }
+    return missing;
+  };
+
+  // ── Action ──
   const handleAction = async (action: "D" | "S" | "A" | "R") => {
-  setNotice(null);
-  try {
-    if (action === "D" || action === "S" || action === "A") {
-      const allRows = [
-        ...taskRowsRef.current,
-        ...charRowsRef.current,
-        ...goalRowsRef.current,
-        ...skillRowsRef.current,
-      ];
-      if (allRows.length > 0) await pamsUpdateRatings(allRows as Record<string, unknown>[]);
+    // Safety net: read-only me koi bhi action allow nahi
+    if (isReadOnly) return;
+    setNotice(null);
+    try {
+      if (action === "D" || action === "S" || action === "A") {
+        const allRows = [...taskRowsRef.current, ...charRowsRef.current, ...goalRowsRef.current, ...skillRowsRef.current];
+        if (allRows.length > 0) await pamsUpdateRatings(allRows as Record<string, unknown>[]);
 
-      // Comments ab bilkul alag, independent table mein save hote hain —
-      // status/flow update se koi relation nahi
-      if (appraiserCommentRef.current.text.trim()) {
-        await pamsSelect({
-          parameter: "save_appraisal_comment",
-          loginid,
-          code1: docNo,
-          code2: employeeCode,
-          code3: String(appraiserCommentRef.current.level),
-          code4: "APPRAISER",
-          code5: appraiserCommentRef.current.text.trim(),
-        });
+        const appraiserText = appraiserCommentRef.current.text?.trim() || "";
+        const appraiserLevel = Number(appraiserCommentRef.current.level || flowLevel || 0);
+        if (appraiserText) {
+          await pamsSelect({ parameter: "save_appraisal_comment", loginid, code1: docNo, code2: employeeCode, code3: String(appraiserLevel), code4: "APPRAISER", code5: appraiserText });
+        }
+        const appraiseeText = appraiseeCommentRef.current.text?.trim() || "";
+        if (appraiseeText) {
+          await pamsSelect({ parameter: "save_appraisal_comment", loginid, code1: docNo, code2: employeeCode, code3: "0", code4: "APPRAISEE", code5: appraiseeText });
+        }
       }
-      if (appraiseeCommentRef.current.text.trim()) {
-        await pamsSelect({
-          parameter: "save_appraisal_comment",
-          loginid,
-          code1: docNo,
-          code2: employeeCode,
-          code3: "0",
-          code4: "APPRAISEE",
-          code5: appraiseeCommentRef.current.text.trim(),
-        });
-      }
+      const ratingToSend = (action === "S" || action === "A" || action === "D") ? (finalRating ?? 0) : 0;
+      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: action, code4: "", number1: ratingToSend });
+      const msg = action === "D" ? "Saved as draft" : action === "S" ? "Submitted successfully" : action === "A" ? "Approved successfully" : "Rejected successfully";
+      setNotice({ type: "success", message: msg });
+      setTimeout(() => navigate(-1), 900);
+    } catch (err: unknown) {
+      console.error("handleAction error:", err);
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
     }
+  };
 
-    const ratingToSend = (action === "S" || action === "A" || action === "D") ? finalRating : 0;
-
-    await pamsSelect({
-      parameter: "update_appraisal_status",
-      loginid,
-      code1: docNo,
-      code2: employeeCode,
-      code3: action,
-      code4: "",
-      number1: ratingToSend,
-    });
-
-    const msg =
-      action === "D" ? "Saved as draft" :
-      action === "S" ? "Submitted successfully" :
-      action === "A" ? "Approved successfully" :
-                       "Rejected successfully";
-    setNotice({ type: "success", message: msg });
-    setTimeout(() => navigate(-1), 900);
-  } catch (err: unknown) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
-  }
-};
-
-  // ── Sent Back ──────────────────────────────────────────────────────────────
   const handleSentBack = async () => {
+    if (isReadOnly) return;
     if (!sentBackReason.trim()) {
       setNotice({ type: "warning", message: "Please enter a reason for sending back!" });
       return;
@@ -625,43 +579,21 @@ const showApproveRejectButtons =
     try {
       await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: "SB", code4: `${sentBackLevel}~${sentBackReason.trim()}` });
       setNotice({ type: "success", message: "Appraisal sent back successfully" });
-      setSentBackPopup(false);
-      setSentBackReason("");
-      setSentBackLevel("1");
+      setSentBackPopup(false); setSentBackReason(""); setSentBackLevel("1");
       setTimeout(() => navigate(-1), 900);
     } catch (err: unknown) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
     }
   };
 
-  // ── Print ──────────────────────────────────────────────────────────────────
-  const handlePrintReport = () => {
-    if (!reportReady || !reportPrintRef.current) return; 
-    const fileName = `Performance-Report-${docNo}-${new Date().toISOString().slice(0, 10)}`;
-    const printStyles = `
-      @page { size: A4 portrait; margin: 10mm 8mm; }
-      * { box-sizing: border-box; }
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-        margin: 0; padding: 0;
-        font-family: Arial, sans-serif;
-        background: #fff;
-      }
-      thead { display: table-header-group; }
-    `;
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(
-      `<!DOCTYPE html><html><head><title>${fileName}</title><style>${printStyles}</style></head><body>${reportPrintRef.current.outerHTML}</body></html>`
-    );
-    win.document.close();
-    win.focus();
-    win.print();
-    win.close();
-  };
+  const handleAppraiserCommentChange = useCallback((val: string, level: number) => {
+    appraiserCommentRef.current = { text: val, level };
+  }, []);
+  const handleAppraiseeCommentChange = useCallback((val: string, level: number) => {
+    appraiseeCommentRef.current = { text: val, level };
+  }, []);
+  const handleReportClose = useCallback(() => setShowReportModal(false), []);
 
-  // ── Full-page loading — sirf tab jab prefetchedRow nahi hai ───────────────
   if (loading) {
     return (
       <div style={S.container}>
@@ -672,67 +604,151 @@ const showApproveRejectButtons =
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div style={S.container}>
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-      `}</style>
+      <style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }`}</style>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {backgroundRefreshing && (
-        <div style={{
-          position: "fixed", top: "12px", right: "16px", zIndex: 9998,
-          background: "#082A89", color: "#fff",
-          fontSize: "11px", fontWeight: 600,
-          padding: "4px 10px", borderRadius: "20px",
-          opacity: 0.85,
-        }}>
+        <div style={{ position: "fixed", top: "12px", right: "16px", zIndex: 9998, background: "#082A89", color: "#fff", fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "20px", opacity: 0.85 }}>
           Refreshing...
         </div>
       )}
-      <div style={S.header}>
-        <button
-          style={S.backBtn}
-          onClick={() => navigate(-1)}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(8,42,137,0.18)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(8,42,137,0.10)"; }}
-          title="Go back"
-        >
-          ←
-        </button>
 
-        <span style={S.docTitle}>Appraisal: {docNo}</span>
-        <span style={S.divider} />
+      {/* ═══════ HEADER ═══════ */}
+      <div style={S.headerBar}>
+        <div style={S.headerAccent} />
+        <div style={S.headerInner}>
+          <button
+            style={S.backBtn}
+            onClick={() => navigate(-1)}
+            onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+            title="Go back"
+          >
+            <ArrowLeft size={16} />
+          </button>
 
-        <div style={S.avatar}>
-          {(employeeName?.[0] ?? employeeCode?.[0] ?? "?").toUpperCase()}
-        </div>
+          <div style={S.title}>
+            <FileText size={16} style={S.titleIcon} />
+            <span>Appraisal: {docNo}</span>
+          </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", minWidth: 0, flex: 1 }}>
+          <span style={S.divider} />
+
+          <div style={S.avatar}>
+            {(employeeName?.[0] ?? employeeCode?.[0] ?? "?").toUpperCase()}
+          </div>
+
           <span style={S.empName}>{employeeName || employeeCode || "—"}</span>
           {employeeCode && <span style={S.empId}>ID: {employeeCode}</span>}
-        </div>
 
-        {showFinalRating && (
-          <div style={S.ratingChipWrap}>
-            <RatingChip rating={finalRating} weightageConfig={weightageConfig} />
+          {mode === "view" && <span style={S.viewOnlyBadge}>View only</span>}
+
+          {showFinalRating && (
+            <div style={S.ratingChipWrap}>
+              <RatingChip rating={finalRating ?? 0} weightageConfig={weightageConfig} />
+            </div>
+          )}
+
+          <div style={S.actions}>
+            {showSaveSubmitButtons && (
+              <>
+                <button
+                  style={S.actionBtn}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
+                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                  onClick={() => void handleAction("D")}
+                >
+                  <Save size={13} /> Save Draft
+                </button>
+                <button
+                  style={S.actionBtn}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
+                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                  onClick={async () => {
+                    try {
+                      setNotice(null);
+                      const missing = await validateBeforeSubmit();
+                      if (missing.length > 0) {
+                        setNotice({ type: "warning", message: `Please fill before submitting: ` + missing.join(" | ") });
+                        return;
+                      }
+                      await handleAction("S");
+                    } catch (error) {
+                      console.error("Submit validation error:", error);
+                      setNotice({ type: "error", message: "Unable to validate appraisal comments. Please try again." });
+                    }
+                  }}
+                >
+                  <Send size={13} /> Submit
+                </button>
+              </>
+            )}
+
+            {showApproveRejectButtons && (
+              <>
+                <button
+                  style={S.actionBtn}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
+                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                  onClick={() => void handleAction("A")}
+                >
+                  <CheckCircle2 size={13} /> Approve
+                </button>
+                <button
+                  style={S.actionBtn}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
+                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                  onClick={() => void handleAction("R")}
+                >
+                  <XCircle size={13} /> Reject
+                </button>
+                <button
+                  style={S.actionBtn}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
+                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                  onClick={() => setSentBackPopup(true)}
+                >
+                  <Undo2 size={13} /> Send Back
+                </button>
+              </>
+            )}
+
+            <button
+              style={S.actionBtn}
+              onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
+              onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
+              onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+              onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+              onClick={() => setShowReportModal(true)}
+            >
+              <Printer size={13} /> Print
+            </button>
           </div>
-        )}
+        </div>
       </div>
 
+      {/* ═══════ TABS + PANEL ═══════ */}
       <div style={S.tabBar}>
         {(
           [
-            { value: "task_details",    label: "Task Details" },
+            { value: "task_details", label: "Task Details" },
             { value: "characteristics", label: "Characteristics" },
-            { value: "goals",           label: "Goals" },
-            { value: "skill",           label: "Skill" },
-            { value: "comments",        label: "Appraiser Comments" },
+            { value: "goals", label: "Goals" },
+            { value: "skill", label: "Skill" },
+            { value: "comments", label: "Appraiser Comments" },
           ] as { value: SelectedTab; label: string }[]
         ).map(({ value, label }) => (
           <button key={value} style={S.tab(selectedTab === value)} onClick={() => setSelectedTab(value)}>
@@ -742,144 +758,69 @@ const showApproveRejectButtons =
       </div>
 
       <div style={S.panel}>
-        <div style={{ display: selectedTab === "task_details"    ? "block" : "none" }}>
-          <TaskDetailsAppraisalTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "task_details"}
-            onRowsChange={(rows) => { taskRowsRef.current = rows; }}
-            onGrandTotalChange={(total) => setTaskTotal(total)}
-          />
-        </div>
-        <div style={{ display: selectedTab === "characteristics" ? "block" : "none" }}>
-          <TaskCharacterAppraisalTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "characteristics"}
-            onRowsChange={(rows) => { charRowsRef.current = rows; }}
-            onGrandTotalChange={(total) => setCharacterTotal(total)}
-          />
-        </div>
-        <div style={{ display: selectedTab === "goals"           ? "block" : "none" }}>
-          <TaskGoalAppraisalTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "goals"}
-            onRowsChange={(rows) => { goalRowsRef.current = rows; }}
-          />
-        </div>
-        <div style={{ display: selectedTab === "skill"           ? "block" : "none" }}>
-          <TaskSkillAppraisalTab
-            docNo={docNo} employeeCode={employeeCode}
-            isVisible={selectedTab === "skill"}
-            onRowsChange={(rows) => { skillRowsRef.current = rows; }}
-          />
-        </div>
-        <div style={{ display: selectedTab === "comments"        ? "block" : "none" }}>
-          <AppraiserCommentsTab
-  docNo={docNo}
-  employeeCode={employeeCode}
-  isVisible={selectedTab === "comments"}
-  taskTotal={taskTotal}
-  characterTotal={characterTotal}
-  flowLevel={flowLevel}
-  userFlowLevel={userFlowLevel}
-  weightageConfig={weightageConfig}
-  showAllComments={true} 
-  onAppraiserCommentChange={(val, level) => { appraiserCommentRef.current = { text: val, level }; }}
-  onAppraiseeCommentChange={(val, level) => { appraiseeCommentRef.current = { text: val, level }; }}
-/>
-        </div>
-      </div>
-
-      <div style={S.btnRow}>
-        <div style={S.btnGroup}>
-          {showSaveSubmitButtons && (
-            <>
-              <button
-                style={S.solidBtn()}
-                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                onClick={() => void handleAction("D")}
-              >
-                💾 Save as Draft
-              </button>
-              <button
-                style={S.solidBtn()}
-                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                onClick={() => {
-                  const missing = validateBeforeSubmit();
-                   console.log("SUBMIT BLOCKED BY:", missing); 
-                  if (missing.length > 0) {
-                    setNotice({ type: "warning", message: `Please fill before submitting: ${missing.join(" | ")}` });
-                    return;
-                  }
-                  void handleAction("S");
-                }}
-              >
-                ➤ Submit
-              </button>
-            </>
-          )}
-          {showApproveRejectButtons && (
-            <>
-              <button
-                style={S.solidBtn("#E8F0FF")}
-                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                onClick={() => void handleAction("A")}
-              >✔️ Approve</button>
-              <button
-                style={S.solidBtn("#E8F0FF")}
-                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                onClick={() => void handleAction("R")}
-              >✗ Reject</button>
-              <button
-                style={S.solidBtn("#E8F0FF")}
-                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                onClick={() => setSentBackPopup(true)}
-              >↩ Send Back</button>
-            </>
-          )}
-        </div>
-        <div style={S.btnGroup}>
-          <button
-            style={S.solidBtn("#E8F0FF")}
-            onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-            onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-            onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-            onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-            onClick={() => { setReportReady(false); setShowReportModal(true); }}
-          >🖨️ Print</button>
-          <button
-            style={S.solidBtn("#E8F0FF")}
-            onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-            onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-            onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-            onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-            onClick={() => navigate(-1)}
-          >🚪 Exit</button>
-        </div>
+        {/* disabled fieldset: read-only me andar ke saare input/select/textarea/button lock ho jate hain */}
+        <fieldset
+          disabled={isReadOnly}
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+        >
+          <div style={{ display: selectedTab === "task_details" ? "block" : "none" }}>
+            <TaskDetailsAppraisalTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "task_details"}
+              onRowsChange={rows => { taskRowsRef.current = rows; }}
+              onGrandTotalChange={total => setTaskTotal(total)}
+            />
+          </div>
+          <div style={{ display: selectedTab === "characteristics" ? "block" : "none" }}>
+            <TaskCharacterAppraisalTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "characteristics"}
+              onRowsChange={rows => { charRowsRef.current = rows; }}
+              onGrandTotalChange={total => setCharacterTotal(total)}
+            />
+          </div>
+          <div style={{ display: selectedTab === "goals" ? "block" : "none" }}>
+            <TaskGoalAppraisalTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "goals"}
+              onRowsChange={rows => { goalRowsRef.current = rows; }}
+              onGrandTotalChange={total => setGoalTotal(total)}
+            />
+          </div>
+          <div style={{ display: selectedTab === "skill" ? "block" : "none" }}>
+            <TaskSkillAppraisalTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "skill"}
+              onRowsChange={rows => { skillRowsRef.current = rows; }}
+              onGrandTotalChange={total => setSkillTotal(total)}
+            />
+          </div>
+          <div style={{ display: selectedTab === "comments" ? "block" : "none" }}>
+            <AppraiserCommentsTab
+              docNo={docNo} employeeCode={employeeCode}
+              isVisible={selectedTab === "comments"}
+              taskTotal={taskTotal}
+              characterTotal={characterTotal}
+              goalTotal={goalTotal}
+              skillTotal={skillTotal}
+              flowLevel={flowLevel} userFlowLevel={userFlowLevel}
+              weightageConfig={weightageConfig}
+              showAllComments={true}
+              onAppraiserCommentChange={handleAppraiserCommentChange}
+              onAppraiseeCommentChange={handleAppraiseeCommentChange}
+            />
+          </div>
+        </fieldset>
       </div>
 
       {/* ── Sent Back Modal ── */}
       {sentBackPopup && (
         <div style={S.overlay} onClick={() => setSentBackPopup(false)}>
-          <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+          <div style={S.modal} onClick={e => e.stopPropagation()}>
             <div style={S.modalTitle}>Send Back Appraisal</div>
             <div>
               <label style={S.label}>Send Back To Level</label>
-              <select style={S.select} value={sentBackLevel} onChange={(e) => setSentBackLevel(e.target.value)}>
+              <select style={S.select} value={sentBackLevel} onChange={e => setSentBackLevel(e.target.value)}>
                 {sentBackLevels.length === 0 ? (
                   <option value="1">Level 1</option>
                 ) : (
@@ -896,7 +837,7 @@ const showApproveRejectButtons =
               <textarea
                 style={S.textarea}
                 value={sentBackReason}
-                onChange={(e) => setSentBackReason(e.target.value)}
+                onChange={e => setSentBackReason(e.target.value)}
                 placeholder="Enter reason for sending back..."
               />
             </div>
@@ -908,42 +849,14 @@ const showApproveRejectButtons =
         </div>
       )}
 
-      {/* ── Report Modal ── */}
       {showReportModal && (
-        <div style={S.reportModalOverlay} onClick={() => setShowReportModal(false)}>
-          <div style={S.reportModalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={S.reportModalHeader}>
-              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#082A89" }}>
-                Performance Report — {docNo}
-              </h3>
-              <button
-                style={S.closeModalBtn}
-                onClick={() => setShowReportModal(false)}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#082A89"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6b7280"; }}
-              >
-                ×
-              </button>
-            </div>
-            <div style={S.reportModalBody}>
-              <PerformanceReportDesign
-                required_values={{
-                  doc_no:        docNo ?? "",
-                  employee_code: employeeCode,
-                  company_code:  "BSG",
-                }}
-                printRef={reportPrintRef}
-                onReady={setReportReady}
-              />
-            </div>
-            <div style={S.reportModalFooter}>
-              <button style={S.outlineBtn} onClick={() => setShowReportModal(false)}>Close</button>
-              <button style={S.solidBtn()} onClick={handlePrintReport}>🖨️ Print Report</button>
-            </div>
-          </div>
-        </div>
+        <PerformanceReportDesign
+          required_values={{ doc_no: docNo ?? "", employee_code: employeeCode, company_code: "BSG" }}
+          onClose={handleReportClose}
+        />
       )}
     </div>
   );
 };
+
 export default AppraisalViewTabsPage;

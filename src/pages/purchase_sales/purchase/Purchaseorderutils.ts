@@ -110,7 +110,6 @@
 //     tx_compntcat_code_1: editor?.mode === "edit" ? editor.row.tx_compntcat_code_1 || "" : "",
 //     tax_code_name: editor?.mode === "edit" ? editor.row.tax_code_name || "" : "",
 //     tx_cat_name: editor?.mode === "edit" ? editor.row.tx_cat_name || "" : "",
-//     // expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0] : EXPENSE_AC_OPTIONS[0],
 //     expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0].value : EXPENSE_AC_OPTIONS[0].value,
 //     print_on_letterhead: editor?.mode === "edit" ? editor.row.print_on_letterhead || "N" : "N",
 //     project_name: editor?.mode === "edit" ? editor.row.project_name || "" : "",
@@ -172,7 +171,13 @@
 //       qty_luom: numberOrZero(row.qty_luom),
 //       unit_price: numberOrZero(row.unit_price),
 //       disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
-//       disc_percent: numberOrZero(row.disc_percent),
+//       // disc_percent: numberOrZero(row.disc_percent),
+//       // disc_price: numberOrZero(row.disc_price),
+//       disc_percent: (() => {
+//         const gross = numberOrZero(row.unit_price) * numberOrZero(row.quantity);
+//         const dp = numberOrZero(row.disc_price);
+//         return gross > 0 && dp > 0 ? (dp / gross) * 100 : numberOrZero(row.disc_percent);
+//       })(),
 //       disc_price: numberOrZero(row.disc_price),
 //       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
 //       tax_amount: numberOrZero(row.tax_amount),
@@ -190,7 +195,6 @@
 //       tx_compnt_amt_1: numberOrZero(row.tx_compnt_amt_1),
 //       tx_compnt_1_expmt: text(row.tx_compnt_1_expmt),
 
-//       // GRN-side (po_*) — used by PurchaseGrnDetailsTable
 //       po_prod_code: text(row.po_prod_code),
 //       po_prod_name: text(row.po_prod_name),
 //       po_p_uom: text(row.po_p_uom),
@@ -201,7 +205,6 @@
 //       po_unit_price: numberOrZero(row.po_unit_price),
 //       po_div_code: text(row.po_div_code),
 
-//       // PO-order-reference side (porder_*) — used by PurchaseInvoiceLinesTable
 //       porder_prod_code: text(row.porder_prod_code),
 //       porder_prod_name: text(row.porder_prod_name),
 //       porder_div_code: text(row.porder_div_code),
@@ -217,7 +220,6 @@
 //       porder_required_dt: toDateInputValue(row.porder_required_dt) || "",
 //       porder_tx_cat_code: text(row.porder_tx_cat_code),
 //       porder_tx_cat_name: text(row.porder_tx_cat_name),
-//       porder_tx_compntcat_code_1: text(row.porder_tx_compntcat_code_1),
 //       porder_tx_compntcat_name_1: text(row.porder_tx_compntcat_name_1),
 //       porder_tx_compnt_perc_1: numberOrZero(row.porder_tx_compnt_perc_1),
 //       porder_tx_compnt_amt_1: numberOrZero(row.porder_tx_compnt_amt_1),
@@ -260,6 +262,7 @@
 //     buyer: form.buyer,
 //     wo_number: form.wo_number,
 //     tx_compnt_1_expmt: form.tx_compnt_1_expmt,
+//     tx_compnt_perc_1: numberOrZero(form.tx_compnt_perc_1),
 //     curr_code: form.curr_code,
 //     curr_name: form.curr_name,
 //     ex_rate: form.ex_rate,
@@ -327,7 +330,9 @@
 //     pi_pr_no: form.po_pr_no,
 //     pi_scope_of_work: form.po_scope_of_work,
 //     pi_ref_doc_no: form.grn_doc_no,
-//     discount_scoope:form.discount_scoope||"ITEM"
+//     discount_scoope: form.discount_scoope || "ITEM",
+//     pr_req_no: form.pr_req_no,
+//     job_card_no: form.job_card_no
 
 //   };
 // }
@@ -370,14 +375,6 @@
 //   return isSamePoUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 // }
 
-
-// // Gross amount = unit price * quantity (no discount applied yet)
-
-
-
-// // Total discount for the whole line (was missing * quantity before)
-
-
 // export function amountBeforeDiscPrice(row: PurchaseOrderLineRow) {
 //   return row.unit_price * computeQuantity(row);
 // }
@@ -417,8 +414,6 @@
 //   return finalPORate(row) * computeQuantity(row);
 // }
 
-
-// // Net = gross - discount (single subtraction, no double-counting)
 // export function lineNetAmount(row: PurchaseOrderLineRow) {
 //   return lineAmount(row);
 // }
@@ -434,7 +429,6 @@
 //   return lineNetAmount(row) * ((row.tx_compnt_perc_1 ?? 0) / 100);
 // }
 
-// // Lcurr = net amount converted at ex_rate (was net * finalRate * ex_rate — double rate applied)
 // export function lineLcurrAmount(row: PurchaseOrderLineRow, ex_rate?: number) {
 //   return lineNetAmount(row) * (ex_rate || 1);
 // }
@@ -467,31 +461,18 @@
 //   }, 0);
 // }
 
-// // export function DiscAmountPercentage(
-// //   form: PurchaseOrderForm,
-// //   rows: PurchaseOrderLineRow[]
-// // ) {
-// //   if (Number(form.disc_hdr_price) > 0) {
-// //     const total = TotalUnitPrice(rows);
-
-// //     if (total === 0) return 0;
-
-// //     const percentage =
-// //       (Number(form.disc_hdr_price) / total) * 100;
-
-// //     // Keep only 3 decimal digits, without rounding
-// //     return Math.trunc(percentage * 1000) / 1000;
-// //   }
-
-// //   return Math.trunc(Number(form.disc_hdr_percent || 0) * 1000) / 1000;
-// // }
-
 // export function DiscAmountPercentage(
 //   form: PurchaseOrderForm,
 //   rows: PurchaseOrderLineRow[]
 // ) {
+//   // Must match the same default used everywhere else this field is read
+//   // (PurchaseOrderHeaderForm, PurchaseOrderLinesTable) or this falls into
+//   // the "Entire PO" branch whenever discount_scoope hasn't been explicitly
+//   // set yet, silently ignoring the per-line discounts.
+//   const discountScope = form.discount_scoope || "ITEM";
+
 //   // Individual Items
-//   if (form.discount_scoope === "ITEM") {
+//   if (discountScope === "ITEM") {
 //     const total = TotalUnitPrice(rows);
 //     const discountAmount = TotalDiscAmount(rows);
 
@@ -531,7 +512,6 @@
 //   return total;
 // }
 
-// // buildDetailsPayload — use computed values instead of stale row.qty / row.lcur_amount
 // export function buildDetailsPayload(
 //   rows: PurchaseOrderLineRow[],
 //   ex_rate?: number,
@@ -578,7 +558,7 @@
 //     lcur_amount_disc: LcurrDisAmount(row),
 
 //     tx_compnt_amt_1: lineTaxAmount(row),
-//     tx_compnt_perc_1: row.tx_compnt_perc_1,
+//     tx_compnt_perc_1: numberOrZero(row.tx_compnt_perc_1),
 //     tx_compnt_1_expmt: row.tx_compnt_1_expmt,
 
 //     po_p_uom: row.po_p_uom,
@@ -606,7 +586,11 @@
 // ) {
 //   return upsertBulkPurchaseEntryApi(
 //     {
-//       header: buildHeaderPayload(form, companyCode, loginid, docType, rows),
+//       header: {
+//         ...buildHeaderPayload(form, companyCode, loginid, docType, rows),
+//         // When the action is CANCELED, tell the backend the document is cancelled.
+//         cancelled: status === "CANCELED" ? "Y" : form.canceled || "N",
+//       },
 //       details: buildDetailsPayload(rows, form.ex_rate),
 
 //       company_code: companyCode || "",
@@ -778,6 +762,19 @@ export async function fetchPurchaseOrderDetail(
 
   return (rows || []).map((raw) => {
     const row = lowerRecord(raw as Record<string, unknown>);
+
+    // FIX 1: the DB stores disc_percent rounded (e.g. 2.381) but disc_price exact
+    // (e.g. 35.714286). Rebuild the percent from the exact disc_price so the
+    // discount does not drift after save (40.000 -> 39.984).
+    const grossAmount =
+      numberOrZero(row.unit_price) *
+      (numberOrZero(row.quantity) ||
+        numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom));
+    const exactDiscPercent =
+      grossAmount > 0 && numberOrZero(row.disc_price) > 0
+        ? (numberOrZero(row.disc_price) / grossAmount) * 100
+        : numberOrZero(row.disc_percent);
+
     return {
       id: newId(),
       div_code: text(row.div_code),
@@ -790,7 +787,7 @@ export async function fetchPurchaseOrderDetail(
       qty_luom: numberOrZero(row.qty_luom),
       unit_price: numberOrZero(row.unit_price),
       disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
-      disc_percent: numberOrZero(row.disc_percent),
+      disc_percent: exactDiscPercent,
       disc_price: numberOrZero(row.disc_price),
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
       tax_amount: numberOrZero(row.tax_amount),
@@ -833,7 +830,6 @@ export async function fetchPurchaseOrderDetail(
       porder_required_dt: toDateInputValue(row.porder_required_dt) || "",
       porder_tx_cat_code: text(row.porder_tx_cat_code),
       porder_tx_cat_name: text(row.porder_tx_cat_name),
-      porder_tx_compntcat_code_1: text(row.porder_tx_compntcat_code_1),
       porder_tx_compntcat_name_1: text(row.porder_tx_compntcat_name_1),
       porder_tx_compnt_perc_1: numberOrZero(row.porder_tx_compnt_perc_1),
       porder_tx_compnt_amt_1: numberOrZero(row.porder_tx_compnt_amt_1),
@@ -876,6 +872,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     buyer: form.buyer,
     wo_number: form.wo_number,
     tx_compnt_1_expmt: form.tx_compnt_1_expmt,
+    tx_compnt_perc_1: numberOrZero(form.tx_compnt_perc_1),
     curr_code: form.curr_code,
     curr_name: form.curr_name,
     ex_rate: form.ex_rate,
@@ -943,7 +940,9 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     pi_pr_no: form.po_pr_no,
     pi_scope_of_work: form.po_scope_of_work,
     pi_ref_doc_no: form.grn_doc_no,
-    discount_scoope:form.discount_scoope||"ITEM"
+    discount_scoope:form.discount_scoope||"ITEM",
+    pr_req_no: form.pr_req_no,
+    job_card_no: form.job_card_no
 
   };
 }
@@ -1082,6 +1081,9 @@ export function DiscAmountPercentage(
   // set yet, silently ignoring the per-line discounts.
   const discountScope = form.discount_scoope || "ITEM";
 
+  // FIX 2: no truncation. Math.trunc(x * 1000) / 1000 turned 2.38095 into 2.380,
+  // which is one of the places the discount percent lost precision.
+
   // Individual Items
   if (discountScope === "ITEM") {
     const total = TotalUnitPrice(rows);
@@ -1089,9 +1091,7 @@ export function DiscAmountPercentage(
 
     if (total === 0) return 0;
 
-    const percentage = (discountAmount / total) * 100;
-
-    return Math.trunc(percentage * 1000) / 1000;
+    return (discountAmount / total) * 100;
   }
 
   // Entire PO
@@ -1100,15 +1100,10 @@ export function DiscAmountPercentage(
 
     if (total === 0) return 0;
 
-    const percentage =
-      (Number(form.disc_hdr_price) / total) * 100;
-
-    return Math.trunc(percentage * 1000) / 1000;
+    return (Number(form.disc_hdr_price) / total) * 100;
   }
 
-  return Math.trunc(
-    Number(form.disc_hdr_percent || 0) * 1000
-  ) / 1000;
+  return Number(form.disc_hdr_percent || 0);
 }
 
 export function DiscAmount(row: PurchaseOrderLineRow) {
@@ -1147,7 +1142,8 @@ export function buildDetailsPayload(
     disc_hdr_price: lineDiscPrice(row),
 
     disc_percent: numberOrZero(row.disc_percent),
-    disc_price: numberOrZero(row.disc_price),
+    // FIX 3: always send the exact discount (amount x percent), same value the footer uses
+    disc_price: DiscAmount(row),
 
     net_amount: lineNetAmount(row),
 
@@ -1197,7 +1193,11 @@ export async function runWorkflow(
 ) {
   return upsertBulkPurchaseEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode, loginid, docType, rows),
+      header: {
+        ...buildHeaderPayload(form, companyCode, loginid, docType, rows),
+        // When the action is CANCELED, tell the backend the document is cancelled.
+        cancelled: status === "CANCELED" ? "Y" : form.canceled || "N",
+      },
       details: buildDetailsPayload(rows, form.ex_rate),
 
       company_code: companyCode || "",

@@ -7,7 +7,32 @@ import { EXPENSE_AC_OPTIONS, PODocType, PurchaseOrderForm } from "./Purchaseorde
 import { numberOrZero, text } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
+import { FileText, Percent } from "lucide-react";
 
+
+function HeaderBlock({
+    label,
+    icon,
+    children,
+    gridCols = "grid-cols-4",
+}: {
+    label: string;
+    icon: ReactNode;
+    children: ReactNode;
+    gridCols?: string;
+}) {
+    return (
+        <div className="finance-payment-header-block">
+            <div className="finance-section-title">
+                <span className="finance-section-icon">{icon}</span>
+                <span>{label}</span>
+            </div>
+            <div className={`grid gap-x-1 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
+                {children}
+            </div>
+        </div>
+    );
+}
 function CompactSection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
     return (
         <div className={`border-t px-3 py-1.5 first:border-t-0 ${className || ""}`}>
@@ -24,7 +49,7 @@ function CField({ label, required, className, children }: { label: string; requi
         <label className={`field ${className || ""}`}>
             <span className="text-[10px]   font-semibold">
                 {label}
-                {required && <span className="ml-1 text-destructive">*</span>}
+               {required && <span className="ml-1 text-red-500">*</span>}
             </span>
             {children}
         </label>
@@ -57,18 +82,16 @@ export function PurchaseGrnHeaderForm({
     const loginIdOrAdmin = loginid || "ADMIN";
 
     return (
-        <div className="rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
-                <div>
-                    <p className="eyebrow m-0 text-[10px] leading-tight">Header</p>
-                    <h3 className="m-0 text-xs font-semibold leading-tight"></h3>
-                </div>
-            </div>
-
-            <CompactSection label="Document & Party">
-                <div className="col-span-2">
+       <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+            {/* HEADER SECTION - HEIGHT UNCHANGED */}
+         
+ <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 p-2 items-start">
+       <div className="flex flex-col gap-2">
+        <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
+                <div className="col-span-3">
                     <LookupField
-                        label="A/c code *"
+                    required
+                        label="A/c code"
                         value={form.ac_code || ""}
                         displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
@@ -87,11 +110,11 @@ export function PurchaseGrnHeaderForm({
                     />
                 </div>
                 {(String(docType ?? "").trim().toUpperCase() === "GRN" &&
-                    <div>
-                        <label>PO No</label>
+                    <div className="col-span-2">
                         <LookupField
-                            label="PO No"
-                            compact
+                        required
+                            label="PO No*"
+                          
                             placeholder="PO No"
                             value={String(form.po_doc_no ?? "")}
                             displayValue={String(form.po_doc_no ?? "")}
@@ -116,6 +139,7 @@ export function PurchaseGrnHeaderForm({
                                     ...current,
                                     po_doc_no: value,
                                     ac_code: text(getLookupValue(row || {}, "ac_code")),
+                                    ac_name: text(getLookupValue(row || {}, "ac_name")),
                                    po_doc_date: toDateInputValue(getLookupValue(row || {}, "po_doc_date")),
                                     po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")),
                                     po_dlvr_term: text(getLookupValue(row || {}, "po_dlvr_term")),
@@ -188,22 +212,22 @@ export function PurchaseGrnHeaderForm({
                         />
                     </div>
                 )}
-                <CField label="PO Date *">
+                <CField label="PO Date " required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.po_doc_date} onChange={(event) => updateField("po_doc_date", event.target.value)} />
                 </CField>
 
-                <CField label="PO Amount *">
+                <CField label="PO Amount " required>
                       
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.total_po_amount} onChange={(event) => updateField("total_po_amount", event.target.value)} />
                 </CField>
 
-                {editMode && <CField label="GRN No"><Input disabled value={form.doc_no || ""} /></CField>}
-                <CField label="GRN Date *">
+                {/* {editMode && <CField label="GRN No"><Input disabled value={form.doc_no || ""} /></CField>} */}
+                <CField label="Goods Receipt Note Date" required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                 </CField>
 
 
-                <div className="col-span-2">
+                {/* <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -221,24 +245,29 @@ export function PurchaseGrnHeaderForm({
                     />
                 </div>
 
+               */}
+              
+            </HeaderBlock>
+</div>
+        <div className="flex flex-col gap-2">
+            <HeaderBlock label="Payment Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
 
-
-
-                <CField label="Pay Terms" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.po_payment_terms} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
+  <CField label="Pay Terms" className="col-span-2">
+                    <Input disabled={headerAndLineDisabled} value={form.po_payment_terms}   maxLength={250} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
                 </CField>
 
-                <CField label="Remarks" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
+               <CField label="Remarks" className="col-span-2">
+                    <Input disabled={headerAndLineDisabled} value={form.remarks}   maxLength={250} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
-                <CField label="Delivery Term" className="col-span-1">
-                    <Input disabled={headerAndLineDisabled} value={form.po_dlvr_term} onChange={(event) => updateField("po_dlvr_term", event.target.value)} />
+                <CField label="Delivery Term" className="col-span-2">
+                    <Input disabled={headerAndLineDisabled} value={form.po_dlvr_term}   maxLength={250} onChange={(event) => updateField("po_dlvr_term", event.target.value)} />
                 </CField>
+            
+            </HeaderBlock>
+        </div>
 
-            </CompactSection>
-
-
+        </div>
         </div>
     );
 }

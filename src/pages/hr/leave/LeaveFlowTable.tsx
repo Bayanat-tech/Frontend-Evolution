@@ -10,6 +10,7 @@ import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToas
 import { useAuth } from "../../../state/AuthContext";
 import type { LeaveFlowConfig } from "./leaveFlowConfig";
 import { LeaveRequestDialog } from "./LeaveRequestDialog";
+import { formatApiDate, isApiDate } from "../../../hooks/apiDate";
 
 type LeaveFlowRow = Record<string, unknown>;
 
@@ -68,7 +69,8 @@ export function LeaveFlowTable({
     }
     setLoading(true);
     try {
-      const response = await getHrLeaveFlow(config.endpoint, loginId);
+      const tenantName = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || '')) ? 'MHDL' : 'ALMS';
+      const response = await getHrLeaveFlow(config.endpoint, loginId, 1, 1000, tenantName);
       setRows(response.tableData || []);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
@@ -224,11 +226,11 @@ function titleCase(value: string) {
 
 function formatValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return formatDate(value);
+  if (isApiDate(value)) return formatApiDate(value);
   return String(value);
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-GB");
-}
+// function formatDate(value: string) {
+//   const date = new Date(value);
+//   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-GB");
+// }

@@ -26,6 +26,10 @@ export function LeaveRegisterPage() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<ToastNotice>(null);
   const [activeFilterPill, setActiveFilterPill] = useState("ALL");
+  const EXCLUDED_BALANCE_TYPES = new Set(
+    ["SICK LEAVE", "FUNERAL LEAVE", "COMPENSATORY LEAVE", "MATERNITY LEAVE", "PATERNITY LEAVE", "SL", "CL", "ML", "FL", "CMP"]
+      .map((v) => v.trim().toUpperCase())
+  );
 
   useEffect(() => {
     if (!loginId) return;
@@ -43,7 +47,7 @@ export function LeaveRegisterPage() {
       })
       .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load employees" }))
       .finally(() => setLoading(false));
-  }, [loginId]);
+    }, [loginId]);
 
   useEffect(() => {
     if (!employeeId) return;
@@ -70,12 +74,13 @@ export function LeaveRegisterPage() {
     try {
       const [balanceRows, historyRows] = await Promise.all([
         executeHrRawSql<Row>(leaveBalanceSql(employeeId)),
-        getHrLeaveHistory({
-          employeeId,
-          leaveType: leaveType === "ALL" ? undefined : leaveType,
-          leaveStartDateFrom: fromDate || undefined,
-          leaveEndDateTo: toDate || undefined,
-        }),
+        // getHrLeaveHistory({
+        //   employeeId,
+        //   leaveType: leaveType === "ALL" ? undefined : leaveType,
+        //   leaveStartDateFrom: fromDate || undefined,
+        //   leaveEndDateTo: toDate || undefined,
+        // }),
+        executeHrRawSql<Row>(leaveHistorySql(employeeId,leaveType,fromDate,toDate,))
       ]);
       setBalances(balanceRows);
       setHistory(historyRows);
@@ -85,6 +90,30 @@ export function LeaveRegisterPage() {
       setLoading(false);
     }
   };
+
+  function leaveHistorySql(employeeId: string , leaveType?:string, formDate?:string, toDate?:string) {
+    return `
+        SELECT *
+        FROM VW_HR_EMP_LEAVE_HIST
+        WHERE EMPLOYEE_ID = '${employeeId}'
+        AND ('${leaveType}' = 'ALL' OR LEAVE_TYPE = '${leaveType}')
+        AND (
+                '${formDate}' IS NULL OR '${toDate}' IS NULL
+                OR LEAVE_REQUEST_DATE BETWEEN 
+                    TO_DATE('${formDate}','YYYY-MM-DD') 
+                    AND TO_DATE('${toDate}','YYYY-MM-DD')
+            )
+        ORDER BY LEAVE_START_DATE DESC
+    `;
+  }
+
+    const visibleBalances = useMemo(() => {
+    return balances.filter((row) => {
+      const code = String(row.LEAVE_TYPE || "").trim().toUpperCase();
+      const desc = String(row.LEAVE_TYPE_DESC || "").trim().toUpperCase();
+      return !EXCLUDED_BALANCE_TYPES.has(code) && !EXCLUDED_BALANCE_TYPES.has(desc);
+    });
+  }, [balances]);
 
   const selectedEmployee = employees.find((employee) => String(employee.EMPLOYEE_ID || "") === employeeId);
 
@@ -240,7 +269,7 @@ export function LeaveRegisterPage() {
               <option value="">Select employee</option>
               {employees.map((employee) => (
                 <option key={String(employee.EMPLOYEE_ID || "")} value={String(employee.EMPLOYEE_ID || "")}>
-                  {String(employee.EMPLOYEE_ID || "")} - {String(employee.RPT_NAME || employee.EMPLOYEE_NAME || "")}
+                  {String(employee.ALTERNATE_ID || "")} - {String(employee.RPT_NAME || employee.EMPLOYEE_NAME || "")}
                 </option>
               ))}
             </Select>
@@ -316,8 +345,8 @@ export function LeaveRegisterPage() {
 
       {/* Leave Balances Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-        {balances.length ? (
-          balances.map((row) => (
+      {visibleBalances.length ? (
+        visibleBalances.map((row) => (
             <Card
               key={`${String(row.LEAVE_TYPE)}-${String(row.EMPLOYEE_ID)}`}
               className="border border-border/80 shadow-sm rounded-xl overflow-hidden bg-card"
@@ -398,9 +427,10 @@ function leaveBalanceSql(employeeId: string) {
       NVL(NO_OF_LEAVES_AVAILABLE, 0) AS NO_OF_LEAVES_AVAILABLE
     FROM VW_HR_LEAVE_YEARLY_BAL_SYSDATE_AWARE
     WHERE EMPLOYEE_ID = '${escapeSql(employeeId)}'
-      AND LEAVE_TYPE NOT IN ('001', '008', 'ABS')
+      AND LEAVE_TYPE NOT IN ('001', '008', 'ABS' )
   `;
 }
+
 
 function escapeSql(value: string) {
   return value.replace(/'/g, "''");

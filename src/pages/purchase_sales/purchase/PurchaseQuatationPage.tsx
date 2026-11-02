@@ -1,18 +1,23 @@
-import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
+import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
 import { Division, getDivisions } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
-import { Dialog } from "../../../components/ui/Dialog";
+// import { Dialog } from "../../../components/ui/Dialog";
+import { DivisionPickerDialog } from "../../../components/ui/DivisionPickerDialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
-import {  PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
-import { PQA_CONFIG } from "./Purchaseordertypes";
+import { TabStrip } from "../../../components/commonComponents";
+import { PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
+import { PQO_CONFIG } from "./Purchaseordertypes";
+import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
+import { Dialog } from "../../../components/mms_ui";
+import { formatDate } from "../../../utils/date";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -78,27 +83,61 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   const [totalRows, setTotalRows] = useState(0);
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
   const isPendingTab = tab === "PENDING";
+  const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
+  const [printTarget, setPrintTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-
+  const [tabCounts, setTabCounts] = useState<Record<string, number>>({
+    PENDING: 0,
+    INPROGRESS: 0,
+    CLOSED: 0,
+    CANCELED: 0,
+    REJECTED: 0,
+    SENDBACK: 0,
+  });
   const loadLookups = async () => {
     const divisionData = await getDivisions();
     setDivisions(divisionData);
   };
 
+  const purchaseOrderTabs = [
+    { value: "PENDING", label: "Pending" },
+    { value: "INPROGRESS", label: "In Progress" },
+    { value: "CLOSED", label: "Closed" },
+    { value: "CANCELED", label: "Canceled" },
+    { value: "REJECTED", label: "Rejected" },
+  ];
+  const getTabCount = (tabValue: string) => {
+    return tabCounts[tabValue] ?? 0;
+  };
+
   const loadRows = async (clearNotice = true) => {
     setLoading(true);
+
     if (clearNotice) setNotice(null);
+
     try {
       const response = await fetchPurchaseOrders();
+
       setRows(response);
       setTotalRows(response.length);
+
+      setTabCounts((prev) => ({
+        ...prev,
+        [tab]: response.length,
+      }));
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load Purchase Quotations" });
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load purchase orders",
+      });
     } finally {
       setLoading(false);
     }
@@ -116,11 +155,62 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     return response as unknown as PurchaseOrderRow[];
   };
 
+  const loadTabCounts = async () => {
+    const visibleTabs: RequestTab[] =
+      approvalLevel === 0
+        ? ["PENDING", "CLOSED", "CANCELED"]
+        : [
+          "PENDING",
+          "INPROGRESS",
+          "CLOSED",
+          ...(canViewCanceledTab ? ["CANCELED" as RequestTab] : []),
+          "REJECTED",
+        ];
+
+    const results = await Promise.all(
+      visibleTabs.map(async (tabValue) => {
+        const response = await getDynamicLookup({
+          parameter: "PS_QUOTATION_ENTRY_TAB_List",
+          code1: user?.company_code,
+          code2: user?.loginid || user?.username || "ADMIN",
+          code3: tabValue,
+        });
+
+        return {
+          tab: tabValue,
+          count: response.length,
+        };
+      })
+    );
+
+    setTabCounts((prev) => {
+      const next = { ...prev };
+
+      results.forEach(({ tab, count }) => {
+        next[tab] = count;
+      });
+
+      return next;
+    });
+  };
+
   useEffect(() => {
-  if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
-    setTab("PENDING");
-  }
-}, [approvalLevel, tab]);
+    if (!user?.company_code || approvalLevel === undefined) return;
+
+    void loadTabCounts();
+  }, [
+    user?.company_code,
+    user?.loginid,
+    user?.username,
+    approvalLevel,
+    canViewCanceledTab,
+  ]);
+
+  useEffect(() => {
+    if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
+      setTab("PENDING");
+    }
+  }, [approvalLevel, tab]);
 
   useEffect(() => {
     void loadLookups().catch((error) => {
@@ -155,6 +245,16 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
+  // Open the editor and make sure a cancelled document carries canceled = "Y"
+  // (list flag, Canceled tab, or last_action) so the editor can show the watermark.
+  const openEditor = (row: PurchaseOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
+
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
       accessorKey: "doc_no",
@@ -166,28 +266,46 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    {
-      accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
-    },
+    // {
+    //   accessorKey: "canceled",
+    //   header: "Status",
+    //   cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
+    // },
      {
-  id: "reason",
-  header: "Reason",
-  accessorFn: (row) =>
-    row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
-},
-        { accessorKey: "last_action", header: "Last Action" },
+          accessorKey: "cancelled",
+          header: () => <div className="text-center font-bold">Status</div>,
+          cell: ({ getValue }) => (
+            <div className="flex justify-center">
+              <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+            </div>
+          ),
+        },
+    {
+      id: "reason",
+      header: "Reason",
+      accessorFn: (row) =>
+        row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
+    },
+    { accessorKey: "last_action", header: "Last Action" },
     {
       id: "actions",
       header: "Actions",
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
+          {/* <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
             <Edit2 size={15} />
+          </Button> */}
+
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => openEditor(row.original)}
+            title={isViewOnlyTab ? "View" : "Edit"}
+          >
+            {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
           </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => setPrintTarget(row.original as any)}>
             <Printer size={15} />
           </Button>
           <Button size="icon" variant="ghost" title="Excel">
@@ -196,7 +314,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         </div>
       ),
     },
-  ], []);
+  ], [isViewOnlyTab, tab]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -205,7 +323,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
 
   return (
     <section className="finance-list-page grid gap-4">
-      <div className="finance-list-heading">
+      {/* <div className="finance-list-heading">
         <div className="finance-list-title">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Quotation</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase quotation document</p>
@@ -214,41 +332,96 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          { tab === "PENDING" && (
-          <Button title="Add Purchase Quotation" onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        )}
+          {tab === "PENDING" && (
+            <Button title="Add Purchase Quotation" onClick={() => setDivisionPicker(true)}>
+              <Plus size={15} /> Add
+            </Button>
+          )}
         </div>
+      </div> */}
+      <div className="finance-list-title">
+        <h6 className="m-0 text-xl font-semibold tracking-tight">Quotation</h6>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-     <TabStrip
-  value={tab}
-  onChange={(value) => setTab(value as RequestTab)}
-  tabs={
-    approvalLevel === 0
-      ? [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-        ]
-      : [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
-          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-        ]
-  }
-/>
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {purchaseOrderTabs
+          .filter((item) => {
+            if (approvalLevel === 0) {
+              return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
+            }
+            <TabStrip
+              value={tab}
+              onChange={(value) => setTab(value as RequestTab)}
+              tabs={
+                approvalLevel === 0
+                  ? [
+                    { label: "Pending", value: "PENDING", icon: "pending" },
+                    { label: "Closed", value: "CLOSED", icon: "closed" },
+                    { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+                  ]
+                  : [
+                    { label: "Pending", value: "PENDING", icon: "pending" },
+                    { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+                    { label: "Closed", value: "CLOSED", icon: "closed" },
+                    ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+                    { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+                  ]
+              }
+            />
 
+            if (item.value === "CANCELED" && !canViewCanceledTab) {
+              return false;
+            }
+
+            return true;
+          })
+          .map((item) => {
+            const active = tab === item.value;
+
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => {
+                  setTab(item.value as RequestTab);
+                  setPageIndex(0);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
+                  }`}
+              >
+                <span>{item.label}</span>
+
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
+                    ? "bg-white/20 text-white"
+                    : "bg-muted text-muted-foreground"
+                    }`}
+                >
+                  {getTabCount(item.value)}
+                </span>
+              </button>
+            );
+          })}
+      </div>
       <div className="min-h-[650px]">
         <DataTable
           columns={columns}
           data={rows}
-          title={loading ? "Loading" : `${totalRows.toLocaleString()} Purchase Quotations`}
-          subtitle="Purchase Quotation List"
+          toolbar={
+            tab === "PENDING" && (
+              <button
+                title="Add Quotation"
+                onClick={() => setDivisionPicker(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+              >
+                <Plus size={14} />
+                Add Quotation
+              </button>
+            )
+          }
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -286,7 +459,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         <div className="fixed inset-0 z-50 bg-background">
           <PurchaseQuotationEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={PQA_CONFIG}
+            config={PQO_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
@@ -299,34 +472,40 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         </div>
       )}
 
-      <Dialog
-        open={divisionPicker}
-        title="Select Division"
-        description="Choose the division before opening the Purchase Quotation form."
-        onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
+      {/* <Dialog open={divisionPicker} onClose={() => setDivisionPicker(false)}>
+  <div className="grid max-h-[420px] gap-2 overflow-auto">
+    {divisions.map((division) => (
+      <button
+        key={division.div_code}
+        className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
+        onClick={() => openCreateForDivision(division)}
+        type="button"
       >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+        <span className="font-medium">{division.div_name}</span>
+        <span className="text-muted-foreground">{division.div_code}</span>
+      </button>
+    ))}
+  </div>
+  <div className="mt-4 flex justify-end">
+    <Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>
+  </div>
+</Dialog> */}
+      <DivisionPickerDialog
+        open={divisionPicker}
+        divisions={divisions}
+        description="Choose the division before opening the Purchase Grn form."
+        onSelect={(division) => openCreateForDivision(division)}
+        onClose={() => setDivisionPicker(false)}
+      />
+      {printTarget && (
+        <PurchaseQuotationPrintDialog
+          open={!!printTarget}
+          onClose={() => setPrintTarget(null)}
+          form={printTarget as any}
+          companyCode={user?.company_code || ""}
+          docType="PQO"
+        />
+      )}
     </section>
   );
-}
-
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
 }

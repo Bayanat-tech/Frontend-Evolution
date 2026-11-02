@@ -12,9 +12,17 @@ export function FreightReportPreview() {
   const [pdfUrl, setPdfUrl] = useState("");
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
   const identity = useRef<ReportIdentity>({ title: "", company: "", user: "", generatedAt: "" });
 
   useEffect(() => { closeReportPreview(); }, [location.pathname]);
+
+  useEffect(() => {
+    if (request?.document?.orientation) {
+      setOrientation(request.document.orientation);
+    }
+  }, [request?.id, request?.document?.orientation]);
+
   useEffect(() => {
     let cancelled = false;
     let url = "";
@@ -26,13 +34,14 @@ export function FreightReportPreview() {
         user: user?.username || user?.USERNAME || user?.loginid || "User",
         generatedAt: new Date().toLocaleString(),
       };
-      createFreightPdf(request.document, identity.current).then((blob) => {
+      const doc = { ...request.document, orientation };
+      createFreightPdf(doc, identity.current).then((blob) => {
         if (cancelled) return;
         url = URL.createObjectURL(blob); setPdfUrl(url);
       }).catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Unable to prepare PDF."); });
     }
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
-  }, [request]);
+  }, [request, orientation, user]);
 
   if (!request) return null;
   const failure = request.error || error;
@@ -40,6 +49,8 @@ export function FreightReportPreview() {
     <ReportPreviewDialog
       title={request.title}
       className="freight-report-preview-freight"
+      orientation={orientation}
+      onToggleOrientation={setOrientation}
       pdfUrl={pdfUrl}
       error={failure}
       exporting={exporting}
@@ -49,7 +60,7 @@ export function FreightReportPreview() {
       onExcel={async () => {
         if (!request.document) return;
         setExporting(true);
-        try { await downloadFreightExcel(request.document, identity.current); }
+        try { await downloadFreightExcel({ ...request.document, orientation }, identity.current); }
         catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to export Excel."); }
         finally { setExporting(false); }
       }}

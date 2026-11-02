@@ -47,24 +47,47 @@ export function LeaveResumptionApprovalPage() {
       setRows([]);
       return;
     }
+
     setLoading(true);
     try {
-      const response = await executeHrRawSql(buildSql(loginId, compCode));
-      setRows((response ?? []) as TLeaveApproval[]);
-    } catch (error) {
-      console.warn("Unable to load leave resumption approvals with company code filter:", error);
-      try {
-        const fallbackSql = `
+      if (user?.tenantName === "WMSTST" ) {
+        try {
+          const response = await executeHrRawSql(buildSql(loginId, compCode));
+          setRows((response ?? []) as TLeaveApproval[]);
+        } catch (error) {
+          console.warn(
+            "Unable to load leave resumption approvals with company code filter:",
+            error
+          );
+          try {
+            const fallbackSql = `
+              SELECT *
+              FROM VW_LEAVE_REQUEST_FLOW_CLOSE
+              WHERE (ACTUAL_RESUME_DATE IS NULL AND RESUME_DATE_APPROVED IS NULL AND FINAL_APPROVED = 'YES' AND CREATED_BY = '${loginId}')
+                OR (ACTUAL_RESUME_DATE IS NOT NULL AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO' AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
+            `;
+            const fallbackRes = await executeHrRawSql(fallbackSql);
+            setRows((fallbackRes ?? []) as TLeaveApproval[]);
+          } catch (fallbackError) {
+            console.warn("Fallback query also failed:", fallbackError);
+          }
+        }
+      } else {
+        // ---- All other tenants: alternate view/query ----
+        const sql_string = `
           SELECT *
-          FROM VW_LEAVE_REQUEST_FLOW_CLOSE
-          WHERE (ACTUAL_RESUME_DATE IS NULL AND RESUME_DATE_APPROVED IS NULL AND FINAL_APPROVED = 'YES' AND CREATED_BY = '${loginId}')
-             OR (ACTUAL_RESUME_DATE IS NOT NULL AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO' AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
+          FROM VW_HR_LEAVE_REQUEST_FLOW
+          WHERE ( ACTUAL_RESUME_DATE IS NULL
+          AND NVL(RESUME_DATE_APPROVED,'NO') = 'NO'
+            AND FINAL_APPROVED = 'YES'
+            AND LAST_ACTION IN ('SAVEASDRAFT','SUBMITTED')
+            AND CREATED_BY = '${user?.loginid1}')
         `;
-        const fallbackRes = await executeHrRawSql(fallbackSql);
-        setRows((fallbackRes ?? []) as TLeaveApproval[]);
-      } catch (fallbackError) {
-        console.warn("Fallback query also failed:", fallbackError);
+        const response = await executeHrRawSql(sql_string);
+        setRows((response ?? []) as TLeaveApproval[]);
       }
+    } catch (error) {
+      console.warn("Unable to load leave resumption approvals:", error);
     } finally {
       setLoading(false);
     }

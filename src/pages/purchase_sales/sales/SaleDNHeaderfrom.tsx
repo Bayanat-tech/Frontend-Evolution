@@ -8,7 +8,32 @@ import { PurchaseOrderForm, SODocType } from "../sales/SalesOrdertypes";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import { numberOrZero, text } from "./SalesOrderutils";
 import { PODocType } from "../purchase/Purchaseordertypes";
+import { FileText, Percent } from "lucide-react";
 
+
+function HeaderBlock({
+    label,
+    icon,
+    children,
+    gridCols = "grid-cols-4",
+}: {
+    label: string;
+    icon: ReactNode;
+    children: ReactNode;
+    gridCols?: string;
+}) {
+    return (
+        <div className="finance-payment-header-block">
+            <div className="finance-section-title">
+                <span className="finance-section-icon">{icon}</span>
+                <span>{label}</span>
+            </div>
+            <div className={`grid gap-x-1 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
+                {children}
+            </div>
+        </div>
+    );
+}
 function CompactSection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
     return (
         <div className={`border-t px-3 py-1.5 first:border-t-0 ${className || ""}`}>
@@ -25,7 +50,7 @@ function CField({ label, required, className, children }: { label: string; requi
         <label className={`field ${className || ""}`}>
             <span className="text-[10px]   font-semibold">
                 {label}
-                {required && <span className="ml-1 text-destructive">*</span>}
+                {required && <span className="ml-1 text-red-500">*</span>}
             </span>
             {children}
         </label>
@@ -66,18 +91,17 @@ export function SalesDNHeaderForm({
     };
 
     return (
-        <div className="rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
-                <div>
-                    <p className="eyebrow m-0 text-[10px] leading-tight">Header</p>
-                    <h3 className="m-0 text-xs font-semibold leading-tight"></h3>
-                </div>
-            </div>
+  <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+            {/* HEADER SECTION - HEIGHT UNCHANGED */}
+          
+ <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 p-2 items-start">
+       <div className="flex flex-col gap-2">
 
-            <CompactSection label="Document & Party">
-                <div className="col-span-2">
+          <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
+                <div className="col-span-3">
                     <LookupField
-                        label="A/c code *"
+                    required
+                        label="A/c code"
                         value={form.ac_code}
                         displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
@@ -96,11 +120,11 @@ export function SalesDNHeaderForm({
                     />
                 </div>
 
-                <div>
-                    <label>SO No</label>
+                <div className="col-span-3">
+                   
                     <LookupField
-                        label="SO No"
-                        compact
+                        label="SO No*"
+                        
                         placeholder="SO No"
                         value={String(form.so_doc_no ?? "")}
                         displayValue={String(form.so_doc_no ?? "")}
@@ -205,6 +229,7 @@ export function SalesDNHeaderForm({
                                     so_zone_code: text(getLookupValue(item, "so_zone_code")),
                                     so_zone_name: text(getLookupValue(item, "so_zone_name")),
                                     serial_no: numberOrZero(getLookupValue(item, "serial_no")),
+                                    sorder_remarks:text(getLookupValue(item, "sorder_remarks"))
                                 }));
                                 console.log("Mapped length:", mappedDetails?.length);
                                 setdetails?.(mappedDetails);
@@ -216,17 +241,16 @@ export function SalesDNHeaderForm({
                     />
                 </div>
 
-                <CField label="SO Date *">
+                <CField label="SO Date" required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(event) => updateField("so_doc_date", event.target.value)} />
                 </CField>
 
-                <CField label="SO Amount *">
+                <CField label="SO Amount" required>
 
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.total_so_amount} onChange={(event) => updateField("total_so_amount", event.target.value)} />
                 </CField>
 
-                {editMode && <CField label="DN No"><Input disabled value={form.doc_no || ""} /></CField>}
-                <CField label="DN Date *">
+                <CField label="DN Date" required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                 </CField>
 
@@ -252,21 +276,28 @@ export function SalesDNHeaderForm({
 
 
 
-                <CField label="Pay Terms" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.so_payment_terms} onChange={(event) => updateField("so_payment_terms", event.target.value)} />
+              
+
+            </HeaderBlock>
+
+    </div>
+    <div className="flex flex-col gap-2">
+            <HeaderBlock label="Payment Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
+            
+              <CField label="Pay Terms" className="col-span-2">
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.so_payment_terms} onChange={(event) => updateField("so_payment_terms", event.target.value)} />
                 </CField>
 
                 <CField label="Remarks" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
-                <CField label="Delivery Term" className="col-span-1">
-                    <Input disabled={headerAndLineDisabled} value={form.so_dlvr_term} onChange={(event) => updateField("so_dlvr_term", event.target.value)} />
+                <CField label="Delivery Term" className="col-span-2">
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.so_dlvr_term} onChange={(event) => updateField("so_dlvr_term", event.target.value)} />
                 </CField>
-
-            </CompactSection>
-
-
+                </HeaderBlock>
         </div>
+            </div>
+            </div>
     );
 }
