@@ -217,7 +217,7 @@ function cleanNumericData(data: any): any {
     'REQUEST_QUANTITY', 'ALLOCATED_APPROVED_QUANTITY',
     'LCURR_AFTER_DISCOUNT', 'QTY_PUOM', 'QTY_LUOM', 'UPPP',
     'QUANTITY', 'AMOUNT_BEFORE_DISC', 'DISC_PRICE',
-    'APPROVED_QTY_PUOM', 'APPROVED_QTY_LUOM', 'APPROVED_UPPP','DISC_PERC',
+    'APPROVED_QTY_PUOM', 'APPROVED_QTY_LUOM', 'APPROVED_UPPP', 'DISC_PERC',
   ];
   if (Array.isArray(data)) return data.map((i) => cleanNumericData(i));
   if (data && typeof data === 'object') {
@@ -259,7 +259,7 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
   } as TPRItem;
 }
 
-function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number, isSupplierUser: boolean) {
+function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number, isSupplierUser: boolean, productNameOf?: (code: unknown) => string) {
   const errors: string[] = [];
   if (!String(header.DESCRIPTION ?? "").trim()) errors.push("Description / Reason is required");
   if (!String(header.REMARKS ?? "").trim()) errors.push("Remarks is required");
@@ -270,7 +270,7 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
   } else {
     items.forEach((item, index) => {
       if (!item.ITEM_CODE) errors.push(`Item ${index + 1}: Product Code is required`);
-      if (!item.ITEM_DESP) errors.push(`Item ${index + 1}: Product Description is required`);
+      if (!item.ITEM_DESP && !productNameOf?.(item.ITEM_CODE)) errors.push(`Item ${index + 1}: Product Description is required`);
       if (isSupplierUser && !item.SUPPLIER) errors.push(`Item ${index + 1}: Supplier is required`);
       if (userLevel === 1 && computeQuantity(item) <= 0) errors.push(`Item ${index + 1}: Quantity must be greater than 0`);
       if (num(item.ITEM_RATE) <= 0) errors.push(`Item ${index + 1}: Rate must be greater than 0`);
@@ -344,12 +344,12 @@ const AddPRRequestPage = ({
   const [localComments, setLocalComments] = useState<any[]>([]);
   const commentsListRef = useRef<HTMLDivElement>(null);
   // ── Live snapshots for validation — avoids stale-closure submit errors ──
-const headerRef = useRef(header);
-const itemsRef = useRef(items);
-const termsRef = useRef(terms);
-useEffect(() => { headerRef.current = header; }, [header]);
-useEffect(() => { itemsRef.current = items; }, [items]);
-useEffect(() => { termsRef.current = terms; }, [terms]);
+  const headerRef = useRef(header);
+  const itemsRef = useRef(items);
+  const termsRef = useRef(terms);
+  useEffect(() => { headerRef.current = header; }, [header]);
+  useEffect(() => { itemsRef.current = items; }, [items]);
+  useEffect(() => { termsRef.current = terms; }, [terms]);
 
   const { data: historyList = [], refetch: refetchHistory } = useQuery<any[]>({
     queryKey: ["pr-history", requestNumber, companyCode],
@@ -388,8 +388,8 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
   }, [requestNumber]);
 
   const isFinalApproved =
-  String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y" &&
-  String((header as any).FA_UPLOADED || "N").toUpperCase() !== "N";
+    String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y" &&
+    String((header as any).FA_UPLOADED || "N").toUpperCase() !== "N";
   const isCancelled =
     String((header as any).CANCEL_FLAG || "").toUpperCase() === "Y" ||
     String(header.LAST_ACTION || "").toUpperCase() === "CANCELED" ||
@@ -480,11 +480,18 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
   const shouldShowSupplier = () => isSupplierUser;
   const shouldShowTermsTab = () => isSupplierUser;
 
-  const { data: productCodes = [] } = useQuery<LookupItem[]>({
+  const { data: productCodes = [], isFetched: productsFetched } = useQuery<LookupItem[]>({
     queryKey: ["pr-product-lookup", companyCode],
     queryFn: () => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" }),
     enabled: !!companyCode,
   });
+
+  const productNameOf = (code: unknown): string => {
+    const c = String(code ?? "").trim();
+    if (!c) return "";
+    return String(productCodes.find((p) => String(p.PROD_CODE ?? "").trim() === c)?.PROD_NAME ?? "");
+  };
+
   const { data: costCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-cost-lookup", companyCode],
     queryFn: () => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_COSTS", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" }),
@@ -500,7 +507,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
     queryFn: () => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" }),
     enabled: !!companyCode,
   });
-  const { data: supplierList = [] } = useQuery<LookupItem[]>({
+  const { data: supplierList = [], isFetched: suppliersFetched } = useQuery<LookupItem[]>({
     queryKey: ["pr-supplier-lookup", companyCode],
     queryFn: () => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_SUPPLIERS", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" }),
     enabled: !!companyCode && shouldShowSupplier(),
@@ -625,6 +632,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
   useEffect(() => {
     if (itemsLoadedRef.current) return;
     if (itemsFetching) return;
+    if (!productsFetched || (isSupplierUser && !suppliersFetched)) return;
     if (itemList.length === 0) {
       if (isViewMode && requestNumber) { setItems([]); itemsLoadedRef.current = true; }
       return;
@@ -636,7 +644,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
       const base: TPRItem = {
         ...row,
         id: (row as any).id || newId(),
-        ITEM_DESP: row.ITEM_DESP || productCodes.find((i) => i.PROD_CODE === row.ITEM_CODE)?.PROD_NAME || "",
+        ITEM_DESP: row.ITEM_DESP || (row as any).PROD_NAME || productNameOf(row.ITEM_CODE),
         COST_NAME: row.COST_NAME || costCodes.find((c) => c.COST_CODE === row.COST_CODE)?.COST_NAME || "",
         SUPPLIER: supCode,
         SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === supCode)?.SUPPLIER_NAME || "",
@@ -647,12 +655,12 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
         LCURR_AFTER_DISCOUNT: 0,
         CASH_IND: (row as any).CASH_IND || "",
         DISC_PERC: (() => {
-  const raw = (row as any).DISC_PERC;
-  if (raw !== null && raw !== undefined && raw !== "") return Number(raw) || 0;
-  const disc = num((row as any).DISCOUNT_AMOUNT);
-  const net = num((row as any).AMOUNT);
-  return disc > 0 && net + disc > 0 ? (disc / (net + disc)) * 100 : 0;
-})(),
+          const raw = (row as any).DISC_PERC;
+          if (raw !== null && raw !== undefined && raw !== "") return Number(raw) || 0;
+          const disc = num((row as any).DISCOUNT_AMOUNT);
+          const net = num((row as any).AMOUNT);
+          return disc > 0 && net + disc > 0 ? (disc / (net + disc)) * 100 : 0;
+        })(),
         P_UOM: (row as any).P_UOM || "",
         QTY_PUOM: (row as any).QTY_PUOM || 0,
         L_UOM: (row as any).L_UOM || "",
@@ -679,7 +687,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
     const renumbered = enriched.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
     itemsLoadedRef.current = true;
-  }, [itemList, itemsFetching, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber, userApprovalLevel, header.CURRENCY_RATE]);
+  }, [itemList, itemsFetching, productsFetched, suppliersFetched, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber, userApprovalLevel, header.CURRENCY_RATE]);
 
   useEffect(() => {
     if (userApprovalLevel < 2) return;
@@ -864,30 +872,31 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
   const qtyColSpan = 4;
 
   const validateAndShowErrors = (): boolean => {
-  const { valid, errors } = validatePRForm(
-    headerRef.current,
-    itemsRef.current,
-    termsRef.current,
-    userApprovalLevel,
-    isSupplierUser
-  );
-  if (!valid) {
-    const onlyTermErrors = errors.every((e) => e.startsWith("Term "));
-    if (onlyTermErrors && shouldShowTermsTab()) {
-      setActiveTab("terms");
-    } else {
-      setActiveTab("items");
+    const { valid, errors } = validatePRForm(
+      headerRef.current,
+      itemsRef.current,
+      termsRef.current,
+      userApprovalLevel,
+      isSupplierUser,
+      productNameOf
+    );
+    if (!valid) {
+      const onlyTermErrors = errors.every((e) => e.startsWith("Term "));
+      if (onlyTermErrors && shouldShowTermsTab()) {
+        setActiveTab("terms");
+      } else {
+        setActiveTab("items");
+      }
+      setNotice({
+        type: "error",
+        message: onlyTermErrors
+          ? `Please fill Terms & Conditions. ${errors.join(". ")}`
+          : errors.join(". "),
+      });
+      return false;
     }
-    setNotice({
-      type: "error",
-      message: onlyTermErrors
-        ? `Please fill Terms & Conditions. ${errors.join(". ")}`
-        : errors.join(". "),
-    });
-    return false;
-  }
-  return true;
-};
+    return true;
+  };
   const saveBulk = async (status: string, remark = "", overrides: Partial<Record<string, any>> = {}) => {
     const headerData: any = {
       REQUEST_NUMBER: requestNumber || null, COMPANY_CODE: companyCode,
@@ -955,7 +964,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
       COST_CODE: item.COST_CODE || "", CAPEX: item.CAPEX_OPEX_NON_OPEX,
       BUYER: "", REASON_FOR_PO_MODIFY: "", DOC_TYPE: "PR", DOC_NO: null,
       DOC_DATE: new Date().toISOString(), DIV_CODE: "", SERIAL_NO: 0,
-      PROD_CODE: item.ITEM_CODE || "", PROD_NAME: item.ITEM_DESP || "",
+      PROD_CODE: item.ITEM_CODE || "", PROD_NAME: item.ITEM_DESP || productNameOf(item.ITEM_CODE),
       P_UOM: item.P_UOM || "", QTY_PUOM: item.QTY_PUOM || 0,
       L_UOM: item.L_UOM || "", QTY_LUOM: item.QTY_LUOM || 0,
       UPPP: item.UPPP || 0, QUANTITY: computeQuantity(item),
@@ -1308,6 +1317,8 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
         }
       }
 
+
+
       if (field === "DISC_PRICE" as any) {
         const qtyForCalc = userApprovalLevel >= 2 ? computeApprovedQuantity(item) : computeQuantity(item);
         const gross = num(item.ITEM_RATE) * qtyForCalc;
@@ -1318,7 +1329,7 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
         if (userApprovalLevel >= 2) recalcItemOnApprovedQty(item, exRate);
         else recalcItem(item, exRate);
         (item as any).DISC_PRICE = newPrice;
-        item.DISCOUNT_AMOUNT = newPrice; 
+        item.DISCOUNT_AMOUNT = newPrice;
         updated[index] = item;
         return updated;
       }
@@ -1933,7 +1944,8 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
                             const supplierName = (item as any).SUPPLIER_NAME || supplierList.find((s: any) => s.SUPPLIER_CODE === supplierCode)?.SUPPLIER_NAME || "";
                             const supplierDisplay = supplierCode && supplierName ? `${supplierCode} - ${supplierName}` : supplierCode;
 
-                            const productDisplay = item.ITEM_CODE && item.ITEM_DESP ? `${item.ITEM_CODE} - ${item.ITEM_DESP}` : (item.ITEM_CODE || "");
+                            const itemDesp = item.ITEM_DESP || productNameOf(item.ITEM_CODE);
+                            const productDisplay = item.ITEM_CODE && itemDesp ? `${item.ITEM_CODE} - ${itemDesp}` : (item.ITEM_CODE || "");
 
                             const qtyForCalc = userApprovalLevel >= 2 ? approvedQty : qty;
                             const grossAmount = num(item.ITEM_RATE) * qtyForCalc;
@@ -1944,46 +1956,46 @@ useEffect(() => { termsRef.current = terms; }, [terms]);
                                 <td className="group sticky left-[30px] z-20 bg-card px-1 py-1 !overflow-visible hover:!z-[25]">
                                   <div className="w-full" title={productDisplay}>
                                     <LookupField
-  label="" compact placeholder="Search Product *"
-  value={item.ITEM_CODE || ""}
-  displayValue={productDisplay}
-  columns={productColumns}
-  valueField="PROD_CODE"
-  displayFields={["PROD_CODE", "PROD_NAME"]}
-  loadOptions={async () => {
-    const all = await almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" });
-    const sel = new Set(items.filter((it) => (it as any).id !== itemId).map((it) => String(it.ITEM_CODE || "").trim()).filter(Boolean));
-    return (all as any[]).filter((p: any) => !sel.has(String(p.PROD_CODE || "").trim()));
-  }}
-  onChange={(val, row) => {
-    // Approvers (level ≥ 2) cannot change product on a submitted PR.
-    if (userApprovalLevel >= 2) return;
-    if (row) {
-      setItems((prev) => prev.map((it) => {
-        if ((it as any).id !== itemId) return it;
-        const tr = String(val ?? "").trim().toUpperCase();
-        if (tr) {
-          const dup = prev.some((o) => (o as any).id !== itemId && String(o.ITEM_CODE || "").trim().toUpperCase() === tr);
-          if (dup) { toast.warning("This product is already added in another line.", 4000); return it; }
-        }
-        const updated: TPRItem = {
-          ...it,
-          ITEM_CODE: String(val ?? ""),
-          ITEM_DESP: String(row.PROD_NAME ?? ""),
-          P_UOM: String(row.P_UOM ?? ""),
-          L_UOM: String(row.L_UOM ?? ""),
-          UPPP: Number(row.UPPP) || 0,
-          ITEM_RATE: Number(row.BASE_PRICE) || 0,
-        };
-        updated.REQUEST_QUANTITY = computeQuantity(updated);
-        const ex = num(updated.CURRENCY_RATE) || 1;
-        return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, ex) : recalcItem(updated, ex);
-      }));
-    }
-  }}
-  // ← Product is locked for every approver (level ≥ 2) — only level 1 can change it.
-  disabled={disabled || userLevelLoading || userApprovalLevel >= 2}
-/>
+                                      label="" compact placeholder="Search Product *"
+                                      value={item.ITEM_CODE || ""}
+                                      displayValue={productDisplay}
+                                      columns={productColumns}
+                                      valueField="PROD_CODE"
+                                      displayFields={["PROD_CODE", "PROD_NAME"]}
+                                      loadOptions={async () => {
+                                        const all = await almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" });
+                                        const sel = new Set(items.filter((it) => (it as any).id !== itemId).map((it) => String(it.ITEM_CODE || "").trim()).filter(Boolean));
+                                        return (all as any[]).filter((p: any) => !sel.has(String(p.PROD_CODE || "").trim()));
+                                      }}
+                                      onChange={(val, row) => {
+                                        // Approvers (level ≥ 2) cannot change product on a submitted PR.
+                                        if (userApprovalLevel >= 2) return;
+                                        if (row) {
+                                          setItems((prev) => prev.map((it) => {
+                                            if ((it as any).id !== itemId) return it;
+                                            const tr = String(val ?? "").trim().toUpperCase();
+                                            if (tr) {
+                                              const dup = prev.some((o) => (o as any).id !== itemId && String(o.ITEM_CODE || "").trim().toUpperCase() === tr);
+                                              if (dup) { toast.warning("This product is already added in another line.", 4000); return it; }
+                                            }
+                                            const updated: TPRItem = {
+                                              ...it,
+                                              ITEM_CODE: String(val ?? ""),
+                                              ITEM_DESP: String(row.PROD_NAME ?? "") || productNameOf(val),
+                                              P_UOM: String(row.P_UOM ?? ""),
+                                              L_UOM: String(row.L_UOM ?? ""),
+                                              UPPP: Number(row.UPPP) || 0,
+                                              ITEM_RATE: Number(row.BASE_PRICE) || 0,
+                                            };
+                                            updated.REQUEST_QUANTITY = computeQuantity(updated);
+                                            const ex = num(updated.CURRENCY_RATE) || 1;
+                                            return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, ex) : recalcItem(updated, ex);
+                                          }));
+                                        }
+                                      }}
+                                      // ← Product is locked for every approver (level ≥ 2) — only level 1 can change it.
+                                      disabled={disabled || userLevelLoading || userApprovalLevel >= 2}
+                                    />
                                   </div>
                                   <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Unit Per Primary: {item.UPPP || 0}</span>
                                 </td>
