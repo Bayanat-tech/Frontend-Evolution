@@ -210,7 +210,11 @@ async function generateHolidayCalendar(params: {
 
     if (details.length === 0) return 0;
 
-    const res = await api.post(HOLIDAY_BULK_URL, { details });
+const res = await api.post(HOLIDAY_BULK_URL, { 
+  details,
+  // Add this if the backend middleware or procedure strictly requires an 'ids' key
+  ids: details.map((d: any) => d.dateid) 
+});
 
     if (!res.data?.success) {
       throw new Error(res.data?.message || "Failed to generate holiday calendar");

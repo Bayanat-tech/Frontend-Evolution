@@ -99,8 +99,8 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
   const { user } = useAuth();
   const loginId = String(user?.loginid1 || user?.LOGINID1 || "");
   console.log("LeaveWorkspacePage: user loginId:", loginId, "company_code:", user?.company_code);
-  const isMhdl = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || ''));
-  const companyCode =String(user?.company_code || "");
+  const isMhdl = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || ""));
+  const companyCode = String(user?.company_code || "");
 
   const [activeTab, setActiveTab] = useState<LeaveTabKey>(initialTab);
   const [dataByTab, setDataByTab] = useState<Record<LeaveFlowKey, Row[]>>({
@@ -124,71 +124,78 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
   const [searchQuery, setSearchQuery] = useState("");
   const [notice, setNotice] = useState<ToastNotice>(null);
 
-  // Dialog state
-  const [dialogOpen, setDialogOpen] = useState(false);
+  // Page state: "list" shows the grid, "editor" shows the leave form as a full page (like WMS masters)
+  const [view, setView] = useState<"list" | "editor">("list");
   const [selectedRow, setSelectedRow] = useState<Row | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
 
   // Load all tab data and counts
-  const loadAllData = useCallback(async (showNotice = false) => {
-    if (!loginId || !companyCode) {
-      setNotice({ type: "error", message: "User login ID or company code is missing." });
-      return;
-    }
-    setLoading(true);
-    if (showNotice) setNotice(null);
+  const loadAllData = useCallback(
+    async (showNotice = false) => {
+      if (!loginId || !companyCode) {
+        setNotice({ type: "error", message: "User login ID or company code is missing." });
+        return;
+      }
+      setLoading(true);
+      if (showNotice) setNotice(null);
 
-    try {
-      const keys: LeaveFlowKey[] = isMhdl ? ["request", "inProgress", "closed", "cancelled", "rejected"] : ["request", "inProgress", "closed", "sentBack", "cancelled", "rejected"];
-      const results = await Promise.allSettled(
-        keys.map((key) => getLeaveFlowBucket({ companyCode, loginId, parameter: tabEndpoints[key], legacy: isMhdl })
-      ));
+      try {
+        const keys: LeaveFlowKey[] = isMhdl
+          ? ["request", "inProgress", "closed", "cancelled", "rejected"]
+          : ["request", "inProgress", "closed", "sentBack", "cancelled", "rejected"];
+        const results = await Promise.allSettled(
+          keys.map((key) =>
+            getLeaveFlowBucket({ companyCode, loginId, parameter: tabEndpoints[key], legacy: isMhdl })
+          )
+        );
 
-      const nextData: Record<LeaveFlowKey, Row[]> = {
-        request: [],
-        inProgress: [],
-        closed: [],
-    sentBack: [],
-        cancelled: [],
-        rejected: [],
-      };
+        const nextData: Record<LeaveFlowKey, Row[]> = {
+          request: [],
+          inProgress: [],
+          closed: [],
+          sentBack: [],
+          cancelled: [],
+          rejected: [],
+        };
 
-      let totalCount = 0;
-      const nextCounts: Record<LeaveTabKey, number> = {
-        request: 0,
-        inProgress: 0,
-        closed: 0,
-    sentBack: 0,
-        cancelled: 0,
-        rejected: 0,
-        all: 0,
-      };
+        let totalCount = 0;
+        const nextCounts: Record<LeaveTabKey, number> = {
+          request: 0,
+          inProgress: 0,
+          closed: 0,
+          sentBack: 0,
+          cancelled: 0,
+          rejected: 0,
+          all: 0,
+        };
 
-      results.forEach((res, index) => {
-        const key = keys[index];
-        if (res.status === "fulfilled") {
-          const rows = res.value;
-          nextData[key] = rows;
-          const count = rows.length;
-          nextCounts[key] = count;
-          totalCount += count;
-        } else {
-          console.warn(`Failed to load ${key}:`, res.reason);
-        }
-      });
+        results.forEach((res, index) => {
+          const key = keys[index];
+          if (res.status === "fulfilled") {
+            const rows = res.value;
+            nextData[key] = rows;
+            const count = rows.length;
+            nextCounts[key] = count;
+            totalCount += count;
+          } else {
+            console.warn(`Failed to load ${key}:`, res.reason);
+          }
+        });
 
-      nextCounts.all = totalCount;
-      setDataByTab(nextData);
-      setCounts(nextCounts);
-    } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load leave requests",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [loginId, companyCode, isMhdl]);
+        nextCounts.all = totalCount;
+        setDataByTab(nextData);
+        setCounts(nextCounts);
+      } catch (error) {
+        setNotice({
+          type: "error",
+          message: error instanceof Error ? error.message : "Unable to load leave requests",
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loginId, companyCode, isMhdl]
+  );
 
   useEffect(() => {
     void loadAllData(false);
@@ -214,22 +221,28 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     return dataByTab[activeTab] || [];
   }, [activeTab, dataByTab]);
 
+  const closeEditor = () => {
+    setView("list");
+    setSelectedRow(null);
+    setIsReadOnly(false);
+  };
+
   const handleOpenView = (row: Row) => {
     setSelectedRow(row);
     setIsReadOnly(true);
-    setDialogOpen(true);
+    setView("editor");
   };
 
   const handleOpenEdit = (row: Row) => {
     setSelectedRow(row);
     setIsReadOnly(false);
-    setDialogOpen(true);
+    setView("editor");
   };
 
   const handleStartNew = () => {
     setSelectedRow(null);
     setIsReadOnly(false);
-    setDialogOpen(true);
+    setView("editor");
   };
 
   const handlePrint = (row: Row) => {
@@ -298,7 +311,8 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
               onClick={(e) => {
                 e.stopPropagation();
                 const tabKey = String(row.original._inferredTab || activeTab);
-                if (canReviewLeave(row.original, tabKey)) handleOpenEdit(row.original); else handleOpenView(row.original);
+                if (canReviewLeave(row.original, tabKey)) handleOpenEdit(row.original);
+                else handleOpenView(row.original);
               }}
               title="View Leave Request"
             >
@@ -392,14 +406,10 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         cell: ({ row }) => {
           const tabKey = (row.original._inferredTab as LeaveFlowKey) || activeTab;
           const status = String(row.original.STATUS ?? row.original.status ?? getStatusText(tabKey));
-          return (
-            <span className={statusBadgeClass(status, tabKey)}>
-              {status}
-            </span>
-          );
+          return <span className={statusBadgeClass(status, tabKey)}>{status}</span>;
         },
       },
-       {
+      {
         accessorKey: "NEXT_ACTION_BY_NAME",
         header: "Next Action By",
         size: 90,
@@ -416,14 +426,16 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         enableColumnFilter: false,
         cell: ({ row }) => {
           const tabKey = (row.original._inferredTab as LeaveFlowKey) || activeTab;
-          const isPending = isMhdl ? tabKey === 'request' || activeTab === 'all' : canReviewLeave(row.original, tabKey);
+          const isPending = isMhdl
+            ? tabKey === "request" || activeTab === "all"
+            : canReviewLeave(row.original, tabKey);
           return (
             <div className="flex items-center justify-center gap-1">
               <button
                 type="button"
                 className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                 title="View Leave Request"
-                  onClick={(e) => {
+                onClick={(e) => {
                   e.stopPropagation();
                   handleOpenView(row.original);
                 }}
@@ -451,7 +463,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
                   e.stopPropagation();
                   handlePrint(row.original);
                 }}
-               >
+              >
                 <Printer size={13} />
               </button>
             </div>
@@ -461,103 +473,110 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     ],
     [activeTab, isMhdl]
   );
+
+  const editorOpen = view === "editor";
+
   return (
     <section className="leave-workspace-freight-view grid gap-2">
-      {/* Top Header Row */}
-      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
-        <div className="flex items-center gap-2.5">
-          <h2
-            className="text-foreground m-0"
-            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
-          >
-            Leave Request Flow
-          </h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {notice && (
-            <span
-              className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
-                notice.type === "success"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-red-200 bg-red-50 text-red-700"
-              }`}
-            >
-              {notice.message}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Freight-style Status Pill Tabs */}
-      <div className="flex flex-wrap items-center gap-1.5 pb-1">
-        {statusTabs.filter(tab => !isMhdl || tab.key !== 'sentBack').map((tab) => {
-          const count = counts[tab.key] || 0;
-          const active = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                active
-                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
-                  : "border border-border bg-card text-foreground hover:bg-secondary"
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                  active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-                }`}
+      {editorOpen ? (
+        /* ---------- EDITOR (full page, replaces the list like WMS masters) ---------- */
+        <LeaveRequestDialog
+          inline
+          open
+          initialRow={selectedRow}
+          readOnly={isReadOnly}
+          onClose={closeEditor}
+          onSaved={() => void loadAllData(false)}
+        />
+      ) : (
+        <>
+          {/* Top Header Row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+            <div className="flex items-center gap-2.5">
+              <h2
+                className="text-foreground m-0"
+                style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                Leave Request Flow
+              </h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {notice && (
+                <span
+                  className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                    notice.type === "success"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  {notice.message}
+                </span>
+              )}
+            </div>
+          </div>
 
-      {/* Main DataTable */}
-      <DataTable
-        columns={columns}
-        data={currentRows}
-        toolbar={
-          <button
-            type="button"
-            onClick={handleStartNew}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-          >
-            <Plus size={14} />
-            Add Leave Request
-          </button>
-        }
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchPlaceholder="Search request number, employee, leave type, reason..."
-        loading={loading}
-        height="calc(100dvh - 180px)"
-        density="grid"
-        enablePagination
-        pageSize={25}
-        enableExport
-        exportFilename={`leave-request-${activeTab}.csv`}
-        getRowId={(row, index) =>
-          String(row.REQUEST_NUMBER ?? row.requestNumber ?? row.SR_NO ?? index)
-        }
-        // onRowClick={handleOpenView}
-      />
+          {/* Freight-style Status Pill Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 pb-1">
+            {statusTabs
+              .filter((tab) => !isMhdl || tab.key !== "sentBack")
+              .map((tab) => {
+                const count = counts[tab.key] || 0;
+                const active = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                      active
+                        ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                        : "border border-border bg-card text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                        active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
 
-      {/* Leave Request Dialog (Add, Edit, View) */}
-      <LeaveRequestDialog
-        open={dialogOpen}
-        initialRow={selectedRow}
-        readOnly={isReadOnly}
-        onClose={() => {
-          setDialogOpen(false);
-          setSelectedRow(null);
-        }}
-        onSaved={() => void loadAllData(false)}
-      />
+          {/* Main DataTable */}
+          <DataTable
+            columns={columns}
+            data={currentRows}
+            toolbar={
+              <button
+                type="button"
+                onClick={handleStartNew}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+              >
+                <Plus size={14} />
+                Add Leave Request
+              </button>
+            }
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search request number, employee, leave type, reason..."
+            loading={loading}
+            height="calc(100dvh - 180px)"
+            density="grid"
+            enablePagination
+            pageSize={25}
+            enableExport
+            exportFilename={`leave-request-${activeTab}.csv`}
+            getRowId={(row, index) =>
+              String(row.REQUEST_NUMBER ?? row.requestNumber ?? row.SR_NO ?? index)
+            }
+            // onRowClick={handleOpenView}
+          />
+        </>
+      )}
     </section>
   );
 }
@@ -591,7 +610,7 @@ function statusBadgeClass(status: string, tabKey: string): string {
 
 function formatDate(value: unknown): string {
   if (!value) return "-";
-  const str = String(value);  
+  const str = String(value);
   const date = new Date(str);
   if (Number.isNaN(date.getTime())) return str;
   return date.toLocaleDateString("en-GB");
