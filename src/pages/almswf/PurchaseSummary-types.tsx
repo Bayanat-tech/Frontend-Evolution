@@ -146,6 +146,7 @@ export type TPRItem = {
   APPROVED_QTY_PUOM: number;
   APPROVED_QTY_LUOM: number;
   APPROVED_UPPP: number;
+  productNameOf?: (code: unknown) => string;
 };
 
 export type TPRterm = {

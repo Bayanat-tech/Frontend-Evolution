@@ -239,9 +239,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   });
   const tabCounts = tabCountQueries.map((q) => (Array.isArray(q.data) ? q.data.length : 0));
 
-  // ── User flows (source of truth for "can create PR?") ─────────────────────
-  // The API returns user_level per flow. If ANY flow has user_level === 1,
-  // the user can create a PR — regardless of what AuthContext.user contains.
+
   const userFlowsQuery = useQuery({
     queryKey: [QUERY_ROOT, loginid, companyCode, "user-flows"],
     queryFn: () =>
@@ -276,9 +274,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     [allUserFlows]
   );
 
-  // Can this user create a PR?
-  // - Hardcoded employees: always (sir's exception)
-  // - Everyone else: only if the API returned at least one level-1 flow
   const canCreatePR = isHardcodedAddPrUser || selfFlows.length > 0;
 
   const data = isPoGeneratedTab ? poQuery.data : prQuery.data;
