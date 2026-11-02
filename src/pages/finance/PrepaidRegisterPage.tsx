@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import {
+  AlertCircle,
   CalendarRange,
   Coins,
   Edit2,
@@ -97,6 +98,36 @@ const EMPTY_PREPAID: PrepaidRow = {
   grouping: "",
   grouping_name: "",
 };
+
+const PREPAID_LIMITS: Partial<Record<keyof PrepaidRow, { max: number; label: string }>> = {
+  description:      { max: 70,  label: "Description" },
+  remarks:          { max: 250, label: "Remarks" },
+  div_code:         { max: 5,   label: "Division" },
+  credit_ac:        { max: 10,  label: "Credit A/C" },
+  debit_ac:         { max: 10,  label: "Debit A/C" },
+  grouping:         { max: 35,  label: "Grouping" },
+  exp_type_code:    { max: 3,   label: "Expense Type" },
+  exp_subtype_code: { max: 10,  label: "Expense Sub Type" },
+  ac_exp_code:      { max: 10,  label: "Expense Code" },
+};
+
+const NUMERIC_FIELDS: { field: keyof PrepaidRow; label: string }[] = [
+  { field: "amount", label: "Amount" },
+  { field: "daily_rate", label: "Daily Rate" },
+  { field: "lcur_amount", label: "LCur Amount" },
+  { field: "monthly_amount", label: "Monthly Amount" },
+  { field: "opening_amount", label: "Opening Amount" },
+  { field: "allocated_amount", label: "Allocated Amount" },
+];
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return (
+    <span data-error="true" className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
+      <AlertCircle size={10} /> {msg}
+    </span>
+  );
+}
 
 export function PrepaidRegisterPage() {
   const { user } = useAuth();
@@ -223,9 +254,9 @@ export function PrepaidRegisterPage() {
           companyCode={companyCode}
           loginId={loginId}
           onClose={closeEditor}
-          onSaved={async () => {
+          onSaved={async (docNo) => {
             setEditor(null);
-            setNotice({ type: "success", message: "Prepaid record saved successfully" });
+            setNotice({ type: "success", message: `Prepaid record saved successfully${docNo ? ` (Doc No: ${docNo})` : ""}` });
             await loadRows(false);
           }}
         />
@@ -309,7 +340,7 @@ function PrepaidEditor({
   companyCode: string;
   loginId: string;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (docNo?: string | number) => Promise<void>;
 }) {
   const readOnly = editor.mode === "view";
   const isEdit = editor.mode === "edit";
@@ -324,21 +355,89 @@ function PrepaidEditor({
     if (form.lcur_amount !== lcur) setForm((prev) => ({ ...prev, lcur_amount: lcur }));
   }, [form.amount, form.daily_rate]);
 
-  const setField = (field: keyof PrepaidRow, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+  // const setField = (field: keyof PrepaidRow, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+const [remarksFocus, setRemarksFocus] = useState(false);
+
+const setField = (field: keyof PrepaidRow, value: string) => {
+  setForm((prev) => ({ ...prev, [field]: value }));
+  setFieldErrors((p) => { if (!p[field]) return p; const { [field]: _, ...rest } = p; return rest; });
+};
+
+const limitErr = (f: keyof PrepaidRow) => {
+  const l = PREPAID_LIMITS[f];
+  const v = String(form[f] ?? "");
+  return l && v.length > l.max ? `Max ${l.max} (${v.length})` : undefined;
+};
+
+const scrollToFirstError = () => setTimeout(() => {
+  document.querySelector("[data-error='true']")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}, 50);
+
+// const FieldError = ({ msg }: { msg?: string }) => msg ? (
+//   <span data-error="true" className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
+//     <AlertCircle size={10} /> {msg}
+//   </span>
+// ) : null;
   const setAmount = (field: keyof PrepaidRow, value: string) => setField(field, money(value));
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (readOnly) return;
-    if (!form.doc_date || !form.credit_ac || !form.debit_ac || !form.amount) {
-      setError("Doc Date, Credit A/C, Debit A/C and Amount are required.");
-      return;
-    }
+    // if (!form.doc_date || !form.credit_ac || !form.debit_ac || !form.amount) {
+    //   setError("Doc Date, Credit A/C, Debit A/C and Amount are required.");
+    //   return;
+    // }
+    
+// const errs: Record<string, string> = {};
+// if (!form.doc_date)  errs.doc_date  = "Doc Date is required";
+// if (!form.div_code)  errs.div_code  = "Division is required";   // DIV_CODE is NOT NULL
+// if (!form.credit_ac) errs.credit_ac = "Credit A/C is required";
+// if (!form.debit_ac)  errs.debit_ac  = "Debit A/C is required";
+// if (!(number(form.amount) > 0)) errs.amount = "Amount must be > 0";
+// else if (Math.abs(number(form.amount)) >= 1e14) errs.amount = "Amount too large (max 14 digits)";
+// if (form.start_date && form.end_date && form.end_date < form.start_date)
+//   errs.end_date = "End Date must be on or after Start Date";
+// for (const [f, l] of Object.entries(PREPAID_LIMITS)) {
+//   const v = String(form[f as keyof PrepaidRow] ?? "");
+//   if (l && v.length > l.max) errs[f] = `Max ${l.max} (${v.length})`;
+// }
+// setFieldErrors(errs);
+// if (Object.keys(errs).length) {
+//   setError("Kindly fill in the missing fields.");
+//   scrollToFirstError();
+//   return;
+// }
+  
+const errs: Record<string, string> = {};
+if (!form.doc_date)           errs.doc_date    = "Doc Date is required";
+if (!form.div_code)           errs.div_code    = "Division is required";
+if (!form.description.trim()) errs.description = "Description is required";
+if (!form.start_date)         errs.start_date  = "Start Date is required";
+if (!form.credit_ac)          errs.credit_ac   = "Credit A/C is required";
+if (!form.debit_ac)           errs.debit_ac    = "Debit A/C is required";
+if (!(number(form.amount) > 0)) errs.amount    = "Amount must be > 0";
+for (const { field, label } of NUMERIC_FIELDS) {
+  if (!errs[field] && Math.abs(number(form[field])) >= 1e14) errs[field] = `${label} too large (max 14 digits)`;
+}
+if (form.start_date && form.end_date && form.end_date < form.start_date)
+  errs.end_date = "End Date must be on or after Start Date";
+for (const [f, l] of Object.entries(PREPAID_LIMITS)) {
+  const v = String(form[f as keyof PrepaidRow] ?? "");
+  if (l && v.length > l.max) errs[f] = `Max ${l.max} (${v.length})`;
+}
+
+setFieldErrors(errs);
+if (Object.keys(errs).length) {
+  setError("Kindly fill in the missing fields.");
+  scrollToFirstError();
+  return;
+}
 
     setSaving(true);
     setError("");
     try {
-      await postFinance("upsertPrepaid", {
+      const res: any = await postFinance("upsertPrepaid", {
         ...form,
         company_code: companyCode,
         doc_type: "PRE",
@@ -354,7 +453,7 @@ function PrepaidEditor({
         user_id: loginId,
         loginid: loginId,
       });
-      await onSaved();
+      await onSaved(res?.doc_no ?? res?.data?.doc_no ?? form.doc_no);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save prepaid record");
     } finally {
@@ -374,7 +473,7 @@ function PrepaidEditor({
           </span>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-bold leading-tight text-slate-900">{title}</h1>
-            <p className="m-0 text-xs text-slate-500">Doc No: {form.doc_no || "Autogenerated"}</p>
+            {/* <p className="m-0 text-xs text-slate-500">Doc No: {form.doc_no || "Autogenerated"}</p> */}
           </div>
         </div>
 
@@ -410,7 +509,9 @@ function PrepaidEditor({
 
       <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-      <form className="flex flex-col gap-2" id="prepaid-register-form" onSubmit={handleSubmit}>
+      {/* <form className="flex flex-col gap-2" id="prepaid-register-form" onSubmit={handleSubmit}> */}
+       <form className="flex flex-col gap-2" id="prepaid-register-form" onSubmit={handleSubmit} noValidate>
+        <div className="grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-2 items-start">
         {/* Card 1: Document Details */}
         <div className="freight-master-form-card">
           <div className="freight-master-form-header">
@@ -418,14 +519,13 @@ function PrepaidEditor({
           </div>
           <div className="freight-master-form-body">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
-              <Field label="Doc No" value={form.doc_no} onChange={(value) => setField("doc_no", value)} disabled={readOnly || isEdit} />
-              <Field label="Doc Date" type="date" value={form.doc_date} onChange={(value) => setField("doc_date", value)} disabled={readOnly} required />
+              {/* <Field label="Doc No" value={form.doc_no} onChange={(value) => setField("doc_no", value)} disabled={readOnly || isEdit} />
+              <Field label="Doc Date" type="date" value={form.doc_date} onChange={(value) => setField("doc_date", value)} disabled={readOnly} required /> */}
               
-              <div className="freight-master-field">
-                <label className="freight-master-label">Division</label>
-                <LookupField
-                  compact
-                  value={form.div_code}
+              <Field label="Doc No" value={form.doc_no} onChange={() => {}} disabled placeholder="Auto generated" />
+              <Field label="Doc Date" type="date" value={form.doc_date} onChange={(v) => setField("doc_date", v)} disabled={readOnly} required error={fieldErrors.doc_date} />
+              <div className="freight-master-field  xl:col-span-2">
+                  <LookupField label="Division *" required enforceRequired value={form.div_code}
                   displayValue={display(form.div_code, form.div_name)}
                   valueField="div_code"
                   displayFields={["div_code", "div_name"]}
@@ -442,15 +542,30 @@ function PrepaidEditor({
                     setField("div_name", String(getLookupValue(row || {}, "div_name") || ""));
                   }}
                 />
+                 <FieldError msg={fieldErrors.div_code} />
               </div>
 
-              <Field className="col-span-1 sm:col-span-3 xl:col-span-2" label="Description" value={form.description} onChange={(value) => setField("description", value)} disabled={readOnly} />
-            </div>
+              {/* <Field className="col-span-1 sm:col-span-3 xl:col-span-2" label="Description" value={form.description} onChange={(value) => setField("description", value)} disabled={readOnly} maxLength={70} error={limitErr("description")} /> */}
+             <Field className="col-span-1 sm:col-span-3 xl:col-span-2" label="Description" required
+               value={form.description} onChange={(v) => setField("description", v)} disabled={readOnly}
+               maxLength={70}
+               error={fieldErrors.description} />
+              </div>
             <div className="mt-2 grid grid-cols-1 gap-2">
-              <label className="freight-master-field">
-                <span className="freight-master-label">Remarks</span>
-                <textarea className="freight-master-input min-h-[38px]" value={form.remarks} onChange={(event) => setField("remarks", event.target.value)} disabled={readOnly} />
-              </label>
+  <label className="freight-master-field">
+  <span className="freight-master-label">Remarks</span>
+  <textarea
+    className={`freight-master-input min-h-[38px] ${limitErr("remarks") ? "!border-rose-500 !ring-rose-400" : ""}`}
+    value={form.remarks} maxLength={250} disabled={readOnly}
+    onFocus={() => setRemarksFocus(true)} onBlur={() => setRemarksFocus(false)}
+    onChange={(e) => setField("remarks", e.target.value)} />
+  {remarksFocus && !readOnly && (
+    <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+      {form.remarks.length} / 250 characters ( {250 - form.remarks.length} left)
+    </div>
+  )}
+  <FieldError msg={limitErr("remarks")} />
+</label>
             </div>
           </div>
         </div>
@@ -461,12 +576,9 @@ function PrepaidEditor({
             <h3><span className="freight-section-icon"><Landmark size={16} /></span>Accounts</h3>
           </div>
           <div className="freight-master-form-body">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
               <div className="freight-master-field">
-                <label className="freight-master-label">Credit A/C <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span></label>
-                <LookupField
-                  compact
-                  value={form.credit_ac}
+                  <LookupField label="Credit A/C *" required enforceRequired value={form.credit_ac}
                   displayValue={display(form.credit_ac, form.credit_ac_name)}
                   valueField="ac_code"
                   displayFields={["ac_code", "ac_name"]}
@@ -483,12 +595,10 @@ function PrepaidEditor({
                     setField("credit_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
                   }}
                 />
+                <FieldError msg={fieldErrors.credit_ac} /> 
               </div>
               <div className="freight-master-field">
-                <label className="freight-master-label">Debit A/C <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span></label>
-                <LookupField
-                  compact
-                  value={form.debit_ac}
+                  <LookupField label="Debit A/C *" required enforceRequired value={form.debit_ac}
                   displayValue={display(form.debit_ac, form.debit_ac_name)}
                   valueField="ac_code"
                   displayFields={["ac_code", "ac_name"]}
@@ -505,20 +615,24 @@ function PrepaidEditor({
                     setField("debit_ac_name", String(getLookupValue(row || {}, "ac_name") || ""));
                   }}
                 />
+                <FieldError msg={fieldErrors.debit_ac} />  
               </div>
             </div>
           </div>
         </div>
+        </div>
 
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 items-start">
         {/* Card 3: Period */}
-        <div className="freight-master-form-card">
+          <div className="freight-master-form-card">
           <div className="freight-master-form-header">
             <h3><span className="freight-section-icon"><CalendarRange size={16} /></span>Period</h3>
           </div>
           <div className="freight-master-form-body">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              <Field label="Start Date" type="date" value={form.start_date} onChange={(value) => setField("start_date", value)} disabled={readOnly} />
-              <Field label="End Date" type="date" value={form.end_date} onChange={(value) => setField("end_date", value)} disabled={readOnly} />
+            <div className="grid grid-cols-3 gap-2">
+             <Field label="Start Date" type="date" required value={form.start_date}
+               onChange={(v) => setField("start_date", v)} disabled={readOnly} error={fieldErrors.start_date} />
+             <Field label="End Date" type="date" value={form.end_date} onChange={(v) => setField("end_date", v)} disabled={readOnly} error={fieldErrors.end_date} />
               <div className="freight-master-field">
                 <label className="freight-master-label">DR/CR</label>
                 <Select className="freight-master-select" value={form.amount_dr_cr} onChange={(event) => setField("amount_dr_cr", event.target.value)} disabled={readOnly}>
@@ -527,25 +641,28 @@ function PrepaidEditor({
                 </Select>
               </div>
             </div>
-          </div>
+          </div>        
         </div>
-
+        
         {/* Card 4: Amounts */}
-        <div className="freight-master-form-card">
+       <div className="freight-master-form-card">
           <div className="freight-master-form-header">
             <h3><span className="freight-section-icon"><Coins size={16} /></span>Amounts</h3>
           </div>
           <div className="freight-master-form-body">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
-              <Field label="Amount" value={form.amount} onChange={(value) => setField("amount", value)} onBlur={(value) => setAmount("amount", value)} disabled={readOnly} numeric required />
-              <Field label="Daily Rate" value={form.daily_rate} onChange={(value) => setField("daily_rate", value)} onBlur={(value) => setAmount("daily_rate", value)} disabled={readOnly} numeric />
-              <Field label="LCur Amount" value={form.lcur_amount} onChange={(value) => setField("lcur_amount", value)} disabled numeric />
-              <Field label="Monthly Amount" value={form.monthly_amount} onChange={(value) => setField("monthly_amount", value)} onBlur={(value) => setAmount("monthly_amount", value)} disabled={readOnly} numeric />
-              <Field label="Opening Amount" value={form.opening_amount} onChange={(value) => setField("opening_amount", value)} onBlur={(value) => setAmount("opening_amount", value)} disabled={readOnly} numeric />
-              <Field label="Allocated Amount" value={form.allocated_amount} onChange={(value) => setField("allocated_amount", value)} onBlur={(value) => setAmount("allocated_amount", value)} disabled={readOnly} numeric />
+              {/* <Field label="Amount" value={form.amount} onChange={(value) => setField("amount", value)} onBlur={(value) => setAmount("amount", value)} disabled={readOnly} numeric required /> */}
+              <Field label="Amount" value={form.amount} onChange={(v) => setField("amount", v)} onBlur={(v) => setAmount("amount", v)} disabled={readOnly} numeric required error={fieldErrors.amount} />
+              <Field label="Daily Rate" value={form.daily_rate} onChange={(value) => setField("daily_rate", value)} onBlur={(value) => setAmount("daily_rate", value)} disabled={readOnly} numeric error={fieldErrors.daily_rate} />
+              <Field label="LCur Amount" value={form.lcur_amount} onChange={(value) => setField("lcur_amount", value)} disabled numeric error={fieldErrors.lcur_amount} />
+              <Field label="Monthly Amount" value={form.monthly_amount} onChange={(value) => setField("monthly_amount", value)} onBlur={(value) => setAmount("monthly_amount", value)} disabled={readOnly} numeric error={fieldErrors.monthly_amount} />
+              <Field label="Opening Amount" value={form.opening_amount} onChange={(value) => setField("opening_amount", value)} onBlur={(value) => setAmount("opening_amount", value)} disabled={readOnly} numeric error={fieldErrors.opening_amount} />
+              <Field label="Allocated Amount" value={form.allocated_amount} onChange={(value) => setField("allocated_amount", value)} onBlur={(value) => setAmount("allocated_amount", value)} disabled={readOnly} numeric error={fieldErrors.allocated_amount} />
             </div>
           </div>
+        </div> 
         </div>
+      
 
         {/* Card 5: Classification */}
         <div className="freight-master-form-card">
@@ -656,45 +773,93 @@ function PrepaidEditor({
 // NEW FIELD COMPONENT TO MATCH AIRLINE TARIFF
 // ---------------------------------------------------------------------------
 
+// function Field({
+//   label,
+//   value,
+//   onChange,
+//   onBlur,
+//   disabled,
+//   type = "text",
+//   numeric,
+//   required,
+//   placeholder,
+//   className,
+// }: {
+//   label: string;
+//   value: string;
+//   onChange: (value: string) => void;
+//   onBlur?: (value: string) => void;
+//   disabled?: boolean;
+//   type?: "text" | "date" | "number";
+//   numeric?: boolean;
+//   required?: boolean;
+//   placeholder?: string;
+//   className?: string;
+// }) {
+//   return (
+//     <div className={`freight-master-field ${className || ""}`}>
+//       <label className="freight-master-label">
+//         <span>{label}</span>
+//         {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+//       </label>
+//       <input
+//         className={`freight-master-input ${numeric ? "numeric text-right tabular-nums" : ""}`}
+//         type={type}
+//         value={value}
+//         onChange={(event) => onChange(event.target.value)}
+//         onBlur={(event) => onBlur?.(event.target.value)}
+//         disabled={disabled}
+//         placeholder={placeholder}
+//         required={required}
+//       />
+//     </div>
+//   );
+// }
+
+// function Field({
+//   label, value, onChange, onBlur, disabled, type = "text", numeric, required, placeholder, className, error, maxLength,
+// }: {
+//   label: string; value: string; onChange: (value: string) => void; onBlur?: (value: string) => void;
+//   disabled?: boolean; type?: "text" | "date" | "number"; numeric?: boolean; required?: boolean;
+//   placeholder?: string; className?: string; error?: string; maxLength?: number;
+// }) {
+//   return (
 function Field({
-  label,
-  value,
-  onChange,
-  onBlur,
-  disabled,
-  type = "text",
-  numeric,
-  required,
-  placeholder,
-  className,
+  label, value, onChange, onBlur, disabled, type = "text", numeric, required, placeholder, className, error, maxLength,
 }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  onBlur?: (value: string) => void;
-  disabled?: boolean;
-  type?: "text" | "date" | "number";
-  numeric?: boolean;
-  required?: boolean;
-  placeholder?: string;
-  className?: string;
+  label: string; value: string; onChange: (value: string) => void; onBlur?: (value: string) => void;
+  disabled?: boolean; type?: "text" | "date" | "number"; numeric?: boolean; required?: boolean;
+  placeholder?: string; className?: string; error?: string; maxLength?: number;
 }) {
+  const [focus, setFocus] = useState(false);
   return (
     <div className={`freight-master-field ${className || ""}`}>
       <label className="freight-master-label">
         <span>{label}</span>
-        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+        {/* {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>} */}
+        {required && <span className="ml-1 text-destructive">*</span>}
       </label>
       <input
-        className={`freight-master-input ${numeric ? "numeric text-right tabular-nums" : ""}`}
+        className={`freight-master-input ${numeric ? "numeric text-right tabular-nums" : ""} ${error ? "!border-rose-500 !ring-rose-400" : ""}`}
         type={type}
         value={value}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
-        onBlur={(event) => onBlur?.(event.target.value)}
+        onFocus={() => setFocus(true)}
+        onBlur={(event) => { setFocus(false); onBlur?.(event.target.value); }}
         disabled={disabled}
         placeholder={placeholder}
-        required={required}
       />
+      {maxLength && focus && !disabled && (
+        <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+          {value.length} / {maxLength} characters ( {maxLength - value.length} left)
+        </div>
+      )}
+      {error && (
+        <span data-error="true" className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
+          <AlertCircle size={10} /> {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -764,3 +929,40 @@ function dateInput(value: unknown) {
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
   return date.toISOString().slice(0, 10);
 }
+
+
+
+// const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+// const pad2 = (n: number) => String(n).padStart(2, "0");
+// const localYmd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+// function today() {
+//   return localYmd(new Date());
+// }
+
+// function dateInput(value: unknown) {
+//   if (!value) return "";
+//   const s = String(value).trim();
+
+//   // already yyyy-mm-dd (optionally with time)
+//   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+
+//   // Oracle style: 02-NOV-26 or 02-NOV-2026
+//   const m = s.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3})[A-Za-z]*[-\/ ](\d{2}|\d{4})$/);
+//   if (m) {
+//     const mon = MONTHS.indexOf(m[2].toUpperCase());
+//     if (mon >= 0) {
+//       const yy = Number(m[3]);
+//       const year = m[3].length === 2 ? (yy < 50 ? 2000 + yy : 1900 + yy) : yy;
+//       return `${year}-${pad2(mon + 1)}-${pad2(Number(m[1]))}`;
+//     }
+//   }
+
+//   // dd/mm/yyyy or dd-mm-yyyy
+//   const d = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+//   if (d) return `${d[3]}-${pad2(Number(d[2]))}-${pad2(Number(d[1]))}`;
+
+//   const date = new Date(s);
+//   if (Number.isNaN(date.getTime())) return s.slice(0, 10);
+//   return localYmd(date);
+// }
