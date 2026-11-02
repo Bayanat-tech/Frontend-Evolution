@@ -36,3 +36,4 @@ const baseParams = (loginid: string, companyCode: string) => ({
   number4: 0,
   date1: null,
   date2: null,
+  });
