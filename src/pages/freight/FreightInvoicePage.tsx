@@ -41,6 +41,7 @@ type InvoiceFormState = {
   prin_code: string;
   prin_name: string;
   curr_code: string;
+  ex_rate: string;
   inv_status: string;
 };
 
@@ -148,6 +149,22 @@ export function FreightInvoicePage() {
       const prinCode = text(jobHeader?.prin_code || jobHeader?.PRIN_CODE);
       const prinName = text(jobHeader?.prin_name || jobHeader?.PRIN_NAME);
       const currCode = text(jobHeader?.curr_code || jobHeader?.CURR_CODE) || "OMR";
+      let exRate = text(jobHeader?.ex_rate || jobHeader?.EX_RATE);
+      if (!exRate || exRate === "0") {
+        if (currCode === "OMR") {
+          exRate = "1";
+        } else {
+          try {
+            const curRes = await api.post<{ success: boolean; data: { ex_rate: number } }>("/api/freight/currency/rate", {
+              company_code: companyCode,
+              curr_code: currCode,
+            });
+            if (curRes.data?.data?.ex_rate) {
+              exRate = String(curRes.data.data.ex_rate);
+            }
+          } catch (_) {}
+        }
+      }
 
       if (prinCode) {
         setForm((prev) => ({
@@ -155,6 +172,7 @@ export function FreightInvoicePage() {
           prin_code: prinCode,
           prin_name: prinName,
           curr_code: currCode,
+          ex_rate: exRate,
         }));
 
         const candRes = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
@@ -212,6 +230,7 @@ export function FreightInvoicePage() {
         prin_code: text(header.prin_code),
         prin_name: text(header.prin_name),
         curr_code: text(header.curr_code) || "OMR",
+        ex_rate: text(header.ex_rate || header.EX_RATE) || "1",
         inv_status: text(header.inv_status) || "N",
       });
       setSelectedRows(jobs);
@@ -406,6 +425,7 @@ export function FreightInvoicePage() {
         cust_code: form.prin_code,
         inv_amount: selectedTotal,
         curr_code: form.curr_code || "OMR",
+        ex_rate: Number(form.ex_rate) || 1,
         inv_status: nextStatus,
         user_id: loginId,
       }];
@@ -567,14 +587,23 @@ export function FreightInvoicePage() {
         </header>
         <div className="freight-document-body">
         <div className="grid gap-3">
-          <div className="grid gap-2 md:grid-cols-6">
-            <MetricCard icon={Briefcase} label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
-            <MetricCard icon={Layers} label="Activity Lines" value={String(selectedRows.length)} />
-            <MetricCard label="Before Tax" value={`${selectedBase.toFixed(3)} ${form.curr_code || "OMR"}`} />
-            <MetricCard label="Tax" value={`${selectedTax.toFixed(3)} ${form.curr_code || "OMR"}`} />
-            <MetricCard icon={TrendingUp} label="Invoice Total" value={`${selectedTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight />
-            <MetricCard label="Status" value={isFormConfirmed ? "Confirmed" : "Draft"} tone={isFormConfirmed ? "emerald" : "amber"} />
-          </div>
+          {(() => {
+            const isFc = form.curr_code && form.curr_code !== "OMR";
+            const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+            const fcTotal = isFc ? selectedTotal / exRate : selectedTotal;
+            const fcBase = isFc ? selectedBase / exRate : selectedBase;
+            const fcTax = isFc ? selectedTax / exRate : selectedTax;
+            return (
+              <div className="grid gap-2 md:grid-cols-6">
+                <MetricCard icon={Briefcase} label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
+                <MetricCard icon={Layers} label="Activity Lines" value={String(selectedRows.length)} />
+                <MetricCard label="Before Tax" value={`${fcBase.toFixed(3)} ${form.curr_code || "OMR"}`} helper={isFc ? `Base: OMR ${selectedBase.toFixed(3)}` : undefined} />
+                <MetricCard label="Tax" value={`${fcTax.toFixed(3)} ${form.curr_code || "OMR"}`} helper={isFc ? `Base: OMR ${selectedTax.toFixed(3)}` : undefined} />
+                <MetricCard icon={TrendingUp} label="Invoice Total" value={`${fcTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight helper={isFc ? `Base: OMR ${selectedTotal.toFixed(3)} (Ex: ${form.ex_rate})` : undefined} />
+                <MetricCard label="Status" value={isFormConfirmed ? "Confirmed" : "Draft"} tone={isFormConfirmed ? "emerald" : "amber"} />
+              </div>
+            );
+          })()}
 
 
           <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
@@ -584,8 +613,8 @@ export function FreightInvoicePage() {
               </div>
               <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Invoice Header</h2>
             </div>
-          <div className="grid gap-2 p-3 md:grid-cols-6">
-            <div className="grid gap-1 text-xs font-semibold text-muted-foreground">
+          <div className="grid gap-2 p-3 md:grid-cols-8">
+            <div className="grid gap-1 text-xs font-semibold text-muted-foreground md:col-span-2">
               <LookupField
                 label="Principal"
                 showLabelInCompact
@@ -617,7 +646,51 @@ export function FreightInvoicePage() {
         disabled={readOnly}
         onChange={(nextValue) => {setFormField("to_date", nextValue); void loadCandidateJobs(candidateSearch, form.prin_code, form.from_date, nextValue);}} /></Field>
 
-            <Field label="Total With Tax"><Input value={selectedTotal.toFixed(3)} disabled className="text-right font-semibold" /></Field>
+            <div className="grid gap-1 text-xs font-semibold text-muted-foreground">
+              <LookupField
+                label="Currency"
+                showLabelInCompact
+                compact
+                disabled={readOnly || selectedRows.length > 0}
+                value={form.curr_code}
+                displayValue={form.curr_code}
+                valueField="curr_code"
+                displayFields={["curr_code", "curr_name"]}
+                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }, { field: "ex_rate", header: "Rate" }]}
+                loadOptions={(search) => loadFreightLookup("freight_currency", companyCode, search)}
+                onChange={async (value, row) => {
+                  let ex = text(row?.ex_rate ?? row?.EX_RATE);
+                  if (!ex || ex === "0") {
+                    if (value === "OMR") {
+                      ex = "1";
+                    } else {
+                      try {
+                        const curRes = await api.post<{ success: boolean; data: { ex_rate: number } }>("/api/freight/currency/rate", {
+                          company_code: companyCode,
+                          curr_code: value,
+                        });
+                        if (curRes.data?.data?.ex_rate) {
+                          ex = String(curRes.data.data.ex_rate);
+                        }
+                      } catch (_) {}
+                    }
+                  }
+                  setForm((prev) => ({ ...prev, curr_code: value, ex_rate: ex || "1" }));
+                }}
+                placeholder="Currency"
+              />
+            </div>
+            <Field label="Ex Rate">
+              <Input
+                type="number"
+                step="any"
+                disabled={readOnly || form.curr_code === "OMR"}
+                value={form.ex_rate}
+                onChange={(e) => setForm((prev) => ({ ...prev, ex_rate: e.target.value }))}
+                className="text-right font-medium"
+                title={form.curr_code !== "OMR" ? `1 ${form.curr_code} = ${form.ex_rate} OMR` : "Base Currency (1.0)"}
+              />
+            </Field>
           </div>
           </div>
 
@@ -758,6 +831,7 @@ function emptyForm(): InvoiceFormState {
     prin_code: "",
     prin_name: "",
     curr_code: "OMR",
+    ex_rate: "1",
     inv_status: "N",
   };
 }
@@ -779,12 +853,14 @@ function MetricCard({
   icon: Icon,
   label,
   value,
+  helper,
   highlight,
   tone = "default",
 }: {
   icon?: LucideIcon;
   label: string;
   value: string;
+  helper?: string;
   highlight?: boolean;
   tone?: "default" | "emerald" | "amber";
 }) {
@@ -804,6 +880,7 @@ function MetricCard({
         {Icon && <Icon size={13} className={highlight ? "text-[#00378C]" : "text-slate-400"} />}
       </div>
       <div className={`mt-1 truncate text-base font-extrabold ${highlight ? "text-[#00378C]" : "text-slate-900"}`}>{value}</div>
+      {helper && <div className="mt-0.5 truncate text-[10px] font-medium text-slate-500">{helper}</div>}
     </div>
   );
 }
