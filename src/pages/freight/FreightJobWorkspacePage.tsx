@@ -150,8 +150,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     { accessorKey: "prin_name", header: "Principal Name", size: 240 },
     { accessorKey: "doc_ref", header: targetMode === "air" ? "MAWB" : "BL / Doc Ref", size: 145 },
     { accessorKey: "hawb", header: targetMode === "air" ? "HAWB" : "House Ref", size: 130 },
-    { accessorKey: "port_code", header: "Origin", size: 90 },
-    { accessorKey: "destination_port", header: "Destination", size: 115 },
+    { accessorKey: "port_code_name", header: "Origin", size: 90, cell: ({ row }) => text(row.original, "port_code_name") || text(row.original, "port_code") },
+    { accessorKey: "destination_name", header: "Destination", size: 115, cell: ({ row }) => text(row.original, "destination_port_name") || text(row.original, "destination_port") },
     { accessorKey: "invoice_date", header: "Invoice", size: 110, cell: ({ row }) => text(row.original, "invoice_date") ? <StatusChip tone="green" label="Invoiced" /> : <StatusChip tone="slate" label="Pending" /> },
     { accessorKey: "canceled", header: "Status", size: 95, cell: ({ row }) => text(row.original, "canceled") === "Y" ? <StatusChip tone="red" label="Cancelled" /> : <StatusChip tone="green" label="Open" /> },
     {
@@ -458,8 +458,17 @@ function smartAdvice(health: ReturnType<typeof buildHealth>) {
   return "No urgent job gaps found for this list.";
 }
 
+// function normalizeLookupRow(row: LookupRow) {
+//   return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key.toUpperCase(), value])) as LookupRow;
+// }
+
 function normalizeLookupRow(row: LookupRow) {
-  return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key.toUpperCase(), value])) as LookupRow;
+  const next: LookupRow = {};
+  Object.entries(row || {}).forEach(([key, value]) => {
+    next[key.toUpperCase()] = value;
+    next[key.toLowerCase()] = value;
+  });
+  return next;
 }
 
 function text(row: LookupRow | null | undefined, key: string) {
