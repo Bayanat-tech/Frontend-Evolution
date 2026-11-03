@@ -132,6 +132,8 @@ type PackForm = {
   executed_by: string;
   frt_chgs_master: string;
   frt_chgs_house: string;
+  contn_seal_desc: string;
+  org_bl_desc: string;
   user_id: string;
 };
 
@@ -717,6 +719,22 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
               value={pack.bl_date}
               onChange={(value) => setPackField(setPack, "bl_date", value)}
             />
+            {direction.code === "IMP" && (
+              <>
+                <Field
+                  label={isAir ? "Import AWB No" : "Import BL No"}
+                  value={pack.import_blno}
+                  onChange={(value) => setPackField(setPack, "import_blno", value)}
+                  maxLength={freightTextLimit("TF_PACKLIST", "import_blno") || 25}
+                />
+                <Field
+                  label={isAir ? "Import AWB Date" : "Import BL Date"}
+                  type="date"
+                  value={pack.import_bldate}
+                  onChange={(value) => setPackField(setPack, "import_bldate", value)}
+                />
+              </>
+            )}
           </div>
         </Panel>
 
@@ -826,23 +844,27 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
   </div> */}
 
   {isAir ? (
-  <div className="freight-job-field-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+  <div className="freight-job-field-grid grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
     <Textarea label="Nature And Quantity Of Goods" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} required maxLength={freightTextLimit("TF_PACKLIST", "prod_description")} />
-    {/* <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} /> */}
-    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} maxLength={freightTextLimit("TF_PACKLIST", "remarks")} 
-    // className="col-span-2" 
-    />
+    <Textarea label="Other Charges" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} maxLength={freightTextLimit("TF_PACKLIST", "marksnos")} placeholder="Other Charges (e.g. House Consumption DECEXP...)" className="!bg-[#fef9c3] !border-amber-300 font-medium text-amber-950 focus:!bg-[#fef08a]" />
+    <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} maxLength={freightTextLimit("TF_PACKLIST", "cargo_details")} />
+    <Textarea label="Handling Info" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "handling_info")} />
+    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} maxLength={freightTextLimit("TF_PACKLIST", "remarks")} />
+  </div>
+) : isSea ? (
+  <div className="freight-job-field-grid grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+    <Textarea label="Marks & Nos." value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} maxLength={freightTextLimit("TF_PACKLIST", "marksnos")} />
+    <Textarea label="Cargo Description" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} maxLength={freightTextLimit("TF_PACKLIST", "prod_description")} />
+    <Textarea label="Goods Detail" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} maxLength={freightTextLimit("TF_PACKLIST", "cargo_details")} />
+    <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "handling_info")} />
+    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} maxLength={freightTextLimit("TF_PACKLIST", "remarks")} />
   </div>
 ) : (
-  <div className="freight-job-field-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+  <div className="freight-job-field-grid grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
     <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} maxLength={freightTextLimit("TF_PACKLIST", "marksnos")} />
-    {isRoad ? (
-    <>
-      {/* <Textarea label="Cargo Detail" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} /> */}
-      <Textarea label="Cargo Desc" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} maxLength={freightTextLimit("TF_PACKLIST", "prod_description")} />
-      <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "handling_info")} />
-    </>
-    ) : null}
+    <Textarea label="Cargo Description" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} maxLength={freightTextLimit("TF_PACKLIST", "prod_description")} />
+    <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} maxLength={freightTextLimit("TF_PACKLIST", "cargo_details")} />
+    <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "handling_info")} />
     <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} maxLength={freightTextLimit("TF_PACKLIST", "remarks")} />
   </div>
 )}
@@ -937,6 +959,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
       <Field label="Number of Originals B/Ls" type="number" value={pack.no_of_original_bl} onChange={(value) => setPackField(setPack, "no_of_original_bl", value)} />
       <Field label="Issuing Carrier Name" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} maxLength={freightTextLimit("TF_PACKLIST", "issuing_carrier")} />
       <Field label="Issuing Carrier Address" value={pack.issuing_carrier_add} onChange={(value) => setPackField(setPack, "issuing_carrier_add", value)} className="lg:col-span-2" maxLength={freightTextLimit("TF_PACKLIST", "issuing_carrier_add")} />
+      <Textarea label="Container & Seal Description" value={pack.contn_seal_desc} onChange={(value) => setPackField(setPack, "contn_seal_desc", value)} className="lg:col-span-2" maxLength={freightTextLimit("TF_PACKLIST", "contn_seal_desc")} />
     </div>
   </Panel>
 )}
@@ -971,6 +994,16 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
             
               <Field label="Valuation Chg" type="number" value={pack.valuation_chg} onChange={(value) => setPackField(setPack, "valuation_chg", value)} />
               <Field label="Tax Chg" type="number" value={pack.tax_chg} onChange={(value) => setPackField(setPack, "tax_chg", value)} />
+              <div className="sm:col-span-2 md:col-span-2 lg:col-span-2">
+                <Textarea
+                  label="Other Charges"
+                  value={pack.marksnos}
+                  onChange={(value) => setPackField(setPack, "marksnos", value)}
+                  maxLength={freightTextLimit("TF_PACKLIST", "marksnos")}
+                  placeholder="Other Charges (e.g. House Consumption DECEXP11112511420975)"
+                  className="!bg-[#fef9c3] !border-amber-300 font-medium text-amber-950 focus:!bg-[#fef08a]"
+                />
+              </div>
               {/* <Field label="Carrier Amount" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} /> */}
               {/* <SelectField label="Rate Ind" value={pack.rate_ind} options={["N", "A", "R"]} onChange={(value) => setPackField(setPack, "rate_ind", value)} />
               <SelectField label="KG Ind" value={pack.kg_ind} options={["K", "L"]} onChange={(value) => setPackField(setPack, "kg_ind", value)} />
@@ -1679,6 +1712,8 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     executed_by: "",
     frt_chgs_master: "",
     frt_chgs_house: "",
+    contn_seal_desc: "",
+    org_bl_desc: "",
     user_id: userId,
   };
 }
