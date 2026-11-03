@@ -424,8 +424,8 @@ export default function YearlyLeaveBalancePage() {
 
         <ReportFilterHeader onClear={handleClearAll} />
 
-        {/* Row 1: Division / Department / Section */}
-        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+        {/* All filters in ONE grid: 4 columns x 2 rows, no empty cells */}
+        <div className="freight-report-fields grid items-start gap-x-3 gap-y-2 p-3 md:grid-cols-2 xl:grid-cols-4">
           <MultiSelectField
             className="freight-report-multi-select"
             label="Division"
@@ -450,10 +450,6 @@ export default function YearlyLeaveBalancePage() {
             value={sections}
             onChange={setSections}
           />
-        </div>
-
-        {/* Row 2: Employee / Leave Type */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <MultiSelectField
             className="freight-report-multi-select"
             label="Employee Code"
@@ -470,58 +466,102 @@ export default function YearlyLeaveBalancePage() {
             value={leaveTypes}
             onChange={setLeaveTypes}
           />
-        </div>
-
-        {/* Row 3: From / To */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="From">
-            <BiscDatePicker
-              value={from}
-              onChange={(value) => {
-                if (!to || value <= to) setFrom(value);
-              }}
-            />
+            <div className="[&>*]:!h-8 [&>*]:!min-h-0 [&_input]:!h-full [&_button]:!h-full">
+              <BiscDatePicker
+                value={from}
+                onChange={(value) => {
+                  if (!to || value <= to) setFrom(value);
+                }}
+              />
+            </div>
           </Field>
           <Field label="To">
-            <BiscDatePicker
-              value={to}
-              onChange={(value) => {
-                if (!from || value >= from) setTo(value);
+            <div className="[&>*]:!h-8 [&>*]:!min-h-0 [&_input]:!h-full [&_button]:!h-full">
+              <BiscDatePicker
+                value={to}
+                onChange={(value) => {
+                  if (!from || value >= from) setTo(value);
+                }}
+              />
+            </div>
+          </Field>
+          {/* Same Field wrapper as From/To so the label looks identical; options are divs (no nested labels) */}
+          <Field label="Report Type">
+            <div
+              className="rounded-md border border-slate-300 bg-blue-50/60 px-2.5 text-[12px] font-medium"
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 16,
+                height: 32,
+                width: "100%",
+                boxSizing: "border-box",
               }}
-            />
+            >
+              {(
+                [
+                  { value: "LIST", label: "Yearly Leave Balance List" },
+                  { value: "CURRENT", label: "Current Leave Balance" },
+                ] as const
+              ).map((o) => (
+                <div
+                  key={o.value}
+                  role="radio"
+                  aria-checked={mode === o.value}
+                  tabIndex={0}
+                  onClick={() => setMode(o.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === " " || e.key === "Enter") {
+                      e.preventDefault();
+                      setMode(o.value);
+                    }
+                  }}
+                  className={mode === o.value ? "text-blue-600" : "text-foreground"}
+                  style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    lineHeight: 1,
+                  }}
+                >
+                  {/* custom radio circle (native input is overridden by global CSS) */}
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 14,
+                      height: 14,
+                      flexShrink: 0,
+                      borderRadius: "50%",
+                      border: `1.5px solid ${mode === o.value ? "#2563eb" : "#94a3b8"}`,
+                      background: "#fff",
+                    }}
+                  >
+                    {mode === o.value && (
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          background: "#2563eb",
+                          display: "block",
+                        }}
+                      />
+                    )}
+                  </span>
+                  <span>{o.label}</span>
+                </div>
+              ))}
+            </div>
           </Field>
         </div>
-
-       {/* Row 4: Report type */}
-<div className="freight-report-fields px-3 pb-3">
-  <div className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-    Report Type
-    <div className="inline-flex w-fit items-center gap-4 rounded-md border border-slate-300 bg-blue-50/60 px-2.5 py-1.5 text-[13px] normal-case font-medium">
-      {(
-        [
-          { value: "LIST", label: "Yearly Leave Balance List" },
-          { value: "CURRENT", label: "Current Leave Balance" },
-        ] as const
-      ).map((o) => (
-        <label
-          key={o.value}
-          className={`flex cursor-pointer items-center gap-1.5 ${
-            mode === o.value ? "text-blue-600" : "text-foreground"
-          }`}
-        >
-          <input
-            type="radio"
-            name="yearly-leave-balance-mode"
-            checked={mode === o.value}
-            onChange={() => setMode(o.value)}
-            className="h-3 w-3 cursor-pointer accent-blue-600"
-          />
-          {o.label}
-        </label>
-      ))}
-    </div>
-  </div>
-</div>
 
         {!dateRangeValid && (
           <p className="px-3 pb-2 text-xs text-destructive">From date must be on or before To date.</p>

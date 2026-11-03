@@ -41,6 +41,7 @@ type InvoiceFormState = {
   prin_code: string;
   prin_name: string;
   curr_code: string;
+  ex_rate: string;
   inv_status: string;
 };
 
@@ -148,6 +149,22 @@ export function FreightInvoicePage() {
       const prinCode = text(jobHeader?.prin_code || jobHeader?.PRIN_CODE);
       const prinName = text(jobHeader?.prin_name || jobHeader?.PRIN_NAME);
       const currCode = text(jobHeader?.curr_code || jobHeader?.CURR_CODE) || "OMR";
+      let exRate = text(jobHeader?.ex_rate || jobHeader?.EX_RATE);
+      if (!exRate || exRate === "0") {
+        if (currCode === "OMR") {
+          exRate = "1";
+        } else {
+          try {
+            const curRes = await api.post<{ success: boolean; data: { ex_rate: number } }>("/api/freight/currency/rate", {
+              company_code: companyCode,
+              curr_code: currCode,
+            });
+            if (curRes.data?.data?.ex_rate) {
+              exRate = String(curRes.data.data.ex_rate);
+            }
+          } catch (_) {}
+        }
+      }
 
       if (prinCode) {
         setForm((prev) => ({
@@ -155,6 +172,7 @@ export function FreightInvoicePage() {
           prin_code: prinCode,
           prin_name: prinName,
           curr_code: currCode,
+          ex_rate: exRate,
         }));
 
         const candRes = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
@@ -203,7 +221,16 @@ export function FreightInvoicePage() {
         invoice_no: text(row.invoice_no),
       });
       const header = normalizeRow(response.data.data?.header || row);
-      const jobs = (response.data.data?.jobSelection || []).map(normalizeRow);
+      const rawJobs = (response.data.data?.jobSelection || []).map(normalizeRow);
+      const hasJobRows = rawJobs.some((r) => Boolean(text(r.job_no)));
+      const filteredJobs = hasJobRows ? rawJobs.filter((r) => Boolean(text(r.job_no))) : rawJobs;
+      const seen = new Set<string>();
+      const jobs = filteredJobs.filter((r) => {
+        const key = `${text(r.job_no)}|${text(r.act_code)}|${text(r.srno)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
       setForm({
         invoice_no: text(header.invoice_no),
         invoice_date: inputDate(text(header.invoice_date)) || today,
@@ -212,6 +239,7 @@ export function FreightInvoicePage() {
         prin_code: text(header.prin_code),
         prin_name: text(header.prin_name),
         curr_code: text(header.curr_code) || "OMR",
+        ex_rate: text(header.ex_rate || header.EX_RATE) || "1",
         inv_status: text(header.inv_status) || "N",
       });
       setSelectedRows(jobs);
@@ -406,6 +434,7 @@ export function FreightInvoicePage() {
         cust_code: form.prin_code,
         inv_amount: selectedTotal,
         curr_code: form.curr_code || "OMR",
+        ex_rate: Number(form.ex_rate) || 1,
         inv_status: nextStatus,
         user_id: loginId,
       }];
@@ -567,14 +596,23 @@ export function FreightInvoicePage() {
         </header>
         <div className="freight-document-body">
         <div className="grid gap-3">
-          <div className="grid gap-2 md:grid-cols-6">
-            <MetricCard icon={Briefcase} label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
-            <MetricCard icon={Layers} label="Activity Lines" value={String(selectedRows.length)} />
-            <MetricCard label="Before Tax" value={`${selectedBase.toFixed(3)} ${form.curr_code || "OMR"}`} />
-            <MetricCard label="Tax" value={`${selectedTax.toFixed(3)} ${form.curr_code || "OMR"}`} />
-            <MetricCard icon={TrendingUp} label="Invoice Total" value={`${selectedTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight />
-            <MetricCard label="Status" value={isFormConfirmed ? "Confirmed" : "Draft"} tone={isFormConfirmed ? "emerald" : "amber"} />
-          </div>
+          {(() => {
+            const isFc = form.curr_code && form.curr_code !== "OMR";
+            const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+            const fcTotal = isFc ? selectedTotal / exRate : selectedTotal;
+            const fcBase = isFc ? selectedBase / exRate : selectedBase;
+            const fcTax = isFc ? selectedTax / exRate : selectedTax;
+            return (
+              <div className="grid gap-2 md:grid-cols-6">
+                <MetricCard icon={Briefcase} label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
+                <MetricCard icon={Layers} label="Activity Lines" value={String(selectedRows.length)} />
+                <MetricCard label="Before Tax" value={`${fcBase.toFixed(3)} ${form.curr_code || "OMR"}`} helper={isFc ? `Base: OMR ${selectedBase.toFixed(3)}` : undefined} />
+                <MetricCard label="Tax" value={`${fcTax.toFixed(3)} ${form.curr_code || "OMR"}`} helper={isFc ? `Base: OMR ${selectedTax.toFixed(3)}` : undefined} />
+                <MetricCard icon={TrendingUp} label="Invoice Total" value={`${fcTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight helper={isFc ? `Base: OMR ${selectedTotal.toFixed(3)} (Ex: ${form.ex_rate})` : undefined} />
+                <MetricCard label="Status" value={isFormConfirmed ? "Confirmed" : "Draft"} tone={isFormConfirmed ? "emerald" : "amber"} />
+              </div>
+            );
+          })()}
 
 
           <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
@@ -584,8 +622,8 @@ export function FreightInvoicePage() {
               </div>
               <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Invoice Header</h2>
             </div>
-          <div className="grid gap-2 p-3 md:grid-cols-6">
-            <div className="grid gap-1 text-xs font-semibold text-muted-foreground">
+          <div className="grid gap-2 p-3 md:grid-cols-8">
+            <div className="grid gap-1 text-xs font-semibold text-muted-foreground md:col-span-2">
               <LookupField
                 label="Principal"
                 showLabelInCompact
@@ -617,7 +655,51 @@ export function FreightInvoicePage() {
         disabled={readOnly}
         onChange={(nextValue) => {setFormField("to_date", nextValue); void loadCandidateJobs(candidateSearch, form.prin_code, form.from_date, nextValue);}} /></Field>
 
-            <Field label="Total With Tax"><Input value={selectedTotal.toFixed(3)} disabled className="text-right font-semibold" /></Field>
+            <div className="grid gap-1 text-xs font-semibold text-muted-foreground">
+              <LookupField
+                label="Currency"
+                showLabelInCompact
+                compact
+                disabled={readOnly || selectedRows.length > 0}
+                value={form.curr_code}
+                displayValue={form.curr_code}
+                valueField="curr_code"
+                displayFields={["curr_code", "curr_name"]}
+                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }, { field: "ex_rate", header: "Rate" }]}
+                loadOptions={(search) => loadFreightLookup("freight_currency", companyCode, search)}
+                onChange={async (value, row) => {
+                  let ex = text(row?.ex_rate ?? row?.EX_RATE);
+                  if (!ex || ex === "0") {
+                    if (value === "OMR") {
+                      ex = "1";
+                    } else {
+                      try {
+                        const curRes = await api.post<{ success: boolean; data: { ex_rate: number } }>("/api/freight/currency/rate", {
+                          company_code: companyCode,
+                          curr_code: value,
+                        });
+                        if (curRes.data?.data?.ex_rate) {
+                          ex = String(curRes.data.data.ex_rate);
+                        }
+                      } catch (_) {}
+                    }
+                  }
+                  setForm((prev) => ({ ...prev, curr_code: value, ex_rate: ex || "1" }));
+                }}
+                placeholder="Currency"
+              />
+            </div>
+            <Field label="Ex Rate">
+              <Input
+                type="number"
+                step="any"
+                disabled={readOnly || form.curr_code === "OMR"}
+                value={form.ex_rate}
+                onChange={(e) => setForm((prev) => ({ ...prev, ex_rate: e.target.value }))}
+                className="text-right font-medium"
+                title={form.curr_code !== "OMR" ? `1 ${form.curr_code} = ${form.ex_rate} OMR` : "Base Currency (1.0)"}
+              />
+            </Field>
           </div>
           </div>
 
@@ -690,8 +772,20 @@ export function FreightInvoicePage() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Before Tax {selectedBase.toFixed(3)} / Tax {selectedTax.toFixed(3)}</p>
-                <p className="m-0 text-lg font-bold text-primary">{selectedTotal.toFixed(3)} {form.curr_code || "OMR"}</p>
+                {(() => {
+                  const isFc = form.curr_code && form.curr_code !== "OMR";
+                  const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+                  const fcTotal = isFc ? selectedTotal / exRate : selectedTotal;
+                  const fcBase = isFc ? selectedBase / exRate : selectedBase;
+                  const fcTax = isFc ? selectedTax / exRate : selectedTax;
+                  return (
+                    <>
+                      <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Before Tax {fcBase.toFixed(3)} / Tax {fcTax.toFixed(3)}</p>
+                      <p className="m-0 text-lg font-bold text-primary">{fcTotal.toFixed(3)} {form.curr_code || "OMR"}</p>
+                      {isFc && <p className="m-0 text-[10.5px] text-muted-foreground font-medium">Base: OMR {selectedTotal.toFixed(3)} (Ex: {form.ex_rate})</p>}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <div className="max-h-72 overflow-auto">
@@ -701,28 +795,40 @@ export function FreightInvoicePage() {
                     <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Job</th>
                     <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Activity</th>
                     <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Qty</th>
-                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Rate</th>
-                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Bill</th>
-                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Tax</th>
-                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Total</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Rate {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Bill {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Tax {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Total {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
                     <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Cost</th>
                     {!readOnly && <th className="px-2 py-2 text-right text-slate-700 font-bold">Action</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedRows.map((row) => (
-                    <tr key={lineKey(row)} className="border-t">
-                      <td className="px-2 py-2 font-semibold text-primary">{text(row.job_no)}</td>
-                      <td className="px-2 py-2">{text(row.act_code)} - {text(row.activity)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "quantity").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill_rate").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "tax_amount").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right font-semibold tabular-nums">{(number(row, "bill") + number(row, "tax_amount")).toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
-                      {!readOnly && <td className="px-2 py-2 text-right"><Button type="button" size="icon" variant="ghost" onClick={() => removeSelected(row)}><Trash2 size={14} /></Button></td>}
-                    </tr>
-                  ))}
+                  {selectedRows.map((row) => {
+                    const isFc = form.curr_code && form.curr_code !== "OMR";
+                    const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+                    const baseBill = number(row, "bill");
+                    const baseTax = number(row, "tax_amount");
+                    const baseRate = number(row, "bill_rate");
+                    const qty = number(row, "quantity") || 1;
+                    const rowRate = isFc ? (Number(row.bill_rate_oc) > 0 ? Number(row.bill_rate_oc) : (baseBill / exRate) / qty) : baseRate;
+                    const rowBill = isFc ? (Number(row.bill_oc) > 0 ? Number(row.bill_oc) : baseBill / exRate) : baseBill;
+                    const rowTax = isFc ? baseTax / exRate : baseTax;
+                    const rowTotal = rowBill + rowTax;
+                    return (
+                      <tr key={lineKey(row)} className="border-t">
+                        <td className="px-2 py-2 font-semibold text-primary">{text(row.job_no)}</td>
+                        <td className="px-2 py-2">{text(row.act_code)} - {text(row.activity)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{qty.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums" title={isFc ? `Base Rate: OMR ${baseRate.toFixed(3)}` : undefined}>{rowRate.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums" title={isFc ? `Base Bill: OMR ${baseBill.toFixed(3)}` : undefined}>{rowBill.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{rowTax.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right font-semibold tabular-nums" title={isFc ? `Base Total: OMR ${(baseBill + baseTax).toFixed(3)}` : undefined}>{rowTotal.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
+                        {!readOnly && <td className="px-2 py-2 text-right"><Button type="button" size="icon" variant="ghost" onClick={() => removeSelected(row)}><Trash2 size={14} /></Button></td>}
+                      </tr>
+                    );
+                  })}
                   {!selectedRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={readOnly ? 8 : 9}>No lines selected.</td></tr>}
                 </tbody>
               </table>
@@ -758,6 +864,7 @@ function emptyForm(): InvoiceFormState {
     prin_code: "",
     prin_name: "",
     curr_code: "OMR",
+    ex_rate: "1",
     inv_status: "N",
   };
 }
@@ -779,12 +886,14 @@ function MetricCard({
   icon: Icon,
   label,
   value,
+  helper,
   highlight,
   tone = "default",
 }: {
   icon?: LucideIcon;
   label: string;
   value: string;
+  helper?: string;
   highlight?: boolean;
   tone?: "default" | "emerald" | "amber";
 }) {
@@ -804,6 +913,7 @@ function MetricCard({
         {Icon && <Icon size={13} className={highlight ? "text-[#00378C]" : "text-slate-400"} />}
       </div>
       <div className={`mt-1 truncate text-base font-extrabold ${highlight ? "text-[#00378C]" : "text-slate-900"}`}>{value}</div>
+      {helper && <div className="mt-0.5 truncate text-[10px] font-medium text-slate-500">{helper}</div>}
     </div>
   );
 }
