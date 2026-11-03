@@ -142,20 +142,30 @@ export function AddProductTypeForm({ mode, existingData, onClose, onSavingChange
       />
 
       <SectionPanel title="Basic Information" icon={IdCard}>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Field label="Prod Type Name" required>
-            <Input
-              disabled={readonly}
-              placeholder="e.g. Electronics"
-              value={form.prodtype_name ?? ""}
-              onChange={(e) => set("prodtype_name", e.target.value)}
-              className={errors.prodtype_name ? "border-destructive focus-visible:ring-destructive" : ""}
-            />
-            {errors.prodtype_name && (
-              <span className="mt-0.5 text-[10px] font-medium text-destructive">{errors.prodtype_name}</span>
-            )}
-          </Field>
-        </div>
+<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+  {(isEdit || readonly) && (
+    <Field label="Prod Type Code">
+      <Input
+        disabled
+        value={form.prodtype_code ?? ""}
+        className="bg-muted/40 font-medium"
+      />
+    </Field>
+  )}
+
+  <Field label="Prod Type Name" required>
+    <Input
+      disabled={readonly}
+      placeholder="e.g. Electronics"
+      value={form.prodtype_name ?? ""}
+      onChange={(e) => set("prodtype_name", e.target.value)}
+      className={errors.prodtype_name ? "border-destructive focus-visible:ring-destructive" : ""}
+    />
+    {errors.prodtype_name && (
+      <span className="mt-0.5 text-[10px] font-medium text-destructive">{errors.prodtype_name}</span>
+    )}
+  </Field>
+</div>
       </SectionPanel>
     </form>
   );

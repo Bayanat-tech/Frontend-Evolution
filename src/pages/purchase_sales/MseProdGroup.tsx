@@ -11,12 +11,13 @@ import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
 import { Input } from "../../components/ui/Input";
 import type { LucideIcon } from "lucide-react";
-
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 /* ------------------------------------------------------------------ */
 /*  Types & helpers                                                    */
 /* ------------------------------------------------------------------ */
 
 type ProductGroupRow = Record<string, any>;
+type Notice = { type: "success" | "error"; message: string } | null;
 
 const LIST_COLUMNS: { key: string; label: string; width?: number }[] = [
   { key: "group_code", label: "Group Code", width: 150 },
@@ -104,6 +105,8 @@ export default function MseProdGroup() {
   const [rows, setRows] = useState<ProductGroupRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+const [notice, setNotice] = useState<Notice>(null);
+const [deleting, setDeleting] = useState(false);
 
   // View state
   const [view, setView] = useState<"list" | "editor">("list");
@@ -122,11 +125,14 @@ export default function MseProdGroup() {
         code1: companyCode,
       });
       setRows(Array.isArray(response) ? response : []);
-    } catch (err) {
-      // Handle error silently or add a toast here
-      console.error(err);
-      setRows([]);
-    } finally {
+} catch (err) {
+  console.error(err);
+  setRows([]);
+  setNotice({
+    type: "error",
+    message: err instanceof Error ? err.message : "Unable to load product groups",
+  });
+} finally {
       setLoading(false);
     }
   };
@@ -203,8 +209,13 @@ export default function MseProdGroup() {
         val1s9: form.direct_expense_ac ? String(form.direct_expense_ac) : undefined,
       });
 
-      handleCloseEditor();
-      await loadRows();
+const wasEdit = editMode;
+handleCloseEditor();
+setNotice({
+  type: "success",
+  message: wasEdit ? "Product group updated successfully." : "Product group created successfully.",
+});
+await loadRows();
     } catch (err: any) {
       setError(err?.message || "Unable to save product group");
     } finally {
@@ -212,22 +223,27 @@ export default function MseProdGroup() {
     }
   };
 
-  const deleteRow = async () => {
-    if (!deleteTarget) return;
-    try {
-      await executeDynamicDelete({
-        parameter: "PURCHASE_SALES_DEL_MSE_PRODGROUP",
-        loginid: loginId,
-        code1: companyCode,
-        code2: String(deleteTarget.group_code),
-      });
-      setDeleteTarget(null);
-      await loadRows();
-    } catch (err: any) {
-      // Handle delete error
-      console.error(err);
-    }
-  };
+const deleteRow = async () => {
+  if (!deleteTarget) return;
+  const code = String(deleteTarget.group_code ?? "");
+  setDeleting(true);
+  try {
+    await executeDynamicDelete({
+      parameter: "PURCHASE_SALES_DEL_MSE_PRODGROUP",
+      loginid: loginId,
+      code1: companyCode,
+      code2: code,
+    });
+    setDeleteTarget(null);
+    setNotice({ type: "success", message: `Product group ${code} deleted successfully.` });
+    await loadRows();
+  } catch (err: any) {
+    setDeleteTarget(null);
+    setNotice({ type: "error", message: err?.message || "Unable to delete product group" });
+  } finally {
+    setDeleting(false);
+  }
+};
 
   const columns = useMemo<ColumnDef<ProductGroupRow>[]>(
     () => [
@@ -510,7 +526,7 @@ export default function MseProdGroup() {
           </h2>
         </div>
       </div>
-
+<AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
       <DataTable
         columns={columns}
         data={filteredRows}
@@ -558,16 +574,21 @@ export default function MseProdGroup() {
         title="Delete Product Group"
         description="This action cannot be undone."
         onClose={() => setDeleteTarget(null)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Close
-            </Button>
-            <Button variant="destructive" onClick={() => void deleteRow()}>
-              Delete
-            </Button>
-          </>
-        }
+footer={
+  <>
+    <Button
+      variant="outline"
+      className="!text-slate-700 !bg-white border-slate-300 hover:!bg-slate-50"
+      onClick={() => setDeleteTarget(null)}
+      disabled={deleting}
+    >
+      Cancel
+    </Button>
+    <Button variant="destructive" onClick={() => void deleteRow()} disabled={deleting}>
+      {deleting ? "Deleting..." : "Delete"}
+    </Button>
+  </>
+}
       >
         <p className="m-0 text-sm text-muted-foreground">
           Delete <strong>{String(deleteTarget?.group_name ?? "")}</strong>?

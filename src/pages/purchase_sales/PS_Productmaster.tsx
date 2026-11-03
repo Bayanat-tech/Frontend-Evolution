@@ -296,6 +296,17 @@ const ProductPurchaseSales = () => {
       setError("Brand Code is required");
       return;
     }
+    
+    const isBlank = (v:string) => !String(v ?? "").trim();
+
+    if (isBlank(form.p_uom)) {
+      setError("Primary UOM is required");
+      return;
+    }
+    if (isBlank(form.l_uom)) {
+      setError("Lower UOM is required");
+      return;
+    }
 
     try {
       setSaving(true);
