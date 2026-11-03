@@ -193,9 +193,13 @@ export function ProductTypePage() {
                 <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
                   {popup.mode === "add" ? "New Product Type" : popup.mode === "edit" ? "Edit Product Type" : "View Product Type"}
                 </h1>
-                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                  {popup.mode === "view" ? "Viewing" : popup.mode === "edit" ? "Editing" : "Draft"}
-                </span>
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                {popup.mode === "view" ? "Viewing" : popup.mode === "edit" ? "Editing" : "Draft"}
+              </span>
+              <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-blue-700">
+                Prod Type Code:{" "}
+                {popup.mode === "add" ? "Auto-generated" : popup.data.prodtype_code || "—"}
+              </span>
               </div>
             </div>
           </div>
@@ -296,14 +300,14 @@ export function ProductTypePage() {
               <Plus size={14} />
               Add Product Type
             </button>
-            <button
+            {/* <button
               type="button"
               onClick={() => void loadRows(false)}
               className="flex items-center justify-center h-[30px] w-[30px] rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all shadow-sm cursor-pointer"
               title="Refresh"
             >
               <RefreshCw size={14} />
-            </button>
+            </button> */}
           </div>
         }
       />
@@ -318,7 +322,8 @@ export function ProductTypePage() {
         onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button variant="outline"   className="!text-slate-700 !bg-white border-slate-300 hover:!bg-slate-50"
+ onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
             <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>

@@ -141,6 +141,7 @@ export function PurchaseReportPreviewDialog({
             </div>
           ) : pdfUrl ? (
             <iframe title={`${title} PDF preview`} src={`${pdfUrl}#zoom=100`} />
+           
           ) : (
             <div className="freight-report-preview-message" role="status">
               <Loader2 size={28} className="animate-spin" />
