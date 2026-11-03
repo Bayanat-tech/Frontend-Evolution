@@ -156,10 +156,10 @@ export function ProductTypePage() {
             >
               <Eye size={15} />
             </Button>
-            <Button 
-              size="icon" 
-              variant="ghost" 
-              title="Delete" 
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Delete"
               className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
               onClick={() => setDeleteTarget(row.original)}
             >
@@ -182,7 +182,6 @@ export function ProductTypePage() {
   if (formOpen) {
     return (
       <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-        
         {/* WMS-style transaction header */}
         <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-2.5">

@@ -25,6 +25,8 @@ type THeaderFilters = {
 type TPayUnitRow = {
   row_id: string;
   pay_unit_code: string;
+  curr_code: string;
+  pay_comp_earn_ded: string;
   pay_unit_name: string;
   amount: string;
   pay_unit_status: string;
@@ -73,6 +75,12 @@ const PAY_UNIT_COLUMNS = [
   { field: "PAY_COMP_DESC", header: "Description" },
 ];
 
+const CURRENCY_COLUMNS = [
+  { field: "CURR_CODE", header: "Code" },
+  { field: "CURR_NAME", header: "Description" },
+];
+
+const P_CURRENCY= 'HR_DROPDOWN_MS_CURRENCY';
 const P_DIVISION = "HR_DROPDOWN_MS_DIVISION";
 const P_DEPARTMENT = "HR_DROPDOWN_MS_DEPARTMENT";
 const P_SECTION = "HR_DROPDOWN_MS_SECTION";
@@ -95,6 +103,8 @@ const makeNewRow = (): TPayUnitRow => ({
   pay_unit_code: "",
   pay_unit_name: "",
   amount: "0",
+  curr_code: "",
+  pay_comp_earn_ded: "",
   pay_unit_status: "P",
   approved_on: today(),
   status: "A",
@@ -136,10 +146,17 @@ export function HrEmployeePayUnits() {
   const patchHeader = (p: Partial<THeaderFilters>) => setHeader((prev) => ({ ...prev, ...p }));
   const employeeReady = !!companyCode && !!header.employee_id;
   
-    const totalAmount = useMemo(
-    () => rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
-      [rows],
-    );
+  const totalAmount = useMemo(
+    () =>
+      rows.reduce((net, r) => {
+        const amt = Number(r.amount) || 0;
+        const kind = String(r.pay_comp_earn_ded ?? "").trim().toUpperCase();
+        if (kind === "E") return net + amt;
+        if (kind === "D") return net - amt;
+        return net;
+      }, 0),
+    [rows],
+  );  
 
   /* ── Lookups ── */
   const loadLookupRows = useCallback(
@@ -161,19 +178,22 @@ export function HrEmployeePayUnits() {
         PAY_COMP_ID: String(r.PAY_COMP_ID ?? r.pay_comp_id ?? ""),
         PAY_COMP_DESC: String(r.PAY_COMP_DESC ?? r.pay_comp_desc ?? ""),
         PAY_COMP_SHORT_DESC: String(r.PAY_COMP_SHORT_DESC ?? r.pay_comp_short_desc ?? ""),
+        PAY_COMP_EARN_DED: String(r.PAY_COMP_EARN_DED ?? r.pay_comp_earn_ded ?? ""), 
       } as LookupRow;
     });
   }, [loadLookupRows, companyCode]);
-  // const loadEmployeeOptions = useCallback(async () => {
-  //   const all = await loadLookupRows(P_EMPLOYEE, companyCode);
-  //   return all.filter((row) => {
-  //     const r = row as Record<string, unknown>;
-  //     if (header.div_code && r.div_code !== header.div_code) return false;
-  //     if (header.dept_code && r.dept_code !== header.dept_code) return false;
-  //     if (header.section_code && r.section_code !== header.section_code) return false;
-  //     return true;
-  //   });
-  // }, [loadLookupRows, companyCode, header.div_code, header.dept_code, header.section_code]);
+
+
+    const loadCurrencyOptions = useCallback(async (): Promise<LookupRow[]> => {
+    const data = await loadLookupRows(P_CURRENCY, companyCode);
+    return data.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        ...r,
+        CURR_CODE: String(r.CURR_CODE ?? r.curr_code ?? ""),
+      } as LookupRow;
+    });
+  }, [loadLookupRows, companyCode]);
 
   /* ── Retrieve ── */
   const handleRetrieve = useCallback(async () => {
@@ -183,12 +203,15 @@ export function HrEmployeePayUnits() {
       const response = await getDynamicLookup({
         parameter: P_RETRIEVE, loginid, code1: companyCode, code2: header.employee_id, ...NULLS,
       });
+      console.log('response',response);
       const list = (Array.isArray(response) ? response : []) as Record<string, any>[];
       setRows(
         list.map((r, idx) => ({
           row_id: `${r.pay_unit_code ?? "row"}-${idx}`,
           pay_unit_code: r.pay_unit_code ?? "",
           pay_unit_name: r.pay_unit_name ?? "",
+          curr_code: r.curr_code ?? "",
+          pay_comp_earn_ded: r.pay_comp_earn_ded ?? "",
           amount: r.amount != null ? String(r.amount) : "0",
           pay_unit_status: toCode(r.pay_unit_status, PAY_UNIT_STATUS_OPTIONS, "P"),
           approved_on: toApiDateInput(r.approved_on),
@@ -253,10 +276,13 @@ export function HrEmployeePayUnits() {
         employee_id: header.employee_id,
         pay_comp_id: row.pay_unit_code,
         pay_comp_amt: Number(row.amount) || 0,
+        pay_comp_earn_ded : row.pay_comp_earn_ded,
         pay_roll_status: row.pay_unit_status,
-        status_flag: row.status,
+        curr_code: row.curr_code,
+        status_flag: 'P',
         remarks: row.remarks,
         company_code: companyCode,
+        comp_status: row.status,
         user_id: loginid,
         user_dt: now,
         entered_on: now,
@@ -316,6 +342,7 @@ export function HrEmployeePayUnits() {
                       updateRow(r.row_id, {
                         pay_unit_code: value,
                         pay_unit_name: String(row?.PAY_COMP_DESC ?? ""),
+                        pay_comp_earn_ded: String(row?.PAY_COMP_EARN_DED ?? "")
                       })
                     }
                     placeholder="Pay unit code or name"
@@ -348,6 +375,35 @@ export function HrEmployeePayUnits() {
             onChange={(e) => updateRow(row.original.row_id, { amount: e.target.value })}
           />
         ),
+      },
+      {
+        id: "curr_code",
+        header: "Currency",
+        size: 130,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+                <div className="min-w-[130px] flex-1">
+                  <LookupField
+                    compact
+                    label="Currency"
+                    value={r.curr_code}
+                    displayValue={r.curr_code ? `${r.curr_code}` : ""}
+                    columns={CURRENCY_COLUMNS}
+                    valueField="curr_code"
+                    displayFields={["curr_code", "curr_name"]}
+                    loadOptions={loadCurrencyOptions}
+                    onChange={(value, row) =>
+                      updateRow(r.row_id, {
+                        curr_code: value,
+                      })
+                    }
+                    placeholder="Currency code or name"
+                  />
+                </div>
+          );
+        },
       },
       {
         id: "pay_unit_status",

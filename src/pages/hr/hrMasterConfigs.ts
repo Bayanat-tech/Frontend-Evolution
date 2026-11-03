@@ -88,7 +88,7 @@ const sectionDivisionLookup = {
   displayFields: ["div_code", "div_name"],
   loadOptions: (context: { loginid: string; companyCode: string }) =>
     getDynamicLookup({
-      parameter: "MST_HR_ACCOUNT_DIVISION",
+      parameter: "HR_DROPDOWN_MS_DIVISION",
       loginid: context.loginid,
       code1: context.companyCode,
       code2: "",
@@ -103,17 +103,18 @@ const sectionDepartmentLookup = {
   valueField: "dept_code",
   displayFields: ["dept_code", "dept_name"],
   loadOptions: (context: { loginid: string; companyCode: string; form?: Record<string, unknown> }) => {
-    const divisionCode = String(context.form?.div_code ?? "");
-    if (!divisionCode) return Promise.resolve([]);
+    const divisionCode = String(context.form?.div_code ?? "").trim();
+    
+    // We removed the early return. Now we always fetch.
     return getDynamicLookup({
-      parameter: "MST_HR_MS_HR_DEPARTMENT",
+      parameter: "HR_DROPDOWN_MS_DEPARTMENT",
       loginid: context.loginid,
       code1: context.companyCode,
-      code2: divisionCode,
+      // If divisionCode is empty, send undefined/null so the backend ignores it
+      code2: divisionCode || undefined, 
     });
   },
 };
-
 export const hrMasterConfigs: Record<string, HrMasterConfig> = {
   department: {
     title: "Department Master",
