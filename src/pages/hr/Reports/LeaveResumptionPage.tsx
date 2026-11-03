@@ -447,8 +447,9 @@ export default function LeaveResumptionPage() {
 
         <ReportFilterHeader onClear={handleClearAll} />
 
-        {/* Row 1: Division / Department / Section */}
-        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+        {/* One grid, 4 columns: Row 1 = Division / Department / Section / Employee Code,
+            Row 2 = Leave From / Leave To / Resume From / Resume To */}
+        <div className="freight-report-fields grid items-start gap-x-3 gap-y-2 p-3 md:grid-cols-2 xl:grid-cols-4">
           <MultiSelectField
             className="freight-report-multi-select"
             label="Division"
@@ -473,10 +474,6 @@ export default function LeaveResumptionPage() {
             value={sections}
             onChange={setSections}
           />
-        </div>
-
-        {/* Row 2: Employee */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <MultiSelectField
             className="freight-report-multi-select"
             label="Employee Code"
@@ -485,41 +482,46 @@ export default function LeaveResumptionPage() {
             value={employees}
             onChange={setEmployees}
           />
-        </div>
 
-        {/* Row 3: Leave From / To + Leave Resume From / To */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-4">
           <Field label="Leave From" onClear={leaveFrom ? () => setLeaveFrom("") : undefined}>
-            <BiscDatePicker
-              value={leaveFrom}
-              onChange={(value) => {
-                if (!leaveTo || value <= leaveTo) setLeaveFrom(value);
-              }}
-            />
+            <div className="[&>*]:!h-8 [&>*]:!min-h-0 [&_input]:!h-full [&_button]:!h-full">
+              <BiscDatePicker
+                value={leaveFrom}
+                onChange={(value) => {
+                  if (!leaveTo || value <= leaveTo) setLeaveFrom(value);
+                }}
+              />
+            </div>
           </Field>
           <Field label="Leave To" onClear={leaveTo ? () => setLeaveTo("") : undefined}>
-            <BiscDatePicker
-              value={leaveTo}
-              onChange={(value) => {
-                if (!leaveFrom || value >= leaveFrom) setLeaveTo(value);
-              }}
-            />
+            <div className="[&>*]:!h-8 [&>*]:!min-h-0 [&_input]:!h-full [&_button]:!h-full">
+              <BiscDatePicker
+                value={leaveTo}
+                onChange={(value) => {
+                  if (!leaveFrom || value >= leaveFrom) setLeaveTo(value);
+                }}
+              />
+            </div>
           </Field>
           <Field label="Leave Resume From">
-            <BiscDatePicker
-              value={resumeFrom}
-              onChange={(value) => {
-                if (!resumeTo || value <= resumeTo) setResumeFrom(value);
-              }}
-            />
+            <div className="[&>*]:!h-8 [&>*]:!min-h-0 [&_input]:!h-full [&_button]:!h-full">
+              <BiscDatePicker
+                value={resumeFrom}
+                onChange={(value) => {
+                  if (!resumeTo || value <= resumeTo) setResumeFrom(value);
+                }}
+              />
+            </div>
           </Field>
           <Field label="Leave Resume To">
-            <BiscDatePicker
-              value={resumeTo}
-              onChange={(value) => {
-                if (!resumeFrom || value >= resumeFrom) setResumeTo(value);
-              }}
-            />
+            <div className="[&>*]:!h-8 [&>*]:!min-h-0 [&_input]:!h-full [&_button]:!h-full">
+              <BiscDatePicker
+                value={resumeTo}
+                onChange={(value) => {
+                  if (!resumeFrom || value >= resumeFrom) setResumeTo(value);
+                }}
+              />
+            </div>
           </Field>
         </div>
 
