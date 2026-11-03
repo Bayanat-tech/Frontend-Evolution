@@ -1,7 +1,7 @@
 import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions, getPoOrderReportExcel, getPoOrderReportHtml } from "../../../api/transactions";
+import { CompanyInfo, Division, getCompanyInfo, getDivisions, getPoOrderReportExcel, getPoOrderReportHtml } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -96,10 +96,11 @@ type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" 
 
 
 
-export function PurchaseOrderPage({ onClose , }: { onClose?: () => void } = {}) {
+export function PurchaseOrderPage({ onClose, }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const [rows, setRows] = useState<PurchaseOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
+  const [divisionsLoading, setDivisionsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RequestTab>("PENDING");
@@ -115,7 +116,7 @@ export function PurchaseOrderPage({ onClose , }: { onClose?: () => void } = {}) 
   const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   // ── Row-level report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -125,57 +126,66 @@ export function PurchaseOrderPage({ onClose , }: { onClose?: () => void } = {}) 
   const [reportPreviewRow, setReportPreviewRow] = useState<PurchaseOrderRow | null>(null);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const [tabCounts, setTabCounts] = useState<Record<string, number>>({
-  PENDING: 0,
-  INPROGRESS: 0,
-  CLOSED: 0,
-  CANCELED: 0,
-  REJECTED: 0,
-  SENDBACK: 0,
-});
+    PENDING: 0,
+    INPROGRESS: 0,
+    CLOSED: 0,
+    CANCELED: 0,
+    REJECTED: 0,
+    SENDBACK: 0,
+  });
 
   const loadLookups = async () => {
-    const divisionData = await getDivisions();
-    setDivisions(divisionData);
+    setDivisionsLoading(true);
+
+    try {
+      const [cInfo] = await Promise.all([getCompanyInfo()]);
+
+      setCompanyInfo(cInfo);
+      const divisionData = await getDivisions();
+      setDivisions(divisionData);
+    } finally {
+      setDivisionsLoading(false);
+    }
   };
 
   const purchaseOrderTabs = [
-  { value: "PENDING", label: "Pending" },
-  { value: "INPROGRESS", label: "In Progress" },
-  { value: "CLOSED", label: "Closed" },
-  { value: "CANCELED", label: "Canceled" },
-  { value: "REJECTED", label: "Rejected" },
-];
-const getTabCount = (tabValue: string) => {
-  return tabCounts[tabValue] ?? 0;
-};
+    { value: "PENDING", label: "Pending" },
+    { value: "INPROGRESS", label: "In Progress" },
+    { value: "CLOSED", label: "Closed" },
+    { value: "CANCELED", label: "Canceled" },
+    { value: "REJECTED", label: "Rejected" },
+  ];
+  const getTabCount = (tabValue: string) => {
+    return tabCounts[tabValue] ?? 0;
+  };
 
-const loadRows = async (clearNotice = true) => {
-  setLoading(true);
+  const loadRows = async (clearNotice = true) => {
+    setLoading(true);
 
-  if (clearNotice) setNotice(null);
+    if (clearNotice) setNotice(null);
 
-  try {
-    const response = await fetchPurchaseOrders();
+    try {
+      const response = await fetchPurchaseOrders();
 
-    setRows(response);
-    setTotalRows(response.length);
+      setRows(response);
+      setTotalRows(response.length);
 
-    setTabCounts((prev) => ({
-      ...prev,
-      [tab]: response.length,
-    }));
-  } catch (error) {
-    setNotice({
-      type: "error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unable to load purchase orders",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+      setTabCounts((prev) => ({
+        ...prev,
+        [tab]: response.length,
+      }));
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load purchase orders",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
@@ -190,10 +200,10 @@ const loadRows = async (clearNotice = true) => {
   };
 
   const loadTabCounts = async () => {
-  const visibleTabs: RequestTab[] =
-    approvalLevel === 0
-      ? ["PENDING", "CLOSED", "CANCELED"]
-      : [
+    const visibleTabs: RequestTab[] =
+      approvalLevel === 0
+        ? ["PENDING", "CLOSED", "CANCELED"]
+        : [
           "PENDING",
           "INPROGRESS",
           "CLOSED",
@@ -201,73 +211,73 @@ const loadRows = async (clearNotice = true) => {
           "REJECTED",
         ];
 
-  const results = await Promise.all(
-    visibleTabs.map(async (tabValue) => {
-      const response = await getDynamicLookup({
-        parameter: "PS_POORDER_ENTRY_TAB_List",
-        code1: user?.company_code,
-        code2: user?.loginid || user?.username || "ADMIN",
-        code3: tabValue,
-           code4: PO_DOC_TYPE.LPO,
+    const results = await Promise.all(
+      visibleTabs.map(async (tabValue) => {
+        const response = await getDynamicLookup({
+          parameter: "PS_POORDER_ENTRY_TAB_List",
+          code1: user?.company_code,
+          code2: user?.loginid || user?.username || "ADMIN",
+          code3: tabValue,
+          code4: PO_DOC_TYPE.LPO,
+        });
+
+        return {
+          tab: tabValue,
+          count: response.length,
+        };
+      })
+    );
+
+    setTabCounts((prev) => {
+      const next = { ...prev };
+
+      results.forEach(({ tab, count }) => {
+        next[tab] = count;
       });
 
-      return {
-        tab: tabValue,
-        count: response.length,
-      };
-    })
-  );
-
-  setTabCounts((prev) => {
-    const next = { ...prev };
-
-    results.forEach(({ tab, count }) => {
-      next[tab] = count;
+      return next;
     });
+  };
 
-    return next;
-  });
-};
+  useEffect(() => {
+    if (!user?.company_code || approvalLevel === undefined) return;
 
-useEffect(() => {
-  if (!user?.company_code || approvalLevel === undefined) return;
-
-  void loadTabCounts();
-}, [
-  user?.company_code,
-  user?.loginid,
-  user?.username,
-  approvalLevel,
-  canViewCanceledTab,
-]);
+    void loadTabCounts();
+  }, [
+    user?.company_code,
+    user?.loginid,
+    user?.username,
+    approvalLevel,
+    canViewCanceledTab,
+  ]);
 
   // ── Row-level print handler ───────────────────────────────────────────────
- const handlePrintPurchaseOrder = async (row: PurchaseOrderRow) => {
-  if (!row.doc_no) return;
+  const handlePrintPurchaseOrder = async (row: PurchaseOrderRow) => {
+    if (!row.doc_no) return;
 
-  const params = {
-    company_code: user?.company_code,
-    doc_type: row.doc_type,
-    doc_no: row.doc_no,
+    const params = {
+      company_code: user?.company_code,
+      doc_type: row.doc_type,
+      doc_no: row.doc_no,
+    };
+    const preview = openPurchaseReport(`Purchase Order ${row.doc_no}`.trim());
+
+    try {
+      const html = await getPoOrderReportHtml(params);
+      preview.ready({
+        html,
+        filename: `purchase_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await getPoOrderReportExcel(params);
+        },
+      });
+    } catch (error) {
+      preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+    }
   };
-  const preview = openPurchaseReport(`Purchase Order ${row.doc_no}`.trim());
 
-  try {
-    const html = await getPoOrderReportHtml(params);
-    preview.ready({
-      html,
-      filename: `purchase_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await getPoOrderReportExcel(params);
-      },
-    });
-  } catch (error) {
-    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
-  }
-};
 
- 
 
   const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
     try {
@@ -320,13 +330,13 @@ useEffect(() => {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
-    const openEditor = (row: PurchaseOrderRow) => {
-      const cancelledRow =
-        String(row.canceled || "N").toUpperCase() === "Y" ||
-        tab === "CANCELED" ||
-        String(row.last_action || "").toUpperCase() === "CANCELED";
-      setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
-    };
+  const openEditor = (row: PurchaseOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
 
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
@@ -339,15 +349,15 @@ useEffect(() => {
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-     {
-              accessorKey: "cancelled",
-              header: () => <div className="text-center font-bold">Status</div>,
-              cell: ({ getValue }) => (
-                <div className="flex justify-center">
-                  <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
-                </div>
-              ),
-            },
+    {
+      accessorKey: "cancelled",
+      header: () => <div className="text-center font-bold">Status</div>,
+      cell: ({ getValue }) => (
+        <div className="flex justify-center">
+          <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+        </div>
+      ),
+    },
     {
       id: "reason",
       header: "Reason",
@@ -369,7 +379,7 @@ useEffect(() => {
           <Button
             size="icon"
             variant="ghost"
-                  onClick={() => openEditor(row.original)}
+            onClick={() => openEditor(row.original)}
             title={isViewOnlyTab ? "View" : "Edit"}
           >
             {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
@@ -383,11 +393,20 @@ useEffect(() => {
         </div>
       ),
     },
-  ], [isViewOnlyTab,tab]);
+  ], [isViewOnlyTab, tab]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
+  };
+
+  const handleAddClick = () => {
+    if (divisionsLoading) return;
+    if (divisions.length === 1) {
+      openCreateForDivision(divisions[0]);
+      return;
+    }
+    setDivisionPicker(true);
   };
 
   return (
@@ -408,60 +427,58 @@ useEffect(() => {
           )}
         </div>
       </div> */}
-            <div className="finance-list-title">
-          <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase Order</h6>
-        </div>
+      <div className="finance-list-title">
+        <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase Order</h6>
+      </div>
 
-   <AutoDismissAlert
-  notice={notice}
-  onClose={() => setNotice(null)}
-/>
+      <AutoDismissAlert
+        notice={notice}
+        onClose={() => setNotice(null)}
+      />
 
-<div className="flex flex-wrap items-center gap-1.5 pb-1">
-  {purchaseOrderTabs
-    .filter((item) => {
-      if (approvalLevel === 0) {
-        return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
-      }
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {purchaseOrderTabs
+          .filter((item) => {
+            if (approvalLevel === 0) {
+              return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
+            }
 
-      if (item.value === "CANCELED" && !canViewCanceledTab) {
-        return false;
-      }
+            if (item.value === "CANCELED" && !canViewCanceledTab) {
+              return false;
+            }
 
-      return true;
-    })
-    .map((item) => {
-      const active = tab === item.value;
+            return true;
+          })
+          .map((item) => {
+            const active = tab === item.value;
 
-      return (
-        <button
-          key={item.value}
-          type="button"
-          onClick={() => {
-            setTab(item.value as RequestTab);
-            setPageIndex(0);
-          }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-            active
-              ? "bg-[#00378C] text-white shadow-sm font-semibold"
-              : "border border-border bg-card text-foreground hover:bg-secondary"
-          }`}
-        >
-          <span>{item.label}</span>
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => {
+                  setTab(item.value as RequestTab);
+                  setPageIndex(0);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                  }`}
+              >
+                <span>{item.label}</span>
 
-          <span
-            className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-              active
-                ? "bg-white/20 text-white"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            {getTabCount(item.value)}
-          </span>
-        </button>
-      );
-    })}
-</div>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
+                      ? "bg-white/20 text-white"
+                      : "bg-muted text-muted-foreground"
+                    }`}
+                >
+                  {getTabCount(item.value)}
+                </span>
+              </button>
+            );
+          })}
+      </div>
 
       <div className="min-h-[650px]">
         <DataTable
@@ -471,7 +488,8 @@ useEffect(() => {
             tab === "PENDING" && (
               <button
                 title="Add Purchase Order"
-                onClick={() => setDivisionPicker(true)}
+                onClick={handleAddClick}
+                disabled={divisionsLoading}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
               >
                 <Plus size={14} />

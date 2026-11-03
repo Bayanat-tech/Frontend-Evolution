@@ -1,4 +1,4 @@
-import { ReactNode, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react"; // CHANGED: + useEffect, useState
 import { Briefcase, Building2, FileText, Percent, Receipt, Truck } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -61,7 +61,8 @@ export function PurchaseOrderHeaderForm({
   docType,
   setdetails,
   rows,
-  calculateDiscount
+  calculateDiscount,
+  amountDecimals = 3,
 }: {
   form: PurchaseOrderForm;
   setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -75,15 +76,38 @@ export function PurchaseOrderHeaderForm({
   setdetails?: (details: any[]) => void;
   rows?: PurchaseOrderLineRow[];
   calculateDiscount: (type: "amount" | "percent", value: number) => void;
+  amountDecimals?: number;
 }) {
   const loginIdOrAdmin = loginid || "ADMIN";
+
+  // ADDED: tax category list (code / name / tx_percnt) - used to resolve Tax % from the selected category
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [companyCode, loginIdOrAdmin]);
+
+  // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
 
   const discountScope = form.discount_scoope || "ITEM";
   const docTypeUpper = String(docType ?? "").trim().toUpperCase();
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const prLoadSeq = useRef(0);
   // light placeholder on empty date inputs (Chrome/Edge/Safari)
-const dateCls = (v?: string | null) =>
+  const dateCls = (v?: string | null) =>
     `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
   // phone / fax: digits, + ( ) - and space only, max 20 chars
   const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
@@ -95,7 +119,7 @@ const dateCls = (v?: string | null) =>
   const cleanAmount = (v: string) => {
     const cleaned = v.replace(/[^0-9.]/g, "");
     const [int, ...rest] = cleaned.split(".");
-    return rest.length ? `${int}.${rest.join("").slice(0, 3)}` : int;
+    return rest.length ? `${int}.${rest.join("").slice(0, amountDecimals)}` : int;
   };
   const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
 
@@ -206,7 +230,7 @@ const dateCls = (v?: string | null) =>
                   inputMode="decimal"
                   readOnly={true}
                   disabled={headerAndLineDisabled}
-                  value={form.credit_amount ?? ""}
+                  value={numberOrZero(form.credit_amount).toFixed(amountDecimals)}
                   onChange={(e) => updateField("credit_amount", cleanAmount(e.target.value))}
                 />
               </CField>
@@ -441,8 +465,8 @@ const dateCls = (v?: string | null) =>
                           zone_code: "",
                           prod_code: text(item.item_code),
                           prod_name: text(item.prod_name),
-                          p_uom: "",
-                          l_uom: "",
+                          p_uom: text(item.p_uom),
+                          l_uom:text(item.l_uom),
                           uppp: 1,
                           qty_puom: numberOrZero(item.approved_qty_puom),
                           qty_luom: numberOrZero(item.approved_qty_luom),
@@ -478,7 +502,7 @@ const dateCls = (v?: string | null) =>
 
             <CField label="Ref Date" className="col-span-2">
               <Input
-               className={dateCls(form.ref_date)}
+                className={dateCls(form.ref_date)}
                 type="date"
                 disabled={headerAndLineDisabled}
                 value={form.ref_date}
@@ -657,12 +681,12 @@ const dateCls = (v?: string | null) =>
                 <Input
                   className="h-7 text-xs text-right"
                   type="number"
-                  step="0.01"
+                  step={10 ** -amountDecimals}
                   disabled={headerAndLineDisabled || discountScope === "ITEM"}
                   value={
                     discountScope === "ITEM"
-                      ? TotalDiscAmount(rows || []).toFixed(3)
-                      : numberOrZero(form.disc_hdr_price).toFixed(3)
+                      ? TotalDiscAmount(rows || []).toFixed(amountDecimals)
+                      : numberOrZero(form.disc_hdr_price).toFixed(amountDecimals)
                   }
                   onChange={(e) => {
                     const value = Number(e.target.value || 0);
@@ -679,8 +703,8 @@ const dateCls = (v?: string | null) =>
                   disabled={headerAndLineDisabled || discountScope === "ITEM"}
                   value={
                     discountScope === "ITEM"
-                      ? DiscAmountPercentage(form, rows || []).toFixed(2)
-                      : numberOrZero(form.disc_hdr_percent).toFixed(2)
+                      ? DiscAmountPercentage(form, rows || []).toFixed(amountDecimals)
+                      : numberOrZero(form.disc_hdr_percent).toFixed(amountDecimals)
                   }
                   onChange={(e) => {
                     const value = Number(e.target.value || 0);
@@ -695,7 +719,8 @@ const dateCls = (v?: string | null) =>
               <CField label="Tax Type">
                 <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                   const taxType = e.target.value;
-                  setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
+                  // CHANGED: No Tax / Zero / Exempt => 0, Std Tax => % of the selected tax category
+                  setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: resolveTaxPerc(taxType, current.tx_cat_code) }));
                 }}
                   disabled={headerAndLineDisabled}>
                   <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
@@ -725,14 +750,45 @@ const dateCls = (v?: string | null) =>
                     loginid: loginIdOrAdmin
                   })
                 }
-                disabled={headerAndLineDisabled}
-                onChange={(value, row) =>
+                disabled={disabled}
+                onChange={async (value, row) => {
+                  const code = text(value).split(" - ")[0].trim();
+                  const catName = text(getLookupValue(row || {}, "tx_cat_name"));
+                  let matchedPerc = 0;
+                  let matchedCode = "";
+                  let matchedName = "";
+                  try {
+                    const codes = await getDynamicLookup({
+                      parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+                      code1: companyCode,
+                      loginid: loginIdOrAdmin,
+                    });
+                    const match = (codes || []).find((c) =>
+                      getLookupValue(c, "tx_compntcat_code") === code ||
+                      getLookupValue(c, "tx_cat_code") === code ||
+                      (code === "01" && (getLookupValue(c, "tx_compntcat_code") === "10100" || getLookupValue(c, "tx_type") === "TAX IN")) ||
+                      (code === "11" && (getLookupValue(c, "tx_compntcat_code") === "11100" || getLookupValue(c, "tx_type") === "TAX OUT")) ||
+                      (code === "00" && (getLookupValue(c, "tx_compntcat_code") === "11000" || String(getLookupValue(c, "tx_compntcat_name") || "").includes("NO VAT")))
+                    );
+                    if (match) {
+                      matchedPerc = Number(getLookupValue(match, "tx_percnt") ?? 0);
+                      matchedCode = text(getLookupValue(match, "tx_compntcat_code"));
+                      matchedName = text(getLookupValue(match, "tx_compntcat_name"));
+                    }
+                  } catch (e) {
+                    console.warn("Error fetching tax code for category", e);
+                  }
+                  const isNoTax = code === "00" || matchedPerc === 0;
                   setForm((current) => ({
                     ...current,
-                    tx_cat_code: text(value).split(" - ")[0].trim(),
-                    tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
-                  }))
-                }
+                    tx_cat_code: code,
+                    tx_cat_name: catName,
+                    tx_compntcat_code_1: matchedCode || current.tx_compntcat_code_1,
+                    tx_compntcat_name_1: matchedName || current.tx_compntcat_name_1,
+                    tx_compnt_1_expmt: isNoTax ? "N" : "S",
+                    tx_compnt_perc_1: matchedPerc,
+                  }));
+                }}
               />
 
               <LookupField
@@ -745,12 +801,23 @@ const dateCls = (v?: string | null) =>
                     ? `${form.tx_compntcat_code_1} - ${form.tx_compntcat_name_1}`
                     : form.tx_compntcat_code_1
                 }
-                columns={[{ field: "tx_compntcat_code", header: "Code" }, { field: "tx_compntcat_name", header: "Name" }]}
+                columns={[{ field: "tx_compntcat_code", header: "Code" }, { field: "tx_compntcat_name", header: "Name" }, { field: "tx_percnt", header: "Tax %" }]}
                 valueField="tx_compntcat_code"
                 displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
                 loadOptions={() => getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE", code1: companyCode, loginid: loginIdOrAdmin })}
                 disabled={headerAndLineDisabled}
-                onChange={(value) => setForm((current) => ({ ...current, tx_compntcat_code_1: value }))}
+                onChange={(value, row) => {
+                  const perc = Number(getLookupValue(row || {}, "tx_percnt") ?? 0);
+                  const codeName = text(getLookupValue(row || {}, "tx_compntcat_name"));
+                  const isNoTax = perc === 0;
+                  setForm((current) => ({
+                    ...current,
+                    tx_compntcat_code_1: text(value),
+                    tx_compntcat_name_1: codeName,
+                    tx_compnt_perc_1: perc,
+                    tx_compnt_1_expmt: isNoTax ? "N" : "S",
+                  }));
+                }}
               />
             </HeaderBlock>
           </div>

@@ -632,8 +632,9 @@ export function numberOrZero(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+export function formatAmount(value: number, decimals: number = 3) {
+  const places = Number.isInteger(decimals) ? Math.min(Math.max(decimals, 0), 20) : 3;
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: places, maximumFractionDigits: places });
   return value < 0 ? `(${amount})` : amount;
 }
 

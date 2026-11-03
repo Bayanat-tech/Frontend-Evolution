@@ -90,6 +90,7 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const [rows, setRows] = useState<PurchaseOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
+  const [divisionsLoading, setDivisionsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RequestTab>("PENDING");
@@ -126,8 +127,13 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   });
 
   const loadLookups = async () => {
-    const divisionData = await getDivisions();
-    setDivisions(divisionData);
+    setDivisionsLoading(true);
+    try {
+      const divisionData = await getDivisions();
+      setDivisions(divisionData);
+    } finally {
+      setDivisionsLoading(false);
+    }
   };
 
   const purchaseOrderTabs = [
@@ -387,9 +393,19 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
     },
   ], [isViewOnlyTab, exportingRowDocNo]);
 
-  const openCreateForDivision = (division: Division) => {
-    setDivisionPicker(false);
-    setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
+const openCreateForDivision = (division: Division) => {
+  setDivisionPicker(false);
+  setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
+};
+
+// One division → open the editor directly. Otherwise let the user pick.
+  const handleAddClick = () => {
+    if (divisionsLoading) return;
+    if (divisions.length === 1) {
+      openCreateForDivision(divisions[0]);
+      return;
+    }
+    setDivisionPicker(true);
   };
 
   return (
@@ -488,7 +504,8 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
             tab === "PENDING" && (
               <button
                 title="Add Purchase GRN"
-                onClick={() => setDivisionPicker(true)}
+                onClick={handleAddClick}
+                disabled={divisionsLoading}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
               >
                 <Plus size={14} />

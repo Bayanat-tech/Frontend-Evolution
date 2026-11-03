@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Select } from "../../../components/ui/Select";
@@ -85,11 +85,33 @@ export function SalesDNHeaderForm({
     docType: PODocType | SODocType
     setdetails?: (details: any[]) => void;
     rows?: PurchaseOrderLineRow[];
-    calculateDiscount?: (type: "amount" | "percent", value: number) => void;
+    calculateDiscount: (type: "amount" | "percent", value: number) => void;
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
+          const [taxCats, setTaxCats] = useState<any[]>([]);
+          useEffect(() => {
+            let alive = true;
+            Promise.resolve(
+              getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
+            )
+              .then((res: any) => {
+                const list = Array.isArray(res) ? res : res?.data ?? [];
+                if (alive) setTaxCats(list);
+              })
+              .catch(() => { });
+            return () => { alive = false; };
+          }, [companyCode, loginIdOrAdmin]);
+        
+            // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+          const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+            if ((taxType || "N") !== "S") return 0;
+            const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+            return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+          };
     const discountScope = form.so_discount_scoope || "ITEM";
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      const discPriceField = editMode ? "disc_hdr_price" : "so_disc_hdr_price";
+    const discPercentField = editMode ? "disc_hdr_percent" : "so_disc_hdr_percent";
 // light placeholder on empty date inputs (Chrome/Edge/Safari)
 const dateCls = (v?: string | null) =>
     `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
@@ -106,27 +128,35 @@ const dateCls = (v?: string | null) =>
         return "";
     };
     // Update header discount ONLY when received quantity changes (not on load / other row edits)
-const qtySignature = (rows || []).map((r) => `${r.qty_puom}|${r.qty_luom}`).join(",");
-const prevQtySignature = useRef<string | null>(null);
+     const qtySignature = (rows || []).map((r) => `${r.qty_puom}|${r.qty_luom}`).join(",");
+    const idSignature = (rows || []).map((r) => r.id).join(","); // ADDED
+    const prevQtySignature = useRef<string | null>(null);
+    const prevIdSignature = useRef<string | null>(null); // ADDED
 
-useEffect(() => {
-    if (!rows || rows.length === 0) return;
-    // first time we see loaded rows: remember the quantities, don't touch the header
-    if (prevQtySignature.current === null || prevQtySignature.current === qtySignature) {
+    useEffect(() => {
+        if (!rows || rows.length === 0) return;
+        // ADDED: line set was replaced (PO selected / doc loaded) - remember it, don't touch the header
+        if (prevIdSignature.current !== idSignature) {
+            prevIdSignature.current = idSignature;
+            prevQtySignature.current = qtySignature;
+            return;
+        }
+        // first time we see loaded rows: remember the quantities, don't touch the header
+        if (prevQtySignature.current === null || prevQtySignature.current === qtySignature) {
+            prevQtySignature.current = qtySignature;
+            return;
+        }
         prevQtySignature.current = qtySignature;
-        return;
-    }
-    prevQtySignature.current = qtySignature;
 
-    const price = TotalDiscAmount(rows);
-    const percent = DiscAmountPercentage(form, rows);
-    setForm((current) =>
-        numberOrZero(current.so_disc_hdr_price) === price &&
-            numberOrZero(current.so_disc_hdr_percent) === percent
-            ? current
-            : { ...current, so_disc_hdr_price: price, so_disc_hdr_percent: percent }
-    );
-}, [qtySignature]);
+        const price = TotalDiscAmount(rows);
+        const percent = DiscAmountPercentage(form, rows);
+        setForm((current) =>
+            numberOrZero(current[discPriceField]) === price &&   // CHANGED
+                numberOrZero(current[discPercentField]) === percent
+                ? current
+                : { ...current, [discPriceField]: price, [discPercentField]: percent }
+        );
+    }, [qtySignature, idSignature]);
     return (
         <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
             {/* HEADER SECTION */}
@@ -537,17 +567,17 @@ useEffect(() => {
                                 </div>
                             </div>
 
-                            <CField label="Disc Amt">
+                                      <CField label="Disc Amt">
                                 <Input
                                     className="h-7 text-xs text-right"
                                     type="number"
                                     step="0.01"
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
-                                    value={numberOrZero(form.so_disc_hdr_price).toFixed(3)}
+                                    value={numberOrZero(form[discPriceField]).toFixed(3)} // CHANGED
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
-                                        updateField("so_disc_hdr_price", value);
-                                        calculateDiscount?.("amount", value);
+                                        updateField(discPriceField, value); // CHANGED
+                                        calculateDiscount("amount", value);
                                     }}
                                 />
                             </CField>
@@ -557,11 +587,11 @@ useEffect(() => {
                                     type="number"
                                     step="0.001"
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
-                                    value={numberOrZero(form.so_disc_hdr_percent).toFixed(2)}
+                                    value={numberOrZero(form[discPercentField]).toFixed(2)} // CHANGED
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
-                                        updateField("so_disc_hdr_percent", value);
-                                        calculateDiscount?.("percent", value);
+                                        updateField(discPercentField, value); // CHANGED
+                                        calculateDiscount("percent", value);
                                     }}
                                 />
                             </CField>
@@ -571,7 +601,7 @@ useEffect(() => {
                             <CField label="Tax Type">
                                 <Select className="h-7 text-xs" value={form.so_tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
-                                    setForm((current) => ({ ...current, so_tx_compnt_1_expmt: taxType, so_tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
+                                    setForm((current) => ({ ...current, so_tx_compnt_1_expmt: taxType, so_tx_compnt_1_pct: resolveTaxPerc(taxType, current.so_tx_cat_code) }));
                                 }}
                                     disabled={headerAndLineDisabled}>
                                     <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>

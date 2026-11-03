@@ -73,6 +73,7 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
   const [rows, setRows] = useState<SalesOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [query, setQuery] = useState("");
+    const [divisionsLoading, setDivisionsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RequestTab>("PENDING");
   const [pageIndex, setPageIndex] = useState(0);
@@ -100,9 +101,15 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
   });
 
   const loadLookups = async () => {
-    const divisionData = await getDivisions();
-    setDivisions(divisionData);
+    setDivisionsLoading(true);
+    try {
+      const divisionData = await getDivisions();
+      setDivisions(divisionData);
+    } finally {
+      setDivisionsLoading(false);
+    }
   };
+
 
   const purchaseOrderTabs = [
     { value: "PENDING", label: "Pending" },
@@ -359,6 +366,16 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
 
+  // One division → open the editor directly. Otherwise let the user pick.
+  const handleAddClick = () => {
+    if (divisionsLoading) return;
+    if (divisions.length === 1) {
+      openCreateForDivision(divisions[0]);
+      return;
+    }
+    setDivisionPicker(true);
+  };
+
   return (
     <section className="finance-list-page grid gap-4">
       {/* <div className="finance-list-heading">
@@ -414,16 +431,16 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
                   setPageIndex(0);
                 }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
-                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
-                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
                   }`}
               >
                 <span>{item.label}</span>
 
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
-                      ? "bg-white/20 text-white"
-                      : "bg-muted text-muted-foreground"
+                    ? "bg-white/20 text-white"
+                    : "bg-muted text-muted-foreground"
                     }`}
                 >
                   {getTabCount(item.value)}
@@ -441,7 +458,8 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
             tab === "PENDING" && (
               <button
                 title="Add Sales Invoice"
-                onClick={() => setDivisionPicker(true)}
+                onClick={handleAddClick}
+                disabled={divisionsLoading}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
               >
                 <Plus size={14} />

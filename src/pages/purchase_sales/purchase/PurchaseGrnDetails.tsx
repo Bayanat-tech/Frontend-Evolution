@@ -1,7 +1,7 @@
 import { Columns3, List, Search, Trash2, X } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { PODocType, PurchaseOrderForm, PurchaseOrderLineRow } from "./Purchaseordertypes";
 import {
     formatAmount,
@@ -23,8 +23,9 @@ import {
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { ColumnModeToggle } from "../../../components/ui/ColumnModeToggle";
 
 function hasExtraStickyColumn(docType?: string | null): boolean {
     const code = String(docType ?? "").trim().toUpperCase();
@@ -103,7 +104,9 @@ export function PurchaseGrnDetailsTable({
     loginid,
     ex_rate,
     docType,
-    expenseTotal = 0
+    expenseTotal = 0,
+     amountDecimals = 3,
+  priceDecimals = 3,
 }: {
     form: PurchaseOrderForm;
     setdetails?: (rows: PurchaseOrderLineRow[]) => void;
@@ -118,6 +121,8 @@ export function PurchaseGrnDetailsTable({
     ex_rate?: number;
     docType?: PODocType | SODocType | null;
     expenseTotal?: number;
+    amountDecimals?: number;
+  priceDecimals?: number;
 }) {
     const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
@@ -126,6 +131,7 @@ export function PurchaseGrnDetailsTable({
     const [lineSearch, setLineSearch] = useState("");
     const discountScope = form.discount_scoope || "ITEM";
     const [showAllColumns, setShowAllColumns] = useState(false);
+    const [defaultZone, setDefaultZone] = useState("");
     const [uppTip, setUppTip] = useState<{ value: number; x: number; y: number } | null>(null);
     const filteredRows = useMemo(() => {
         const q = lineSearch.trim().toLowerCase();
@@ -153,7 +159,27 @@ export function PurchaseGrnDetailsTable({
         [rows, expenseTotal],
     );
 
+    useEffect(() => {
+        let alive = true;
+        Promise.resolve(
+            getDynamicLookup({ parameter: "PS_POORDER_ENTRY_ZONE_LIST", code1: companyCode, loginid: loginid || "ADMIN" })
+        )
+            .then((res: any) => {
+                const list = Array.isArray(res) ? res : res?.data ?? [];
+                const first = list[0];
+                if (alive && first) setDefaultZone(text(getLookupValue(first, "zone_code")));
+            })
+            .catch(() => { });
+        return () => { alive = false; };
+    }, [companyCode, loginid]);
 
+    // Fill the default zone on any line that has none (existing and newly added)
+    useEffect(() => {
+        if (!defaultZone || headerAndLineDisabled) return;
+        rows.forEach((r) => {
+            if (!r.zone_code) updateRow(r.id, { zone_code: defaultZone });
+        });
+    }, [defaultZone, rows, headerAndLineDisabled]);
     return (
         <div
             className="commercial-lines-card rounded-md border bg-card min-w-0"
@@ -175,34 +201,11 @@ export function PurchaseGrnDetailsTable({
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setShowAllColumns(!showAllColumns)}
-                        className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${showAllColumns
-                            ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
-                            : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-                            }`}
-                        title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
-                    >
-                        <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-                        <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
-                    </button>
-
-                    <div className="bisc-table-search">
-                        <Search size={13} className="bisc-table-search-icon" />
-                        <input
-                            className="bisc-search-input"
-                            type="text"
-                            value={lineSearch}
-                            onChange={(e) => setLineSearch(e.target.value)}
-                            placeholder="Search lines..."
-                        />
-                        {lineSearch && (
-                            <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
-                                <X size={11} />
-                            </button>
-                        )}
-                    </div>
+                    <ColumnModeToggle showAllColumns={showAllColumns} onChange={setShowAllColumns} />
+                            <div className="relative flex h-8 w-64 items-center rounded-full border border-slate-300 bg-white pl-8 pr-3 transition-all duration-300 ease-out focus-within:w-96 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/20">
+                              <Search size={13} className="absolute left-3 text-slate-400" />
+                              <input className="h-full w-full border-0 bg-transparent text-xs outline-none placeholder:text-slate-400" type="text" value={lineSearch} onChange={(e) => setLineSearch(e.target.value)} placeholder="Search lines..." />
+                            </div> 
                     {/* <Button disabled={headerAndLineDisabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addRow} className="commercial-add-line-btn">
             <Plus size={14} /> Add Line
           </Button> */}
@@ -377,7 +380,7 @@ export function PurchaseGrnDetailsTable({
 
                                     {/* Unit Price — DISPLAY ONLY */}
                                     <td className="px-2 py-1">
-                                        <Input className={`finance-money-input ${INPUT_BG}`} disabled readOnly type="number" style={{ textAlign: "right" }} step="0.0001" value={row.po_unit_price} />
+                                        <Input className={`finance-money-input ${INPUT_BG}`} disabled readOnly type="number" style={{ textAlign: "right" }} step="0.0001" value={row.po_unit_price?.toFixed(priceDecimals)} />
                                     </td>
                                     {/* PO Quantity */}
                                     <td className="finance-amount-cell px-2 py-1 text-right bg-slate-200">
@@ -456,7 +459,7 @@ export function PurchaseGrnDetailsTable({
                                     </td>
                                     {/* Amount (before discount) */}
                                     <td className={AMOUNT_CELL}>
-                                        {formatAmount(amountBeforeDiscPrice(row))}
+                                        {formatAmount(amountBeforeDiscPrice(row), amountDecimals)}
                                     </td>
                                     {/* Discount: Disc % */}
                                     <td className="px-2 py-1">
@@ -466,7 +469,7 @@ export function PurchaseGrnDetailsTable({
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={row.disc_percent}
+                                            value={row.disc_percent.toFixed(amountDecimals)}
                                             onChange={(event) => {
                                                 const discPercent = Number(event.target.value || 0);
                                                 const amount = amountBeforeDiscPrice(row);
@@ -486,7 +489,7 @@ export function PurchaseGrnDetailsTable({
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={row.disc_price}
+                                            value={row.disc_price?.toFixed(amountDecimals)}
                                             onChange={(event) => {
                                                 const discPrice = Number(event.target.value || 0);
                                                 const amount = amountBeforeDiscPrice(row);
@@ -502,8 +505,8 @@ export function PurchaseGrnDetailsTable({
                                     </td>
 
                                     {/* Net Amount (Excl Tax) */}
-                                    <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
-                                    <td className={AMOUNT_CELL}>{formatAmount(expensePerUnit.get(row.id) || 0)}</td>                                    {/* TAX: Tax % */}
+                                    <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row), amountDecimals)}</td>
+                                    <td className={AMOUNT_CELL}>{formatAmount(expensePerUnit.get(row.id) || 0, amountDecimals)}</td>                                    {/* TAX: Tax % */}
                                     <td className="px-2 py-1">
                                         <Input
                                             className={`finance-money-input ${INPUT_BG}`}
@@ -522,13 +525,13 @@ export function PurchaseGrnDetailsTable({
                                         />
                                     </td>
                                     {/* TAX: Tax Amount */}
-                                    <td className={AMOUNT_CELL}>{formatAmount(lineTaxAmount(row))}</td>
+                                    <td className={AMOUNT_CELL}>{formatAmount(lineTaxAmount(row), amountDecimals)}</td>
                                     {/* Total Amount (Incl Tax) = Net + Tax */}
-                                    <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row) + lineTaxAmount(row))}</td>
+                                    <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row) + lineTaxAmount(row), amountDecimals)}</td>
 
                                     {/* ---------- All Columns view only ---------- */}
                                     {showAllColumns && (<td className={AMOUNT_CELL}>
-                                        {formatAmount(lcurrAmountValue)}
+                                        {formatAmount(lcurrAmountValue, amountDecimals)}
                                     </td>)}
                                     {showAllColumns && (<td className="px-2 py-1">
                                         <Select
@@ -612,10 +615,10 @@ export function PurchaseGrnDetailsTable({
                                         />
                                     </td>)}
                                     {showAllColumns && (<td className={AMOUNT_CELL}>
-                                        {formatAmount(taxLcurrAmountValue)}
+                                        {formatAmount(taxLcurrAmountValue, amountDecimals)}
                                     </td>)}
                                     {showAllColumns && (<td className={`w-32 ${AMOUNT_CELL}`}>
-                                        {formatAmount(LcurrDisAmount(row, ex_rate))}
+                                        {formatAmount(LcurrDisAmount(row, ex_rate),amountDecimals)}
                                     </td>)}
                                     {showAllColumns && (<td className="w-32 px-2 py-1">
                                         <Input className={INPUT_BG} type="date" disabled={headerAndLineDisabled} value={row.required_dt} onChange={(event) => updateRow(row.id, { required_dt: event.target.value })} />
@@ -653,27 +656,27 @@ export function PurchaseGrnDetailsTable({
             >
                 <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Amount</span>
-                    <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
+                    <strong className="text-emerald-600">{formatAmount(totalAmountDisct, amountDecimals)}</strong>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Discount</span>
-                    <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
+                    <strong>{formatAmount(TotalDiscAmount(rows), amountDecimals)}</strong>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Total Amount Excluding Tax</span>
-                    <strong>{formatAmount(grandTotal)}</strong>
+                    <strong>{formatAmount(grandTotal, amountDecimals)}</strong>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Tax</span>
-                    <strong>{formatAmount(totalTaxAmount)}</strong>
+                    <strong>{formatAmount(totalTaxAmount, amountDecimals)}</strong>
                 </div>
                 <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
                     <span className="font-semibold text-[#00378C]">Total Amount Including Tax</span>
-                    <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
+                    <strong className="text-sm text-emerald-600">{formatAmount(finalTotal, amountDecimals)}</strong>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Other Expenses</span>
-                    <strong>{formatAmount(expenseTotal)}</strong>
+                    <strong>{formatAmount(expenseTotal, amountDecimals)}</strong>
                 </div>
             </div>
             {uppTip &&

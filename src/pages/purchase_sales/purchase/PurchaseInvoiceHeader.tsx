@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Briefcase, Building2, FileText, Percent, Receipt, Truck } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -78,7 +78,26 @@ export function PurchaseInvoiceHeaderForm({
     rows?: PurchaseOrderLineRow[];
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [companyCode, loginIdOrAdmin]);
 
+    // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
     const discountScope = form.discount_scoope || "ITEM";
     const docTypeUpper = String(docType ?? "").trim().toUpperCase();
 
@@ -603,19 +622,16 @@ const dateCls = (v?: string | null) =>
                         </HeaderBlock>
 
                         <HeaderBlock label="Tax" icon={<Receipt size={11} />} gridCols="grid-cols-2">
-                            <CField label="Tax Type"  >
-                                <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
-                                    const taxType = e.target.value;
-                                    const perc = taxType === "S" ? (Number(form.tx_compnt_perc_1) > 0 ? Number(form.tx_compnt_perc_1) : 5) : 0;
-                                    setForm((current) => ({
-                                        ...current,
-                                        tx_compnt_1_expmt: taxType,
-                                        tx_compnt_perc_1: perc,
-                                    }));
-                                }}>
-                                    <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
-                                </Select>
-                            </CField>
+                             <CField label="Tax Type">
+                                            <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+                                              const taxType = e.target.value;
+                                              // CHANGED: No Tax / Zero / Exempt => 0, Std Tax => % of the selected tax category
+                                              setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: resolveTaxPerc(taxType, current.tx_cat_code) }));
+                                            }}
+                                              disabled={headerAndLineDisabled}>
+                                              <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
+                                            </Select>
+                                          </CField>
 
                             <LookupField
                                 label="Tax Category"

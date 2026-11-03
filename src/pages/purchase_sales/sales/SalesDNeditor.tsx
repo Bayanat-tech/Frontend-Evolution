@@ -4,7 +4,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups"; // CHANGED: + getLookupValue
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -94,6 +94,29 @@ export function SalesDNEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+
+  // ADDED: tax category list (code / name / tx_percnt) - Tax % comes from here, not hardcoded
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: user?.company_code })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [user?.company_code]);
+
+  // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
+
   // ---- Report dialog state ----
   const openReport = async () => {
     if (!form.doc_no) {
@@ -146,14 +169,19 @@ export function SalesDNEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
  useEffect(() => {
-    const taxPerc =
-      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+    // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
+
+    // CHANGED: from category list instead of hardcoded 5
+    const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
 
     setRows((current) =>
       current.map((row) => {
-        // Only reset % / amount when the Tax Type really changed for this line.
-        // On load (and when only category/code change) keep the saved line %.
+        // Only reset % / amount when the Tax Type or Tax Category really changed for this line.
+        // On load (and when only the tax code changes) keep the saved line %.
         const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+        const catChanged = (row.tx_cat_code || "") !== (form.tx_cat_code || ""); // ADDED
+        const taxChanged = typeChanged || catChanged; // ADDED
 
         const updatedRow = {
           ...row,
@@ -161,8 +189,8 @@ export function SalesDNEditor({
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
-          ...(typeChanged
+          tx_compnt_perc_1: taxChanged ? taxPerc : row.tx_compnt_perc_1, // CHANGED
+          ...(taxChanged // CHANGED
             ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
             : {}),
         };
@@ -176,7 +204,8 @@ export function SalesDNEditor({
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
-    form.tx_compnt_perc_1
+    form.tx_compnt_perc_1,
+    taxCats // ADDED
 
   ]);
   useEffect(() => {
@@ -405,7 +434,7 @@ export function SalesDNEditor({
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? Number(form.tx_compnt_perc_1 || 0) : 0,
+        tx_compnt_perc_1: resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code), // CHANGED: from category %
       },
     ]);
 

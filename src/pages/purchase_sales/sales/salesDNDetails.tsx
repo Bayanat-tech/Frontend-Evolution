@@ -10,6 +10,7 @@ import { PODocType } from "../purchase/Purchaseordertypes";
 import { amountBeforeDiscPrice, TotalDiscAmount } from "../purchase/Purchaseorderutils";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { ColumnModeToggle } from "../../../components/ui/ColumnModeToggle";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -177,34 +178,11 @@ export function SalesDnDetailsTable({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowAllColumns(!showAllColumns)}
-            className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${showAllColumns
-              ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
-              : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
-          >
-            <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-            <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
-          </button>
-
-          <div className="bisc-table-search">
-            <Search size={13} className="bisc-table-search-icon" />
-            <input
-              className="bisc-search-input"
-              type="text"
-              value={lineSearch}
-              onChange={(e) => setLineSearch(e.target.value)}
-              placeholder="Search lines..."
-            />
-            {lineSearch && (
-              <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
-                <X size={11} />
-              </button>
-            )}
-          </div>
+         <ColumnModeToggle showAllColumns={showAllColumns} onChange={setShowAllColumns} />
+                 <div className="relative flex h-8 w-64 items-center rounded-full border border-slate-300 bg-white pl-8 pr-3 transition-all duration-300 ease-out focus-within:w-96 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/20">
+                   <Search size={13} className="absolute left-3 text-slate-400" />
+                   <input className="h-full w-full border-0 bg-transparent text-xs outline-none placeholder:text-slate-400" type="text" value={lineSearch} onChange={(e) => setLineSearch(e.target.value)} placeholder="Search lines..." />
+                 </div> 
         </div>
       </div>
       <div className="commercial-lines-scroll max-h-[43vh] overflow-auto min-w-0">

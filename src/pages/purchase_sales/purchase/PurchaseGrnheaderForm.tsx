@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Select } from "../../../components/ui/Select";
@@ -70,7 +70,9 @@ export function PurchaseGrnHeaderForm({
     docType,
     setdetails,
     rows,
-    calculateDiscount
+    calculateDiscount,
+      amountDecimals = 3,
+
 }: {
     form: PurchaseOrderForm;
     setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -84,14 +86,38 @@ export function PurchaseGrnHeaderForm({
     setdetails?: (details: any[]) => void;
     rows?: PurchaseOrderLineRow[];
     calculateDiscount: (type: "amount" | "percent", value: number) => void;
+    amountDecimals?: number;
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
+    const [taxCats, setTaxCats] = useState<any[]>([]);
+    useEffect(() => {
+        let alive = true;
+        Promise.resolve(
+            getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
+        )
+            .then((res: any) => {
+                const list = Array.isArray(res) ? res : res?.data ?? [];
+                if (alive) setTaxCats(list);
+            })
+            .catch(() => { });
+        return () => { alive = false; };
+    }, [companyCode, loginIdOrAdmin]);
+
+    // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+    const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+        if ((taxType || "N") !== "S") return 0;
+        const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+        return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+    };
     const discountScope = form.po_discount_scoope || "ITEM";
+    // ADDED: edit mode -> disc_hdr_*, otherwise -> po_disc_hdr_*
+    const discPriceField = editMode ? "disc_hdr_price" : "po_disc_hdr_price";
+    const discPercentField = editMode ? "disc_hdr_percent" : "po_disc_hdr_percent";
     const docTypeUpper = String(docType ?? "").trim().toUpperCase();
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-// light placeholder on empty date inputs (Chrome/Edge/Safari)
-const dateCls = (v?: string | null) =>
-    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
+    // light placeholder on empty date inputs (Chrome/Edge/Safari)
+    const dateCls = (v?: string | null) =>
+        `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
     // phone / fax: digits, + ( ) - and space only, max 20 chars
     const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
 
@@ -102,17 +128,25 @@ const dateCls = (v?: string | null) =>
     const cleanAmount = (v: string) => {
         const cleaned = v.replace(/[^0-9.]/g, "");
         const [int, ...rest] = cleaned.split(".");
-        return rest.length ? `${int}.${rest.join("").slice(0, 3)}` : int;
+        return rest.length ? `${int}.${rest.join("").slice(0, amountDecimals)}` : int;
     };
     const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
 
     // Keep header discount in sync with the lines (rvd qty changes -> line disc changes -> header changes)
     // Update header discount ONLY when received quantity changes (not on load / other row edits)
     const qtySignature = (rows || []).map((r) => `${r.qty_puom}|${r.qty_luom}`).join(",");
+    const idSignature = (rows || []).map((r) => r.id).join(","); // ADDED
     const prevQtySignature = useRef<string | null>(null);
+    const prevIdSignature = useRef<string | null>(null); // ADDED
 
     useEffect(() => {
         if (!rows || rows.length === 0) return;
+        // ADDED: line set was replaced (PO selected / doc loaded) - remember it, don't touch the header
+        if (prevIdSignature.current !== idSignature) {
+            prevIdSignature.current = idSignature;
+            prevQtySignature.current = qtySignature;
+            return;
+        }
         // first time we see loaded rows: remember the quantities, don't touch the header
         if (prevQtySignature.current === null || prevQtySignature.current === qtySignature) {
             prevQtySignature.current = qtySignature;
@@ -123,12 +157,12 @@ const dateCls = (v?: string | null) =>
         const price = TotalDiscAmount(rows);
         const percent = DiscAmountPercentage(form, rows);
         setForm((current) =>
-            numberOrZero(current.po_disc_hdr_price) === price &&
-                numberOrZero(current.po_disc_hdr_percent) === percent
+            numberOrZero(current[discPriceField]) === price &&   // CHANGED
+                numberOrZero(current[discPercentField]) === percent
                 ? current
-                : { ...current, po_disc_hdr_price: price, po_disc_hdr_percent: percent }
+                : { ...current, [discPriceField]: price, [discPercentField]: percent }
         );
-    }, [qtySignature]);
+    }, [qtySignature, idSignature]);
     return (
         <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
             {/* HEADER SECTION - HEIGHT UNCHANGED */}
@@ -315,6 +349,8 @@ const dateCls = (v?: string | null) =>
                                             other_expense_cost: numberOrZero(getLookupValue(row || {}, "other_expense_cost")),
                                             po_disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "po_disc_hdr_percent")),
                                             po_disc_hdr_price: numberOrZero(getLookupValue(row || {}, "po_disc_hdr_price")),
+                                            disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "po_disc_hdr_percent")),
+                                            disc_hdr_price: numberOrZero(getLookupValue(row || {}, "po_disc_hdr_price")),
                                             po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")).slice(0, 250),
                                             credit_period: numberOrZero(getLookupValue(row || {}, "credit_period") || accountRow?.credit_period),
                                             due_date: getLookupValue(row || {}, "due_date"),
@@ -577,10 +613,10 @@ const dateCls = (v?: string | null) =>
                                     type="number"
                                     step="0.01"
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
-                                    value={numberOrZero(form.po_disc_hdr_price).toFixed(3)}
+                                    value={numberOrZero(form[discPriceField]).toFixed(amountDecimals)} // CHANGED
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
-                                        updateField("po_disc_hdr_price", value);
+                                        updateField(discPriceField, value); // CHANGED
                                         calculateDiscount("amount", value);
                                     }}
                                 />
@@ -591,10 +627,10 @@ const dateCls = (v?: string | null) =>
                                     type="number"
                                     step="0.001"
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
-                                    value={numberOrZero(form.po_disc_hdr_percent).toFixed(2)}
+                                    value={numberOrZero(form[discPercentField]).toFixed(amountDecimals)} // CHANGED
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
-                                        updateField("po_disc_hdr_percent", value);
+                                        updateField(discPercentField, value); // CHANGED
                                         calculateDiscount("percent", value);
                                     }}
                                 />
@@ -605,7 +641,7 @@ const dateCls = (v?: string | null) =>
                             <CField label="Tax Type">
                                 <Select className="h-7 text-xs" value={form.po_tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
-                                    setForm((current) => ({ ...current, po_tx_compnt_1_expmt: taxType, po_tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
+                                    setForm((current) => ({ ...current, po_tx_compnt_1_expmt: taxType, po_tx_compnt_1_pct: resolveTaxPerc(taxType, current.po_tx_cat_code) }));
                                 }}
                                     disabled={headerAndLineDisabled}>
                                     <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>

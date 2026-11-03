@@ -528,7 +528,7 @@ export function buildDetailsPayload(rows: SalesOrderLineRow[], ex_rate?: number)
     lcur_amount_disc: LcurrDisAmount(row),
 
     tx_compnt_amt_1: lineTaxAmount(row),
-    tx_compnt_perc_1: row.tx_compnt_perc_1,
+    tx_compnt_perc_1: numberOrZero(row.tx_compnt_perc_1),
     tx_compnt_1_expmt: row.tx_compnt_1_expmt,
 
     // SO

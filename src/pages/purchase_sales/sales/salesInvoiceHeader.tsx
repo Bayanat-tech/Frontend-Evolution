@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Building2, FileText, Percent, Receipt, Truck } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -83,12 +83,29 @@ export function SalesInvoiceHeaderForm({
     const docTypeUpper = String(docType ?? "").trim().toUpperCase();
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
-
+    const [taxCats, setTaxCats] = useState<any[]>([]);
+    useEffect(() => {
+        let alive = true;
+        Promise.resolve(
+            getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
+        )
+            .then((res: any) => {
+                const list = Array.isArray(res) ? res : res?.data ?? [];
+                if (alive) setTaxCats(list);
+            })
+            .catch(() => { });
+        return () => { alive = false; };
+    }, [companyCode, loginIdOrAdmin]);
+    const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+        if ((taxType || "N") !== "S") return 0;
+        const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+        return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+    };
     // phone / fax: digits, + ( ) - and space only, max 20 chars
     const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
-// light placeholder on empty date inputs (Chrome/Edge/Safari)
-const dateCls = (v?: string | null) =>
-    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
+    // light placeholder on empty date inputs (Chrome/Edge/Safari)
+    const dateCls = (v?: string | null) =>
+        `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
     // whole number only, max 4 digits
     const cleanInt = (v: string, max = 4) => v.replace(/\D/g, "").slice(0, max);
 
@@ -589,24 +606,22 @@ const dateCls = (v?: string | null) =>
                         </HeaderBlock>
 
                         <HeaderBlock label="Tax" icon={<Receipt size={11} />} gridCols="grid-cols-2">
-                            <CField label="Tax Type"  >
-                                <Select className="h-7 text-xs" disabled={headerAndLineDisabled || disabled} value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+                            <CField label="Tax Type">
+                                <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
-                                    const perc = taxType === "S" ? (Number(form.tx_compnt_perc_1) > 0 ? Number(form.tx_compnt_perc_1) : 5) : 0;
-                                    setForm((current) => ({
-                                        ...current,
-                                        tx_compnt_1_expmt: taxType,
-                                        tx_compnt_perc_1: perc,
-                                    }));
-                                }}>
+                                    // CHANGED: No Tax / Zero / Exempt => 0, Std Tax => % of the selected tax category
+                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: resolveTaxPerc(taxType, current.tx_cat_code) }));
+                                }}
+                                    disabled={headerAndLineDisabled}>
                                     <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
                                 </Select>
                             </CField>
+
                             <LookupField
                                 label="Tax Category"
                                 value={form.tx_cat_name
                                     ? `${form.tx_cat_code} - ${form.tx_cat_name}`
-                                    : form.tx_cat_code || ""}
+                                    : form.tx_cat_code}
                                 displayValue={
                                     form.tx_cat_name
                                         ? `${form.tx_cat_code} - ${form.tx_cat_name}`
@@ -625,26 +640,74 @@ const dateCls = (v?: string | null) =>
                                         loginid: loginIdOrAdmin
                                     })
                                 }
-                                disabled={headerAndLineDisabled}
-                                onChange={(value, row) =>
+                                disabled={disabled}
+                                onChange={async (value, row) => {
+                                    const code = text(value).split(" - ")[0].trim();
+                                    const catName = text(getLookupValue(row || {}, "tx_cat_name"));
+                                    let matchedPerc = 0;
+                                    let matchedCode = "";
+                                    let matchedName = "";
+                                    try {
+                                        const codes = await getDynamicLookup({
+                                            parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+                                            code1: companyCode,
+                                            loginid: loginIdOrAdmin,
+                                        });
+                                        const match = (codes || []).find((c) =>
+                                            getLookupValue(c, "tx_compntcat_code") === code ||
+                                            getLookupValue(c, "tx_cat_code") === code ||
+                                            (code === "01" && (getLookupValue(c, "tx_compntcat_code") === "10100" || getLookupValue(c, "tx_type") === "TAX IN")) ||
+                                            (code === "11" && (getLookupValue(c, "tx_compntcat_code") === "11100" || getLookupValue(c, "tx_type") === "TAX OUT")) ||
+                                            (code === "00" && (getLookupValue(c, "tx_compntcat_code") === "11000" || String(getLookupValue(c, "tx_compntcat_name") || "").includes("NO VAT")))
+                                        );
+                                        if (match) {
+                                            matchedPerc = Number(getLookupValue(match, "tx_percnt") ?? 0);
+                                            matchedCode = text(getLookupValue(match, "tx_compntcat_code"));
+                                            matchedName = text(getLookupValue(match, "tx_compntcat_name"));
+                                        }
+                                    } catch (e) {
+                                        console.warn("Error fetching tax code for category", e);
+                                    }
+                                    const isNoTax = code === "00" || matchedPerc === 0;
                                     setForm((current) => ({
                                         ...current,
-                                        tx_cat_code: text(value).split(" - ")[0].trim(),
-                                        tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
-                                    }))
-                                }
+                                        tx_cat_code: code,
+                                        tx_cat_name: catName,
+                                        tx_compntcat_code_1: matchedCode || current.tx_compntcat_code_1,
+                                        tx_compntcat_name_1: matchedName || current.tx_compntcat_name_1,
+                                        tx_compnt_1_expmt: isNoTax ? "N" : "S",
+                                        tx_compnt_perc_1: matchedPerc,
+                                    }));
+                                }}
                             />
 
                             <LookupField
                                 label="Tax Code"
-                                value={form.tx_compntcat_code_1 || ""}
-                                displayValue={form.tx_compntcat_code_1 || ""}
-                                columns={[{ field: "tx_compntcat_code", header: "Code" }, { field: "tx_compntcat_name", header: "Name" }]}
+                                value={form.tx_compntcat_name_1
+                                    ? `${form.tx_compntcat_code_1} - ${form.tx_compntcat_name_1}`
+                                    : form.tx_compntcat_code_1}
+                                displayValue={
+                                    form.tx_compntcat_name_1
+                                        ? `${form.tx_compntcat_code_1} - ${form.tx_compntcat_name_1}`
+                                        : form.tx_compntcat_code_1
+                                }
+                                columns={[{ field: "tx_compntcat_code", header: "Code" }, { field: "tx_compntcat_name", header: "Name" }, { field: "tx_percnt", header: "Tax %" }]}
                                 valueField="tx_compntcat_code"
                                 displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE", code1: companyCode, loginid: loginIdOrAdmin })}
                                 disabled={headerAndLineDisabled}
-                                onChange={(value) => setForm((current) => ({ ...current, tx_compntcat_code_1: value }))}
+                                onChange={(value, row) => {
+                                    const perc = Number(getLookupValue(row || {}, "tx_percnt") ?? 0);
+                                    const codeName = text(getLookupValue(row || {}, "tx_compntcat_name"));
+                                    const isNoTax = perc === 0;
+                                    setForm((current) => ({
+                                        ...current,
+                                        tx_compntcat_code_1: text(value),
+                                        tx_compntcat_name_1: codeName,
+                                        tx_compnt_perc_1: perc,
+                                        tx_compnt_1_expmt: isNoTax ? "N" : "S",
+                                    }));
+                                }}
                             />
                         </HeaderBlock>
                     </div>

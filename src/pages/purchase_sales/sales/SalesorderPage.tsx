@@ -1,7 +1,7 @@
 import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions, getSoOrderReportExcel, getSOrderReportHtml } from "../../../api/transactions";
+import { CompanyInfo, Division, getCompanyInfo, getDivisions, getSoOrderReportExcel, getSOrderReportHtml } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -77,6 +77,7 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const [rows, setRows] = useState<SalesOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
+  const [divisionsLoading, setDivisionsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RequestTab>("PENDING");
@@ -91,6 +92,7 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<SalesOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   // ── Row-level report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
@@ -111,8 +113,16 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
   });
 
   const loadLookups = async () => {
-    const divisionData = await getDivisions();
-    setDivisions(divisionData);
+    setDivisionsLoading(true);
+    try {
+      const [cInfo] = await Promise.all([getCompanyInfo()]);
+      
+            setCompanyInfo(cInfo);
+      const divisionData = await getDivisions();
+      setDivisions(divisionData);
+    } finally {
+      setDivisionsLoading(false);
+    }
   };
 
 
@@ -365,6 +375,16 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
 
+  // One division → open the editor directly. Otherwise let the user pick.
+  const handleAddClick = () => {
+    if (divisionsLoading) return;
+    if (divisions.length === 1) {
+      openCreateForDivision(divisions[0]);
+      return;
+    }
+    setDivisionPicker(true);
+  };
+
   return (
     <section className="finance-list-page grid gap-4">
       {/* <div className="finance-list-heading">
@@ -440,9 +460,10 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
           toolbar={
             tab === "PENDING" && (
               <button
-                title="Add Sales Order"
-                onClick={() => setDivisionPicker(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+                title={divisionsLoading ? "Loading divisions..." : "Add Sales Order"}
+                onClick={handleAddClick}
+                disabled={divisionsLoading}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Plus size={14} />
                 Add Order
@@ -511,4 +532,3 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
     </section>
   );
 }
-

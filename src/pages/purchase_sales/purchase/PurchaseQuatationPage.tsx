@@ -1,7 +1,7 @@
 import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions } from "../../../api/transactions";
+import { CompanyInfo, Division, getCompanyInfo, getDivisions } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -75,6 +75,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   const { user } = useAuth();
   const [rows, setRows] = useState<PurchaseOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
+  const [divisionsLoading, setDivisionsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RequestTab>("PENDING");
@@ -82,6 +83,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
+    const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const isPendingTab = tab === "PENDING";
   const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";
   const canViewCanceledTab = approvalLevel <= 1;
@@ -100,8 +102,16 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     SENDBACK: 0,
   });
   const loadLookups = async () => {
-    const divisionData = await getDivisions();
-    setDivisions(divisionData);
+    setDivisionsLoading(true);
+    try {
+       const [cInfo] = await Promise.all([getCompanyInfo()]);
+      
+            setCompanyInfo(cInfo);
+      const divisionData = await getDivisions();
+      setDivisions(divisionData);
+    } finally {
+      setDivisionsLoading(false);
+    }
   };
 
   const purchaseOrderTabs = [
@@ -271,15 +281,15 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     //   header: "Status",
     //   cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
     // },
-     {
-          accessorKey: "cancelled",
-          header: () => <div className="text-center font-bold">Status</div>,
-          cell: ({ getValue }) => (
-            <div className="flex justify-center">
-              <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
-            </div>
-          ),
-        },
+    {
+      accessorKey: "cancelled",
+      header: () => <div className="text-center font-bold">Status</div>,
+      cell: ({ getValue }) => (
+        <div className="flex justify-center">
+          <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+        </div>
+      ),
+    },
     {
       id: "reason",
       header: "Reason",
@@ -319,6 +329,16 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
+  };
+
+  // One division → open the editor directly. Otherwise let the user pick.
+   const handleAddClick = () => {
+    if (divisionsLoading) return;
+    if (divisions.length === 1) {
+      openCreateForDivision(divisions[0]);
+      return;
+    }
+    setDivisionPicker(true);
   };
 
   return (
@@ -414,7 +434,8 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
             tab === "PENDING" && (
               <button
                 title="Add Quotation"
-                onClick={() => setDivisionPicker(true)}
+                onClick={handleAddClick}
+                disabled={divisionsLoading}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
               >
                 <Plus size={14} />

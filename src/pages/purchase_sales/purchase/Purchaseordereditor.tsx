@@ -4,7 +4,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -49,6 +49,7 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import {
   getPoOrderReportHtml,
   getPoOrderReportExcel,
+  CompanyInfo,
 } from "../../../api/transactions";
 
 import { NewReportDialog } from "../../../components/new_report_format";
@@ -75,6 +76,12 @@ export function PurchaseOrderEditor({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const amountDecimals = Number.isInteger(user?.amount_decimal_nos)
+    ? Math.min(Math.max(Number(user?.amount_decimal_nos), 0), 20)
+    : 2;
+  const priceDecimals = Number.isInteger(user?.price_decimal_nos)
+    ? Math.min(Math.max(Number(user?.price_decimal_nos), 0), 20)
+    : 2;
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
@@ -94,7 +101,6 @@ export function PurchaseOrderEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
-
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -111,25 +117,41 @@ export function PurchaseOrderEditor({
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const submitBtnRef = useRef<HTMLDivElement>(null);
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: user?.company_code })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [user?.company_code]);
+
+  // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
 
   useEffect(() => {
-    if (!editor) return;
-    const initialForm = emptyForm(editor);
-    setForm(initialForm);
-    setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
-    setError("");
-    setLoading(editor.mode === "edit");
-  }, [editor]);
+    // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
 
-  useEffect(() => {
-    const taxPerc =
-      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+    // CHANGED: from category list instead of hardcoded 5
+    const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
 
     setRows((current) =>
       current.map((row) => {
-        // Only reset % / amount when the Tax Type really changed for this line.
-        // On load (and when only category/code change) keep the saved line %.
+        // Only reset % / amount when the Tax Type or Tax Category really changed for this line.
+        // On load (and when only the tax code changes) keep the saved line %.
         const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+        const catChanged = (row.tx_cat_code || "") !== (form.tx_cat_code || ""); // ADDED
+        const taxChanged = typeChanged || catChanged; // ADDED
 
         const updatedRow = {
           ...row,
@@ -137,8 +159,8 @@ export function PurchaseOrderEditor({
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
-          ...(typeChanged
+          tx_compnt_perc_1: taxChanged ? taxPerc : row.tx_compnt_perc_1, // CHANGED
+          ...(taxChanged // CHANGED
             ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
             : {}),
         };
@@ -152,9 +174,54 @@ export function PurchaseOrderEditor({
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
-    form.tx_compnt_perc_1
+    form.tx_compnt_perc_1,
+    taxCats // ADDED
 
   ]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const initialForm = emptyForm(editor);
+    setForm(initialForm);
+    setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
+    setError("");
+    setLoading(editor.mode === "edit");
+  }, [editor]);
+
+  // useEffect(() => {
+  //   const taxPerc =
+  //     form.tx_compnt_1_expmt === "S" ? 5 : 0;
+
+  //   setRows((current) =>
+  //     current.map((row) => {
+  //       // Only reset % / amount when the Tax Type really changed for this line.
+  //       // On load (and when only category/code change) keep the saved line %.
+  //       const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
+  //       const updatedRow = {
+  //         ...row,
+
+  //         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+  //         tx_cat_code: `${form.tx_cat_code || ""}`,
+  //         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+  //         tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+  //         ...(typeChanged
+  //           ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+  //           : {}),
+  //       };
+
+  //       return updatedRow;
+  //     })
+  //   );
+
+
+  // }, [
+  //   form.tx_compntcat_code_1,
+  //   form.tx_cat_code,
+  //   form.tx_compnt_1_expmt,
+  //   form.tx_compnt_perc_1
+
+  // ]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -407,8 +474,10 @@ export function PurchaseOrderEditor({
         ...emptyLineRow(form.div_code),
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+        tx_compnt_perc_1: resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code), // CHANGED: was hardcoded 5
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -696,7 +765,7 @@ export function PurchaseOrderEditor({
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(finalTotal)}</strong>
+                <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(finalTotal, amountDecimals)}</strong>
               </div>
               {form.ac_code && (
                 <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
@@ -717,7 +786,7 @@ export function PurchaseOrderEditor({
                 title="Purchase Order"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(finalTotal)}
+                total={formatAmount(finalTotal, amountDecimals)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -795,7 +864,7 @@ export function PurchaseOrderEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab  && form.doc_no &&  (
+                  {isPendingTab && form.doc_no && (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
@@ -898,6 +967,7 @@ export function PurchaseOrderEditor({
                       rows={rows}
                       setdetails={setRows}
                       calculateDiscount={applyDiscountCalculation}
+                      amountDecimals={amountDecimals}
                     />
                   </div>
                 )}
@@ -915,6 +985,8 @@ export function PurchaseOrderEditor({
                   discAmt={form.disc_price}
                   companyCode={user?.company_code}
                   loginid={user?.loginid || user?.username}
+                  amountDecimals={amountDecimals}
+                  priceDecimals={priceDecimals}
 
                 />
               </div>
@@ -930,7 +1002,7 @@ export function PurchaseOrderEditor({
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs shadow-2xs">
                 <span className="text-[11px] font-medium text-slate-500">Total Amount</span>
-                <strong className="font-mono text-xs text-slate-900">{formatAmount(finalTotal)}</strong>
+                <strong className="font-mono text-xs text-slate-900">{formatAmount(finalTotal, amountDecimals)}</strong>
               </div>
 
 
@@ -1023,7 +1095,7 @@ export function PurchaseOrderEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
-          readOnly={!isPendingTab || isCancelled} 
+        readOnly={!isPendingTab || isCancelled}
       />
 
 

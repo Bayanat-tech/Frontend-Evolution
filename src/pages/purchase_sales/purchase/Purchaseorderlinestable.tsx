@@ -30,6 +30,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Dialog } from "../../../components/ui/Dialog";
 import Importpoitems from "./Importpoitems";
+import { ColumnModeToggle } from "../../../components/ui/ColumnModeToggle";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -133,7 +134,9 @@ export function PurchaseOrderLinesTable({
   loginid,
   ex_rate,
   docType,
-  onImportRows
+  onImportRows,
+  amountDecimals = 3,
+  priceDecimals = 3,
 }: {
   form: PurchaseOrderForm;
   setdetails?: (rows: SalesOrderLineRow[]) => void;
@@ -148,6 +151,8 @@ export function PurchaseOrderLinesTable({
   ex_rate?: number;
   docType?: PODocType | SODocType | null;
   onImportRows?: (rows: Partial<PurchaseOrderLineRow>[]) => void;
+  amountDecimals?: number;
+  priceDecimals?: number;
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -203,6 +208,29 @@ export function PurchaseOrderLinesTable({
     return () => { alive = false; };
   }, [companyCode, loginid]);
 
+  // ADDED: tax category list (code / name / tx_percnt) - used to resolve Tax % from the selected category
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [companyCode]);
+
+  // ADDED: tax % of a category. Only "S" (Std Tax) uses the category %, everything else is 0.
+  const resolveTaxPerc = (taxType: string | undefined, catCode: string | undefined): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
+
   // Fill the default zone on any line that has none (existing and newly added)
   useEffect(() => {
     if (!defaultZone.code || headerAndLineDisabled) return;
@@ -232,34 +260,13 @@ export function PurchaseOrderLinesTable({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowAllColumns(!showAllColumns)}
-            className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${showAllColumns
-              ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
-              : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
-          >
-            <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-            <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
-          </button>
+          <ColumnModeToggle showAllColumns={showAllColumns} onChange={setShowAllColumns} />
+          <div className="relative flex h-8 w-64 items-center rounded-full border border-slate-300 bg-white pl-8 pr-3 transition-all duration-300 ease-out focus-within:w-96 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/20">
+            <Search size={13} className="absolute left-3 text-slate-400" />
+            <input className="h-full w-full border-0 bg-transparent text-xs outline-none placeholder:text-slate-400" type="text" value={lineSearch} onChange={(e) => setLineSearch(e.target.value)} placeholder="Search lines..." />
+          </div> 
 
-          <div className="bisc-table-search">
-            <Search size={13} className="bisc-table-search-icon" />
-            <input
-              className="bisc-search-input"
-              type="text"
-              value={lineSearch}
-              onChange={(e) => setLineSearch(e.target.value)}
-              placeholder="Search lines..."
-            />
-            {lineSearch && (
-              <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
-                <X size={11} />
-              </button>
-            )}
-          </div>
+         
           <Button disabled={headerAndLineDisabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addRow} className="commercial-add-line-btn">
             <Plus size={14} /> Add Line
           </Button>
@@ -503,7 +510,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.000001"
-                      value={Number(row.unit_price || 0).toFixed(3)}
+                      value={Number(row.unit_price || 0).toFixed(priceDecimals)}
                       onChange={(event) =>
                         updateRow(row.id, {
                           unit_price: Number(event.target.value || 0)
@@ -513,7 +520,7 @@ export function PurchaseOrderLinesTable({
                   </td>
                   {/* Amount (before discount) */}
                   <td className={AMOUNT_CELL}>
-                    {formatAmount(amountBeforeDiscPrice(row))}
+                    {formatAmount(amountBeforeDiscPrice(row), amountDecimals)}
                   </td>
                   {/* Discount: Disc % */}
                   <td className="px-2 py-1">
@@ -523,7 +530,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_percent.toFixed(2)}
+                      value={row.disc_percent.toFixed(amountDecimals)}
                       onChange={(event) => {
                         const discPercent = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -543,7 +550,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_price.toFixed(3)}
+                      value={row.disc_price.toFixed(amountDecimals)}
                       onChange={(event) => {
                         const discPrice = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -558,7 +565,7 @@ export function PurchaseOrderLinesTable({
                     />
                   </td>
                   {/* Net Amount (Excl Tax) */}
-                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
+                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row), amountDecimals)}</td>
                   {/* TAX: Tax % */}
                   {/* TAX: Tax % */}
                   <td className="px-2 py-1">
@@ -579,21 +586,22 @@ export function PurchaseOrderLinesTable({
                     />
                   </td>
                   {/* TAX: Tax Amount */}
-                  <td className={AMOUNT_CELL}>{formatAmount(lineTaxAmount(row))}</td>
+                  <td className={AMOUNT_CELL}>{formatAmount(lineTaxAmount(row), amountDecimals)}</td>
                   {/* Total Amount (Incl Tax) = Net + Tax */}
-                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row) + lineTaxAmount(row))}</td>
+                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row) + lineTaxAmount(row), amountDecimals)}</td>
 
                   {/* ---------- All Columns view only ---------- */}
                   {showAllColumns && (<td className={AMOUNT_CELL}>
-                    {formatAmount(lcurrAmountValue)}
+                    {formatAmount(lcurrAmountValue, amountDecimals)}
                   </td>)}
                   {showAllColumns && (<td className="px-2 py-1">
                     <Select
                       value={row.tx_compnt_1_expmt || "N"}
                       onChange={(event) => {
                         const taxType = event.target.value;
-                        const taxPerc = taxType === "S" ? 5 : 0;
-                        const taxAmt = taxType === "S" ? (Number(lineAmount(row)) || 0) * (taxPerc / 100) : 0;
+                        // CHANGED: No Tax / Zero / Exempt => 0, Std Tax => % of the selected tax category
+                        const taxPerc = resolveTaxPerc(taxType, row.tx_cat_code);
+                        const taxAmt = (Number(lineAmount(row)) || 0) * (taxPerc / 100);
                         updateRow(row.id, {
                           tx_compnt_1_expmt: taxType,
                           tx_compnt_perc_1: taxPerc,
@@ -631,8 +639,13 @@ export function PurchaseOrderLinesTable({
                         })
                       }
                       onChange={(value, selectedRow) => {
+                        // CHANGED: Tax % follows the category only when Tax Type is Std Tax
+                        const isStd = (row.tx_compnt_1_expmt || "N") === "S";
+                        const taxPerc = isStd ? numberOrZero(getLookupValue(selectedRow || {}, "tx_percnt")) : 0;
                         updateRow(row.id, {
                           tx_cat_code: text(value),
+                          tx_compnt_perc_1: taxPerc,
+                          tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100),
                           // tx_cat_name: text(
                           //   getLookupValue(selectedRow || {}, "tx_cat_name")
                           // ),
@@ -675,10 +688,10 @@ export function PurchaseOrderLinesTable({
                     />
                   </td>)}
                   {showAllColumns && (<td className={AMOUNT_CELL}>
-                    {formatAmount(taxLcurrAmountValue)}
+                    {formatAmount(taxLcurrAmountValue, amountDecimals)}
                   </td>)}
                   {showAllColumns && (<td className={`w-32 ${AMOUNT_CELL}`}>
-                    {formatAmount(LcurrDisAmount(row, ex_rate))}
+                    {formatAmount(LcurrDisAmount(row, ex_rate), amountDecimals)}
                   </td>)}
                   {showAllColumns && (<td className="w-32 px-2 py-1">
                     <Input className={INPUT_BG} type="date" disabled={headerAndLineDisabled} value={row.required_dt} onChange={(event) => updateRow(row.id, { required_dt: event.target.value })} />
@@ -725,23 +738,23 @@ export function PurchaseOrderLinesTable({
         </div> */}
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Amount</span>
-          <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
+          <strong className="text-emerald-600">{formatAmount(totalAmountDisct, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Discount</span>
-          <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
+          <strong>{formatAmount(TotalDiscAmount(rows), amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Amount Excluding Tax</span>
-          <strong>{formatAmount(grandTotal)}</strong>
+          <strong>{formatAmount(grandTotal, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Tax</span>
-          <strong>{formatAmount(totalTaxAmount)}</strong>
+          <strong>{formatAmount(totalTaxAmount, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
           <span className="font-semibold text-[#00378C]">Total Amount Including Tax</span>
-          <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
+          <strong className="text-sm text-emerald-600">{formatAmount(finalTotal, amountDecimals)}</strong>
         </div>
       </div>
       <Dialog
