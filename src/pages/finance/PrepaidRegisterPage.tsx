@@ -167,6 +167,7 @@ export function PrepaidRegisterPage() {
         seen.add(key);
         return true;
       });
+      mapped.sort((a, b) => Number(b.doc_no) - Number(a.doc_no)); 
       setRows(mapped);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load prepaid register" });
@@ -186,8 +187,8 @@ export function PrepaidRegisterPage() {
   }, [query, rows]);
 
   const columns = useMemo<ColumnDef<PrepaidRow>[]>(() => [
-    { accessorKey: "doc_no", header: "Doc No", size: 130, cell: ({ getValue }) => <span className="font-semibold">{String(getValue() || "")}</span> },
-    { accessorKey: "doc_date", header: "Doc Date", size: 120 },
+    { accessorKey: "doc_no", header: "Doc No", size: 130, sortingFn: (a, b) => Number(a.original.doc_no) - Number(b.original.doc_no), cell: ({ getValue }) => <span className="font-semibold">{String(getValue() || "")}</span> },
+    { accessorKey: "doc_date", header: "Doc Date", size: 120, cell: ({ getValue }) => fmtDmy(String(getValue() || "")) },
     { accessorKey: "div_code", header: "Division", size: 110 },
     { accessorKey: "description", header: "Description", size: 240 },
     { accessorKey: "amount", header: "Amount", size: 120 },
@@ -195,8 +196,8 @@ export function PrepaidRegisterPage() {
     { accessorKey: "monthly_amount", header: "Monthly", size: 120 },
     { accessorKey: "credit_ac", header: "Credit A/C", size: 140 },
     { accessorKey: "debit_ac", header: "Debit A/C", size: 140 },
-    { accessorKey: "start_date", header: "Start", size: 115 },
-    { accessorKey: "end_date", header: "End", size: 115 },
+    { accessorKey: "start_date", header: "Start", size: 115, cell: ({ getValue }) => fmtDmy(String(getValue() || "")) },
+    { accessorKey: "end_date", header: "End", size: 115, cell: ({ getValue }) => fmtDmy(String(getValue() || "")) },
     {
       id: "actions",
       header: "Actions",
@@ -770,60 +771,6 @@ if (Object.keys(errs).length) {
 }
 
 // ---------------------------------------------------------------------------
-// NEW FIELD COMPONENT TO MATCH AIRLINE TARIFF
-// ---------------------------------------------------------------------------
-
-// function Field({
-//   label,
-//   value,
-//   onChange,
-//   onBlur,
-//   disabled,
-//   type = "text",
-//   numeric,
-//   required,
-//   placeholder,
-//   className,
-// }: {
-//   label: string;
-//   value: string;
-//   onChange: (value: string) => void;
-//   onBlur?: (value: string) => void;
-//   disabled?: boolean;
-//   type?: "text" | "date" | "number";
-//   numeric?: boolean;
-//   required?: boolean;
-//   placeholder?: string;
-//   className?: string;
-// }) {
-//   return (
-//     <div className={`freight-master-field ${className || ""}`}>
-//       <label className="freight-master-label">
-//         <span>{label}</span>
-//         {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
-//       </label>
-//       <input
-//         className={`freight-master-input ${numeric ? "numeric text-right tabular-nums" : ""}`}
-//         type={type}
-//         value={value}
-//         onChange={(event) => onChange(event.target.value)}
-//         onBlur={(event) => onBlur?.(event.target.value)}
-//         disabled={disabled}
-//         placeholder={placeholder}
-//         required={required}
-//       />
-//     </div>
-//   );
-// }
-
-// function Field({
-//   label, value, onChange, onBlur, disabled, type = "text", numeric, required, placeholder, className, error, maxLength,
-// }: {
-//   label: string; value: string; onChange: (value: string) => void; onBlur?: (value: string) => void;
-//   disabled?: boolean; type?: "text" | "date" | "number"; numeric?: boolean; required?: boolean;
-//   placeholder?: string; className?: string; error?: string; maxLength?: number;
-// }) {
-//   return (
 function Field({
   label, value, onChange, onBlur, disabled, type = "text", numeric, required, placeholder, className, error, maxLength,
 }: {
@@ -919,50 +866,39 @@ function money(value: unknown) {
   return number(value).toFixed(3);
 }
 
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function dateInput(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}
-
-
-
-// const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-// const pad2 = (n: number) => String(n).padStart(2, "0");
-// const localYmd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-
 // function today() {
-//   return localYmd(new Date());
+//   return new Date().toISOString().slice(0, 10);
 // }
 
 // function dateInput(value: unknown) {
 //   if (!value) return "";
-//   const s = String(value).trim();
-
-//   // already yyyy-mm-dd (optionally with time)
-//   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-
-//   // Oracle style: 02-NOV-26 or 02-NOV-2026
-//   const m = s.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3})[A-Za-z]*[-\/ ](\d{2}|\d{4})$/);
-//   if (m) {
-//     const mon = MONTHS.indexOf(m[2].toUpperCase());
-//     if (mon >= 0) {
-//       const yy = Number(m[3]);
-//       const year = m[3].length === 2 ? (yy < 50 ? 2000 + yy : 1900 + yy) : yy;
-//       return `${year}-${pad2(mon + 1)}-${pad2(Number(m[1]))}`;
-//     }
-//   }
-
-//   // dd/mm/yyyy or dd-mm-yyyy
-//   const d = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
-//   if (d) return `${d[3]}-${pad2(Number(d[2]))}-${pad2(Number(d[1]))}`;
-
-//   const date = new Date(s);
-//   if (Number.isNaN(date.getTime())) return s.slice(0, 10);
-//   return localYmd(date);
+//   const date = new Date(String(value));
+//   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+//   return date.toISOString().slice(0, 10);
 // }
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function localYmd(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function today() {
+  return localYmd(new Date());
+}
+
+function dateInput(value: unknown) {
+  if (!value) return "";
+  const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s) && !s.endsWith("Z")) return s.slice(0, 10);
+  const date = new Date(s);
+  if (Number.isNaN(date.getTime())) return s.slice(0, 10);
+  return localYmd(date);
+}
+
+function fmtDmy(value: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || "");
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : value || "";
+}
