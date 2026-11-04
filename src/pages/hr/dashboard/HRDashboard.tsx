@@ -636,6 +636,8 @@ const empty = <T,>(): Slice<T> => ({ data: null, error: null });
 
 export default function HrDashboard() {
   const { user } = useAuth();
+  console.log("user", user);
+  if (user?.tenantId === "MHDL_TENANT") return <></>;
 
   // Filter: defaults to the current month and year
   const now = useMemo(() => new Date(), []);
