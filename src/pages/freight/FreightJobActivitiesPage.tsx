@@ -38,6 +38,7 @@ type ActivityLine = {
   partners_price: string;
   transporter_code: string;
   transporter_name?: string;
+  transporter_ac_code?: string;
   vehicle_no: string;
   transport_price: string;
   confirmed: string;
@@ -682,55 +683,71 @@ export function FreightJobActivitiesPage({
 
         {/* Scrollable Table matching Finance Detail Tables */}
         <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-250px)] min-h-[320px]">
-          <table className="finance-lines-table w-full text-xs min-w-[1370px] border-collapse" >
+          <table className="finance-lines-table w-full text-xs min-w-[1240px] border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: "26px" }} />
+              <col style={{ width: "26px" }} />
+              <col style={{ width: "210px" }} />
+              <col style={{ width: "42px" }} />
+              <col style={{ width: "68px" }} />
+              <col style={{ width: "72px" }} />
+              <col style={{ width: "88px" }} />
+              <col style={{ width: "165px" }} />
+              <col style={{ width: "68px" }} />
+              <col style={{ width: "220px" }} />
+              <col style={{ width: "68px" }} />
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "96px" }} />
+              <col style={{ width: "58px" }} />
+            </colgroup>
             <thead className="sticky top-0 shadow-md z-10 whitespace-nowrap">
               {/* Tier 1 Header: Group Categories (PB Income & Expense Division) in matching Corporate Navy */}
               <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none bg-[#002d72] text-white border-b border-[#002052]">
-                <th colSpan={4} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
+                <th colSpan={4} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1 px-1.5">
                   Service & Activity Details
                 </th>
-                <th colSpan={2} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
+                <th colSpan={2} className="bg-[#00378C] text-white border-r border-white/20 py-1 px-1.5">
                   Income (Billing)
                 </th>
-                <th colSpan={5} className="bg-[#002d72] text-white border-r border-white/20 py-1.5 px-2">
+                <th colSpan={5} className="bg-[#002d72] text-white border-r border-white/20 py-1 px-1.5">
                   Expense (Costs & Vendors)
                 </th>
-                <th colSpan={1} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
+                <th colSpan={1} className="bg-[#00378C] text-white border-r border-white/20 py-1 px-1.5">
                   Tax
                 </th>
-                <th colSpan={1} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2" title="Customer Billing Sales Invoice">
+                <th colSpan={1} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1 px-1.5" title="Customer Billing Sales Invoice">
                   Invoice
                 </th>
-                <th colSpan={1} className="bg-[#00245e] text-white/95 py-1.5 px-2">
+                <th colSpan={1} className="bg-[#00245e] text-white/95 py-1 px-1">
                   Actions
                 </th>
               </tr>
 
-              {/* Tier 2 Header: Individual Columns matching Finance Detail Tables */}
+              {/* Tier 2 Header: Optimized compact widths to prevent horizontal scroll & give room to Transporter */}
               <tr className="bg-[#00378C] text-[11px] font-semibold text-white uppercase tracking-wider shadow-xs">
-                <th className="finance-sticky-col finance-col-no px-1.5 py-2 text-center w-8 bg-[#00378C] text-white border-r border-white/15" title="Tick / Select">
-                  Tick
+                <th className="px-0.5 py-1.5 text-center w-[26px] min-w-[26px] max-w-[26px] bg-[#00378C] text-white border-r border-white/15" title="Tick / Select">
+                  <CheckSquare size={12} className="inline opacity-80" />
                 </th>
-                <th className="px-2 py-2 text-center w-9 bg-[#00378C] text-white border-r border-white/15">#</th>
-                <th className="px-2 py-2 text-left min-w-[220px] text-white border-r border-white/15">Activity / Description</th>
-                <th className="px-0.5 py-1 text-right w-[35px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
+                <th className="px-0.5 py-1.5 text-center w-[26px] min-w-[26px] max-w-[26px] bg-[#00378C] text-white border-r border-white/15">#</th>
+                <th className="px-2 py-1.5 text-left min-w-[190px] w-[210px] text-white border-r border-white/15">Activity / Description</th>
+                <th className="px-1 py-1.5 text-right w-[42px] min-w-[42px] max-w-[45px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Qty</th>
                 {/* Income Columns */}
-                <th className="px-2 py-2 text-right w-[9550px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
-                <th className="px-2 py-2 text-right w-[200px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
+                <th className="px-1 py-1.5 text-right w-[68px] min-w-[68px] max-w-[72px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
+                <th className="px-1 py-1.5 text-right w-[72px] min-w-[72px] max-w-[78px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
                 {/* Expense Columns */}
-                <th className="px-2 py-2 text-right w-[85px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
+                <th className="px-1.5 py-1.5 text-right w-[88px] min-w-[85px] max-w-[92px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
                   Other Cost
                 </th>
-                <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Agent</th>
-                <th className="px-2 py-2 text-right w-[70px] bg-[#002f78] text-white border-r border-white/15">Agent Price</th>
-                <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Transporter</th>
-                <th className="px-2 py-2 text-right w-[70px] bg-[#002f78] text-white border-r border-white/15">Transp Price</th>
+                <th className="px-1.5 py-1.5 text-left w-[165px] min-w-[155px] bg-[#002f78] text-white/95 border-r border-white/15">Agent</th>
+                <th className="px-1 py-1.5 text-right w-[68px] min-w-[68px] max-w-[72px] bg-[#002f78] text-white border-r border-white/15" title="Agent Price">Ag. Price</th>
+                <th className="px-2 py-1.5 text-left w-[220px] min-w-[200px] bg-[#002f78] text-white/95 border-r border-white/15">Transporter</th>
+                <th className="px-1 py-1.5 text-right w-[68px] min-w-[68px] max-w-[72px] bg-[#002f78] text-white border-r border-white/15" title="Transporter Price">Tr. Price</th>
                 {/* Tax */}
-                <th className="px-2 py-2 text-center w-[110px] text-emerald-200 bg-[#00378C] border-r border-white/15">Tax / VAT</th>
+                <th className="px-1 py-1.5 text-center w-[92px] min-w-[88px] max-w-[95px] text-emerald-200 bg-[#00378C] border-r border-white/15">Tax / VAT</th>
                 {/* Customer Sales Invoice (PowerBuilder consolidated_invno) */}
-                <th className="px-2 py-2 text-center w-[120px] bg-[#681822] text-rose-100 border-r border-white/15" title="Customer Freight Invoice (PB consolidated_invno)">Invoice No</th>
+                <th className="px-1 py-1.5 text-center w-[96px] min-w-[92px] max-w-[100px] bg-[#681822] text-rose-100 border-r border-white/15" title="Customer Freight Invoice (PB consolidated_invno)">Invoice No</th>
                 {/* Action */}
-                <th className="px-2 py-2 text-center w-[75px] text-white bg-[#00378C]">Actions</th>
+                <th className="px-0.5 py-1.5 text-center w-[58px] min-w-[55px] max-w-[60px] text-white bg-[#00378C]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -766,7 +783,7 @@ export function FreightJobActivitiesPage({
                     }`}
                   >
                     {/* Row Tick & # */}
-                    <td className="finance-sticky-col finance-col-no px-1 py-1 text-center w-8 border-r border-slate-200">
+                    <td className="px-0.5 py-1 text-center w-[26px] min-w-[26px] max-w-[26px] border-r border-slate-200">
                       <input
                         type="checkbox"
                         className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
@@ -776,12 +793,12 @@ export function FreightJobActivitiesPage({
                         title="Tick / Confirm line"
                       />
                     </td>
-                    <td className="px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500 border-r border-slate-200">
+                    <td className="px-0.5 py-1 text-center font-mono text-[11px] font-semibold text-slate-500 w-[26px] min-w-[26px] max-w-[26px] border-r border-slate-200">
                       {index + 1}
                     </td>
 
                     {/* Activity / Description (Unified Column) */}
-                    <td className="px-1.5 py-1 min-w-[220px] max-w-[280px] border-r border-slate-200">
+                    <td className="px-1.5 py-1 min-w-[190px] w-[210px] border-r border-slate-200">
                       <div className="flex flex-col gap-1">
                         <ActivityLookup
                           value={line.act_code}
@@ -795,6 +812,9 @@ export function FreightJobActivitiesPage({
                             const txCat = line.tx_cat_code || lookupText(header, "tx_cat_code") || "11";
                             const actName = lookupText(row || undefined, "activity");
 
+                            const rowTaxPerc = lookupText(row || undefined, "tx_compnt_1_perc");
+                            const rowExpmt = lookupText(row || undefined, "tx_compnt_1_expmt");
+
                             let updatedLine: ActivityLine = recalc({
                               ...line,
                               act_code: value,
@@ -806,20 +826,31 @@ export function FreightJobActivitiesPage({
                               tx_cat_code: txCat,
                             });
 
+                            const initialTaxPerc = (rowTaxPerc && Number(rowTaxPerc) > 0) ? rowTaxPerc : (rowExpmt === "S" ? "5" : "0");
+                            const initialExpmt = rowExpmt || (numberValue(initialTaxPerc) > 0 ? "S" : "N");
+                            if (initialExpmt === "S" || numberValue(initialTaxPerc) > 0) {
+                              updatedLine = recalcSalesTax({
+                                ...updatedLine,
+                                tx_compnt_perc_1: initialTaxPerc,
+                                tx_compnt_1_expmt: initialExpmt,
+                              });
+                            }
+
                             if (value && companyCode && divCode && txCat) {
                               try {
                                 const compRows = await freightTaxComponents<LookupRow>(companyCode, divCode, txCat, "", value);
                                 if (compRows.length > 0) {
                                   const firstComp = normalizeLookupRow(compRows[0]);
                                   const taxCode = lookupText(firstComp, "tx_compntcat_code");
-                                  const taxPerc = lookupText(firstComp, "tx_percnt") || "0";
-                                  const isStandard = numberValue(taxPerc) > 0 ? "S" : "N";
+                                  const catTaxPerc = lookupText(firstComp, "tx_percnt") || lookupText(firstComp, "tx_compnt_perc_1") || "";
+                                  const effectiveTaxPerc = (rowTaxPerc && Number(rowTaxPerc) > 0) ? rowTaxPerc : (catTaxPerc || (rowExpmt === "S" ? "5" : "0"));
+                                  const effectiveExpmt = rowExpmt || (numberValue(effectiveTaxPerc) > 0 ? "S" : "N");
                                   updatedLine = recalcSalesTax({
                                     ...updatedLine,
                                     tx_compntcat_code_1: taxCode,
                                     tx_compntcat_name_1: lookupText(firstComp, "tx_compntcat_name"),
-                                    tx_compnt_perc_1: taxPerc,
-                                    tx_compnt_1_expmt: isStandard,
+                                    tx_compnt_perc_1: effectiveTaxPerc,
+                                    tx_compnt_1_expmt: effectiveExpmt,
                                   });
                                 }
                               } catch (err) {
@@ -842,17 +873,18 @@ export function FreightJobActivitiesPage({
                     </td>
 
                     {/* Qty */}
-                    <td className="px-1.5 py-1 w-[45px] border-r border-slate-200">
+                    <td className="px-1 py-1 w-[42px] min-w-[42px] max-w-[45px] border-r border-slate-200">
                       <MoneyInput
                         value={line.quantity}
                         disabled={isLineLocked}
+                        className="px-1"
                         onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))}
                       />
                     </td>
 
                     {/* Rate (OMR) */}
                     <td
-                      className="px-1.5 py-1 w-[100px] border-r border-slate-200"
+                      className="px-1 py-1 w-[68px] min-w-[68px] max-w-[72px] border-r border-slate-200"
                       title={
                         hasForeignCurrency
                           ? `Base: OMR ${money(line.bill_rate)} | Foreign: ${money(line.bill_rate_oc)} ${line.bill_curr_code} (Ex: ${line.bill_ex_rate})`
@@ -862,6 +894,7 @@ export function FreightJobActivitiesPage({
                       <MoneyInput
                         value={line.bill_rate}
                         disabled={isLineLocked}
+                        className="px-1"
                         onChange={(value) => {
                           const newRate = numberValue(value);
                           const qty = numberValue(line.quantity) || 1;
@@ -886,7 +919,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Revenue (OMR) */}
                     <td
-                      className="px-1.5 py-1 w-[95px] border-r border-slate-200"
+                      className="px-1 py-1 w-[72px] min-w-[72px] max-w-[78px] border-r border-slate-200"
                       title={
                         hasForeignCurrency
                           ? `Base: OMR ${money(line.bill)} | Foreign: ${money(line.bill_oc)} ${line.bill_curr_code} (Ex: ${line.bill_ex_rate})`
@@ -896,6 +929,7 @@ export function FreightJobActivitiesPage({
                       <MoneyInput
                         value={line.bill}
                         disabled={isLineLocked}
+                        className="px-1 font-bold"
                         onChange={(value) => {
                           const newBill = numberValue(value);
                           const qty = numberValue(line.quantity) || 1;
@@ -920,7 +954,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Other Cost Amt (OMR) - PB actual_cost with distinct yellow styling */}
                     <td
-                      className="px-1.5 py-1 w-[95px] bg-amber-50/60 border-r border-slate-200"
+                      className="px-1 py-1 w-[88px] min-w-[85px] max-w-[92px] bg-amber-50/60 border-r border-slate-200"
                       title={
                         line.ac_curr_code && line.ac_curr_code !== "OMR"
                           ? `Other Cost: OMR ${money(line.actual_cost)} | Foreign: ${money(line.actual_cost_oc)} ${line.ac_curr_code} (Ex: ${line.ac_ex_rate})`
@@ -930,7 +964,7 @@ export function FreightJobActivitiesPage({
                       <MoneyInput
                         value={line.actual_cost}
                         disabled={isLineLocked}
-                        className="!bg-[#fef9c3] !border-amber-300 text-amber-950 font-bold focus:!bg-[#fef08a]"
+                        className="!bg-[#fef9c3] !border-amber-300 text-amber-950 font-bold focus:!bg-[#fef08a] px-1"
                         onChange={(value) => {
                           const newCost = numberValue(value);
                           const acEx = numberValue(line.ac_ex_rate) || 1;
@@ -947,14 +981,14 @@ export function FreightJobActivitiesPage({
                         }}
                       />
                       {otherPi && (
-                        <span className="block mt-0.5 text-[9px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-1 text-center shadow-2xs" title={`Other Cost Booked in PI #${otherPi}`}>
+                        <span className="block mt-0.5 text-[8.5px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-0.5 text-center shadow-2xs truncate" title={`Other Cost Booked in PI #${otherPi}`}>
                           PI: {otherPi}
                         </span>
                       )}
                     </td>
 
                     {/* Agent / Broker */}
-                    <td className="px-1.5 py-1 w-[165px] border-r border-slate-200">
+                    <td className="px-1 py-1 w-[165px] min-w-[155px] border-r border-slate-200">
                       <AgentLookup
                         companyCode={companyCode}
                         value={line.broker_code}
@@ -971,7 +1005,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Agent Price (OMR) */}
                     <td
-                      className="px-1.5 py-1 w-[85px] border-r border-slate-200"
+                      className="px-1 py-1 w-[68px] min-w-[68px] max-w-[72px] border-r border-slate-200"
                       title={
                         line.partner_curr_code && line.partner_curr_code !== "OMR"
                           ? `Base Agent: OMR ${money(line.partners_price)} | Foreign: ${money(line.partner_price_oc)} ${line.partner_curr_code} (Ex: ${line.partner_ex_rate})`
@@ -981,6 +1015,7 @@ export function FreightJobActivitiesPage({
                       <MoneyInput
                         value={line.partners_price}
                         disabled={isLineLocked}
+                        className="px-1"
                         onChange={(value) => {
                           const newPrice = numberValue(value);
                           const pEx = numberValue(line.partner_ex_rate) || 1;
@@ -994,14 +1029,14 @@ export function FreightJobActivitiesPage({
                         }}
                       />
                       {agentPi && (
-                        <span className="block mt-0.5 text-[9px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-1 text-center shadow-2xs" title={`Agent Booked in PI #${agentPi}`}>
+                        <span className="block mt-0.5 text-[8.5px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-0.5 text-center shadow-2xs truncate" title={`Agent Booked in PI #${agentPi}`}>
                           PI: {agentPi}
                         </span>
                       )}
                     </td>
 
-                    {/* Transporter */}
-                    <td className="px-1.5 py-1 w-[165px] border-r border-slate-200">
+                    {/* Transporter (Wider column to fully display Transporter names like AAA CHINA LIMITED) */}
+                    <td className="px-1 py-1 w-[220px] min-w-[200px] border-r border-slate-200">
                       <TransporterLookup
                         companyCode={companyCode}
                         value={line.transporter_code}
@@ -1011,6 +1046,7 @@ export function FreightJobActivitiesPage({
                           updateLine(index, {
                             transporter_code: val,
                             transporter_name: lookupText(row, "transporter_name") || "",
+                            transporter_ac_code: lookupText(row, "ac_code") || lookupText(row, "transporter_ac_code") || "",
                           });
                         }}
                       />
@@ -1018,7 +1054,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Transporter Price (OMR) */}
                     <td
-                      className="px-1.5 py-1 w-[85px]"
+                      className="px-1 py-1 w-[68px] min-w-[68px] max-w-[72px] border-r border-slate-200"
                       title={
                         line.tp_curr_code && line.tp_curr_code !== "OMR"
                           ? `Base Transp: OMR ${money(line.transport_price)} | Foreign: ${money(line.transport_price_oc)} ${line.tp_curr_code} (Ex: ${line.tp_ex_rate})`
@@ -1028,6 +1064,7 @@ export function FreightJobActivitiesPage({
                       <MoneyInput
                         value={line.transport_price}
                         disabled={isLineLocked}
+                        className="px-1"
                         onChange={(value) => {
                           const newPrice = numberValue(value);
                           const tpEx = numberValue(line.tp_ex_rate) || 1;
@@ -1041,18 +1078,18 @@ export function FreightJobActivitiesPage({
                         }}
                       />
                       {transpPi && (
-                        <span className="block mt-0.5 text-[9px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-1 text-center shadow-2xs" title={`Transporter Booked in PI #${transpPi}`}>
+                        <span className="block mt-0.5 text-[8.5px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-0.5 text-center shadow-2xs truncate" title={`Transporter Booked in PI #${transpPi}`}>
                           PI: {transpPi}
                         </span>
                       )}
                     </td>
 
                     {/* Tax (VAT) Dedicated Button */}
-                    <td className="px-1.5 py-1 w-[110px] border-r border-slate-200">
+                    <td className="px-1 py-1 w-[92px] min-w-[88px] max-w-[95px] border-r border-slate-200">
                       <button
                         type="button"
                         onClick={() => setActiveTaxIndex(index)}
-                        className={`h-7 w-full px-1.5 rounded border flex items-center justify-between gap-1 text-[11px] font-mono transition-all cursor-pointer shadow-2xs ${
+                        className={`h-7 w-full px-1 rounded border flex items-center justify-between gap-0.5 text-[10.5px] font-mono transition-all cursor-pointer shadow-2xs ${
                           hasTax
                             ? "border-emerald-400 bg-emerald-50/90 text-emerald-900 font-bold hover:bg-emerald-100"
                             : "border-dashed border-slate-300 bg-slate-50/60 text-slate-500 hover:border-slate-400 hover:bg-slate-100"
@@ -1066,20 +1103,20 @@ export function FreightJobActivitiesPage({
                         }
                       >
                         <span className="flex items-center gap-0.5 font-bold">
-                          <Percent size={11} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
+                          <Percent size={10} className={hasTax ? "text-emerald-600 shrink-0" : "text-slate-400 shrink-0"} />
                           <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `${line.tx_compnt_perc_1}%` : "0%"}</span>
                         </span>
-                        <span className="text-[10.5px] tabular-nums font-semibold truncate text-right">
+                        <span className="text-[10px] tabular-nums font-semibold truncate text-right">
                           {hasTax ? money(line.tx_compnt_lcuramt_1) : "No Tax"}
                         </span>
                       </button>
                     </td>
 
                     {/* Freight Invoice No (Red badge) */}
-                    <td className="px-1.5 py-1 text-center w-[110px] border-r border-slate-200">
+                    <td className="px-1 py-1 text-center w-[96px] min-w-[92px] max-w-[100px] border-r border-slate-200">
                       {line.consolidated_invno ? (
                         <span
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 font-mono shadow-2xs"
+                          className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 font-mono shadow-2xs truncate max-w-[90px]"
                           title={`Freight Invoice #${line.consolidated_invno}`}
                         >
                           {line.consolidated_invno}
@@ -1089,14 +1126,12 @@ export function FreightJobActivitiesPage({
                       )}
                     </td>
 
-
-
                     {/* Action Buttons: Currency Calculator & Delete */}
-                    <td className="px-1.5 py-1 w-[75px] text-center">
-                      <div className="flex items-center justify-center gap-1">
+                    <td className="px-0.5 py-1 w-[58px] min-w-[55px] max-w-[60px] text-center">
+                      <div className="flex items-center justify-center gap-0.5">
                         <button
                           type="button"
-                          className={`h-7 w-7 rounded border flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 ${
+                          className={`h-6 w-6 rounded border flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 ${
                             hasForeignCurrency
                               ? "border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 ring-1 ring-amber-300"
                               : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-800"
@@ -1108,19 +1143,19 @@ export function FreightJobActivitiesPage({
                           }
                           onClick={() => setActiveFcIndex(index)}
                         >
-                          <Calculator size={13} className={hasForeignCurrency ? "text-amber-700" : "text-slate-500"} />
+                          <Calculator size={12} className={hasForeignCurrency ? "text-amber-700" : "text-slate-500"} />
                         </button>
 
                         <Button
                           type="button"
                           size="icon"
                           variant="ghost"
-                          className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50 shrink-0 cursor-pointer"
+                          className="h-6 w-6 text-muted-foreground hover:text-red-600 hover:bg-red-50 shrink-0 cursor-pointer"
                           title="Remove line"
                           disabled={isLineLocked}
                           onClick={() => removeLine(index)}
                         >
-                          <Trash2 size={13} />
+                          <Trash2 size={12} />
                         </Button>
                       </div>
                     </td>
@@ -1152,36 +1187,36 @@ export function FreightJobActivitiesPage({
             {lines.length > 0 && (
               <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-10 whitespace-nowrap">
                 <tr>
-                  <td className="px-1 py-1.5 text-center text-slate-400">-</td>
-                  <td className="px-1 py-1.5 text-center text-slate-400">-</td>
-                  <td className="px-3 py-1.5 text-left font-extrabold uppercase text-slate-600">
+                  <td className="px-0.5 py-1 text-center text-slate-400 w-[26px] min-w-[26px] max-w-[26px]">-</td>
+                  <td className="px-0.5 py-1 text-center text-slate-400 w-[26px] min-w-[26px] max-w-[26px]">-</td>
+                  <td className="px-2 py-1 text-left font-extrabold uppercase text-slate-600 w-[210px] min-w-[190px]">
                     Totals ({lines.length} {lines.length === 1 ? "line" : "lines"}):
                   </td>
-                  <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
+                  <td className="px-1 py-1 text-right font-mono text-slate-400 w-[42px] min-w-[42px] max-w-[45px]">-</td>
                   {/* Income Totals */}
-                  <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
-                  <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900 bg-blue-50/70 border-r border-slate-200">
+                  <td className="px-1 py-1 text-right font-mono text-slate-400 w-[68px] min-w-[68px] max-w-[72px]">-</td>
+                  <td className="px-1 py-1 text-right font-mono font-bold text-blue-900 bg-blue-50/70 border-r border-slate-200 w-[72px] min-w-[72px] max-w-[78px]">
                     {money(totals.incomeBill)}
                   </td>
                   {/* Expense Totals */}
-                  <td className="px-2 py-1.5 text-right font-mono font-bold text-amber-950 bg-amber-100/80 border-r border-amber-300">
+                  <td className="px-1.5 py-1 text-right font-mono font-bold text-amber-950 bg-amber-100/80 border-r border-amber-300 w-[88px] min-w-[85px] max-w-[92px]">
                     {money(totals.expenseOthers)}
                   </td>
-                  <td className="px-2 py-1.5 text-left text-slate-400">-</td>
-                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-slate-700 bg-amber-50/40 border-r border-slate-200">
+                  <td className="px-1 py-1 text-left text-slate-400">-</td>
+                  <td className="px-1 py-1 text-right font-mono font-semibold text-slate-700 bg-amber-50/40 border-r border-slate-200">
                     {money(totals.expenseAgent)}
                   </td>
-                  <td className="px-2 py-1.5 text-left text-slate-400">-</td>
-                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-slate-700 bg-amber-50/40 border-r border-slate-200">
+                  <td className="px-2 py-1 text-left text-slate-400">-</td>
+                  <td className="px-1 py-1 text-right font-mono font-semibold text-slate-700 bg-amber-50/40 border-r border-slate-200">
                     {money(totals.expenseTransport)}
                   </td>
                   {/* Tax Total */}
-                  <td className="px-2 py-1.5 text-center font-mono font-bold text-emerald-800 bg-emerald-50/80 border-r border-slate-200">
+                  <td className="px-1 py-1 text-center font-mono font-bold text-emerald-800 bg-emerald-50/80 border-r border-slate-200">
                     {money(totals.tax)}
                   </td>
                   {/* Customer Sales Invoice Total */}
-                  <td className="px-2 py-1.5 text-center text-slate-400 border-r border-slate-200">-</td>
-                  <td className="px-2 py-1.5 text-center text-[10px] text-slate-400 font-mono">
+                  <td className="px-1 py-1 text-center text-slate-400 border-r border-slate-200">-</td>
+                  <td className="px-0.5 py-1 text-center text-[10px] text-slate-400 font-mono">
                     —
                   </td>
                 </tr>
@@ -2012,9 +2047,12 @@ export function FreightJobActivitiesPage({
                     value={lines[activeTaxIndex].tx_compnt_1_expmt}
                     disabled={isLineLocked}
                     onChange={(treatment) => {
+                      const curPerc = lines[activeTaxIndex].tx_compnt_perc_1;
+                      const nextPerc = treatment === "S" && (!curPerc || Number(curPerc) === 0) ? "5" : curPerc;
                       updateLine(activeTaxIndex, recalcSalesTax({
                         ...lines[activeTaxIndex],
                         tx_compnt_1_expmt: treatment,
+                        tx_compnt_perc_1: nextPerc,
                       }));
                     }}
                   />
@@ -2377,7 +2415,12 @@ function TransporterLookup({
   useEffect(() => {
     if (value && !cachedName && companyCode) {
       loadFreightLookup("freight_transporter", companyCode, value).then((rows) => {
-        const found = rows.find((r) => lookupText(r, "transporter_code") === value);
+        const valTrim = String(value || "").trim();
+        const valNorm = valTrim.replace(/^0+/, "");
+        const found = rows.find((r) => {
+          const code = String(lookupText(r, "transporter_code") || "").trim();
+          return code === valTrim || (valNorm && code.replace(/^0+/, "") === valNorm);
+        });
         if (found) {
           const name = lookupText(found, "transporter_name");
           if (name) setCachedName(name);
@@ -2530,6 +2573,7 @@ function toLine(row: LookupRow, index: number, header?: LookupRow | null): Activ
   // Fallbacks for display names
   line.broker_name = lookupText(row, "broker_name") || lookupText(row, "agent_name") || "";
   line.transporter_name = lookupText(row, "transporter_name") || "";
+  (line as any).transporter_ac_code = lookupText(row, "transporter_ac_code") || lookupText(row, "ac_code") || "";
   line.activity = lookupText(row, "activity") || "";
   line.consolidated_invno = lookupText(row, "consolidated_invno") || lookupText(row, "invoice_no") || "";
   line.pi_no = lookupText(row, "pi_no") || lookupText(row, "booked_pi_no") || lookupText(row, "trans_docno") || "";

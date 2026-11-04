@@ -79,6 +79,42 @@ const religionLookup = {
     }),
 };
 
+const sectionDivisionLookup = {
+  columns: [
+    { field: "div_code", header: "Division Code" },
+    { field: "div_name", header: "Division Name" },
+  ],
+  valueField: "div_code",
+  displayFields: ["div_code", "div_name"],
+  loadOptions: (context: { loginid: string; companyCode: string }) =>
+    getDynamicLookup({
+      parameter: "HR_DROPDOWN_MS_DIVISION",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: "",
+    }),
+};
+
+const sectionDepartmentLookup = {
+  columns: [
+    { field: "dept_code", header: "Department Code" },
+    { field: "dept_name", header: "Department Name" },
+  ],
+  valueField: "dept_code",
+  displayFields: ["dept_code", "dept_name"],
+  loadOptions: (context: { loginid: string; companyCode: string; form?: Record<string, unknown> }) => {
+    const divisionCode = String(context.form?.div_code ?? "").trim();
+    
+    // We removed the early return. Now we always fetch.
+    return getDynamicLookup({
+      parameter: "HR_DROPDOWN_MS_DEPARTMENT",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      // If divisionCode is empty, send undefined/null so the backend ignores it
+      code2: divisionCode || undefined, 
+    });
+  },
+};
 export const hrMasterConfigs: Record<string, HrMasterConfig> = {
   department: {
     title: "Department Master",
@@ -943,12 +979,12 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       { name: "section_code", label: "Section Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "section_name", label: "Section Name", required: true, width: 260 },
       { name: "section_short_name", label: "Short Name", width: 140 },
-      { name: "div_code", label: "Division Code", required: true, width: 130 },
-      { name: "dept_code", label: "Department Code", required: true, width: 140 },
+      { name: "div_code", label: "Division", required: true, width: 130, lookup: sectionDivisionLookup },
+      { name: "dept_code", label: "Department", required: true, width: 140, lookup: sectionDepartmentLookup },
       { name: "sect_head_id", label: "Section Head", width: 150 },
       { name: "phone", label: "Phone", width: 140 },
       { name: "email", label: "Email", type: "email", width: 220 },
-      { name: "status", label: "Status", type: "select", options: yesNo, width: 120 },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
       { name: "remarks", label: "Remarks", table: false },
       { name: "sect_addr1", label: "Address 1", required: true, table: false },
       { name: "sect_addr2", label: "Address 2", table: false },
@@ -959,7 +995,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       { name: "expense_type", label: "Expense Type", table: false },
       { name: "expense_sub_type", label: "Expense Sub Type", table: false },
     ],
-    defaults: { status: "Y" },
+    defaults: { status: "A" },
     deleteMode: "gm",
   },
 

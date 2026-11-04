@@ -156,10 +156,10 @@ export function ProductTypePage() {
             >
               <Eye size={15} />
             </Button>
-            <Button 
-              size="icon" 
-              variant="ghost" 
-              title="Delete" 
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Delete"
               className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
               onClick={() => setDeleteTarget(row.original)}
             >
@@ -182,7 +182,6 @@ export function ProductTypePage() {
   if (formOpen) {
     return (
       <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-        
         {/* WMS-style transaction header */}
         <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -194,9 +193,13 @@ export function ProductTypePage() {
                 <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
                   {popup.mode === "add" ? "New Product Type" : popup.mode === "edit" ? "Edit Product Type" : "View Product Type"}
                 </h1>
-                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                  {popup.mode === "view" ? "Viewing" : popup.mode === "edit" ? "Editing" : "Draft"}
-                </span>
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                {popup.mode === "view" ? "Viewing" : popup.mode === "edit" ? "Editing" : "Draft"}
+              </span>
+              <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-blue-700">
+                Prod Type Code:{" "}
+                {popup.mode === "add" ? "Auto-generated" : popup.data.prodtype_code || "—"}
+              </span>
               </div>
             </div>
           </div>
@@ -297,14 +300,14 @@ export function ProductTypePage() {
               <Plus size={14} />
               Add Product Type
             </button>
-            <button
+            {/* <button
               type="button"
               onClick={() => void loadRows(false)}
               className="flex items-center justify-center h-[30px] w-[30px] rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all shadow-sm cursor-pointer"
               title="Refresh"
             >
               <RefreshCw size={14} />
-            </button>
+            </button> */}
           </div>
         }
       />
@@ -319,7 +322,8 @@ export function ProductTypePage() {
         onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button variant="outline"   className="!text-slate-700 !bg-white border-slate-300 hover:!bg-slate-50"
+ onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
             <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>

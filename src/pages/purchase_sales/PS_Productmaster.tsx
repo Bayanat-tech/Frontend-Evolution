@@ -1,5 +1,5 @@
 import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, Wallet } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -162,6 +162,10 @@ const ProductPurchaseSales = () => {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
 
+  // UOM options cache (state kept for any consumers; the promise ref is the source of truth)
+  const [, setUomOptions] = useState<any[]>([]);
+  const uomPromiseRef = useRef<Promise<any[]> | null>(null);
+
   // View state
   const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
@@ -173,6 +177,32 @@ const ProductPurchaseSales = () => {
 
   // Both UOMs picked and identical → UPPP is locked to 1
   const sameUom = Boolean(form.p_uom) && Boolean(form.l_uom) && form.p_uom === form.l_uom;
+
+  /* ---- Shared, cached UOM fetch: one request, reused by every field ---- */
+  const fetchUoms = useCallback((): Promise<any[]> => {
+    if (!uomPromiseRef.current) {
+      uomPromiseRef.current = getDynamicLookup({
+        parameter: UOM_PARAM,
+        loginid: loginId,
+        code1: companyCode,
+      })
+        .then((res) => {
+          const arr = Array.isArray(res) ? res : [];
+          setUomOptions(arr);
+          return arr;
+        })
+        .catch(() => {
+          uomPromiseRef.current = null; // allow retry
+          return [];
+        });
+    }
+    return uomPromiseRef.current;
+  }, [loginId, companyCode]);
+
+  // Warm the cache once the company is known
+  useEffect(() => {
+    if (companyCode) void fetchUoms();
+  }, [fetchUoms, companyCode]);
 
   const loadRows = async (clearNotice = true) => {
     setLoading(true);
@@ -229,10 +259,16 @@ const ProductPurchaseSales = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  /* ---- UOM change: auto UPPP = 1 when both UOMs are same, derive uom_count ---- */
+  /* ---- UOM change: auto-fill L UOM & UPPP = 1 when P UOM is selected ---- */
   const setUom = (key: "p_uom" | "l_uom", value: string) => {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
+
+      // Auto-fill Lower UOM when Primary changes (if empty or it was mirroring Primary)
+      if (key === "p_uom" && (!prev.l_uom || prev.l_uom === prev.p_uom)) {
+        next.l_uom = value;
+      }
+
       const wasSame = Boolean(prev.p_uom) && Boolean(prev.l_uom) && prev.p_uom === prev.l_uom;
       const isSame = Boolean(next.p_uom) && Boolean(next.l_uom) && next.p_uom === next.l_uom;
 
@@ -258,6 +294,17 @@ const ProductPurchaseSales = () => {
     }
     if (!form.brand_code) {
       setError("Brand Code is required");
+      return;
+    }
+    
+    const isBlank = (v:string) => !String(v ?? "").trim();
+
+    if (isBlank(form.p_uom)) {
+      setError("Primary UOM is required");
+      return;
+    }
+    if (isBlank(form.l_uom)) {
+      setError("Lower UOM is required");
       return;
     }
 
@@ -351,6 +398,8 @@ const ProductPurchaseSales = () => {
   const renderUomLookup = (key: "p_uom" | "l_uom") => (
     <div className="w-full min-w-0">
       <LookupField
+        // Force remount when l_uom changes to re-resolve the display name
+        key={key === "l_uom" ? `l_uom-${form.l_uom}` : "p_uom"}
         label=""
         value={form[key] ?? ""}
         valueField="uom_code"
@@ -359,15 +408,7 @@ const ProductPurchaseSales = () => {
           { field: "uom_code", header: "Code" },
           { field: "uom_name", header: "Name" },
         ]}
-        loadOptions={async () => {
-          return (
-            (await getDynamicLookup({
-              parameter: UOM_PARAM,
-              loginid: loginId,
-              code1: companyCode,
-            })) || []
-          );
-        }}
+        loadOptions={fetchUoms}
         onChange={(value) => setUom(key, value)}
         compact
       />

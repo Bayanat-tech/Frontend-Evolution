@@ -189,6 +189,32 @@ export function LookupField({
     loadOptionsRef.current = loadOptions;
   }, [loadOptions]);
 
+  // ───── NEW: resolve display name for a preset value without opening the popover ─────
+  const resolvingRef = useRef(false);
+  useEffect(() => {
+    if (!value || displayValue !== undefined || rows.length > 0 || resolvingRef.current) return;
+    resolvingRef.current = true;
+    (async () => {
+      try {
+        const raw = await loadOptionsRef.current("");
+        const unique: LookupRow[] = [];
+        const seen = new Set<string>();
+        for (const r of Array.isArray(raw) ? raw : []) {
+          const val = String(getLookupValue(r, valueField) ?? JSON.stringify(r));
+          if (!seen.has(val)) {
+            seen.add(val);
+            unique.push(r);
+          }
+        }
+        setRows(unique);
+      } catch {
+        resolvingRef.current = false; // allow a retry later
+      }
+    })();
+  }, [value, displayValue, rows.length, valueField]);  useEffect(() => {
+    loadOptionsRef.current = loadOptions;
+  }, [loadOptions]);
+
   const lastFetchedQueryRef = useRef<string | null>(null);
 
   const openLookup = async () => {
