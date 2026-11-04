@@ -420,8 +420,6 @@ const APPROVER_IDS = ["2018030473", "2010090086", "2010080001", "2021060535"];
   prefetchedRow ? text(prefetchedRow.NEXT_ACTION_BY).trim().toUpperCase() : ""
 );
 
-  // Read-only: view mode, ya Pending ke alawa kisi bhi tab se aaye ho.
-  // Read-only me koi edit / Save / Submit / Approve / Reject / Send Back nahi.
   const isReadOnly =
     mode === "view" || (sourceTab !== "" && sourceTab !== "PENDING");
 
@@ -431,11 +429,9 @@ const isMyTurn = nextActionBy !== "" && nextActionBy === loginKey;
 
 const showActionButtons = !isReadOnly;
 
-// Approve / Reject / Send Back: sirf hardcoded approver, aur jab NEXT_ACTION_BY wahi ho
 const showApproveRejectButtons =
   showActionButtons && !isFinalized && isApprover && isMyTurn;
 
-// Save Draft / Submit: pehle jaisa flow level logic, par approver buttons ke saath nahi
 const showSaveSubmitButtons =
   showActionButtons && !isFinalized && !showApproveRejectButtons && ! APPROVER_IDS.includes(loginKey) && isMyTurn;
 
@@ -564,7 +560,6 @@ const showSaveSubmitButtons =
 
   // ── Action ──
   const handleAction = async (action: "D" | "S" | "A" | "R") => {
-    // Safety net: read-only me koi bhi action allow nahi
     if (isReadOnly) return;
     setNotice(null);
     try {
@@ -663,15 +658,14 @@ const showSaveSubmitButtons =
 
   try {
     await pamsSelect({
-      parameter: "sent_back_appraisal",          // ✅ NAYA PARAMETER
+      parameter: "sent_back_appraisal",       
       loginid,
-      code1: docNo,                              // ✅ DOC_NO
-      code2: employeeCode,                       // ✅ EMPLOYEE_CODE
-      code3: String(selectedLevel.LEVEL_NO),     // ✅ TARGET_LEVEL
-      code4: selectedLevel.EMPLOYEE_CODE_ID,     // ✅ TARGET_EMPLOYEE_CODE
-      code5: sentBackReason.trim(),              // ✅ REASON
-      code6: periodNumber,                       // ✅ PERIOD_NUMBER
-      // ❌ number1 — HATA DIYA (ab zaroorat nahi)
+      code1: docNo,                           
+      code2: employeeCode,                       
+      code3: String(selectedLevel.LEVEL_NO),     
+      code4: selectedLevel.EMPLOYEE_CODE_ID,    
+      code5: sentBackReason.trim(),              
+      code6: periodNumber,                       
     });
 
     setNotice({
