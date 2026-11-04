@@ -42,10 +42,6 @@ function text(val: unknown): string {
   return String(val);
 }
 
-// ─── Final Rating (weighted) ──────────────────────────────────────────────
-// Sirf wahi categories calculation me aati hain jinme rating hai (score > 0).
-// Rating nahi hai = N/A = weight/denominator se bahar.
-// Kuch bhi rated nahi hai to null return hota hai (UI me N/A).
 function calcFinalRating(
   taskTotal: number,
   charTotal: number,
@@ -73,7 +69,7 @@ function calcFinalRating(
 
 const fmtScore = (v: unknown) => (Number(v || 0) > 0 ? Number(v).toFixed(2) : "N/A");
 
-// ─── Styles ───────────────────────────────────────────────────────────────
+
 const S = {
   scoreRow: {
     display: "flex" as const,
@@ -236,8 +232,6 @@ const AppraiserCommentsTab: React.FC<Props> = ({
             const row = res[0] as Row;
             setEmployeeName(text(row.EMPLOYEE_NAME));
             if (flowLevel === 0) {
-              // Doc level 0 pe hai — next reviewer trigger ke routing se aata hai
-              // (self-created => COO, warna immediate supervisor).
               setCurrentActorName(text(row.NEXT_REVIEWER_NAME));
             } else if (userFlowLevel === 0) {
               if (isCurrentActionUser) setCurrentActorName(text(row.CURRENT_USER_NAME) || myName || loginid);
@@ -247,8 +241,8 @@ const AppraiserCommentsTab: React.FC<Props> = ({
               setCurrentActorName(text(row[`APPRAISER_NAME${userFlowLevel}`]));
             }
           }
-        } catch { /* fail-safe */ }
-      } catch { /* fail-safe */ }
+        } catch { }
+      } catch { }
       finally { if (!cancelled) setLoading(false); }
     };
 

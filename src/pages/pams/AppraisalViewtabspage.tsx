@@ -32,7 +32,6 @@ interface SentBackLevel {
   RPT_NAME: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
@@ -70,7 +69,6 @@ function getRatingMeta(rating: number): { label: string; numColor: string; label
   return { label: "—", numColor: "#6b7280", labelColor: "#6b7280" };
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const S = {
   container: {
     width: "100%",
@@ -307,7 +305,7 @@ const S = {
   },
 };
 
-// ─── Final Rating Chip ────────────────────────────────────────────────────────
+
 const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }> = ({
   rating,
   weightageConfig,
@@ -339,19 +337,16 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
   );
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+
 const AppraisalViewTabsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-
   const prefetchedRow = (location.state as { prefetchedRow?: Row } | null)?.prefetchedRow;
-
   const getDocNoFromPath = () => {
     const match = location.pathname.match(/\/(?:appraisal\/)?view\/([^/?]+)/);
     return match ? match[1] : "";
   };
-
   const docNo = getDocNoFromPath();
   const employeeCode = searchParams.get("employee_code") ?? "";
   const employeeName = searchParams.get("employee_name") ?? "";
@@ -360,7 +355,6 @@ const AppraisalViewTabsPage: React.FC = () => {
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
-
   const [selectedTab, setSelectedTab] = useState<SelectedTab>("task_details");
   const [flowLevel, setFlowLevel] = useState<number>(
     prefetchedRow ? num(prefetchedRow.FLOW_LEVEL_RUNNING) : 0
@@ -381,7 +375,6 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [characterTotal, setCharacterTotal] = useState<number>(0);
   const [goalTotal, setGoalTotal] = useState<number>(0);
   const [skillTotal, setSkillTotal] = useState<number>(0);
-
   const [sentBackPopup, setSentBackPopup] = useState(false);
   const [sentBackLevel, setSentBackLevel] = useState<string>("");
   const [sentBackReason, setSentBackReason] = useState("");
@@ -389,15 +382,11 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [deptHead, setDeptHead] = useState("");
   const [sentBackLoading, setSentBackLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
-
   const [loading, setLoading] = useState(!prefetchedRow);
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
-
   const [showReportModal, setShowReportModal] = useState(false);
   const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
   const APPROVER_IDS = ["2018030473", "2010090086", "2010080001", "2021060535"];
-
-  // ─── Default weightage (70/10/10/10) ───
   const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
     taskPct: 70,
     charPct: 10,
@@ -419,49 +408,35 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [nextActionBy, setNextActionBy] = useState<string>(
     prefetchedRow ? text(prefetchedRow.NEXT_ACTION_BY).trim().toUpperCase() : ""
   );
-
-  // Read-only: view mode, ya Pending ke alawa kisi bhi tab se aaye ho.
-  // Read-only me koi edit / Save / Submit / Approve / Reject / Send Back nahi.
   const isReadOnly =
     mode === "view" || (sourceTab !== "" && sourceTab !== "PENDING");
-
   const loginKey = loginid.trim().toUpperCase();
   const isApprover = APPROVER_IDS.includes(loginid.trim());
   const isMyTurn = nextActionBy !== "" && nextActionBy === loginKey;
-
   const showActionButtons = !isReadOnly;
-
-  // Approve / Reject / Send Back: sirf hardcoded approver, aur jab NEXT_ACTION_BY wahi ho
   const showApproveRejectButtons =
     showActionButtons && !isFinalized && isApprover && isMyTurn;
-
-  // Save Draft / Submit: pehle jaisa flow level logic, par approver buttons ke saath nahi
   const showSaveSubmitButtons =
     showActionButtons && !isFinalized && !showApproveRejectButtons && !APPROVER_IDS.includes(loginKey) && isMyTurn;
-
   const finalRating = calcFinalRating(taskTotal, characterTotal, goalTotal, skillTotal, weightageConfig);
   const showFinalRating = finalRating !== null;
 
-  // ── Fetch ──
   useEffect(() => {
     if (!docNo || !employeeCode) { setLoading(false); return; }
     const fetchInitialData = async () => {
       if (!prefetchedRow) setLoading(true); else setBackgroundRefreshing(true);
       try {
         const periodNumber = prefetchedRow ? text(prefetchedRow.PERIOD_NUMBER) : "";
-
         const [flowRes, commentRes, historyRes] = await Promise.all([
           pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
           pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
           pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
         ]);
-
         const docPeriod = text(flowRes[0]?.PERIOD_NUMBER) || periodNumber;
         setPeriodNumber(docPeriod);
         const weightageRes = await pamsSelect({
           parameter: "Trn_weightage", loginid, code1: companyCode, code2: docPeriod,
         });
-
         let currentFlowLevel = 0, nextActionBy = "";
         if (flowRes.length > 0) {
 
@@ -520,7 +495,6 @@ const AppraisalViewTabsPage: React.FC = () => {
     void fetchInitialData();
   }, [docNo, employeeCode, loginid, companyCode]);
 
-  // ── Validation ──
   const validateBeforeSubmit = async (): Promise<string[]> => {
     const missing: string[] = [];
     const emptyTask = taskRowsRef.current.filter(r => !r.RATING || Number(r.RATING) === 0);
@@ -562,9 +536,7 @@ const AppraisalViewTabsPage: React.FC = () => {
     return missing;
   };
 
-  // ── Action ──
   const handleAction = async (action: "D" | "S" | "A" | "R") => {
-    // Safety net: read-only me koi bhi action allow nahi
     if (isReadOnly) return;
     setNotice(null);
     try {
@@ -722,7 +694,6 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ═══════ HEADER ═══════ */}
       <div style={S.headerBar}>
         <div style={S.headerAccent} />
         <div style={S.headerInner}>
@@ -846,7 +817,6 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ═══════ TABS + PANEL ═══════ */}
       <div style={S.tabBar}>
         {(
           [
@@ -864,7 +834,6 @@ const AppraisalViewTabsPage: React.FC = () => {
       </div>
 
       <div style={S.panel}>
-        {/* disabled fieldset: read-only me andar ke saare input/select/textarea/button lock ho jate hain */}
         <fieldset
           disabled={isReadOnly}
           style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
@@ -919,7 +888,6 @@ const AppraisalViewTabsPage: React.FC = () => {
         </fieldset>
       </div>
 
-      {/* ── Sent Back Modal ── */}
       {sentBackPopup && (
         <div style={S.overlay} onClick={() => setSentBackPopup(false)}>
           <div style={S.modal} onClick={e => e.stopPropagation()}>
