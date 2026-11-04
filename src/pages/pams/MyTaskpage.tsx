@@ -46,7 +46,7 @@ interface HodBatch {
   PENDING_COUNT: number | string;
 }
 
-const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
+const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENTBACK_TAB", "APPROVED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"] as const;
 const IN_PROGRESS_TAB = 1; // is tab me checkbox selection nahi dikhega
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
@@ -841,14 +841,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
-
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
-        <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <a href="/pams/masters" style={{ color: "#6b7280", textDecoration: "none" }}>Master</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <span style={{ color: "#111827", fontWeight: 500 }}>Appraisal</span>
-      </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
