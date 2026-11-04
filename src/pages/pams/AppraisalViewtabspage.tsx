@@ -26,6 +26,12 @@ interface WeightageConfig {
   isHrDefined: boolean;
 }
 
+interface SentBackLevel {
+  LEVEL_NO: number;
+  EMPLOYEE_CODE_ID: string;
+  RPT_NAME: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
@@ -362,6 +368,10 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [finalApproved, setFinalApproved] = useState<string>(
     prefetchedRow ? (text(prefetchedRow.FINAL_APPROVED) || "NO") : "NO"
   );
+
+  const [periodNumber, setPeriodNumber] = useState<string>(
+  prefetchedRow ? text(prefetchedRow.PERIOD_NUMBER) : ""
+);
   const [createdBy, setCreatedBy] = useState<string>(
     prefetchedRow ? text(prefetchedRow.CREATED_BY) : ""
   );
@@ -373,9 +383,11 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [skillTotal, setSkillTotal] = useState<number>(0);
 
   const [sentBackPopup, setSentBackPopup] = useState(false);
-  const [sentBackLevel, setSentBackLevel] = useState("1");
+  const [sentBackLevel, setSentBackLevel] = useState<string>("");
   const [sentBackReason, setSentBackReason] = useState("");
-  const [sentBackLevels, setSentBackLevels] = useState<Row[]>([]);
+  const [sentBackLevels, setSentBackLevels] = useState<SentBackLevel[]>([]);
+  const [deptHead, setDeptHead] = useState("");
+  const [sentBackLoading, setSentBackLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
   const [loading, setLoading] = useState(!prefetchedRow);
@@ -383,6 +395,7 @@ const AppraisalViewTabsPage: React.FC = () => {
 
   const [showReportModal, setShowReportModal] = useState(false);
   const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
+const APPROVER_IDS = ["2018030473", "2010090086", "2010080001", "2021060535"];
 
   // ─── Default weightage (70/10/10/10) ───
   const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
@@ -403,19 +416,28 @@ const AppraisalViewTabsPage: React.FC = () => {
   const isFinalized = finalApproved === "YES";
   const employeeIsHOD =
     !!createdBy && createdBy.trim().toUpperCase() === employeeCode.trim().toUpperCase();
+    const [nextActionBy, setNextActionBy] = useState<string>(
+  prefetchedRow ? text(prefetchedRow.NEXT_ACTION_BY).trim().toUpperCase() : ""
+);
 
   // Read-only: view mode, ya Pending ke alawa kisi bhi tab se aaye ho.
   // Read-only me koi edit / Save / Submit / Approve / Reject / Send Back nahi.
   const isReadOnly =
     mode === "view" || (sourceTab !== "" && sourceTab !== "PENDING");
 
-  const showActionButtons = !isReadOnly;
-  const showSaveSubmitButtons =
-    showActionButtons && !isFinalized &&
-    (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
-  const showApproveRejectButtons =
-    showActionButtons && !isFinalized &&
-    (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
+  const loginKey = loginid.trim().toUpperCase();
+const isApprover = APPROVER_IDS.includes(loginid.trim());
+const isMyTurn = nextActionBy !== "" && nextActionBy === loginKey;
+
+const showActionButtons = !isReadOnly;
+
+// Approve / Reject / Send Back: sirf hardcoded approver, aur jab NEXT_ACTION_BY wahi ho
+const showApproveRejectButtons =
+  showActionButtons && !isFinalized && isApprover && isMyTurn;
+
+// Save Draft / Submit: pehle jaisa flow level logic, par approver buttons ke saath nahi
+const showSaveSubmitButtons =
+  showActionButtons && !isFinalized && !showApproveRejectButtons && ! APPROVER_IDS.includes(loginKey) && isMyTurn;
 
   const finalRating = calcFinalRating(taskTotal, characterTotal, goalTotal, skillTotal, weightageConfig);
   const showFinalRating = finalRating !== null;
@@ -428,22 +450,25 @@ const AppraisalViewTabsPage: React.FC = () => {
       try {
         const periodNumber = prefetchedRow ? text(prefetchedRow.PERIOD_NUMBER) : "";
 
-        const [flowRes, levelRes, commentRes, historyRes] = await Promise.all([
+        const [flowRes, commentRes, historyRes] = await Promise.all([
           pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
-          pamsSelect({ parameter: "sentback_levels", loginid, code1: docNo }),
           pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
           pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
         ]);
 
         const docPeriod = text(flowRes[0]?.PERIOD_NUMBER) || periodNumber;
+        setPeriodNumber(docPeriod);
         const weightageRes = await pamsSelect({
           parameter: "Trn_weightage", loginid, code1: companyCode, code2: docPeriod,
         });
 
         let currentFlowLevel = 0, nextActionBy = "";
         if (flowRes.length > 0) {
+          
           currentFlowLevel = num(flowRes[0].FLOW_LEVEL_RUNNING);
           nextActionBy = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
+          setDeptHead(text(flowRes[0].DEPT_HEAD));
+          setNextActionBy(nextActionBy); 
           setFlowLevel(currentFlowLevel);
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
           setCreatedBy(text(flowRes[0].CREATED_BY));
@@ -478,9 +503,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           setUserFlowLevel(myAction ? num(myAction.FLOW_LEVEL) : currentFlowLevel);
         }
 
-        setSentBackLevels(levelRes as Row[]);
-        if (levelRes.length > 0) setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
-
+  
         if (commentRes.length > 0) {
           appraiserCommentRef.current = {
             text: text(commentRes[0].APPRAISER_COMMENTS),
@@ -570,21 +593,104 @@ const AppraisalViewTabsPage: React.FC = () => {
     }
   };
 
+  const openSentBackPopup = async () => {
+  setSentBackPopup(true);
+  setSentBackLoading(true);
+  setSentBackLevels([]);
+  setSentBackLevel("");
+
+  try {
+    const res = await pamsSelect({
+      parameter: "Trn_appraisal",
+      loginid,
+      code1: companyCode,
+      code2: loginid,
+      code3: employeeCode,
+      code4: String(flowLevel),
+      code5: deptHead,
+      code6: "SENTBACK",
+    });
+
+    const list = (res as unknown as SentBackLevel[]) ?? [];
+    setSentBackLevels(list);
+
+    if (list.length > 0) {
+      setSentBackLevel(String(list[0].LEVEL_NO));
+    }
+  } catch (err: unknown) {
+    setNotice({
+      type: "error",
+      message:
+        err instanceof Error
+          ? err.message
+          : "Unable to load send back levels",
+    });
+  } finally {
+    setSentBackLoading(false);
+  }
+};
+
   const handleSentBack = async () => {
-    if (isReadOnly) return;
-    if (!sentBackReason.trim()) {
-      setNotice({ type: "warning", message: "Please enter a reason for sending back!" });
-      return;
-    }
-    try {
-      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: "SB", code4: `${sentBackLevel}~${sentBackReason.trim()}` });
-      setNotice({ type: "success", message: "Appraisal sent back successfully" });
-      setSentBackPopup(false); setSentBackReason(""); setSentBackLevel("1");
-      setTimeout(() => navigate(-1), 900);
-    } catch (err: unknown) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
-    }
-  };
+  if (isReadOnly) return;
+
+  if (!sentBackReason.trim()) {
+    setNotice({
+      type: "warning",
+      message: "Please enter a reason for sending back!",
+    });
+    return;
+  }
+
+  if (!sentBackLevel) {
+    setNotice({
+      type: "warning",
+      message: "Please select a level to send back to!",
+    });
+    return;
+  }
+
+  const selectedLevel = sentBackLevels.find(
+    (item) => String(item.LEVEL_NO) === String(sentBackLevel)
+  );
+
+  if (!selectedLevel) {
+    setNotice({
+      type: "warning",
+      message: "Invalid selected level!",
+    });
+    return;
+  }
+
+  try {
+    await pamsSelect({
+      parameter: "sent_back_appraisal",          // ✅ NAYA PARAMETER
+      loginid,
+      code1: docNo,                              // ✅ DOC_NO
+      code2: employeeCode,                       // ✅ EMPLOYEE_CODE
+      code3: String(selectedLevel.LEVEL_NO),     // ✅ TARGET_LEVEL
+      code4: selectedLevel.EMPLOYEE_CODE_ID,     // ✅ TARGET_EMPLOYEE_CODE
+      code5: sentBackReason.trim(),              // ✅ REASON
+      code6: periodNumber,                       // ✅ PERIOD_NUMBER
+      // ❌ number1 — HATA DIYA (ab zaroorat nahi)
+    });
+
+    setNotice({
+      type: "success",
+      message: "Appraisal sent back successfully",
+    });
+
+    setSentBackPopup(false);
+    setSentBackReason("");
+    setSentBackLevel("1");
+
+    setTimeout(() => navigate(-1), 900);
+  } catch (err: unknown) {
+    setNotice({
+      type: "error",
+      message: err instanceof Error ? err.message : "Something went wrong",
+    });
+  }
+};
 
   const handleAppraiserCommentChange = useCallback((val: string, level: number) => {
     appraiserCommentRef.current = { text: val, level };
@@ -719,7 +825,7 @@ const AppraisalViewTabsPage: React.FC = () => {
                   onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
                   onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
                   onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                  onClick={() => setSentBackPopup(true)}
+                  onClick={() => void openSentBackPopup()}
                 >
                   <Undo2 size={13} /> Send Back
                 </button>
@@ -819,19 +925,26 @@ const AppraisalViewTabsPage: React.FC = () => {
           <div style={S.modal} onClick={e => e.stopPropagation()}>
             <div style={S.modalTitle}>Send Back Appraisal</div>
             <div>
-              <label style={S.label}>Send Back To Level</label>
-              <select style={S.select} value={sentBackLevel} onChange={e => setSentBackLevel(e.target.value)}>
-                {sentBackLevels.length === 0 ? (
-                  <option value="1">Level 1</option>
-                ) : (
-                  sentBackLevels.map((level, i) => (
-                    <option key={i} value={text(level.FLOW_RUNNING_LEVEL) || String(i + 1)}>
-                      {text(level.LEVEL_NAME) || `Level ${text(level.FLOW_RUNNING_LEVEL) || i + 1}`}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
+  <label style={S.label}>Send Back To</label>
+  <select
+    style={S.select}
+    value={sentBackLevel}
+    disabled={sentBackLoading || sentBackLevels.length === 0}
+    onChange={e => setSentBackLevel(e.target.value)}
+  >
+    {sentBackLoading ? (
+      <option value="">Loading...</option>
+    ) : sentBackLevels.length === 0 ? (
+      <option value="">No previous level found</option>
+    ) : (
+      sentBackLevels.map((lvl, i) => (
+        <option key={i} value={text(lvl.LEVEL_NO)}>
+          {text(lvl.RPT_NAME)} ({text(lvl.EMPLOYEE_CODE_ID)})
+        </option>
+      ))
+    )}
+  </select>
+</div>
             <div>
               <label style={S.label}>Reason</label>
               <textarea
@@ -843,7 +956,9 @@ const AppraisalViewTabsPage: React.FC = () => {
             </div>
             <div style={S.modalBtnRow}>
               <button type="button" style={S.outlineBtn} onClick={() => setSentBackPopup(false)}>Cancel</button>
-              <button type="button" style={S.solidBtn()} onClick={() => void handleSentBack()}>Confirm Send Back</button>
+              <button type="button" style={S.solidBtn()} disabled={sentBackLoading || !sentBackLevel} onClick={() => void handleSentBack()}>
+  Confirm Send Back
+</button>
             </div>
           </div>
         </div>
