@@ -392,7 +392,12 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
     }
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
     setDimensions([]);
-    setContainers([]);
+    if (containers.length > 0) {
+      setPack((curr) => ({
+        ...curr,
+        container_details: containers.map((r) => r.container_no.trim()).filter(Boolean).join(", "),
+      }));
+    }
     setNotice(null);
     setEditing(true);
     setView("editor");
@@ -473,16 +478,48 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
         return;
       }
 
-      setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
-      setContainers([]);
+      const draftPack = toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code);
+      let autoContainers: ContainerLine[] = [];
+      try {
+        const cntrRes = await api.post<{ success?: boolean; data?: { CONTAINERS?: LookupRow[] } }>("/api/freight/packlist/get", {
+          company_code: companyCode,
+          prin_code: prinCode,
+          job_no: jobNo,
+          packlist_no: "",
+        });
+        const rows = cntrRes.data?.data?.CONTAINERS || [];
+        autoContainers = rows.map(toContainerLine);
+      } catch (_) {}
+
+      setContainers(autoContainers);
+      if (autoContainers.length > 0) {
+        draftPack.container_no = autoContainers.map((r) => r.container_no.trim()).filter(Boolean).join(", ");
+      }
+      setPack(draftPack);
       if (mode.code === "A") await loadDimensions(normalized);
       else setDimensions([]);
       setEditing(!readOnly);
       setView("editor");
     } catch (error: any) {
-      setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
+      const draftPack = toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code);
+      let autoContainers: ContainerLine[] = [];
+      try {
+        const cntrRes = await api.post<{ success?: boolean; data?: { CONTAINERS?: LookupRow[] } }>("/api/freight/packlist/get", {
+          company_code: companyCode,
+          prin_code: prinCode,
+          job_no: jobNo,
+          packlist_no: "",
+        });
+        const rows = cntrRes.data?.data?.CONTAINERS || [];
+        autoContainers = rows.map(toContainerLine);
+      } catch (_) {}
+
+      setContainers(autoContainers);
+      if (autoContainers.length > 0) {
+        draftPack.container_no = autoContainers.map((r) => r.container_no.trim()).filter(Boolean).join(", ");
+      }
+      setPack(draftPack);
       setDimensions([]);
-      setContainers([]);
       setEditing(!readOnly);
       setView("editor");
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });

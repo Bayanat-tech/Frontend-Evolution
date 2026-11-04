@@ -281,7 +281,10 @@ export function FreightJobActivitySelectorDialog({
       // Other cost is an internal/direct job expense and does NOT belong to the Agent/Broker
       if (actualCost > 0) {
         const otherAcCode = "2020100000";
-        const isMatch = Boolean(cleanSupplier && cleanSupplier === otherAcCode);
+        const isMatch = Boolean(
+          cleanSupplier &&
+            (cleanSupplier === otherAcCode)
+        );
         const curr = String(act.ac_curr_code || "");
         const ex = Number(act.ac_ex_rate || 1);
         const bookedDoc = findBookedPI("Other Cost", actCode, actualCost);

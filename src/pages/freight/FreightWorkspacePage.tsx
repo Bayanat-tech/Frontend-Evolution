@@ -23,6 +23,8 @@ import { FreightTrackerDashboardPanel } from "./FreightTrackerDashboardPanel";
 import { FreightProQueuePage } from "./FreightProQueuePage";
 import { FreightDcStationPage } from "./FreightDcStationPage";
 import { FreightNotificationDrawer } from "./FreightNotificationDrawer";
+import { FreightTrackerSettingsDialog } from "./FreightTrackerSettingsDialog";
+import { Settings } from "lucide-react";
 
 type FreightProcess = "enquiry" | "rfq" | "quotation";
 
@@ -67,6 +69,7 @@ export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarg
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <section className="freight-workspace-home">
@@ -94,6 +97,15 @@ export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarg
       {activeView === "dashboard" && (
           <div className="flex items-center gap-3">
             <FreightNotificationDrawer />
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              title="Milestone Notifications & Mail Admin Settings"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs transition-all dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+            >
+              <Settings size={14} className="text-slate-500" />
+              <span>Mail & Alert Admin</span>
+            </button>
             <div className="flex items-center rounded-lg border border-slate-200 bg-slate-100/80 p-0.5 text-xs font-medium dark:border-slate-800 dark:bg-slate-800">
               <button
                 type="button"
@@ -159,6 +171,7 @@ export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarg
       ) : (
         <FreightControlCenter target={target} />
       )}
+      <FreightTrackerSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </section>
   );
 }
@@ -418,6 +431,7 @@ function FreightControlCenter({ target: _target }: { target?: FreightWorkspaceTa
           </table>
         </div>
       </div>
+    
     </section>
   );
 

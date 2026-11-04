@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, TrendingUp, Ban, Bell,  CheckCircle2, ShieldCheck, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowRight, TrendingUp, Ban, Bell, CheckCircle2, ShieldCheck, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards, AlertTriangle, FileCheck, Landmark, Sliders, Sparkles } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -18,6 +18,8 @@ import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
 import { FreightJobTrackingTab } from "./FreightJobTrackingTab";
 import { FreightNotificationDrawer } from "./FreightNotificationDrawer";
 import { FreightJobFinancialAuditDialog } from "../../components/freight/FreightJobFinancialAuditDialog";
+import { FreightTrackerSettingsDialog } from "./FreightTrackerSettingsDialog";
+import { FreightSmartJobCreationDialog } from "../../components/freight/FreightSmartJobCreationDialog";
 
 type JobTab = "job" | "packlist" | "documents" | "activities" | "tracking" | "alerts" | "instructions" | "deposits";
 type WorkspaceMode = "list" | "steps";
@@ -52,10 +54,13 @@ const modeIcon = {
   land: Truck,
 };
 
-const tabs: { key: JobTab; label: string; icon: typeof ClipboardList; ready: boolean }[] = [
+const tabs: { key: JobTab; label: string; icon: any; ready: boolean }[] = [
   { key: "job", label: "Job / File", icon: ClipboardList, ready: true },
   { key: "packlist", label: "Pack List", icon: PackageCheck, ready: true },
   { key: "documents", label: "Documents", icon: FileText, ready: true },
+  { key: "alerts", label: "Alerts", icon: AlertTriangle, ready: true },
+  { key: "instructions", label: "Instructions", icon: FileCheck, ready: true },
+  { key: "deposits", label: "Deposits", icon: Landmark, ready: true },
   { key: "activities", label: "Service & Activities", icon: ReceiptText, ready: true },
   { key: "tracking", label: "Live Milestones & Tracking", icon: ShieldCheck, ready: true },
 ];
@@ -85,6 +90,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [message, setMessage] = useState("");
   const [auditJob, setAuditJob] = useState<LookupRow | null>(null);
   const [auditOpen, setAuditOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [smartDocOpen, setSmartDocOpen] = useState(false);
 
   const openFinancialAudit = (row: LookupRow) => {
     setAuditJob(row);
@@ -153,8 +160,95 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     { accessorKey: "hawb", header: targetMode === "air" ? "HAWB" : "House Ref", size: 130 },
     { accessorKey: "port_code_name", header: "Origin", size: 90, cell: ({ row }) => text(row.original, "port_code_name") || text(row.original, "port_code") },
     { accessorKey: "destination_name", header: "Destination", size: 115, cell: ({ row }) => text(row.original, "destination_port_name") || text(row.original, "destination_port") },
-    { accessorKey: "invoice_date", header: "Invoice", size: 110, cell: ({ row }) => text(row.original, "invoice_date") ? <StatusChip tone="green" label="Invoiced" /> : <StatusChip tone="slate" label="Pending" /> },
-    { accessorKey: "canceled", header: "Status", size: 95, cell: ({ row }) => text(row.original, "canceled") === "Y" ? <StatusChip tone="red" label="Cancelled" /> : <StatusChip tone="green" label="Open" /> },
+    { accessorKey: "invoice_date", header: "Invoice", size: 100, cell: ({ row }) => text(row.original, "invoice_date") ? <StatusChip tone="green" label="Invoiced" /> : <StatusChip tone="slate" label="Pending" /> },
+    {
+      id: "milestone_stage",
+      header: "Live Milestone",
+      size: 140,
+      cell: ({ row }) => {
+        const stage = text(row.original, "current_stage");
+        const level = text(row.original, "current_level");
+        const status = text(row.original, "tracker_status");
+        if (!stage) {
+          return (
+            <button
+              type="button"
+              onClick={() => openSteps(row.original, "tracking")}
+              className="text-[11px] font-semibold text-blue-600 hover:underline cursor-pointer"
+            >
+              + Start Tracking
+            </button>
+          );
+        }
+        return (
+          <button
+            type="button"
+            onClick={() => openSteps(row.original, "tracking")}
+            className="flex items-center gap-1.5 cursor-pointer text-left"
+          >
+            <span
+              className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold ${
+                status === "COMPLETED"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : status === "ON_HOLD"
+                  ? "bg-amber-100 text-amber-900 border border-amber-300"
+                  : "bg-blue-100 text-[#00378C]"
+              }`}
+            >
+              L{level || "1"}: {stage.replace(/_/g, " ")}
+            </span>
+          </button>
+        );
+      },
+    },
+    {
+      id: "operational_risk",
+      header: "Operational Alerts",
+      size: 150,
+      cell: ({ row }) => {
+        const onHoldCount = Number(text(row.original, "on_hold_count") || "0");
+        const holdEntity = text(row.original, "active_hold_entity");
+        const doDaysStr = text(row.original, "do_days_left");
+        const missingDocs = Number(text(row.original, "missing_mandatory_docs") || "0");
+
+        const hasDo = Boolean(doDaysStr);
+        const doDays = hasDo ? Number(doDaysStr) : null;
+
+        return (
+          <div className="flex flex-wrap items-center gap-1">
+            {onHoldCount > 0 && (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                ⚠️ HELD: {holdEntity || "Review"}
+              </span>
+            )}
+            {doDays !== null && (
+              <span
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                  doDays < 0
+                    ? "bg-rose-100 text-rose-800 border border-rose-300 animate-pulse"
+                    : doDays <= 3
+                    ? "bg-amber-100 text-amber-800 border border-amber-300 animate-pulse"
+                    : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                }`}
+              >
+                DO: {doDays < 0 ? `${Math.abs(doDays)}d Expired` : `${doDays}d Left`}
+              </span>
+            )}
+            {missingDocs > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                {missingDocs} Req Docs
+              </span>
+            )}
+            {onHoldCount === 0 && (doDays === null || doDays > 3) && missingDocs === 0 && (
+              <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-0.5">
+                <CheckCircle2 size={12} /> Clear
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    { accessorKey: "canceled", header: "Status", size: 85, cell: ({ row }) => text(row.original, "canceled") === "Y" ? <StatusChip tone="red" label="Cancelled" /> : <StatusChip tone="green" label="Open" /> },
     {
       id: "actions",
       header: "Actions",
@@ -247,7 +341,28 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           columns={columns}
           data={filteredRows}
           actionButton={
-            <div className="flex items-center gap-2"><FreightNotificationDrawer /><button
+            <div className="flex items-center gap-2">
+              <FreightNotificationDrawer />
+              <button
+                type="button"
+                onClick={() => setSmartDocOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 hover:from-blue-100 hover:to-indigo-100 dark:from-blue-950/40 dark:to-indigo-950/40 dark:text-blue-300 dark:border-blue-800 transition-all text-xs font-semibold shadow-xs cursor-pointer"
+                title="Upload shipping document PDF to extract B/L, containers, and create verified job"
+              >
+                <Sparkles size={14} className="text-blue-600 dark:text-blue-400" />
+                <span>Smart PDF Ingestion</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-secondary transition-all text-xs font-medium cursor-pointer text-foreground shadow-xs"
+                title="Configure Company Workflow & Notification Settings"
+              >
+                <Sliders size={14} className="text-blue-600 dark:text-blue-400" />
+                <span>Workflow & Alerts</span>
+              </button>
+              <button
               type="button"
               onClick={() => openSteps(null, "job")}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
@@ -275,6 +390,25 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                 ? "bg-emerald-50/70"
                 : "bg-blue-50/50"
           }
+        />
+
+        <FreightTrackerSettingsDialog
+          open={settingsOpen}
+          onClose={() => {
+            setSettingsOpen(false);
+            void loadRows();
+          }}
+        />
+
+        <FreightSmartJobCreationDialog
+          open={smartDocOpen}
+          onClose={() => {
+            setSmartDocOpen(false);
+            void loadRows();
+          }}
+          onJobCreated={() => {
+            void loadRows();
+          }}
         />
 
         {auditJob && (
