@@ -55,6 +55,9 @@ interface CreditRequestPageProps {
   initialTab?: number;
 }
 
+// Approval levels allowed to create a Credit Request (0 = requester, not in the approver list)
+// const ADD_ALLOWED_LEVELS = [1];
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const { user } = useAuth();
@@ -65,6 +68,10 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [tab, setTab] = useState<CRTab>(TAB_STATUS[initialTab] ?? "PENDING");
   const [query, setQuery] = useState("");
+  // Levels allowed to create a Credit Request (set from the SQL result above)
+     const [userLevel, setUserLevel] = useState<number | null>(null);
+  const canAdd = userLevel ===1;
+    // const canAdd = userLevel ===1  ;
 
   const [tabCounts, setTabCounts] = useState<Record<string, number>>({
   PENDING: 0, INPROGRESS: 0, CLOSED: 0, CANCELED: 0, REJECTED: 0, SENDBACK: 0,
@@ -139,6 +146,37 @@ const loadTabCounts = async () => {
   void loadTabCounts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [user?.company_code, user?.loginid, user?.username]);
+
+
+  // ── Logged-in user's approval level (decides who sees "Add CR") ──────────────
+  useEffect(() => {
+    if (!user?.company_code) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const rows = await getDynamicLookup({
+          parameter: "PS_CREDITREQUEST_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
+          code1: user.company_code,
+          code2: user.loginid || user.username || "ADMIN",
+          code3: "credit_request_form",
+        });
+        if (!mounted) return;
+        const first = (rows || [])[0] as Record<string, unknown> | undefined;
+        const level = first
+          ? Number(first.level ?? first.LEVEL ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0])
+          : 0;
+        setUserLevel(Number.isFinite(level) ? level : 0);
+      } catch {
+        // If the level can't be read, hide the Add button instead of showing it to everyone
+        if (mounted) setUserLevel(null);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.company_code, user?.loginid, user?.username]);
+
+
 
   // ── Client-side search filter ───────────────────────────────────────────────
   const filteredRows = useMemo(() => {
@@ -260,7 +298,7 @@ const closePopup = (refresh?: boolean, message?: string) => {
     />
   );
 }
-
+console.log("userLevel", userLevel, canAdd);
   // ── Render (List page) ─────────────────────────────────────────────────────
   return (
   <section className="finance-list-page grid gap-4">
@@ -302,7 +340,7 @@ const closePopup = (refresh?: boolean, message?: string) => {
         columns={columns}
         data={filteredRows}
         toolbar={
-          tab === "PENDING" && (
+                   tab === "PENDING" && canAdd && (
             <button
               title="Add CR"
               onClick={openAddPopup}

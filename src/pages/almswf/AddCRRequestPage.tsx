@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Save,
@@ -95,11 +95,98 @@ type AddCRRequestPageProps = {
   onClose: (refresh?: boolean, message?: string) => void;
 };
 
+// ─── Field limits (match CREDIT_FORM_REQUEST column sizes) ───────────────
+const FIELD_MAX: Partial<Record<keyof TCRHeader, number>> = {
+  COMPANY_NAME: 50,
+  WAY_NO: 10,
+  BLDG_NO: 10,
+  FLAT_NO: 10,
+  LOCATION: 10,
+  PO_BOX: 10,
+  CITY: 10,
+  OFFICE_TEL_NO: 20,
+  FAX_NO: 20,
+  WEBSITE: 50,
+  EMAIL: 50,
+  FIN_CONTACT_PERSON: 50,
+  FIN_CONTACT_NUMBER: 10,
+  FIN_CONTACT_EMAIL: 50,
+  COMMERCIAL_REG_NO: 20,
+  BUSINESS_SECTOR: 50,
+  REMARKS_CONTACT_PERSON: 50,
+  AUTHORIZED_SIGNATORY: 50,
+  ACCOUNT_NO: 50,
+  DESCRIPTION: 200,
+  COMMENTS: 1000,
+  REMARKS: 1000,
+};
+
+// VARCHAR2(n BYTE) counts bytes, so non-English text can use more than 1 per character
+const clipBytes = (text: string, max: number) => {
+  const enc = new TextEncoder();
+  let out = "";
+  let bytes = 0;
+  for (const ch of text) {
+    const n = enc.encode(ch).length;
+    if (bytes + n > max) break;
+    out += ch;
+    bytes += n;
+  }
+  return out;
+};
+
+// Blocks e, +, - (and "." for whole-number fields) in number inputs
+const blockNumberKeys = (allowDecimal: boolean) => (e: KeyboardEvent<HTMLInputElement>) => {
+  const blocked = ["e", "E", "+", "-"];
+  if (!allowDecimal) blocked.push(".");
+  if (blocked.includes(e.key)) e.preventDefault();
+};
+
+// ─── Validation rules ────────────────────────────────────────────────────
+const MAX_AMOUNT = 999999999.999; // NUMBER(12,3)
+const MAX_PERIOD = 9999; // NUMBER(4)
+const MAX_SANCTIONED_PERIOD = 999999999999999; // NUMBER(20), kept within JS safe range
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_RE = /^[0-9+\-\s()]+$/;
+const WEB_RE = /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/\S*)?$/i;
+
+const DRAFT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
+  REQUEST_DATE: "Request Date",
+  COMPANY_NAME: "Company Name",
+};
+
+const SUBMIT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
+  ...DRAFT_REQUIRED,
+  WAY_NO: "Way No",
+  BLDG_NO: "Bldg No",
+  FLAT_NO: "Flat No",
+  LOCATION: "Location",
+  PO_BOX: "Po Box",
+  POSTAL_CODE: "Postal Code",
+  CITY: "City",
+  OFFICE_TEL_NO: "Tel No",
+  FAX_NO: "Fax No",
+  WEBSITE: "Website",
+  EMAIL: "Email",
+  FIN_CONTACT_PERSON: "Finance Contact Person",
+  FIN_CONTACT_NUMBER: "Finance Tel No",
+  FIN_CONTACT_EMAIL: "Finance Email",
+  COMMERCIAL_REG_NO: "Commercial Reg No",
+  BUSINESS_SECTOR: "Business Sector",
+  REMARKS_CONTACT_PERSON: "Contact Person",
+  AUTHORIZED_SIGNATORY: "Authorized Signatory",
+  CREDIT_FORM_SIGNATURE_DATE: "Credit Form Signature Date",
+  CREDIT_LIMIT: "Credit Limit",
+  REQUESTED_CREDIT_PERIOD: "Requested Credit Period",
+  ACCOUNT_NO: "Account No",
+  DESCRIPTION: "Description",
+  COMMENTS: "Comments",
+  REMARKS: "Remarks",
+};
 
 const Required = () => <span className="ml-0.5 text-destructive">*</span>;
 
 const GRID_4 = "grid grid-cols-1 gap-0.5 p-1 md:grid-cols-2 xl:grid-cols-4";
-
 
 const TEXTAREA_CLS =
   "min-h-[56px] w-full resize-y rounded-md border bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60";
@@ -110,7 +197,6 @@ type SectionCardProps = {
   hint?: string;
   children: ReactNode;
 };
-
 
 const SectionCard = ({ icon: Icon, title, hint, children }: SectionCardProps) => (
   <div className="shrink-0 rounded-xl border bg-card shadow-sm">
@@ -139,6 +225,7 @@ const AddCRRequestPage = ({
   const loginid = user?.loginid ?? "";
 
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
   const [dialogError, setDialogError] = useState("");
@@ -176,8 +263,22 @@ const AddCRRequestPage = ({
   }, [hdrList, hdrLoading, isEditMode, isViewMode]);
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
-    setHeader((prev) => ({ ...prev, [field]: value }));
+    setHeader((prev) => ({
+      ...prev,
+      [field]:
+        typeof value === "string" && FIELD_MAX[field]
+          ? clipBytes(value, FIELD_MAX[field] as number)
+          : value,
+    }));
 
+  // Number fields: ignores any keystroke that would exceed the column's digits
+  const setNum = (field: keyof TCRHeader, raw: string, intDigits: number, decimals = 0) => {
+    if (raw === "") return setHdr(field, undefined);
+    const [i = "", d = ""] = raw.split(".");
+    if (!/^\d*$/.test(i) || !/^\d*$/.test(d)) return;
+    if (i.length > intDigits || d.length > decimals) return;
+    setHdr(field, Number(raw));
+  };
 
   const envSelected = [
     header.ACCOUNT_ENV_TMS === "Y" && "TMS",
@@ -253,12 +354,63 @@ const AddCRRequestPage = ({
       ...extra,
     });
 
-  const validateTel = () => {
-    if (header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10) {
-      setNotice({ type: "error", message: "Tel No must be exactly 10 digits" });
-      return false;
+  const validateForm = (mode: "draft" | "submit") => {
+    const errs: string[] = [];
+    const text = (f: keyof TCRHeader) => String(header[f] ?? "").trim();
+    const num = (f: keyof TCRHeader) => Number(header[f] ?? 0);
+
+    // Required
+    const required = mode === "submit" ? SUBMIT_REQUIRED : DRAFT_REQUIRED;
+    (Object.keys(required) as (keyof TCRHeader)[]).forEach((f) => {
+      const v = header[f];
+      const empty = typeof v === "number" ? v <= 0 : text(f) === "";
+      if (empty) errs.push(`${required[f]} is required`);
+    });
+
+    // Formats
+    if (text("EMAIL") && !EMAIL_RE.test(text("EMAIL"))) errs.push("Email is not valid");
+    if (text("FIN_CONTACT_EMAIL") && !EMAIL_RE.test(text("FIN_CONTACT_EMAIL")))
+      errs.push("Finance Email is not valid");
+    if (text("OFFICE_TEL_NO") && !PHONE_RE.test(text("OFFICE_TEL_NO")))
+      errs.push("Tel No can contain only digits, +, -, spaces and brackets");
+    if (text("FAX_NO") && !PHONE_RE.test(text("FAX_NO")))
+      errs.push("Fax No can contain only digits, +, -, spaces and brackets");
+    if (text("WEBSITE") && !WEB_RE.test(text("WEBSITE")))
+      errs.push("Website is not valid (example: www.company.com)");
+    if (text("FIN_CONTACT_NUMBER") && text("FIN_CONTACT_NUMBER").length !== 10)
+      errs.push("Finance Tel No must be exactly 10 digits");
+
+    // Numbers
+    const postal = num("POSTAL_CODE");
+    if (postal && (!Number.isInteger(postal) || postal < 0 || String(postal).length > 10))
+      errs.push("Postal Code must be a whole number of up to 10 digits");
+
+    const checkAmount = (label: string, n: number) => {
+      if (n < 0) errs.push(`${label} cannot be negative`);
+      else if (n > MAX_AMOUNT) errs.push(`${label} cannot be more than ${MAX_AMOUNT.toLocaleString()}`);
+      else if ((String(n).split(".")[1] ?? "").length > 3)
+        errs.push(`${label} allows a maximum of 3 decimal places`);
+    };
+    checkAmount("Credit Limit", num("CREDIT_LIMIT"));
+    checkAmount("Sanctioned Credit Limit Amt", num("SANCTIONED_CREDIT_LIMIT_AMT"));
+
+    const checkPeriod = (label: string, n: number, max: number) => {
+      if (n < 0 || !Number.isInteger(n)) errs.push(`${label} must be a whole number`);
+      else if (n > max) errs.push(`${label} cannot be more than ${max.toLocaleString()}`);
+    };
+    checkPeriod("Requested Credit Period", num("REQUESTED_CREDIT_PERIOD"), MAX_PERIOD);
+    checkPeriod("Sanctioned Credit Period", num("SANCTIONED_CREDIT_PERIOD"), MAX_SANCTIONED_PERIOD);
+
+    return errs;
+  };
+
+  const runValidation = (mode: "draft" | "submit") => {
+    const list = validateForm(mode);
+    setErrors(list);
+    if (list.length) {
+      document.querySelector(".commercial-editor-body")?.scrollTo({ top: 0, behavior: "smooth" });
     }
-    return true;
+    return list.length === 0;
   };
 
   const execute = async (
@@ -294,10 +446,10 @@ const AddCRRequestPage = ({
   };
 
   const handleSaveDraft = () => {
-    if (validateTel()) void execute("draft", "SAVEASDRAFT", "Draft saved successfully!");
+    if (runValidation("draft")) void execute("draft", "SAVEASDRAFT", "Draft saved successfully!");
   };
   const handleSubmit = () => {
-    if (validateTel()) void execute("submit", "SUBMITTED", "CR submitted successfully!");
+    if (runValidation("submit")) void execute("submit", "SUBMITTED", "CR submitted successfully!");
   };
 
   const handleRejectConfirm = () => {
@@ -455,6 +607,17 @@ const AddCRRequestPage = ({
             >
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
+              {errors.length > 0 && (
+                <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                  <p className="m-0 mb-1 font-semibold">Please fix the following:</p>
+                  <ul className="m-0 list-disc pl-5">
+                    {errors.map((e) => (
+                      <li key={e}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* ── 1. Request Information ─────────────────────────────────── */}
               <SectionCard icon={ClipboardList} title="Request Information" hint="Credit Request">
                 <div className={GRID_4}>
@@ -489,7 +652,7 @@ const AddCRRequestPage = ({
 
                   {/* Row 2 */}
                   <label className="field"><span>Po Box<Required /></span><Input disabled={disabled} value={header.PO_BOX || ""} onChange={(e) => setHdr("PO_BOX", e.target.value)} /></label>
-                  <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" value={header.POSTAL_CODE ?? ""} onChange={(e) => setHdr("POSTAL_CODE", Number(e.target.value))} /></label>
+                  <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" onKeyDown={blockNumberKeys(false)} value={header.POSTAL_CODE ?? ""} onChange={(e) => setNum("POSTAL_CODE", e.target.value, 10)} /></label>
                   <label className="field"><span>City<Required /></span><Input disabled={disabled} value={header.CITY || ""} onChange={(e) => setHdr("CITY", e.target.value)} /></label>
                   <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.OFFICE_TEL_NO || ""} onChange={(e) => setHdr("OFFICE_TEL_NO", e.target.value)} /></label>
 
@@ -544,10 +707,10 @@ const AddCRRequestPage = ({
               {/* ── 4. Credit Requested / Sanctioned ───────────────────────── */}
               <SectionCard icon={CreditCard} title="Credit Requested / Sanctioned" hint="Requested And Sanctioned Limits">
                 <div className={GRID_4}>
-                  <label className="field"><span>Credit Limit<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setHdr("CREDIT_LIMIT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Requested Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("REQUESTED_CREDIT_PERIOD", Number(e.target.value))} /></label>
-                  <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
+                  <label className="field"><span>Credit Limit<Required /></span><Input disabled={disabled} type="number" step="0.001" onKeyDown={blockNumberKeys(true)} value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setNum("CREDIT_LIMIT", e.target.value, 9, 3)} /></label>
+                  <label className="field"><span>Requested Credit Period<Required /></span><Input disabled={disabled} type="number" onKeyDown={blockNumberKeys(false)} value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("REQUESTED_CREDIT_PERIOD", e.target.value, 4)} /></label>
+                  <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" onKeyDown={blockNumberKeys(true)} value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_LIMIT_AMT", e.target.value, 9, 3)} /></label>
+                  <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" onKeyDown={blockNumberKeys(false)} value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_PERIOD", e.target.value, 15)} /></label>
                 </div>
               </SectionCard>
 
