@@ -33,6 +33,7 @@ const BTN_BLUE = "rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-m
 // Employees who get the Supplier column + Terms & Conditions tab.
 // 2019070493 = ESHRAQ, 2010080035 = SHAHAB
 const SUPPLIER_USER_CODES: string[] = ["2019070493", "2010080035"];
+const AMOUNT_CHECK_USER_CODES: string[] = ["2019070493", "2010080035"];
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;
@@ -316,6 +317,10 @@ const AddPRRequestPage = ({
   const [importOpen, setImportOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: string; action: "SUBMIT" | "APPROVE" | "" }>({
+  open: false, message: "", action: "",
+});
   const [remarkText, setRemarkText] = useState("");
   const [selectedSendBackTo, setSelectedSendBackTo] = useState("");
   const [activeTab, setActiveTab] = useState<"items" | "terms">("items");
@@ -1033,18 +1038,62 @@ const AddPRRequestPage = ({
     runAction("SAVEASDRAFT", "Draft saved successfully!");
   };
 
-  const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
+  const checkAmountExceed = async (): Promise<string | null> => {
+    if (!AMOUNT_CHECK_USER_CODES.includes(loginid) || !requestNumber) return null;
+    try {
+      const rows = await almsCommonSelect<Record<string, any>>({
+        parameter: "PS_PREQUEST_ENTRY_CHECK_AMOUNT_EXCEED",
+        loginid, code1: companyCode, code2: requestNumber,
+        code3: String(Math.round((totalAmount + totalTax) * 1000)),   // amount incl. tax, in mils
+        code4: "",
+      });
+      const row: any = rows?.[0] ?? {};
+      const msg = String(row.MSG ?? row.msg ?? "").trim();
+      return msg || null;
+    } catch (err) {
+      console.error("Amount check failed", err);   // do not block the user if the check itself fails
+      return null;
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (saving) return;
+    if (!validateAndShowErrors()) return;
+    setSavingAction("SUBMITTED");
+    const msg = await checkAmountExceed();
+    setSavingAction(null);
+    if (msg) {
+      setAmountExceed({ open: true, message: msg, action: "SUBMIT" });
+      return;
+    }
+    await runAction("SUBMITTED", "PR submitted successfully!");
+  };
 
   const handleCancel = () => {
     if (!requestNumber) { onClose(); return; }
-    if (!window.confirm("Are you sure you want to cancel this Purchase Request? This action cannot be undone.")) return;
-    runAction("CANCELED", "PR cancelled successfully!", "", {
+    setCancelOpen(true);
+  };
+
+  const handleCancelConfirm = async () => {
+    setCancelOpen(false);
+    await runAction("CANCELED", "PR cancelled successfully!", "", {
       CANCEL_FLAG: "Y",
       CANCEL_DATE: new Date().toISOString(),
       CANCEL_USER: loginid,
       NEXT_ACTION_BY: "",
     });
   };
+
+  // "Yes" = continue with the normal document logic (same as clicking Submit / Approve)
+  const handleAmountExceedYes = async () => {
+    const action = amountExceed.action;
+    setAmountExceed({ open: false, message: "", action: "" });
+    if (action === "APPROVE") await handleApprove(true);
+    else await runAction("SUBMITTED", "PR submitted successfully!");
+  };
+
+  // "No" = stay on the document, nothing is saved
+  const handleAmountExceedNo = () => setAmountExceed({ open: false, message: "", action: "" });
 
   const handlePrint = async () => {
     if (!requestNumber) { toast.warning("Please save the request before printing.", 4000); return; }
@@ -1073,9 +1122,19 @@ const AddPRRequestPage = ({
     }
   };
 
-  const handleApprove = async () => {
-    if (!requestNumber) { toast.error("No PR to approve", 5000); return; }
-    if (!validateAndShowErrors()) return;
+  const handleApprove = async (skipAmountCheck = false) => {
+  if (!requestNumber) { toast.error("No PR to approve", 5000); return; }
+  if (!validateAndShowErrors()) return;
+
+  if (!skipAmountCheck) {
+    setSavingAction("APPROVED");
+    const msg = await checkAmountExceed();
+    setSavingAction(null);
+    if (msg) {
+      setAmountExceed({ open: true, message: msg, action: "APPROVE" });
+      return;
+    }
+  }
     setSaving(true); setSavingAction("APPROVED"); setNotice(null);
     try {
       const cur = Number(header.FLOW_LEVEL_RUNNING) || 1;
@@ -2294,6 +2353,35 @@ const AddPRRequestPage = ({
           </label>
         </div>
       </Dialog>
+
+      <Dialog
+  open={cancelOpen}
+  title="Cancel Request"
+  description="Are you sure you want to cancel this Purchase Request? This action cannot be undone."
+  onClose={() => setCancelOpen(false)}
+  footer={<>
+    <Button type="button" onClick={() => setCancelOpen(false)} className={BTN_BLUE}>No</Button>
+    <Button type="button" disabled={saving} onClick={() => void handleCancelConfirm()} className={BTN_BLUE}>
+      {savingAction === "CANCELED" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+      Yes, Cancel
+    </Button>
+  </>}
+>
+  <p className="text-sm text-slate-700">Request No: <strong>{requestNumber}</strong></p>
+</Dialog>
+
+<Dialog
+  open={amountExceed.open}
+  title="Amount Exceeded"
+  description="The amount is more than the approved amount."
+  onClose={handleAmountExceedNo}
+  footer={<>
+    <Button type="button" onClick={handleAmountExceedNo} className={BTN_BLUE}>No</Button>
+    <Button type="button" disabled={saving} onClick={() => void handleAmountExceedYes()} className={BTN_BLUE}>Yes</Button>
+  </>}
+>
+  <div className="whitespace-pre-line text-sm leading-relaxed text-slate-800">{amountExceed.message}</div>
+</Dialog>
 
       <Dialog
         open={commentsOpen}
