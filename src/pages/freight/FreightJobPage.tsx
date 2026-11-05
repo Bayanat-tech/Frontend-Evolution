@@ -833,6 +833,7 @@ export function FreightJobPage({
                       ...current,
                       port_code: value,
                       port_code_name: lookupText(row || undefined, "PORT_NAME") || current.port_code_name,
+                      place_receipt: lookupText(row || undefined, "COUNTRY_NAME") || current.place_receipt,
                     }))
                   }
                   required
@@ -851,6 +852,7 @@ export function FreightJobPage({
                       ...current,
                       destination_port: value,
                       destination_port_name: lookupText(row || undefined, "PORT_NAME") || current.destination_port_name,
+                       place_delivery: lookupText(row || undefined, "COUNTRY_NAME") || current.place_delivery,
                     }))
                   }
                   required
@@ -1742,4 +1744,4 @@ function formatDate(value: string) {
   return date.toLocaleDateString("en-GB");
 }
 
-const portColumns = [{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }, { field: "COUNTRY_CODE", header: "Country" }];
+const portColumns = [{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }, { field: "COUNTRY_NAME", header: "Country" }];
