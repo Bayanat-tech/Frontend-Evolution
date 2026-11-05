@@ -1748,16 +1748,28 @@ const limitProps = (f: keyof FormState) => ({
                         onChange={(value, row) => {
                           const newRate = Number(getLookupValue(row || {}, "ex_rate") || form.ex_rate || 1);
                           const currName = text(getLookupValue(row || {}, "curr_name"));
+                          const prevRate = Number(form.ex_rate || 1);
                           setForm((c) => ({
                             ...c,
                             curr_code: value,
                             curr_name: currName,
                             ex_rate: newRate,
-                            detail: c.detail.map((l) =>
-                              !l.curr_code || l.curr_code === c.curr_code
-                                ? { ...l, curr_code: value, curr_name: currName, ex_rate: newRate, lcur_amount: Math.abs(Number(l.amount || 0)) * newRate }
-                                : l
-                            ),
+                            detail: c.detail.map((l) => {
+                              if (!l.curr_code || l.curr_code === c.curr_code) {
+                                const baseLcur = Number(l.lcur_amount != null && Number(l.lcur_amount) > 0 ? l.lcur_amount : (Math.abs(Number(l.amount || 0)) * prevRate));
+                                const newAmt = newRate > 0 ? Number((baseLcur / newRate).toFixed(3)) : baseLcur;
+                                return {
+                                  ...l,
+                                  curr_code: value,
+                                  curr_name: currName,
+                                  ex_rate: newRate,
+                                  amount: newAmt,
+                                  price: newAmt,
+                                  lcur_amount: baseLcur,
+                                };
+                              }
+                              return l;
+                            }),
                           }));
                         }}
                       />

@@ -151,6 +151,7 @@ export function FreightJobActivitiesPage({
   const getBookedPIForLine = useCallback((costType: "Agent Cost" | "Transporter Cost" | "Other Cost", actCode: string, amount: number) => {
     if (!bookedPIList.length || !amount) return null;
     const match = bookedPIList.find((pi: any) => {
+      if (pi.CANCELED === "Y") return false;
       const rem = String(pi.REMARKS || "").toUpperCase();
       const typeMatch =
         costType === "Agent Cost"
@@ -161,7 +162,9 @@ export function FreightJobActivitiesPage({
       if (!typeMatch) return false;
       const actMatch = rem.includes(actCode.toUpperCase());
       if (!actMatch) return false;
-      const amtMatch = Math.abs(Number(pi.AMOUNT) - amount) < 0.001;
+      const piAmt = Number(pi.AMOUNT || 0);
+      const piLcur = Number(pi.LCUR_AMOUNT != null ? pi.LCUR_AMOUNT : piAmt);
+      const amtMatch = Math.abs(piAmt - amount) < 0.001 || Math.abs(piLcur - amount) < 0.001;
       return amtMatch;
     });
     return match ? String(match.DOC_NO) : null;
