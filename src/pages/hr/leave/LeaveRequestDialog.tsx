@@ -247,13 +247,11 @@ export function LeaveRequestDialog({
   const fieldsDisabled = readOnly || !isCreator || workflowLoading || Boolean(workflowError);
 
   // Sick leave (e.g. "002 - SICK LEAVE") needs a supporting attachment before it can be submitted.
+  // For every other leave type the attachment is optional.
   const isSickLeave = form.leaveType === "002" || (form.leaveTypeDesc || "").toUpperCase().includes("SICK");
   const sickLeaveNeedsAttachment = isCreator && isSickLeave && (attachmentCount ?? 0) === 0;
 
-  // The Attachments tab exists only for sick leave; always start on the details tab.
-  useEffect(() => {
-    if (!isSickLeave) setActiveTab("details");
-  }, [isSickLeave]);
+  // Always start on the details tab when the dialog / page opens.
   useEffect(() => {
     if (open) setActiveTab("details");
   }, [open]);
@@ -268,12 +266,9 @@ export function LeaveRequestDialog({
     return count;
   };
 
+  // Attachment count is tracked for every leave type (required for sick leave, optional for the rest).
   useEffect(() => {
     if (!open) return;
-    if (!isSickLeave) {
-      setAttachmentCount(null);
-      return;
-    }
     if (!requestNumber) {
       setAttachmentCount(0);
       return;
@@ -289,7 +284,7 @@ export function LeaveRequestDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, requestNumber, isSickLeave]);
+  }, [open, requestNumber]);
 
   useEffect(() => {
     if (!open) return;
@@ -658,6 +653,7 @@ export function LeaveRequestDialog({
     if (flagErrors()) return;
 
     // Sick leave cannot be submitted until at least one attachment is uploaded.
+    // Other leave types may submit with or without attachments.
     if (action === "SUBMITTED" && isCreator && isSickLeave) {
       if (!requestNumber) {
         setNotice({ type: "error", message: "Please attach a supporting document before submitting sick leave." });
@@ -776,6 +772,7 @@ export function LeaveRequestDialog({
             : "Draft saved. Attachments will enable after request number is available.",
         });
         // Sick leave: take the user straight to the Attachments tab after the draft is saved.
+        // Other leave types stay on the details tab (attachments are optional).
         if (isSickLeave && (savedRequestNumber || requestNumber)) setActiveTab("attachments");
         onSaved();
         return savedRequestNumber || requestNumber || undefined;
@@ -924,44 +921,53 @@ export function LeaveRequestDialog({
         </p>
       )}
 
-      {/* Tabs: the Attachments tab exists only for sick leave */}
-      {isSickLeave && (
-        <div className="flex gap-1 border-b border-slate-200">
-          {(
-            [
-              { id: "details", label: "Leave Details" },
-              { id: "attachments", label: "Attachments" },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-1.5 text-xs font-semibold ${
-                activeTab === tab.id
-                  ? "border-[#00378C] text-[#00378C]"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {tab.id === "attachments" && <Paperclip size={13} />}
-              {tab.label}
-              {tab.id === "attachments" && attachmentCount !== null && attachmentCount > 0 && (
-                <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">{attachmentCount}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Tabs: Attachments is required for sick leave and optional for every other leave type */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {(
+          [
+            { id: "details", label: "Leave Details" },
+            { id: "attachments", label: "Attachments" },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-1.5 text-xs font-semibold ${
+              activeTab === tab.id
+                ? "border-[#00378C] text-[#00378C]"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {tab.id === "attachments" && <Paperclip size={13} />}
+            {tab.label}
+            {tab.id === "attachments" && (
+              <span className={`text-[10px] font-medium ${isSickLeave ? "text-red-500" : "text-slate-400"}`}>
+                {isSickLeave ? "(Required)" : ""}
+              </span>
+            )}
+            {tab.id === "attachments" && attachmentCount !== null && attachmentCount > 0 && (
+              <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">{attachmentCount}</span>
+            )}
+          </button>
+        ))}
+      </div>
 
-      {isSickLeave && activeTab === "attachments" && (
-        <HrLeaveAttachmentPanel
-          requestNumber={requestNumber}
-          companyCode={companyCode}
-          loginId={loginId}
-          readOnly={fieldsDisabled}
-          onCountChange={setAttachmentCount}
-        />
-      )}
+      {activeTab === "attachments" &&
+        (requestNumber ? (
+          <HrLeaveAttachmentPanel
+            requestNumber={requestNumber}
+            companyCode={companyCode}
+            loginId={loginId}
+            readOnly={fieldsDisabled}
+            onCountChange={setAttachmentCount}
+          />
+        ) : (
+          <p className="m-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Save As Draft first, then you can upload attachments here.
+          </p>
+        ))}
+
       {showSendBackRemark && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Sent back with remarks</p>
@@ -976,7 +982,7 @@ export function LeaveRequestDialog({
       )}
 
       {/* Three columns side-by-side with bordered section cards */}
-      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${isSickLeave && activeTab === "attachments" ? "hidden" : ""}`}>
+      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${activeTab === "attachments" ? "hidden" : ""}`}>
         {/* ---------- Column 1: Leave Details ---------- */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
@@ -1205,7 +1211,7 @@ export function LeaveRequestDialog({
         </div>
       </div>
 
-      {hasActualResumeDate(initialRow) && !(isSickLeave && activeTab === "attachments") && (
+      {hasActualResumeDate(initialRow) && activeTab !== "attachments" && (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
             <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
@@ -1678,4 +1684,3 @@ function getUuid() {
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
-
