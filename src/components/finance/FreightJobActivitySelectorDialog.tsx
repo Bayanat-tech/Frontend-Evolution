@@ -336,11 +336,12 @@ export function FreightJobActivitySelectorDialog({
       const actCount = Number(j.activity_count ?? j.ACTIVITY_COUNT ?? 0);
       const expense = Number(j.expense ?? j.EXPENSE ?? 0);
       if (actCount <= 0 || expense <= 0) return false;
-      // If user is looking for unbooked items, show the job if it still has unbooked lines
-      if (hideFullyBookedJobs && j.is_fully_booked) return false;
+      // If user is looking for unbooked items, hide only if fully booked
+      if (statusFilter === "unbooked" && hideFullyBookedJobs && j.is_fully_booked) return false;
+      if (statusFilter === "booked" && !j.pi_booked_amount) return false;
       return true;
     });
-  }, [jobs, hideFullyBookedJobs]);
+  }, [jobs, hideFullyBookedJobs, statusFilter]);
 
   // Filtered expenses (PowerBuilder logic: hide booked by default)
   const visibleExpenses = useMemo(() => {
