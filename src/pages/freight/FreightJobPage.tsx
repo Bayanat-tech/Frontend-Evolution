@@ -284,6 +284,22 @@ export function FreightJobPage({
     setView(startMode);
   }, [companyCode, direction.code, mode.code, startMode, userId]);
 
+  useEffect(() => {
+    if (job.div_code && !job.div_name) {
+      lookup("freight_division", companyCode, "NULL", "NULL", job.div_code)
+        .then((rows) => {
+          const match = rows.find((r) => lookupText(r, "DIV_CODE") === job.div_code) || rows[0];
+          if (match) {
+            setJob((curr) => ({
+              ...curr,
+              div_name: lookupText(match, "DIV_NAME") || curr.div_name,
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [job.div_code, job.div_name, companyCode]);
+
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
     { accessorKey: "job_date", header: "Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
@@ -680,6 +696,7 @@ export function FreightJobPage({
                       prin_name: lookupText(row || undefined, "PRIN_NAME") || current.prin_name,
                       quotation_ref: current.prin_code !== value ? "" : current.quotation_ref,
                       div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code,
+                      div_name: lookupText(row || undefined, "DIV_NAME") || (current.div_code !== lookupText(row || undefined, "DIV_CODE") ? "" : current.div_name),
                     }))
                   }
                   required
@@ -699,6 +716,7 @@ export function FreightJobPage({
                       dept_code: value,
                       dept_name: lookupText(row || undefined, "DEPT_NAME") || current.dept_name,
                       div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code,
+                      div_name: lookupText(row || undefined, "DIV_NAME") || (current.div_code !== lookupText(row || undefined, "DIV_CODE") ? "" : current.div_name),
                     }))
                   }
                   required
@@ -706,15 +724,16 @@ export function FreightJobPage({
                 <Lookup
                   label="Division"
                   value={job.div_code}
-                  displayValue={job.div_name}
+                  displayValue={job.div_name ? (job.div_name.includes(job.div_code) ? job.div_name : `${job.div_code} - ${job.div_name}`) : job.div_code}
                   valueField="DIV_CODE"
                   displayFields={["DIV_CODE", "DIV_NAME"]}
                   columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]}
                   loadOptions={(search) => lookup("freight_division", companyCode, "NULL", "NULL", search)}
-                  onChange={(value) =>
+                  onChange={(value, row) =>
                     setJob((current) => ({
                       ...current,
                       div_code: value,
+                      div_name: lookupText(row || undefined, "DIV_NAME") || current.div_name,
                       tx_cat_code: current.div_code === value ? current.tx_cat_code : "",
                       tx_cat_name: current.div_code === value ? current.tx_cat_name : "",
                     }))
@@ -833,6 +852,7 @@ export function FreightJobPage({
                       ...current,
                       port_code: value,
                       port_code_name: lookupText(row || undefined, "PORT_NAME") || current.port_code_name,
+                      place_receipt: lookupText(row || undefined, "COUNTRY_NAME") || current.place_receipt,
                     }))
                   }
                   required
@@ -851,6 +871,7 @@ export function FreightJobPage({
                       ...current,
                       destination_port: value,
                       destination_port_name: lookupText(row || undefined, "PORT_NAME") || current.destination_port_name,
+                       place_delivery: lookupText(row || undefined, "COUNTRY_NAME") || current.place_delivery,
                     }))
                   }
                   required
@@ -1742,4 +1763,4 @@ function formatDate(value: string) {
   return date.toLocaleDateString("en-GB");
 }
 
-const portColumns = [{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }, { field: "COUNTRY_CODE", header: "Country" }];
+const portColumns = [{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }, { field: "COUNTRY_NAME", header: "Country" }];
