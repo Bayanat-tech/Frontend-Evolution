@@ -162,6 +162,7 @@ export function FreightJobActivitySelectorDialog({
     const findBookedPI = (costType: string, actCode: string, amount: number) => {
       if (!bookedPIList.length) return undefined;
       const match = bookedPIList.find((pi: any) => {
+        if (pi.CANCELED === "Y") return false;
         const rem = String(pi.REMARKS || "").toUpperCase();
         const jNo = String(pi.JOB_NO || "").trim().toUpperCase();
         if (jNo && jNo !== jobNo.toUpperCase()) return false;
@@ -177,7 +178,9 @@ export function FreightJobActivitySelectorDialog({
         const actMatch = rem.includes(actCode.toUpperCase());
         if (!actMatch) return false;
 
-        const amtMatch = Math.abs(Number(pi.AMOUNT) - amount) < 0.001;
+        const piAmt = Number(pi.AMOUNT || 0);
+        const piLcur = Number(pi.LCUR_AMOUNT != null ? pi.LCUR_AMOUNT : piAmt);
+        const amtMatch = Math.abs(piAmt - amount) < 0.001 || Math.abs(piLcur - amount) < 0.001;
         return amtMatch;
       });
       return match ? String(match.DOC_NO) : undefined;
@@ -215,9 +218,13 @@ export function FreightJobActivitySelectorDialog({
             (brokerCode.toUpperCase() === cleanSupplier ||
               (brokerAcref && brokerAcref.toUpperCase() === cleanSupplier))
         );
-        const curr = String(act.partner_curr_code || "");
+        const curr = String(act.partner_curr_code || "OMR");
         const ex = Number(act.partner_ex_rate || 1);
-        const bookedDoc = findBookedPI("Agent Cost", actCode, partnerPrice);
+        const isForeign = Boolean(curr && curr !== "OMR" && ex > 0);
+        const ocAmt = Number(act.partner_price_oc || 0);
+        const fcAmount = isForeign ? (ocAmt > 0 ? ocAmt : Number((partnerPrice / ex).toFixed(3))) : partnerPrice;
+        const lcurAmt = partnerPrice;
+        const bookedDoc = findBookedPI("Agent Cost", actCode, lcurAmt);
         items.push({
           key: `${jobNo}_${srno}_AGENT`,
           srno,
@@ -226,10 +233,10 @@ export function FreightJobActivitySelectorDialog({
           act_code: actCode,
           activity: activityDesc,
           cost_type: "Agent Cost",
-          amount: partnerPrice,
+          amount: fcAmount,
           curr_code: curr,
-          ex_rate: ex,
-          lcur_amount: partnerPrice * ex,
+          ex_rate: isForeign ? ex : 1,
+          lcur_amount: lcurAmt,
           vendor_code: brokerAcref || brokerCode,
           vendor_name: brokerName || "Agent / Partner",
           isSupplierMatch: isMatch,
@@ -249,9 +256,13 @@ export function FreightJobActivitySelectorDialog({
             (transporterCode.toUpperCase() === cleanSupplier ||
               (transporterAcCode && transporterAcCode.toUpperCase() === cleanSupplier))
         );
-        const curr = String(act.tp_curr_code || "");
+        const curr = String(act.tp_curr_code || "OMR");
         const ex = Number(act.tp_ex_rate || 1);
-        const bookedDoc = findBookedPI("Transporter Cost", actCode, transportPrice);
+        const isForeign = Boolean(curr && curr !== "OMR" && ex > 0);
+        const ocAmt = Number(act.transport_price_oc || 0);
+        const fcAmount = isForeign ? (ocAmt > 0 ? ocAmt : Number((transportPrice / ex).toFixed(3))) : transportPrice;
+        const lcurAmt = transportPrice;
+        const bookedDoc = findBookedPI("Transporter Cost", actCode, lcurAmt);
         items.push({
           key: `${jobNo}_${srno}_TRANS`,
           srno,
@@ -260,10 +271,10 @@ export function FreightJobActivitySelectorDialog({
           act_code: actCode,
           activity: activityDesc,
           cost_type: "Transporter Cost",
-          amount: transportPrice,
+          amount: fcAmount,
           curr_code: curr,
-          ex_rate: ex,
-          lcur_amount: transportPrice * ex,
+          ex_rate: isForeign ? ex : 1,
+          lcur_amount: lcurAmt,
           vendor_code: transporterAcCode || transporterCode,
           vendor_name: transporterName || "Transporter",
           vehicle_no: vehicleNo,
@@ -282,9 +293,13 @@ export function FreightJobActivitySelectorDialog({
       if (actualCost > 0) {
         const otherAcCode = "2020100000";
         const isMatch = Boolean(cleanSupplier && cleanSupplier === otherAcCode);
-        const curr = String(act.ac_curr_code || "");
-        const ex = Number(act.ac_ex_rate || 1);
-        const bookedDoc = findBookedPI("Other Cost", actCode, actualCost);
+        const curr = String(act.ac_curr_code || act.curr_code || "OMR");
+        const ex = Number(act.ac_ex_rate || act.ex_rate || 1);
+        const isForeign = Boolean(curr && curr !== "OMR" && ex > 0);
+        const ocAmt = Number(act.actual_cost_oc || 0);
+        const fcAmount = isForeign ? (ocAmt > 0 ? ocAmt : Number((actualCost / ex).toFixed(3))) : actualCost;
+        const lcurAmt = actualCost;
+        const bookedDoc = findBookedPI("Other Cost", actCode, lcurAmt);
         items.push({
           key: `${jobNo}_${srno}_OTHER`,
           srno,
@@ -293,10 +308,10 @@ export function FreightJobActivitySelectorDialog({
           act_code: actCode,
           activity: activityDesc,
           cost_type: "Other Cost",
-          amount: actualCost,
+          amount: fcAmount,
           curr_code: curr,
-          ex_rate: ex,
-          lcur_amount: actualCost * ex,
+          ex_rate: isForeign ? ex : 1,
+          lcur_amount: lcurAmt,
           vendor_code: otherAcCode,
           vendor_name: "Direct / Provision Cost",
           isSupplierMatch: isMatch,
