@@ -7,7 +7,6 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
 import type { LookupRow } from "../../api/lookups";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
 
 interface WeightageRow {
@@ -33,7 +32,7 @@ function num(val: unknown): number {
   return isFinite(n) ? n : 0;
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const S = {
   page: {
     padding: "16px", fontFamily: "inherit", fontSize: "12px",
@@ -60,7 +59,7 @@ const S = {
     fontSize: "10px", fontWeight: 600, color: "#888",
     textTransform: "uppercase" as const, letterSpacing: "0.05em", marginBottom: "12px",
   },
-  // 3-col equal grid for Additional Settings
+
   grid3Equal: {
     display: "grid" as const,
     gridTemplateColumns: "1fr 1fr 1fr",
@@ -139,13 +138,11 @@ const S = {
   },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+
 const AppraisalWeightageMaster: React.FC = () => {
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
-
-  // ── Form state ────────────────────────────────────────────────────────────
   const [taskPct, setTaskPct] = useState<number>(70);
   const [periodNumber, setPeriodNumber] = useState<string>("");
   const [periodDisplay, setPeriodDisplay] = useState<string>("");
@@ -153,8 +150,6 @@ const AppraisalWeightageMaster: React.FC = () => {
   const [divDisplay, setDivDisplay] = useState<string>("All Divisions");
   const [deptCode, setDeptCode] = useState<string>("ALL");
   const [deptDisplay, setDeptDisplay] = useState<string>("All Departments");
-
-  // ── Data state ────────────────────────────────────────────────────────────
   const [history, setHistory] = useState<WeightageRow[]>([]);
   const [periods, setPeriods] = useState<Row[]>([]);
   const [divisions, setDivisions] = useState<Row[]>([]);
@@ -164,12 +159,9 @@ const AppraisalWeightageMaster: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-
   const charPct = 100 - taskPct;
   const isValid = taskPct >= 1 && taskPct <= 99;
   const activeRow = history.find((r) => r.IS_ACTIVE === "Y");
-
-  // ── Fetch base data ───────────────────────────────────────────────────────
   const fetchAll = useCallback(() => {
     setLoading(true);
     setErrorMsg("");
@@ -188,7 +180,7 @@ const AppraisalWeightageMaster: React.FC = () => {
         setPeriods(per as Row[] || []);
         setDivisions(div as Row[] || []);
 
-        // Pre-fill with active record
+      
         const active = histRows?.find((r) => r.IS_ACTIVE === "Y");
         if (active) {
           setTaskPct(num(active.TASK_PCT));
@@ -213,7 +205,6 @@ const AppraisalWeightageMaster: React.FC = () => {
     if (companyCode) fetchAll();
   }, [companyCode, fetchAll]);
 
-  // ── Cascade: fetch departments when division changes ──────────────────────
   useEffect(() => {
     if (!companyCode) return;
     setDeptCode("ALL");
@@ -227,7 +218,7 @@ const AppraisalWeightageMaster: React.FC = () => {
       .catch(() => setDepartments([]));
   }, [divCode, companyCode, loginid]);
 
-  // ── Lookup data adapters ──────────────────────────────────────────────────
+
   const periodOptions = useMemo((): LookupRow[] =>
     periods.map((p) => ({
       PERIOD_NUMBER: text(p.PERIOD_NUMBER),
@@ -250,7 +241,7 @@ const AppraisalWeightageMaster: React.FC = () => {
     })),
   ], [departments]);
 
-  // ── Save ──────────────────────────────────────────────────────────────────
+
   const handleSave = async () => {
     if (!isValid) return;
     if (!periodNumber) { setErrorMsg("Please select an effective period"); return; }
@@ -283,7 +274,7 @@ const AppraisalWeightageMaster: React.FC = () => {
     }
   };
 
-  // ── Delete single row ─────────────────────────────────────────────────────
+
   const handleDeleteRow = async (code: string) => {
     setDeleting(code);
     setErrorMsg("");
@@ -302,7 +293,7 @@ const AppraisalWeightageMaster: React.FC = () => {
     }
   };
 
-  // ── DataTable columns ─────────────────────────────────────────────────────
+
   const columns: ColumnDef<WeightageRow>[] = useMemo(() => [
     {
       accessorKey: "PERIOD_NUMBER",
@@ -386,7 +377,7 @@ const AppraisalWeightageMaster: React.FC = () => {
     },
   ], [deleting]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
+ 
   return (
     <div style={S.page}>
 

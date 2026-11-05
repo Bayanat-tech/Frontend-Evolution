@@ -57,9 +57,7 @@ export type DesignationInfo = {
   deptName: string;
 };
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
+
 function text(value: unknown): string {
   if (value === null || value === undefined) return "";
   return String(value);
@@ -162,9 +160,7 @@ function Field({
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Async fetchers
-// ─────────────────────────────────────────────────────────────
+
 async function fetchKpiTypes(loginid: string, companyCode: string): Promise<Row[]> {
   try {
     const data = await pamsSelect({ parameter: "kpi_type", loginid, code1: companyCode });
@@ -224,7 +220,7 @@ async function fetchDesignations(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
+
 export function KpiGroupPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -314,7 +310,7 @@ export function KpiGroupPage() {
     } else {
       setRows([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [selectedDivision, selectedDepartment, loginid, companyCode]);
 
   useEffect(() => {
@@ -324,9 +320,7 @@ export function KpiGroupPage() {
     })();
   }, [loginid, companyCode]);
 
-  // ═════════════════════════════════════════════════════════
-  // ARRAY-BASED designationLookup
-  // ═════════════════════════════════════════════════════════
+
   useEffect(() => {
     if (!loginid || !companyCode) return;
 
@@ -438,7 +432,7 @@ export function KpiGroupPage() {
       g.rows.push(r);
     });
 
-    // Dedupe within each designation group
+
     map.forEach((group) => {
       const seen = new Set<string>();
       group.rows = group.rows.filter((r) => {
@@ -451,7 +445,7 @@ export function KpiGroupPage() {
         return true;
       });
 
-      // Recompute weightage after dedupe
+
       group.totalWeightage = group.rows.reduce(
         (sum, r) => sum + number(r.STANDARD_WEIGHTAGE),
         0
@@ -469,9 +463,7 @@ export function KpiGroupPage() {
     setExpandedGroups((prev) => ({ ...prev, [key]: !current }));
   };
 
-  // ═════════════════════════════════════════════════════════
-  // ACTIVITY HANDLERS
-  // ═════════════════════════════════════════════════════════
+
   const addActivity = () => setActivities((p) => [...p, { srno: 0, desc: "" }]);
 
   const updateActivity = (idx: number, desc: string) =>
@@ -520,9 +512,7 @@ export function KpiGroupPage() {
     }
   };
 
-  // ═════════════════════════════════════════════════════════
-  // CASCADING HANDLERS
-  // ═════════════════════════════════════════════════════════
+  
   const onDivisionChange = async (divCode: string) => {
     setForm((prev) => ({ ...prev, DIVISION_CODE: divCode, DEPARTMENT_CODE: "", DESG_CODE: "" }));
     setDepartmentList([]);
@@ -542,9 +532,7 @@ export function KpiGroupPage() {
     }
   };
 
-  // ═════════════════════════════════════════════════════════
-  // OPEN ADD
-  // ═════════════════════════════════════════════════════════
+  
   const openAdd = async () => {
     setEditMode(false);
     setViewMode(false);
@@ -668,9 +656,7 @@ export function KpiGroupPage() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // ═════════════════════════════════════════════════════════
-  // SAVE
-  // ═════════════════════════════════════════════════════════
+  
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
 
@@ -698,7 +684,6 @@ export function KpiGroupPage() {
     setSaving(true);
 
     try {
-      // ── Save / Update KPI master ─────────────────────────
       await pamsSave({
         parameter: "kpi_ins_upd",
         loginid,
@@ -779,9 +764,7 @@ export function KpiGroupPage() {
     }
   };
 
-  // ═════════════════════════════════════════════════════════
-  // DELETE
-  // ═════════════════════════════════════════════════════════
+
   const handleDeleteClick = (row: Row) => {
     setConfirmDeleteTarget(row);
   };
@@ -840,9 +823,7 @@ export function KpiGroupPage() {
       ? "KPI Activity"
       : "Characteristic";
 
-  // ═════════════════════════════════════════════════════════
-  // RENDER
-  // ═════════════════════════════════════════════════════════
+
   return (
     <section className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
@@ -1518,9 +1499,6 @@ export function KpiGroupPage() {
         </div>
       </Dialog>
 
-      {/* ─────────────────────────────────────────────────────
-          Confirm Delete Dialog
-      ───────────────────────────────────────────────────── */}
       <Dialog
         open={Boolean(confirmDeleteTarget)}
         compact
@@ -1582,9 +1560,7 @@ export function KpiGroupPage() {
         </div>
       </Dialog>
 
-      {/* ─────────────────────────────────────────────────────
-          Cannot Delete Dialog (blocked by appraisal docs)
-      ───────────────────────────────────────────────────── */}
+   
       <Dialog
         open={Boolean(deleteTarget)}
         compact

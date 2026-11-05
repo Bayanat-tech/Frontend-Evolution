@@ -14,7 +14,7 @@ import type { LookupRow } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
 import { DataTable } from "../../components/ui/DataTablePams";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Row = Record<string, unknown>;
 type EmpType = "MANAGER" | "NON-MANAGER";
 
@@ -46,7 +46,7 @@ interface HodBatch {
   PENDING_COUNT: number | string;
 }
 
-const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
+const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENTBACK_TAB", "APPROVED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"] as const;
 const IN_PROGRESS_TAB = 1; // is tab me checkbox selection nahi dikhega
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
@@ -124,12 +124,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
   const isHRApprover = HR_APPROVERS.includes(loginid);
-
   const cacheKey = useCallback(
     (tabIdx: number) => `${loginid}-${companyCode}-${TAB_STATUS[tabIdx]}`,
     [loginid, companyCode]
   );
-
   const [activeTab, setActiveTab] = useState(initialTab);
   const [rows, setRows] = useState<Row[]>(
     () => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`) ?? []
@@ -227,7 +225,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     void loadLookups();
   }, [loginid, companyCode]);
 
-  // ── Saare tabs ke counts (aur cache) ek saath load karo ──
   const loadTabCounts = useCallback(async () => {
     if (!loginid || !companyCode) return;
     const results = await Promise.all(
@@ -542,7 +539,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const cols: ColumnDef<Row>[] = [];
 
-    // ── Appraisal Doc No: header me Select All, cell me row checkbox ──
     cols.push({
       accessorKey: "APPRAISAL_DOC_NO",
       size: 220,
@@ -800,10 +796,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     return cols;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSelection, selectedRows, visibleIds, selectedVisibleIds, activeWeightage, activeTab]);
 
-  // ── Manager / Non Manager toggle (DataTable toolbar me) ──
   const typeToggle = showTypeTabs ? (
     <div
       style={{
@@ -842,38 +836,29 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
-        <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <a href="/pams/masters" style={{ color: "#6b7280", textDecoration: "none" }}>Master</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <span style={{ color: "#111827", fontWeight: 500 }}>Appraisal</span>
-      </div>
-
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* ── Tabs (Purchase Request jaisa pill UI + count) ── */}
-      {/* ── Tabs ── */}
-<div style={{ display: "flex", alignItems: "center", gap: "2px", borderBottom: "2px solid #e5e7eb" }}>
-  {TAB_LABELS.map((label, index) => (
-    <button
-      key={index}
-      onClick={() => handleTabChange(index)}
-      style={{
-        padding: "8px 20px", fontSize: "14px",
-        fontWeight: activeTab === index ? 700 : 500,
-        color: activeTab === index ? "#082A89" : "#6b7280",
-        background: activeTab === index ? "#f0f4ff" : "transparent",
-        border: "none",
-        borderBottom: activeTab === index ? "2px solid #082A89" : "2px solid transparent",
-        borderRadius: "8px 8px 0 0", cursor: "pointer",
-        marginBottom: "-2px", whiteSpace: "nowrap",
-      }}
-    >
-      {label}
-    </button>
-  ))}
-</div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "2px", borderBottom: "2px solid #e5e7eb" }}>
+        {TAB_LABELS.map((label, index) => (
+          <button
+            key={index}
+            onClick={() => handleTabChange(index)}
+            style={{
+              padding: "8px 20px", fontSize: "14px",
+              fontWeight: activeTab === index ? 700 : 500,
+              color: activeTab === index ? "#082A89" : "#6b7280",
+              background: activeTab === index ? "#f0f4ff" : "transparent",
+              border: "none",
+              borderBottom: activeTab === index ? "2px solid #082A89" : "2px solid transparent",
+              borderRadius: "8px 8px 0 0", cursor: "pointer",
+              marginBottom: "-2px", whiteSpace: "nowrap",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {hodBatches
         .filter((b) => Number(b.PENDING_COUNT) === 0 && Number(b.READY_COUNT) > 0)
