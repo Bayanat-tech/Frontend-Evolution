@@ -62,6 +62,7 @@ export function FreightJobActivitySelectorDialog({
   // PowerBuilder Filters
   const [filterBySupplier, setFilterBySupplier] = useState<boolean>(Boolean(supplierCode));
   const [statusFilter, setStatusFilter] = useState<"unbooked" | "booked" | "all">("unbooked"); // PB default: unbooked only
+  const [costTypeFilter, setCostTypeFilter] = useState<"all" | "other" | "agent" | "trans">("all");
   const [hideFullyBookedJobs, setHideFullyBookedJobs] = useState<boolean>(true); // PB default: do not show fully booked jobs
   const [expenseSearch, setExpenseSearch] = useState("");
 
@@ -119,6 +120,7 @@ export function FreightJobActivitySelectorDialog({
       const shouldFilter = Boolean(supplierCode);
       setFilterBySupplier(shouldFilter);
       setStatusFilter("unbooked");
+      setCostTypeFilter("all");
       setHideFullyBookedJobs(true);
       void fetchJobs("", shouldFilter ? supplierCode.trim() : null);
     }
@@ -289,10 +291,10 @@ export function FreightJobActivitySelectorDialog({
       }
 
       // 3. Other Cost line (PowerBuilder dw_3 supplier_type = 'ACTUAL', SUPPLIER_ACC = '2020100000')
-      // Other cost is an internal/direct job expense and does NOT belong to the Agent/Broker
+      // Other cost is a direct/internal job expense and can be booked to ANY supplier on the invoice
       if (actualCost > 0) {
         const otherAcCode = "2020100000";
-        const isMatch = Boolean(cleanSupplier && cleanSupplier === otherAcCode);
+        const isMatch = true;
         const curr = String(act.ac_curr_code || act.curr_code || "OMR");
         const ex = Number(act.ac_ex_rate || act.ex_rate || 1);
         const isForeign = Boolean(curr && curr !== "OMR" && ex > 0);
@@ -334,6 +336,7 @@ export function FreightJobActivitySelectorDialog({
       const actCount = Number(j.activity_count ?? j.ACTIVITY_COUNT ?? 0);
       const expense = Number(j.expense ?? j.EXPENSE ?? 0);
       if (actCount <= 0 || expense <= 0) return false;
+      // If user is looking for unbooked items, show the job if it still has unbooked lines
       if (hideFullyBookedJobs && j.is_fully_booked) return false;
       return true;
     });
@@ -348,7 +351,14 @@ export function FreightJobActivitySelectorDialog({
       list = list.filter((item) => item.isBooked);
     }
     if (filterBySupplier && supplierCode) {
-      list = list.filter((item) => item.isSupplierMatch);
+      list = list.filter((item) => item.cost_type === "Other Cost" || item.isSupplierMatch);
+    }
+    if (costTypeFilter === "other") {
+      list = list.filter((item) => item.cost_type === "Other Cost");
+    } else if (costTypeFilter === "agent") {
+      list = list.filter((item) => item.cost_type === "Agent Cost");
+    } else if (costTypeFilter === "trans") {
+      list = list.filter((item) => item.cost_type === "Transporter Cost");
     }
     if (expenseSearch.trim()) {
       const q = expenseSearch.trim().toLowerCase();
@@ -578,11 +588,19 @@ export function FreightJobActivitySelectorDialog({
                             <span className="rounded bg-emerald-100 border border-emerald-300 px-1.5 py-0.2 text-[9px] font-bold text-emerald-800">
                               Booked: {lastPiNo}
                             </span>
+                          ) : (job.is_broker_booked || Number(job.agent_booked_amount || 0) > 0) && Number(job.has_other_cost || 0) > 0 && Number(job.other_booked_amount || 0) === 0 ? (
+                            <span className="rounded bg-amber-100 border border-amber-300 px-1.5 py-0.2 text-[9px] font-bold text-amber-900" title="Broker cost booked in PI. Other Cost available.">
+                              Broker Booked · Other Open
+                            </span>
                           ) : job.pi_line_count > 0 ? (
                             <span className="rounded bg-amber-100 border border-amber-200 px-1.5 py-0.2 text-[9px] font-semibold text-amber-800">
                               Part Booked
                             </span>
-                          ) : null}
+                          ) : (
+                            <span className="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.2 text-[9px] font-semibold text-blue-700">
+                              Unbooked
+                            </span>
+                          )}
                           <span className="text-[10px] text-slate-500">{dateStr}</span>
                         </div>
                       </div>
@@ -629,18 +647,55 @@ export function FreightJobActivitySelectorDialog({
               </div>
 
               {selectedJob && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {/* Cost Type pills */}
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded p-0.5 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setCostTypeFilter("all")}
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer transition-colors ${
+                        costTypeFilter === "all" ? "bg-[#00378C] text-white" : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCostTypeFilter("other")}
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer transition-colors ${
+                        costTypeFilter === "other"
+                          ? "bg-amber-600 text-white"
+                          : "text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200"
+                      }`}
+                      title="Show Other Cost lines"
+                    >
+                      Other Cost
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCostTypeFilter("agent")}
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer transition-colors ${
+                        costTypeFilter === "agent"
+                          ? "bg-purple-600 text-white"
+                          : "text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200"
+                      }`}
+                      title="Show Broker / Agent Cost lines"
+                    >
+                      Broker Cost
+                    </button>
+                  </div>
+
                   {/* PB Mode toggle: Hide already booked lines */}
                   <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded px-2 py-0.5 shadow-2xs">
-                    <span className="text-[11px] font-semibold text-slate-600">Filter:</span>
+                    <span className="text-[11px] font-semibold text-slate-600">Status:</span>
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as any)}
                       className="h-5.5 text-[11px] font-bold rounded border-0 bg-transparent py-0 pl-1 pr-5 text-[#00378C] focus:ring-0 cursor-pointer"
                     >
-                      <option value="unbooked">Unbooked Only (Default)</option>
-                      <option value="booked">Already Booked in PI</option>
-                      <option value="all">All Expenses (Booked & Unbooked)</option>
+                      <option value="unbooked">Unbooked Only</option>
+                      <option value="booked">Already Booked</option>
+                      <option value="all">All (Booked & Open)</option>
                     </select>
                   </div>
 
@@ -812,17 +867,21 @@ export function FreightJobActivitySelectorDialog({
                                   isBooked
                                     ? "bg-slate-200 text-slate-500"
                                     : item.cost_type === "Agent Cost"
-                                    ? "bg-purple-100 text-purple-800"
+                                    ? "bg-purple-100 text-purple-800 border border-purple-200"
                                     : item.cost_type === "Transporter Cost"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-slate-200 text-slate-800"
+                                    ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                    : "bg-amber-100 text-amber-900 border border-amber-300 font-extrabold"
                                 }`}
                               >
                                 {item.cost_type}
                               </span>
-                              {isBooked && (
+                              {isBooked ? (
                                 <span className="inline-flex items-center gap-1 rounded bg-emerald-100 border border-emerald-300 px-1.5 py-0.2 font-mono text-[9px] font-bold text-emerald-800">
                                   Booked: {item.booked_pi_no}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-1.5 py-0.2 text-[9px] font-semibold text-blue-700">
+                                  Ready to Book
                                 </span>
                               )}
                             </div>
