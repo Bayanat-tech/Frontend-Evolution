@@ -397,7 +397,7 @@ export function SmartInlineAllocationTable({
 
                       {/* Invoice Amount */}
                       <td className="px-2 py-1 text-right font-mono text-xs font-semibold text-slate-700 truncate">
-                        {invAmt > 0 ? formatAmount(invAmt) : "-"}
+                        {invAmt > 0 ? `${formatAmount(invAmt)}${String(row.c_curr_code_origin || "").trim() && String(row.c_curr_code_origin).trim() !== "OMR" ? " " + String(row.c_curr_code_origin).trim() : ""}` : "-"}
                       </td>
 
                       {/* Outstanding */}

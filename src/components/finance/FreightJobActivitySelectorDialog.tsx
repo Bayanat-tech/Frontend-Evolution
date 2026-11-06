@@ -226,7 +226,7 @@ export function FreightJobActivitySelectorDialog({
         const ocAmt = Number(act.partner_price_oc || 0);
         const fcAmount = isForeign ? (ocAmt > 0 ? ocAmt : Number((partnerPrice / ex).toFixed(3))) : partnerPrice;
         const lcurAmt = partnerPrice;
-        const bookedDoc = findBookedPI("Agent Cost", actCode, lcurAmt);
+        const bookedDoc = findBookedPI("Agent Cost", actCode, lcurAmt) || (act as any).trans_docno || (act as any).TRANS_DOCNO;
         items.push({
           key: `${jobNo}_${srno}_AGENT`,
           srno,
