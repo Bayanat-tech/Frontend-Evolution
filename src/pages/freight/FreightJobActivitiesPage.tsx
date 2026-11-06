@@ -766,7 +766,7 @@ export function FreightJobActivitiesPage({
                 const agentCostVal = numberValue(line.partners_price);
                 const transpCostVal = numberValue(line.transport_price);
                 const actualCostVal = numberValue(line.actual_cost);
-                const agentPi = getBookedPIForLine("Agent Cost", line.act_code, agentCostVal);
+                const agentPi = getBookedPIForLine("Agent Cost", line.act_code, agentCostVal) || (line as any).pi_no || "";
                 const transpPi = getBookedPIForLine("Transporter Cost", line.act_code, transpCostVal);
                 const otherPi = getBookedPIForLine("Other Cost", line.act_code, actualCostVal);
 
