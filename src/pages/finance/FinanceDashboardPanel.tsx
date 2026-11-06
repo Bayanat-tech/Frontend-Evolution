@@ -222,7 +222,14 @@ export function FinanceDashboardPanel() {
     companyCode === "GRL" ||
     companyCode === "BTIND" ||
     companyName.toUpperCase().includes("INDIA");
-  const currencyCode = data.currency_code || (isIndiaCompany ? "INR" : "OMR");
+  const currencyCode = String(
+    data.currency_code ||
+      userRecord.base_curr_code ||
+      userRecord.BASE_CURR_CODE ||
+      userRecord.currency ||
+      userRecord.CURRENCY ||
+      (isIndiaCompany ? "INR" : "OMR")
+  ).trim().toUpperCase();
   const currencyDecimals =
     data.currency_decimals != null
       ? data.currency_decimals
@@ -1479,9 +1486,8 @@ function isUsableCurrencySymbol(symbol: string, code: string): boolean {
   if (
     !clean ||
     clean.includes("?") ||
-    /[Ø±â\ufffd]/.test(clean) ||
-    clean.toUpperCase() === code.toUpperCase() ||
-    code.toUpperCase() === "OMR"
+    /[^A-Za-z0-9$€£¥₹\s]/.test(clean) ||
+    clean.toUpperCase() === code.toUpperCase()
   ) {
     return false;
   }

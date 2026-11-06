@@ -717,16 +717,22 @@ export function FreightJobPage({
                   displayFields={["PRIN_CODE", "PRIN_NAME"]}
                   columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]}
                   loadOptions={(search) => lookup("freight_principal", companyCode, "NULL", "NULL", search)}
-                  onChange={(value, row) =>
-                    setJob((current) => ({
-                      ...current,
-                      prin_code: value,
-                      prin_name: lookupText(row || undefined, "PRIN_NAME") || current.prin_name,
-                      quotation_ref: current.prin_code !== value ? "" : current.quotation_ref,
-                      div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code,
-                      div_name: lookupText(row || undefined, "DIV_NAME") || (current.div_code !== lookupText(row || undefined, "DIV_CODE") ? "" : current.div_name),
-                    }))
-                  }
+                  onChange={(value, row) => {
+                    const rowDiv = lookupText(row || undefined, "DIV_CODE");
+                    const rowDivName = lookupText(row || undefined, "DIV_NAME");
+                    setJob((current) => {
+                      const nextDivCode = rowDiv || current.div_code;
+                      const nextDivName = rowDivName || divisionMap[nextDivCode] || (current.div_code === nextDivCode ? current.div_name : "");
+                      return {
+                        ...current,
+                        prin_code: value,
+                        prin_name: lookupText(row || undefined, "PRIN_NAME") || current.prin_name,
+                        quotation_ref: current.prin_code !== value ? "" : current.quotation_ref,
+                        div_code: nextDivCode,
+                        div_name: nextDivName,
+                      };
+                    });
+                  }}
                   required
                 />
 
@@ -738,34 +744,48 @@ export function FreightJobPage({
                   displayFields={["DEPT_CODE", "DEPT_NAME"]}
                   columns={[{ field: "DEPT_CODE", header: "Code" }, { field: "DEPT_NAME", header: "Department" }, { field: "DIV_CODE", header: "Div" }]}
                   loadOptions={(search) => lookup("freight_department", companyCode, "NULL", "NULL", search)}
-                  onChange={(value, row) =>
-                    setJob((current) => ({
-                      ...current,
-                      dept_code: value,
-                      dept_name: lookupText(row || undefined, "DEPT_NAME") || current.dept_name,
-                      div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code,
-                      div_name: lookupText(row || undefined, "DIV_NAME") || (current.div_code !== lookupText(row || undefined, "DIV_CODE") ? "" : current.div_name),
-                    }))
-                  }
+                  onChange={(value, row) => {
+                    const rowDiv = lookupText(row || undefined, "DIV_CODE");
+                    const rowDivName = lookupText(row || undefined, "DIV_NAME");
+                    setJob((current) => {
+                      const nextDivCode = rowDiv || current.div_code;
+                      const nextDivName = rowDivName || divisionMap[nextDivCode] || (current.div_code === nextDivCode ? current.div_name : "");
+                      return {
+                        ...current,
+                        dept_code: value,
+                        dept_name: lookupText(row || undefined, "DEPT_NAME") || current.dept_name,
+                        div_code: nextDivCode,
+                        div_name: nextDivName,
+                      };
+                    });
+                  }}
                   required
                 />
                 <Lookup
                   label="Division"
                   value={job.div_code}
-                  displayValue={(() => { const dName = job.div_name || divisionMap[job.div_code]; return dName ? (dName.includes(job.div_code) ? dName : `${job.div_code} - ${dName}`) : job.div_code; })()}
+                  displayValue={(() => {
+                    const dName = job.div_name || divisionMap[job.div_code];
+                    if (!dName) return undefined;
+                    return dName.includes(job.div_code) ? dName : `${job.div_code} - ${dName}`;
+                  })()}
                   valueField="DIV_CODE"
                   displayFields={["DIV_CODE", "DIV_NAME"]}
                   columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]}
                   loadOptions={(search) => lookup("freight_division", companyCode, "NULL", "NULL", search)}
-                  onChange={(value, row) =>
+                  onChange={(value, row) => {
+                    const resolvedName = lookupText(row || undefined, "DIV_NAME") || divisionMap[value] || "";
                     setJob((current) => ({
                       ...current,
                       div_code: value,
-                      div_name: lookupText(row || undefined, "DIV_NAME") || current.div_name,
+                      div_name: resolvedName || current.div_name,
                       tx_cat_code: current.div_code === value ? current.tx_cat_code : "",
                       tx_cat_name: current.div_code === value ? current.tx_cat_name : "",
-                    }))
-                  }
+                    }));
+                    if (resolvedName) {
+                      setDivisionMap((prev) => ({ ...prev, [value]: resolvedName }));
+                    }
+                  }}
                   required
                 />
                 <Lookup
