@@ -284,21 +284,49 @@ export function FreightJobPage({
     setView(startMode);
   }, [companyCode, direction.code, mode.code, startMode, userId]);
 
+  const [divisionMap, setDivisionMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!companyCode) return;
+    lookup("freight_division", companyCode, "NULL", "NULL", "NULL")
+      .then((rows) => {
+        const map: Record<string, string> = {};
+        rows.forEach((r) => {
+          const code = lookupText(r, "DIV_CODE");
+          const name = lookupText(r, "DIV_NAME");
+          if (code && name) map[code] = name;
+        });
+        setDivisionMap(map);
+      })
+      .catch(() => {});
+  }, [companyCode]);
+
   useEffect(() => {
     if (job.div_code && !job.div_name) {
-      lookup("freight_division", companyCode, "NULL", "NULL", job.div_code)
-        .then((rows) => {
-          const match = rows.find((r) => lookupText(r, "DIV_CODE") === job.div_code) || rows[0];
-          if (match) {
-            setJob((curr) => ({
-              ...curr,
-              div_name: lookupText(match, "DIV_NAME") || curr.div_name,
-            }));
-          }
-        })
-        .catch(() => {});
+      if (divisionMap[job.div_code]) {
+        setJob((curr) => ({
+          ...curr,
+          div_name: divisionMap[job.div_code],
+        }));
+      } else {
+        lookup("freight_division", companyCode, "NULL", "NULL", job.div_code)
+          .then((rows) => {
+            const match = rows.find((r) => lookupText(r, "DIV_CODE") === job.div_code);
+            if (match) {
+              const name = lookupText(match, "DIV_NAME");
+              setJob((curr) => ({
+                ...curr,
+                div_name: name || curr.div_name,
+              }));
+              if (name) {
+                setDivisionMap((prev) => ({ ...prev, [job.div_code]: name }));
+              }
+            }
+          })
+          .catch(() => {});
+      }
     }
-  }, [job.div_code, job.div_name, companyCode]);
+  }, [job.div_code, job.div_name, companyCode, divisionMap]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
@@ -724,7 +752,7 @@ export function FreightJobPage({
                 <Lookup
                   label="Division"
                   value={job.div_code}
-                  displayValue={job.div_name ? (job.div_name.includes(job.div_code) ? job.div_name : `${job.div_code} - ${job.div_name}`) : job.div_code}
+                  displayValue={(() => { const dName = job.div_name || divisionMap[job.div_code]; return dName ? (dName.includes(job.div_code) ? dName : `${job.div_code} - ${dName}`) : job.div_code; })()}
                   valueField="DIV_CODE"
                   displayFields={["DIV_CODE", "DIV_NAME"]}
                   columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]}

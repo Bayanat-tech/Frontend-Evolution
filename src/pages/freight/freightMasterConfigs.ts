@@ -427,6 +427,23 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
       { name: "status", label: "Status", type: "select", options: activeStatus, width: 120, tab: "billing", section: "Billing" },
     ],
     defaults: { status: "A" },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT a.company_code, a.activity_code, a.activity, a.activity_group_code, g.act_group_name,
+               a.activity_subgroup_code, s.act_subgroup_name, a.uom AS uom_code,
+               a.income_code AS charge_code, CASE WHEN NVL(a.freeze_flag, 'N') = 'Y' THEN 'I' ELSE 'A' END AS status
+        FROM ms_activity a
+        LEFT JOIN ms_activity_group g ON g.company_code = a.company_code AND g.activity_group_code = a.activity_group_code
+        LEFT JOIN ms_activity_subgroup s ON s.company_code = a.company_code AND s.activity_subgroup_code = a.activity_subgroup_code
+        WHERE a.company_code = '${typedUser.company_code}'
+        ORDER BY a.activity_code
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
     // formTabs removed for single-page layout
     deleteConfig: disableDelete,
   },
