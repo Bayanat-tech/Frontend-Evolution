@@ -854,6 +854,11 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       element: () => <RJVDocumentEditor docType={"RJV"} />
     },
     {
+      name: "Finance Year End JV",
+      match: ({ pathname }) => isYearEndJVRoute(pathname),
+      element: () => <JVDocumentEditor docType={"EJV"} />
+    },
+    {
       name: "Finance Bank Reconciliation",
       match: ({ pathname }) => isBankReconciliationRoute(pathname),
       element: () => <BankReconciliationPage />,
@@ -2396,11 +2401,23 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   function isJournalVoucherRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     const isReverse = normalized.includes("rjv") || normalized.includes("reverse");
+    const isYearEnd = normalized.includes("ejv") || normalized.includes("year_end") || normalized.includes("year-end");
     return (
       !isReverse &&
+      !isYearEnd &&
       (normalized.includes("/finance/accounts/transactions/jv") ||
         normalized.includes("/finance/accounts/transactions/provisional") ||
         normalized.includes("/finance/accounts/transactions/journal"))
+    );
+  }
+
+  function isYearEndJVRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/transactions/ejv") ||
+      normalized.includes("/finance/accounts/transactions/year_end_jv") ||
+      normalized.includes("/finance/accounts/transactions/year-end-jv") ||
+      normalized.includes("/finance/accounts/transactions/yearend")
     );
   }
 
