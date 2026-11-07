@@ -311,7 +311,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
         </div>
 
         {/* Center: Attractive Menu Search with solid border */}
-        <div className="flex-1 min-w-0 px-4 relative" ref={searchDropdownRef}>
+        <div className="flex-1 min-w-0 px-3 lg:px-4 relative w-full" ref={searchDropdownRef} style={{ flex: "1 1 auto", width: "100%" }}>
           <div
             className={cn(
               "top-menu-search-box group flex items-center gap-2.5 px-3.5 h-[36px] w-full rounded-xl transition-all duration-150",
@@ -320,6 +320,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               "focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/15 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-400/20",
               "shadow-xs"
             )}
+            style={{ width: "100%", maxWidth: "100%" }}
             role="search"
           >
             <Search size={15} className="text-[#00378C] dark:text-sky-400 shrink-0 group-hover:scale-105 transition-transform" />
