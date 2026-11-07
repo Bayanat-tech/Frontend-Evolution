@@ -742,7 +742,7 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     },
     {
       name: "Finance Trail Balance L2 Report",
-      match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/first_group"),
+      match: ({ pathname }) => isTrialBalanceRoute(pathname),
       element: () => <TrialBalancePage />,
     },
     {
@@ -2068,6 +2068,8 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts/masters/budget_a/c_wise") ||
+      normalized.includes("/finance/accounts/masters/budget_a/c_group") ||
+      normalized.includes("/finance/accounts/masters/budget_ac_group") ||
       normalized.includes("/finance/accounts/masters/budget_ac_wise") ||
       normalized.includes("/finance/accounts/masters/account-wise-budget")
     );
@@ -2214,6 +2216,16 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       normalized.includes("/finance/accounts/masters/a-c_tree") ||
       normalized.includes("/finance/accounts/masters/ac_tree") ||
       normalized.includes("/finance/accounts/masters/a/c_tree")
+    );
+  }
+
+    function isTrialBalanceRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes('trial_balance') ||
+      normalized.includes('trial-balance') ||
+      normalized.includes('trail_balance') ||
+      normalized.includes('trail-balance')
     );
   }
 

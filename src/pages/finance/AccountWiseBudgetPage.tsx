@@ -16,6 +16,7 @@ type BudgetRow = {
   doc_no: string;
   doc_date: string;
   doc_type: string;
+  version: string;
   budget_year: string;
   div_code: string;
   div_name: string;
@@ -119,6 +120,15 @@ export function AccountWiseBudgetPage() {
 
   const columns = useMemo<ColumnDef<BudgetRow>[]>(() => [
     {
+      accessorKey: "version",
+      header: "Version",
+      cell: ({ row }) => (
+        <button type="button" className="text-left font-mono font-medium text-slate-700 hover:text-primary transition-colors cursor-pointer" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Click to edit">
+          {String(row.original.version || "V1")}
+        </button>
+      ),
+      },
+      {
       accessorKey: "doc_type",
       header: "Type",
       cell: ({ row }) => (
@@ -342,7 +352,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
     event.preventDefault();
     if (readOnly) return;
     setError("");
-    if (!form.budget_year || !form.ac_code || !form.div_code || !form.doc_type) {
+    if (!form.budget_year || !form.ac_code || !form.div_code || !form.version) {
       setError("Version, Budget Year, Division and Account are required.");
       return;
     }
@@ -355,7 +365,8 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
         ac_code: form.ac_code,
         div_code: form.div_code,
         doc_no: isEdit ? numberValue(form.doc_no) : 0,
-        doc_type: form.doc_type,
+        doc_type: form.doc_type || "BDA",
+        version: form.version,
         doc_date: form.doc_date,
         jan_budget_month: numberValue(form.jan_budget_month),
         feb_budget_month: numberValue(form.feb_budget_month),
@@ -445,8 +456,8 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
               <LookupField
                 label="Version"
                 required
-                value={form.doc_type}
-                displayValue={form.doc_type}
+                value={form.version}
+                displayValue={form.version}
                 columns={[
                   { field: "version_code", header: "Version" },
                   { field: "version_desc", header: "Description" },
@@ -455,7 +466,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
                 displayFields={["version_code", "version_desc"]}
                 disabled={readOnly}
                 loadOptions={() => getDynamicLookup({ parameter: "AC_BUDGET_GET_VERSION", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-                onChange={(value) => setField("doc_type", value)}
+                onChange={(value) => setField("version", value)}
               />
               <div className="flex flex-col">
                 <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
@@ -568,6 +579,7 @@ function emptyBudget(companyCode: string): BudgetRow {
     doc_no: "",
     doc_date: new Date().toISOString().slice(0, 10),
     doc_type: "BDA",
+    version: "V1",
     budget_year: year,
     div_code: "",
     div_name: "",
@@ -595,6 +607,7 @@ function mapBudgetRow(row: LookupRow): BudgetRow {
     doc_no: String(getLookupValue(row, "doc_no") || ""),
     doc_date: String(getLookupValue(row, "doc_date") || ""),
     doc_type: String(getLookupValue(row, "doc_type") || ""),
+    version: String(getLookupValue(row, "version") || ""), 
     budget_year: String(getLookupValue(row, "budget_year") || ""),
     div_code: String(getLookupValue(row, "div_code") || ""),
     div_name: String(getLookupValue(row, "div_name") || ""),
