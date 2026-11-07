@@ -1,16 +1,18 @@
 import { FormEvent, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  KeyRound,
   LockKeyhole,
   Mail,
+  KeyRound,
   Eye,
   EyeOff,
   CheckCircle2,
   AlertCircle,
   X,
-  ShieldCheck,
-  RefreshCw,
   Send,
+  RefreshCw,
+  ShieldCheck,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -24,25 +26,11 @@ type ResetPasswordModalProps = {
 };
 
 export function ResetPasswordModal({ open, onClose, user }: ResetPasswordModalProps) {
-  const [activeTab, setActiveTab] = useState<"instant" | "email">("instant");
+  // Primary mode matches login screen: 'email' (Send reset link)
+  // Also supports 'direct' (Change password directly)
+  const [mode, setMode] = useState<"email" | "direct">("email");
 
-  // Instant Change Password State
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [instantLoading, setInstantLoading] = useState(false);
-  const [instantError, setInstantError] = useState<string | null>(null);
-  const [instantSuccess, setInstantSuccess] = useState<string | null>(null);
-
-  // Email Reset Link State
-  const [emailInput, setEmailInput] = useState("");
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
-
-  if (!open) return null;
-
+  // Email Reset Link State (Same as Login Window)
   const currentEmail = (
     user?.email_id ||
     user?.EMAIL_ID ||
@@ -56,54 +44,33 @@ export function ResetPasswordModal({ open, onClose, user }: ResetPasswordModalPr
     "User"
   ).toString().trim();
 
+  const [emailInput, setEmailInput] = useState(currentEmail);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+
+  // Direct Change Password State
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [directLoading, setDirectLoading] = useState(false);
+  const [directError, setDirectError] = useState<string | null>(null);
+  const [directSuccess, setDirectSuccess] = useState<string | null>(null);
+
+  if (!open) return null;
+
   const handleClose = () => {
-    setNewPassword("");
-    setConfirmPassword("");
-    setInstantError(null);
-    setInstantSuccess(null);
     setEmailError(null);
     setEmailSuccess(null);
+    setDirectError(null);
+    setDirectSuccess(null);
+    setNewPassword("");
+    setConfirmPassword("");
     onClose();
   };
 
-  const handleInstantSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setInstantError(null);
-    setInstantSuccess(null);
-
-    const trimmedPassword = newPassword.trim();
-    if (!trimmedPassword) {
-      setInstantError("Please enter a new password.");
-      return;
-    }
-
-    if (trimmedPassword.length < 6) {
-      setInstantError("Password must be at least 6 characters long.");
-      return;
-    }
-
-    if (trimmedPassword !== confirmPassword.trim()) {
-      setInstantError("Passwords do not match.");
-      return;
-    }
-
-    try {
-      setInstantLoading(true);
-      const identifier = currentLoginId || currentEmail;
-      const res = await changePasswordRequest(trimmedPassword, identifier);
-      if (res.success === false) {
-        throw new Error(res.message || "Failed to update password.");
-      }
-      setInstantSuccess("Password has been changed successfully! You can use your new password next time you sign in.");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (err: any) {
-      setInstantError(err.message || "Unable to update password. Please try again.");
-    } finally {
-      setInstantLoading(false);
-    }
-  };
-
+  // 1. Send Reset Link (Exact same logic as LoginPage.tsx handleForgotPasswordSubmit)
   const handleEmailSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setEmailError(null);
@@ -125,114 +92,222 @@ export function ResetPasswordModal({ open, onClose, user }: ResetPasswordModalPr
       setEmailLoading(true);
       const res = await forgotPasswordRequest(targetEmail);
       if (res.success === false) {
-        throw new Error(res.message || "Failed to send reset link.");
+        throw new Error(res.message || "Unable to send password reset instructions.");
       }
-      setEmailSuccess(res.message || `Password reset instructions have been sent to ${targetEmail}.`);
+      setEmailSuccess(
+        res.message ||
+          "Password reset instructions have been sent to your email. Check your inbox to set your new password."
+      );
     } catch (err: any) {
-      setEmailError(err.message || "Unable to send reset instructions.");
+      setEmailError(err.message || "Unable to send password reset instructions.");
     } finally {
       setEmailLoading(false);
     }
   };
 
-  return (
+  // 2. Direct Password Change (Optional instant update)
+  const handleDirectSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setDirectError(null);
+    setDirectSuccess(null);
+
+    const trimmedPassword = newPassword.trim();
+    if (!trimmedPassword) {
+      setDirectError("Please enter a new password.");
+      return;
+    }
+
+    if (trimmedPassword.length < 6) {
+      setDirectError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (trimmedPassword !== confirmPassword.trim()) {
+      setDirectError("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setDirectLoading(true);
+      const identifier = currentLoginId || currentEmail;
+      const res = await changePasswordRequest(trimmedPassword, identifier);
+      if (res.success === false) {
+        throw new Error(res.message || "Failed to update password.");
+      }
+      setDirectSuccess("Password has been changed successfully! Please use your new password next time you sign in.");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      setDirectError(err.message || "Unable to update password. Please try again.");
+    } finally {
+      setDirectLoading(false);
+    }
+  };
+
+  // Use createPortal to mount directly to document.body, guaranteeing the modal is never cut off or clipped by any header
+  return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 select-none animate-in fade-in duration-200"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in duration-150"
       onClick={handleClose}
+      style={{ margin: 0, padding: 16 }}
     >
       <div
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl transition-all"
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl transition-all my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="relative bg-gradient-to-r from-blue-900 to-[#00378C] p-5 text-white">
+        {/* Modal Top Header */}
+        <div className="relative bg-gradient-to-r from-blue-900 via-[#00378C] to-blue-800 px-6 py-5 text-white">
           <button
             type="button"
             onClick={handleClose}
-            className="cursor-pointer absolute top-4 right-4 p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+            className="cursor-pointer absolute top-4 right-4 p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/15 transition-colors"
             title="Close"
             aria-label="Close"
           >
             <X size={18} />
           </button>
 
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
-              <KeyRound className="w-6 h-6 text-white" />
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner shrink-0 mt-0.5">
+              <LockKeyhole className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-base font-bold tracking-tight text-white">Reset Password</h2>
-              <p className="text-xs text-blue-100/90 font-medium mt-0.5">
-                Account: <span className="font-semibold text-white underline decoration-blue-300">{currentLoginId}</span>
+            <div className="min-w-0 pr-6">
+              <h2 className="text-base font-bold text-white tracking-tight">Reset or change password</h2>
+              <p className="text-xs text-blue-100/90 font-normal mt-0.5 leading-snug">
+                Account: <span className="font-semibold text-white">{currentLoginId}</span>
               </p>
             </div>
           </div>
-
-          {/* Mode Switcher Tabs */}
-          <div className="flex items-center gap-1.5 mt-4 p-1 rounded-xl bg-black/20 backdrop-blur-xs border border-white/10 text-xs">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("instant");
-                setInstantError(null);
-                setInstantSuccess(null);
-              }}
-              className={`cursor-pointer flex-1 py-1.5 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === "instant"
-                  ? "bg-white text-blue-950 shadow-sm"
-                  : "text-white/80 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <LockKeyhole size={13} />
-              <span>Change Password</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("email");
-                setEmailError(null);
-                setEmailSuccess(null);
-                if (!emailInput && currentEmail) {
-                  setEmailInput(currentEmail);
-                }
-              }}
-              className={`cursor-pointer flex-1 py-1.5 px-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === "email"
-                  ? "bg-white text-blue-950 shadow-sm"
-                  : "text-white/80 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <Mail size={13} />
-              <span>Send Reset Link</span>
-            </button>
-          </div>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-5">
-          {activeTab === "instant" ? (
-            <form onSubmit={handleInstantSubmit} className="space-y-4">
-              {instantSuccess ? (
+        {/* Modal Content */}
+        <div className="p-6">
+          {mode === "email" ? (
+            /* Mode 1: Exact Same as Login Screen */
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              {emailSuccess ? (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/40 p-4 text-center">
                   <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center mb-2">
                     <CheckCircle2 size={22} />
                   </div>
-                  <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-200">Password Changed</h4>
-                  <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">{instantSuccess}</p>
+                  <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-200">Reset Link Sent</h4>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1 leading-relaxed">
+                    {emailSuccess}
+                  </p>
                   <Button
                     type="button"
                     onClick={handleClose}
-                    className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 rounded-lg"
+                    className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 rounded-xl"
                   >
                     Done
                   </Button>
                 </div>
               ) : (
                 <>
-                  {instantError && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Enter your registered email and we’ll send you a secure reset link (same as the login screen).
+                  </p>
+
+                  {emailError && (
                     <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/40 p-3 text-xs text-rose-700 dark:text-rose-300">
                       <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
-                      <span>{instantError}</span>
+                      <span>{emailError}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                      <span>Email address</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">Registered account email</span>
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="Enter your email address"
+                        autoFocus
+                        className="text-xs h-10 rounded-xl pl-9 border-slate-300 dark:border-slate-700 focus:border-[#00378C] dark:focus:border-sky-400"
+                      />
+                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleClose}
+                      disabled={emailLoading}
+                      className="h-9.5 px-4 text-xs font-semibold rounded-xl"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={emailLoading || !emailInput.trim()}
+                      className="cursor-pointer h-9.5 px-5 text-xs font-semibold rounded-xl bg-[#00378C] hover:bg-blue-700 text-white shadow-sm flex items-center gap-1.5"
+                    >
+                      {emailLoading ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" />
+                          <span>Sending link...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={13} />
+                          <span>Send reset link</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Option to change password directly without email */}
+                  <div className="pt-3 border-t border-border/60 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("direct");
+                        setEmailError(null);
+                        setEmailSuccess(null);
+                      }}
+                      className="cursor-pointer text-xs font-medium text-[#00378C] dark:text-sky-400 hover:underline inline-flex items-center gap-1"
+                    >
+                      <span>Or change password directly here</span>
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+          ) : (
+            /* Mode 2: Direct Password Change */
+            <form onSubmit={handleDirectSubmit} className="space-y-4">
+              {directSuccess ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/40 p-4 text-center">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center mb-2">
+                    <CheckCircle2 size={22} />
+                  </div>
+                  <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-200">Password Changed</h4>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1 leading-relaxed">{directSuccess}</p>
+                  <Button
+                    type="button"
+                    onClick={handleClose}
+                    className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 rounded-xl"
+                  >
+                    Done
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Set a new password directly for your account.
+                  </p>
+
+                  {directError && (
+                    <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/40 p-3 text-xs text-rose-700 dark:text-rose-300">
+                      <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
+                      <span>{directError}</span>
                     </div>
                   )}
 
@@ -248,7 +323,7 @@ export function ResetPasswordModal({ open, onClose, user }: ResetPasswordModalPr
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="Enter your new password"
                         autoFocus
-                        className="pr-10 text-xs h-9.5 rounded-xl border-slate-300 dark:border-slate-700 focus:border-[#00378C] dark:focus:border-sky-400"
+                        className="pr-10 text-xs h-10 rounded-xl border-slate-300 dark:border-slate-700 focus:border-[#00378C] dark:focus:border-sky-400"
                       />
                       <button
                         type="button"
@@ -271,7 +346,7 @@ export function ResetPasswordModal({ open, onClose, user }: ResetPasswordModalPr
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="Confirm your new password"
-                        className="pr-10 text-xs h-9.5 rounded-xl border-slate-300 dark:border-slate-700 focus:border-[#00378C] dark:focus:border-sky-400"
+                        className="pr-10 text-xs h-10 rounded-xl border-slate-300 dark:border-slate-700 focus:border-[#00378C] dark:focus:border-sky-400"
                       />
                       <button
                         type="button"
@@ -302,18 +377,18 @@ export function ResetPasswordModal({ open, onClose, user }: ResetPasswordModalPr
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={handleClose}
-                      disabled={instantLoading}
-                      className="h-9 px-4 text-xs font-semibold rounded-xl"
+                      onClick={() => setMode("email")}
+                      disabled={directLoading}
+                      className="h-9.5 px-4 text-xs font-semibold rounded-xl"
                     >
-                      Cancel
+                      Back to Send Reset Link
                     </Button>
                     <Button
                       type="submit"
-                      disabled={instantLoading || !newPassword.trim() || newPassword !== confirmPassword}
-                      className="cursor-pointer h-9 px-5 text-xs font-semibold rounded-xl bg-[#00378C] hover:bg-blue-700 text-white shadow-sm flex items-center gap-1.5"
+                      disabled={directLoading || !newPassword.trim() || newPassword !== confirmPassword}
+                      className="cursor-pointer h-9.5 px-5 text-xs font-semibold rounded-xl bg-[#00378C] hover:bg-blue-700 text-white shadow-sm flex items-center gap-1.5"
                     >
-                      {instantLoading ? (
+                      {directLoading ? (
                         <>
                           <RefreshCw size={13} className="animate-spin" />
                           <span>Updating...</span>
@@ -329,83 +404,10 @@ export function ResetPasswordModal({ open, onClose, user }: ResetPasswordModalPr
                 </>
               )}
             </form>
-          ) : (
-            <form onSubmit={handleEmailSubmit} className="space-y-4">
-              {emailSuccess ? (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-900/60 dark:bg-blue-950/40 p-4 text-center">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center mb-2">
-                    <CheckCircle2 size={22} />
-                  </div>
-                  <h4 className="text-sm font-bold text-blue-900 dark:text-blue-200">Reset Email Sent</h4>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">{emailSuccess}</p>
-                  <Button
-                    type="button"
-                    onClick={handleClose}
-                    className="mt-4 w-full bg-[#00378C] hover:bg-blue-700 text-white font-semibold text-xs h-9 rounded-lg"
-                  >
-                    Close
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {emailError && (
-                    <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/40 p-3 text-xs text-rose-700 dark:text-rose-300">
-                      <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
-                      <span>{emailError}</span>
-                    </div>
-                  )}
-
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    We will send a secure password reset link to your registered email address, valid for 10 minutes.
-                  </p>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground">
-                      Registered Email Address
-                    </label>
-                    <Input
-                      type="email"
-                      value={emailInput || currentEmail}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      placeholder="Enter registered email"
-                      className="text-xs h-9.5 rounded-xl border-slate-300 dark:border-slate-700 focus:border-[#00378C] dark:focus:border-sky-400"
-                    />
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-end gap-2.5">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleClose}
-                      disabled={emailLoading}
-                      className="h-9 px-4 text-xs font-semibold rounded-xl"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={emailLoading || (!emailInput.trim() && !currentEmail)}
-                      className="cursor-pointer h-9 px-5 text-xs font-semibold rounded-xl bg-[#00378C] hover:bg-blue-700 text-white shadow-sm flex items-center gap-1.5"
-                    >
-                      {emailLoading ? (
-                        <>
-                          <RefreshCw size={13} className="animate-spin" />
-                          <span>Sending...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send size={13} />
-                          <span>Send Reset Link</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </>
-              )}
-            </form>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
