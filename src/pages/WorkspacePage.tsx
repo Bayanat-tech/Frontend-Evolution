@@ -242,7 +242,10 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   }, [user?.company_logo, user?.COMPANY_LOGO, companyCode]);
 
   const fallbackUserName = (user as { name?: string } | null)?.name;
-  const displayName = user?.username || user?.loginid || fallbackUserName || "User";
+  const rawDisplayName = user?.username || user?.loginid || fallbackUserName || "User";
+  const displayName = (rawDisplayName && companyName && rawDisplayName.toUpperCase() === companyName.toUpperCase() && user?.loginid)
+    ? user.loginid
+    : rawDisplayName;
   const userInitials = (displayName || "U").slice(0, 3).toUpperCase();
   const isFreightModule = (appCode || "").toLowerCase() === "fms";
   const isFinanceModule = /^(finance|accounts?|fin|fas|f&a)$/i.test(appCode || "") || /\/finance(?:\/|$)/i.test(location.pathname);
@@ -311,7 +314,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
         </div>
 
         {/* Center: Attractive Menu Search with solid border */}
-        <div className="flex-1 min-w-0 px-3 lg:px-4 relative w-full" ref={searchDropdownRef} style={{ flex: "1 1 auto", width: "100%" }}>
+        <div className="flex-1 min-w-0 px-3 lg:px-4 relative max-w-[540px] xl:max-w-[620px]" ref={searchDropdownRef}>
           <div
             className={cn(
               "top-menu-search-box group flex items-center gap-2.5 px-3.5 h-[36px] w-full rounded-xl transition-all duration-150",
@@ -320,7 +323,6 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               "focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/15 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-400/20",
               "shadow-xs"
             )}
-            style={{ width: "100%", maxWidth: "100%" }}
             role="search"
           >
             <Search size={15} className="text-[#00378C] dark:text-sky-400 shrink-0 group-hover:scale-105 transition-transform" />
@@ -475,9 +477,6 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               </div>
               <div className="hidden md:block text-left">
                 <p className="text-foreground text-xs font-semibold leading-tight">{displayName}</p>
-                <p className="text-muted-foreground text-[10.5px] leading-tight truncate max-w-[180px]" title={companyName}>
-                  {companyName}
-                </p>
               </div>
               <ChevronDown
                 className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform hidden md:block", profileDropdownOpen && "rotate-180")}
@@ -487,7 +486,6 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50 py-1">
                 <div className="px-3 py-2 border-b border-border/60 md:hidden">
                   <p className="text-foreground text-xs font-semibold truncate">{displayName}</p>
-                  <p className="text-muted-foreground text-[10.5px] truncate" title={companyName}>{companyName}</p>
                 </div>
                 <button
                   type="button"

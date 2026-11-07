@@ -143,7 +143,7 @@ export function SupportLauncher() {
         title="Help & Support"
         onClick={() => setOpen(true)}
       >
-        <Headphones size={18} />
+        <Headphones size={20} strokeWidth={2.2} />
         {unread > 0 && (
           <span className="sup-launch-count" aria-label={`${unread} unread support messages`}>
             {unread > 99 ? '99+' : unread}

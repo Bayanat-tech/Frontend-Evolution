@@ -781,7 +781,7 @@
 .finance-workspace .finance-dashboard-filters strong,
 .finance-workspace .finance-dashboard-filters select,
 .finance-workspace .finance-dashboard-filters > button { height: 30px; font-size: 10px; border-radius: 7px; }
-.finance-workspace .finance-dashboard-filters strong { max-width: 190px; padding-inline: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finance-workspace .finance-dashboard-filters strong { max-width: none; min-width: 180px; padding-inline: 10px; white-space: nowrap; }
 .finance-workspace .finance-dashboard-filters select { min-width: 98px; padding-inline: 8px 24px; }
 .finance-workspace .finance-dashboard-filters > button { width: 30px; }
 .finance-workspace .finance-dashboard-hero-kpis { gap: 8px; }

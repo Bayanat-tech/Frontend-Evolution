@@ -167,7 +167,7 @@ export function FinanceDashboardPanel() {
   const companyLogo = String(userRecord.company_logo || userRecord.COMPANY_LOGO || "");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
 
-  const [fyPeriod, setFyPeriod] = useState<string>("");
+  const [fyPeriod, setFyPeriod] = useState<string>("226");
   const [divCode, setDivCode] = useState<string>("All");
   const [month, setMonth] = useState<number>(0); // 0 = All Months
   const [data, setData] = useState<DashboardData>({});
@@ -191,9 +191,12 @@ export function FinanceDashboardPanel() {
         }
       );
       if (response.data?.success && response.data?.data) {
-        setData(response.data.data);
-        if (!fyPeriod && response.data.data.fy_period) {
-          setFyPeriod(response.data.data.fy_period);
+        const resData = response.data.data;
+        setData(resData);
+        if (resData.fy_period && (!fyPeriod || fyPeriod === "226")) {
+          setFyPeriod(resData.fy_period);
+        } else if (!fyPeriod && resData.available_fy_periods?.length) {
+          setFyPeriod(resData.available_fy_periods[0]);
         }
       } else {
         setData({});
@@ -355,31 +358,34 @@ export function FinanceDashboardPanel() {
         <div className="finance-dashboard-filters">
           <label>
             <span>Company</span>
-            <strong>
+            <strong title={companyName} className="finance-company-badge">
               {companyLogo && !logoFailed ? (
                 <img
                   src={companyLogo}
                   alt=""
-                  className="h-3.5 w-3.5 object-contain rounded-sm inline-block"
+                  className="h-3.5 w-3.5 object-contain rounded-sm inline-block shrink-0"
                   onError={() => setLogoFailed(true)}
                 />
               ) : (
-                <Building2 size={13} />
+                <Building2 size={13} className="shrink-0" />
               )}
-              {companyName}
+              <span className="truncate max-w-[320px]">{companyName}</span>
             </strong>
           </label>
 
           <label>
             <span>Fiscal Period</span>
             <select
-              value={fyPeriod}
+              value={fyPeriod || (data.available_fy_periods && data.available_fy_periods[0]) || "226"}
               onChange={(e) => setFyPeriod(e.target.value)}
               disabled={loading}
             >
-              {(data.available_fy_periods || ["226"]).map((p) => (
+              {((data.available_fy_periods && data.available_fy_periods.length > 0)
+                ? data.available_fy_periods
+                : ["226", "225", "227"]
+              ).map((p) => (
                 <option key={p} value={p}>
-                  FY {p}
+                  {p === "All" || p === "ALL" ? "All Periods" : `FY ${p}`}
                 </option>
               ))}
             </select>
