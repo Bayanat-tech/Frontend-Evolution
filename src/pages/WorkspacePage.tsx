@@ -32,6 +32,7 @@ import {
   Languages,
   LayoutDashboard,
   LayoutGrid,
+  KeyRound,
   LogOut,
   Map,
   MapPin,
@@ -69,6 +70,7 @@ import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
 import { getModuleMeta } from "./AppSelectionPage";
+import { ResetPasswordModal } from "../components/ResetPasswordModal";
 
 export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { appCode } = useParams();
@@ -81,6 +83,33 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Global Ctrl+K shortcut to focus search
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        menuSearchRef.current?.focus();
+        setSearchFocused(true);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
+
+  // Dismiss live search dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
 
   const activeApp = useMemo(() => {
@@ -280,65 +309,134 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </Link>
         </div>
 
-        {/* Center: Search (constrained so it can't push the right block out) */}
-        {/* Search: fills all space between logo and right block */}
-        <div className="flex-1 min-w-0 pl-3 pr-18">
+        {/* Center: Attractive Menu Search with solid border */}
+        <div className="flex-1 max-w-xl mx-auto px-4 min-w-0 relative" ref={searchDropdownRef}>
           <div
-            className="bisc-sidebar-search-container w-full min-w-0"
-            style={{ padding: 20, margin: 15, border: 0, width: "200%" }}
+            className={cn(
+              "top-menu-search-box group flex items-center gap-2.5 px-3.5 h-[36px] w-full rounded-xl transition-all duration-150",
+              "bg-white dark:bg-slate-900",
+              "border-[1.5px] border-slate-400 hover:border-[#00378C] dark:border-slate-600 dark:hover:border-sky-400",
+              "focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/15 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-400/20",
+              "shadow-xs"
+            )}
+            role="search"
           >
-            <div className="bisc-sidebar-search-box" role="search">
-              <Search size={14} className="bisc-sidebar-search-icon" />
-              <input
-                ref={menuSearchRef}
-                aria-label="Search menu"
-                autoComplete="off"
-                type="text"
-                value={menuSearchQuery}
-                onChange={(e) => {
-                  setMenuSearchQuery(e.target.value);
-                  setSelectedSearchIndex(0);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowDown") {
-                    e.preventDefault();
-                    setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev + 1) % filteredScreens.length : 0));
-                  } else if (e.key === "ArrowUp") {
-                    e.preventDefault();
-                    setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev - 1 + filteredScreens.length) % filteredScreens.length : 0));
-                  } else if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (filteredScreens[selectedSearchIndex]) {
-                      navigate(filteredScreens[selectedSearchIndex].target);
-                      setMenuSearchQuery("");
-                      handleMenuNavigate();
-                    }
-                  } else if (e.key === "Escape") {
+            <Search size={15} className="text-[#00378C] dark:text-sky-400 shrink-0 group-hover:scale-105 transition-transform" />
+            <input
+              ref={menuSearchRef}
+              aria-label="Search menu"
+              autoComplete="off"
+              type="text"
+              value={menuSearchQuery}
+              onFocus={() => setSearchFocused(true)}
+              onChange={(e) => {
+                setMenuSearchQuery(e.target.value);
+                setSelectedSearchIndex(0);
+                setSearchFocused(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev + 1) % filteredScreens.length : 0));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev - 1 + filteredScreens.length) % filteredScreens.length : 0));
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (filteredScreens[selectedSearchIndex]) {
+                    navigate(filteredScreens[selectedSearchIndex].target);
                     setMenuSearchQuery("");
+                    setSearchFocused(false);
+                    handleMenuNavigate();
                   }
-                }}
-                placeholder="Search menu..."
-                className="bisc-sidebar-search-input"
-              />
-              {menuSearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => { setMenuSearchQuery(""); menuSearchRef.current?.focus(); }}
-                  className="bisc-sidebar-search-clear"
-                  title="Clear search"
-                  aria-label="Clear menu search"
-                >
-                  <X size={11} strokeWidth={2.5} />
-                </button>
+                } else if (e.key === "Escape") {
+                  setMenuSearchQuery("");
+                  setSearchFocused(false);
+                }
+              }}
+              placeholder="Search menu screens, reports, vouchers... (Ctrl + K)"
+              className="flex-1 bg-transparent border-none outline-none text-xs text-foreground placeholder:text-slate-400 dark:placeholder:text-slate-500 font-normal min-w-0"
+            />
+            {menuSearchQuery ? (
+              <button
+                type="button"
+                onClick={() => { setMenuSearchQuery(""); menuSearchRef.current?.focus(); }}
+                className="cursor-pointer shrink-0 w-5 h-5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center transition-colors"
+                title="Clear search"
+                aria-label="Clear menu search"
+              >
+                <X size={12} strokeWidth={2.5} />
+              </button>
+            ) : (
+              <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded shadow-2xs pointer-events-none select-none">
+                Ctrl K
+              </kbd>
+            )}
+          </div>
+
+          {/* Floating Live Search Dropdown directly under the top search bar */}
+          {searchFocused && menuSearchQuery.trim() && (
+            <div className="absolute left-4 right-4 top-full mt-1.5 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50 max-h-[380px] flex flex-col animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="px-3.5 py-2 bg-secondary/50 border-b border-border flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <Search size={13} className="text-[#00378C] dark:text-sky-400" />
+                  <span>Matching Screens</span>
+                </span>
+                <span className="text-[11px] font-medium text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  {filteredScreens.length} found
+                </span>
+              </div>
+
+              {filteredScreens.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  <Search size={22} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-xs font-medium">No matching menu screens found</p>
+                  <p className="text-[11px] opacity-75 mt-0.5">Try searching with a different keyword</p>
+                </div>
+              ) : (
+                <div className="overflow-y-auto p-1.5 divide-y divide-border/40">
+                  {filteredScreens.map((item, index) => {
+                    const isSelected = index === selectedSearchIndex;
+                    return (
+                      <Link
+                        key={item.id}
+                        to={item.target}
+                        onClick={() => {
+                          setMenuSearchQuery("");
+                          setSearchFocused(false);
+                          handleMenuNavigate();
+                        }}
+                        onMouseEnter={() => setSelectedSearchIndex(index)}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer",
+                          isSelected ? "bg-primary text-primary-foreground font-semibold" : "hover:bg-secondary text-foreground"
+                        )}
+                      >
+                        <span className={cn(
+                          "w-7 h-7 rounded-md flex items-center justify-center shrink-0",
+                          isSelected ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
+                        )}>
+                          <MenuIcon item={item.node} level={1} className={isSelected ? "text-white" : "text-[#00378C] dark:text-sky-400"} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs leading-tight">{item.title}</p>
+                          {item.pathTrail.length > 0 && (
+                            <p className={cn(
+                              "truncate text-[10px] mt-0.5 leading-tight",
+                              isSelected ? "text-white/80" : "text-muted-foreground"
+                            )}>
+                              {item.pathTrail.join(" › ")}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
               )}
             </div>
-          </div>
+          )}
         </div>
-
-
-
-        {/* Center spacer */}
-        <div className="flex-1" />
 
         {/* Right: Dark mode + User profile */}
         <div className="flex items-center gap-2 min-w-[200px] justify-end">

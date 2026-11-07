@@ -1345,6 +1345,45 @@ footer,
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
 }
 
+
+/* Account Reset Password button hover */
+.account-reset-password {
+  transition: all 150ms ease;
+}
+.account-reset-password:hover {
+  color: #00378C !important;
+  border-color: #00378C !important;
+  background: rgba(0, 55, 140, 0.08) !important;
+  transform: translateY(-1px);
+}
+.app.dark .account-reset-password:hover {
+  color: #38bdf8 !important;
+  border-color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+}
+
+/* Top Menu Search Box Solid Border Styling */
+.top-menu-search-box {
+  border-style: solid !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.top-menu-search-box:hover {
+  border-color: #00378C !important;
+  box-shadow: 0 2px 6px rgba(0, 55, 140, 0.08);
+}
+.top-menu-search-box:focus-within {
+  border-color: #00378C !important;
+  box-shadow: 0 0 0 3px rgba(0, 55, 140, 0.14) !important;
+}
+.app.dark .top-menu-search-box:hover {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 2px 6px rgba(56, 189, 248, 0.12);
+}
+.app.dark .top-menu-search-box:focus-within {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+}
+
 .icon-button {
   width: 38px;
   height: 38px;
