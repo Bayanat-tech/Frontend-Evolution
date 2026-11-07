@@ -1364,6 +1364,8 @@ footer,
 
 /* Top Menu Search Box Solid Border Styling */
 .top-menu-search-box {
+  width: 100% !important;
+  max-width: 100% !important;
   border-style: solid !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }

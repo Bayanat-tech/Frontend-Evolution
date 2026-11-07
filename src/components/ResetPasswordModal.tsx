@@ -2,7 +2,6 @@ import { FormEvent, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   LockKeyhole,
-  Mail,
   KeyRound,
   Eye,
   EyeOff,
@@ -220,17 +219,14 @@ export function ResetPasswordModal({ open, onClose, user }: ResetPasswordModalPr
                       <span>Email address</span>
                       <span className="text-[10px] text-muted-foreground font-normal">Registered account email</span>
                     </label>
-                    <div className="relative">
-                      <Input
-                        type="email"
-                        value={emailInput}
-                        onChange={(e) => setEmailInput(e.target.value)}
-                        placeholder="Enter your email address"
-                        autoFocus
-                        className="text-xs h-10 rounded-xl pl-9 border-slate-300 dark:border-slate-700 focus:border-[#00378C] dark:focus:border-sky-400"
-                      />
-                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    </div>
+                    <Input
+                      type="email"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      placeholder="Enter your email address"
+                      autoFocus
+                      className="text-xs h-10 rounded-xl border-slate-300 dark:border-slate-700 focus:border-[#00378C] dark:focus:border-sky-400 px-3"
+                    />
                   </div>
 
                   <div className="pt-2 flex items-center justify-end gap-2.5">
