@@ -74,11 +74,13 @@ function SectionPanel({
 function Field({
   label,
   required,
+  error,
   children,
   className,
 }: {
   label: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -88,7 +90,8 @@ function Field({
         {label}
         {required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
       </span>
-      {children}
+      <div className={error ? "rounded-md ring-1 ring-red-500" : ""}>{children}</div>
+      {error && <span className="text-[10.5px] font-medium text-red-600">{error}</span>}
     </label>
   );
 }
@@ -105,8 +108,8 @@ export default function MseProdGroup() {
   const [rows, setRows] = useState<ProductGroupRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-const [notice, setNotice] = useState<Notice>(null);
-const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // View state
   const [view, setView] = useState<"list" | "editor">("list");
@@ -115,6 +118,7 @@ const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState<ProductGroupRow>(() => makeEmpty());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<ProductGroupRow | null>(null);
 
   const loadRows = async () => {
@@ -125,14 +129,14 @@ const [deleting, setDeleting] = useState(false);
         code1: companyCode,
       });
       setRows(Array.isArray(response) ? response : []);
-} catch (err) {
-  console.error(err);
-  setRows([]);
-  setNotice({
-    type: "error",
-    message: err instanceof Error ? err.message : "Unable to load product groups",
-  });
-} finally {
+    } catch (err) {
+      console.error(err);
+      setRows([]);
+      setNotice({
+        type: "error",
+        message: err instanceof Error ? err.message : "Unable to load product groups",
+      });
+    } finally {
       setLoading(false);
     }
   };
@@ -154,6 +158,7 @@ const [deleting, setDeleting] = useState(false);
     setOriginal(null);
     setForm(makeEmpty());
     setError("");
+    setFieldErrors({});
     setView("editor");
   };
 
@@ -162,6 +167,7 @@ const [deleting, setDeleting] = useState(false);
     setOriginal(row);
     setForm({ ...makeEmpty(), ...row });
     setError("");
+    setFieldErrors({});
     setView("editor");
   };
 
@@ -169,16 +175,29 @@ const [deleting, setDeleting] = useState(false);
     setView("list");
     setEditMode(false);
     setOriginal(null);
+    setFieldErrors({});
   };
 
   const setField = (key: string, value: any) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const { [key]: _removed, ...rest } = prev;
+      return rest;
+    });
   };
 
   const handleSubmit = async () => {
     setError("");
-    if (!form.group_name?.trim()) {
-      setError("Product Group Name is required");
+    setFieldErrors({});
+
+    const errs: Record<string, string> = {};
+    if (!form.group_name?.trim()) errs.group_name = "Product Group Name is required";
+    if (!String(form.gitin_ac_code ?? "").trim()) errs.gitin_ac_code = "GIT-IN A/C Code is required";
+
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
+      setError(Object.values(errs)[0]);
       return;
     }
 
@@ -209,13 +228,13 @@ const [deleting, setDeleting] = useState(false);
         val1s9: form.direct_expense_ac ? String(form.direct_expense_ac) : undefined,
       });
 
-const wasEdit = editMode;
-handleCloseEditor();
-setNotice({
-  type: "success",
-  message: wasEdit ? "Product group updated successfully." : "Product group created successfully.",
-});
-await loadRows();
+      const wasEdit = editMode;
+      handleCloseEditor();
+      setNotice({
+        type: "success",
+        message: wasEdit ? "Product group updated successfully." : "Product group created successfully.",
+      });
+      await loadRows();
     } catch (err: any) {
       setError(err?.message || "Unable to save product group");
     } finally {
@@ -223,27 +242,27 @@ await loadRows();
     }
   };
 
-const deleteRow = async () => {
-  if (!deleteTarget) return;
-  const code = String(deleteTarget.group_code ?? "");
-  setDeleting(true);
-  try {
-    await executeDynamicDelete({
-      parameter: "PURCHASE_SALES_DEL_MSE_PRODGROUP",
-      loginid: loginId,
-      code1: companyCode,
-      code2: code,
-    });
-    setDeleteTarget(null);
-    setNotice({ type: "success", message: `Product group ${code} deleted successfully.` });
-    await loadRows();
-  } catch (err: any) {
-    setDeleteTarget(null);
-    setNotice({ type: "error", message: err?.message || "Unable to delete product group" });
-  } finally {
-    setDeleting(false);
-  }
-};
+  const deleteRow = async () => {
+    if (!deleteTarget) return;
+    const code = String(deleteTarget.group_code ?? "");
+    setDeleting(true);
+    try {
+      await executeDynamicDelete({
+        parameter: "PURCHASE_SALES_DEL_MSE_PRODGROUP",
+        loginid: loginId,
+        code1: companyCode,
+        code2: code,
+      });
+      setDeleteTarget(null);
+      setNotice({ type: "success", message: `Product group ${code} deleted successfully.` });
+      await loadRows();
+    } catch (err: any) {
+      setDeleteTarget(null);
+      setNotice({ type: "error", message: err?.message || "Unable to delete product group" });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const columns = useMemo<ColumnDef<ProductGroupRow>[]>(
     () => [
@@ -354,7 +373,7 @@ const deleteRow = async () => {
 
               <SectionPanel title="Product Group Details" icon={Building2}>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Field label="Product Group Name" required>
+                  <Field label="Product Group Name" required error={fieldErrors.group_name}>
                     <Input
                       value={form.group_name ?? ""}
                       onChange={(e) => setField("group_name", e.target.value)}
@@ -365,7 +384,7 @@ const deleteRow = async () => {
 
               <SectionPanel title="Goods in Transit / Inventory A/C" icon={LayoutGrid}>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                    <Field label="GIT-IN A/C Code" required>
+                  <Field label="GIT-IN A/C Code" required error={fieldErrors.gitin_ac_code}>
                     <LookupField
                       label=""
                       value={form.gitin_ac_code ?? ""}
@@ -386,7 +405,7 @@ const deleteRow = async () => {
                       compact
                     />
                   </Field>
-                  
+
                   <Field label="Inventory A/C Code">
                     <LookupField
                       label=""
@@ -475,8 +494,6 @@ const deleteRow = async () => {
                     />
                   </Field>
 
-
-
                   <Field label="GIT-OUT A/C Code">
                     <LookupField
                       label=""
@@ -489,111 +506,4 @@ const deleteRow = async () => {
                       ]}
                       loadOptions={async () => {
                         return await getDynamicLookup({
-                          parameter: "PURCHASE_SALES_MSE_PROD_GROUP_DROP_DOWN_GITOUT_ACCOUNT",
-                          loginid: loginId,
-                          code1: companyCode,
-                        }) || [];
-                      }}
-                      onChange={(value) => setField("gitout_ac_code", value)}
-                      compact
-                    />
-                  </Field>
-
-                </div>
-              </SectionPanel>
-
-            </div>
-          </div>
-
-        </div>
-      </section>
-    );
-  }
-
-  /* ─────────────────────────────────────────────────────────
-     LIST VIEW — Freight style
-     ───────────────────────────────────────────────────────── */
-  return (
-    <section className="freight-enquiry-list-screen grid gap-2">
-      {/* Page title only — buttons live inside the DataTable toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
-        <div className="flex items-center gap-2.5">
-          <h2
-            className="text-foreground m-0"
-            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
-          >
-            Product Group
-          </h2>
-        </div>
-      </div>
-<AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-      <DataTable
-        columns={columns}
-        data={filteredRows}
-        title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Product Groups`}
-        subtitle="Manage Product Groups"
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search product group..."
-        loading={loading}
-        emptyText="No product groups found"
-        height="calc(100dvh - 150px)"
-        minWidth={Math.max(900, LIST_COLUMNS.reduce((sum, column) => sum + (column.width || 160), 120))}
-        density="grid"
-        enablePagination={false}
-        enableExport={false}
-        getRowId={(row, index) => `${String(row.group_code ?? "")}_${index}`}
-        toolbar={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={openAdd}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              Add Product Group
-            </button>
-            <FinanceListActionsMenu
-              fyPeriod=""
-              fyPeriods={[]}
-              onFyPeriodChange={() => {}}
-              onExport={() =>
-                exportToCsv(filteredRows, columns, `product-group-${new Date().toISOString().slice(0, 10)}.csv`)
-              }
-              onRefresh={() => void loadRows()}
-            />
-          </div>
-        }
-      />
-
-      {/* ---------- DELETE CONFIRM ---------- */}
-      <Dialog
-        open={Boolean(deleteTarget)}
-        compact
-        tone="danger"
-        title="Delete Product Group"
-        description="This action cannot be undone."
-        onClose={() => setDeleteTarget(null)}
-footer={
-  <>
-    <Button
-      variant="outline"
-      className="!text-slate-700 !bg-white border-slate-300 hover:!bg-slate-50"
-      onClick={() => setDeleteTarget(null)}
-      disabled={deleting}
-    >
-      Cancel
-    </Button>
-    <Button variant="destructive" onClick={() => void deleteRow()} disabled={deleting}>
-      {deleting ? "Deleting..." : "Delete"}
-    </Button>
-  </>
-}
-      >
-        <p className="m-0 text-sm text-muted-foreground">
-          Delete <strong>{String(deleteTarget?.group_name ?? "")}</strong>?
-        </p>
-      </Dialog>
-    </section>
-  );
-}
+                         
