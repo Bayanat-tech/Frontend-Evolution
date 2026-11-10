@@ -1,4 +1,4 @@
-// AppraisalSummaryReportDesign.tsx
+
 import React, { useMemo, useEffect, useState, useRef } from "react";
 import { pamsSelect } from "../../api/pams";
 import { useAuth } from "../../state/AuthContext";
@@ -45,9 +45,6 @@ interface DivGroup {
   total: number;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Bell Curve
-// ─────────────────────────────────────────────────────────────
 const POINT_BG = ["#ffd6d6", "#ffe8c8", "#fffacc", "#d6f0d6", "#d0e8ff"];
 const POINT_BD = ["#cc5555", "#cc8833", "#aaaa22", "#44aa44", "#3366cc"];
 
@@ -126,7 +123,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
         .asr-title-block { flex: 1; text-align: center; }
         .asr-title-block .main-title { font-size: 13px; font-weight: bold; }
 
-        /* ── Core table reset ── */
         .asr-tbl {
           width: 100%;
           border-collapse: collapse;
@@ -143,27 +139,27 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
           white-space: nowrap;
         }
 
-        /* ── Header styles ── */
+ 
         .asr-tbl .c-header    { font-weight: bold; background-color: #c0c0c0; text-align: center; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .asr-tbl .c-subheader { font-weight: bold; background-color: #d8d8d8; text-align: center; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 
-        /* ── Alignment helpers ── */
+
         .asr-tbl .c-center { text-align: center; }
         .asr-tbl .c-right  { text-align: right;  }
         .asr-tbl .c-bold   { font-weight: bold;  }
         .asr-tbl .c-wrap   { white-space: normal; }
 
-        /* ── Row colour bands ── */
+
         .asr-tbl .td-div    { font-weight: bold; background-color: #dce8f5; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .asr-tbl .td-divtot { font-weight: bold; background-color: #c8dcf0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .asr-tbl .td-grand  { font-weight: bold; background-color: #b0cce6; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .asr-tbl .td-tot    { font-weight: bold; background-color: #efefef; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 
-        /* ── Summary table ── */
+
         .asr-tbl .c-sum-hdr { font-weight: bold; background-color: #f5c97a; text-align: center; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .asr-tbl .c-sum-lbl { font-weight: bold; background-color: #fdebc8; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 
-        /* ── Rating colour cells ── */
+  
         .asr-tbl .r1 { background-color:#ffd6d6; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .asr-tbl .r2 { background-color:#ffe8c8; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .asr-tbl .r3 { background-color:#fffacc; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -182,7 +178,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
 
       <div className="asr-wrap">
 
-        {/* ── Logo + Title ── */}
+   
         <div className="asr-header">
           <div style={{ flexShrink: 0, width: 187, height: 68 }}>
             <svg width="187" height="68" viewBox="0 0 220 80" xmlns="http://www.w3.org/2000/svg">

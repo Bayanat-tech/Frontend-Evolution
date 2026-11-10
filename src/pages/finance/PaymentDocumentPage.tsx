@@ -85,6 +85,7 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
   RJV: { title: "Reverse JV", subtitle: "Reverse ledger journal", addLabel: "Add Voucher" },
+  EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
 };
 
 // const today = () => new Date().toISOString().slice(0, 10);
@@ -587,7 +588,11 @@ function PaymentDocumentEditor({
                             inv_no: balance.inv_no || child.inv_no,
                             ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
                             inv_amt: balance.original_amount,
-                            c_bal_amt_org: balance.outstanding_amount,
+                  c_bal_amt_org: balance.outstanding_amount,
+                  c_curr_code_origin: (balance as any).curr_code || (balance as any).c_curr_code_origin || (child as any).c_curr_code_origin,
+                  c_ex_rate_origin: (balance as any).ex_rate || (balance as any).c_ex_rate_origin || (child as any).c_ex_rate_origin,
+                  lcur_original_amount: (balance as any).lcur_original_amount,
+                  lcur_outstanding: (balance as any).lcur_outstanding,
                             paid_amt: balance.paid_amount,
                           } as TransactionChildRow;
                         }

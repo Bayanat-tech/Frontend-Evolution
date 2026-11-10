@@ -1,4 +1,5 @@
-import { Download, Loader2, Paperclip, Plus, Printer, Save, Send, Undo2, Upload, X, XCircle } from "lucide-react";
+import { Download, Loader2, Paperclip, Plus, Printer, Save, Send, Trash2, Undo2, Upload, X, XCircle } from "lucide-react";
+import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { ReactNode, useEffect, useState } from "react";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
@@ -83,7 +84,7 @@ function emptyForm(editor: BudgetEditorState): BudgetRequestForm {
     request_number: editor?.mode === "edit" ? editor.row.request_number : "",
     div_code: editor?.mode === "create" ? editor.divCode || "" : editor?.mode === "edit" ? editor.row.div_code : "",
     div_name: editor?.mode === "create" ? editor.divName || "" : editor?.mode === "edit" ? editor.row.div_name || "" : "",
-    curr_code: editor?.mode === "edit" ? editor.row.curr_code || "" : "",
+    curr_code: editor?.mode === "edit" ? editor.row.curr_code || "" : "INR",
     curr_name: "",
     ex_rate: 1,
     budget_year: editor?.mode === "edit" ? editor.row.budget_year || defaultBudgetYear() : defaultBudgetYear(),
@@ -499,50 +500,160 @@ export function BudgetRequestEditor({
   return (
     <>
       <form
-        className={`finance-utility-page finance-document-ui payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+        className={`finance-utility-page finance-document-ui payment-workbench commercial-editor flex h-screen flex-col overflow-hidden ${isCancelled ? "is-cancelled" : ""}`}
         onSubmit={(event) => {
           event.preventDefault();
           void handleSubmit();
         }}
       >
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-              <div>
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Budget Request" : "New Budget Request"}
-                </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Budget Request</h2>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Request Number</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{form.request_number || "New"}</strong>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Budget Year</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{form.budget_year || "—"}</strong>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Requested</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(totalRequested)}</strong>
-              </div>
-              {form.div_code && (
-                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
-                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
-                </div>
+        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm shrink-0">
+          <div className="flex min-h-10 items-center justify-between gap-3 flex-wrap">
+            <FinanceDocumentIdentity
+              title="Budget Request"
+              documentNo={form.request_number}
+              documentDate={form.request_date}
+              total={formatAmount(totalRequested)}
+              onBack={onClose}
+            />
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {form.canceled === "Y" && (
+                <Badge variant="outline" className="border-rose-300 bg-rose-50 text-rose-700">
+                  Cancelled
+                </Badge>
               )}
-            </div>
-            <div className="flex items-center gap-2">
-              {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
+
+              {/* Save Draft Button */}
+              <Button
+                type="button"
+                onClick={handleSaveAsDraft}
+                disabled={actionDisabled || actionBarBusy}
+                className="rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+              >
+                {actionLoading === "draft" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save size={14} className="mr-1.5" />
+                )}
+                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+              </Button>
+
+              {/* Submit Button */}
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={actionDisabled || actionBarBusy}
+                className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+              >
+                {actionLoading === "submit" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send size={14} className="mr-1.5" />
+                )}
+                {actionLoading === "submit" ? "Submitting..." : "Submit"}
+              </Button>
+
+              {/* Send Back Button */}
+              {canSendBackOrReject && (
+                <Button
+                  type="button"
+                  onClick={handleSendBack}
+                  disabled={actionDisabled || actionBarBusy}
+                  className="rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                >
+                  {actionLoading === "sendBack" ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Undo2 size={14} className="mr-1.5" />
+                  )}
+                  {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                </Button>
+              )}
+
+              {/* Reject Button */}
+              {canSendBackOrReject && (
+                <Button
+                  type="button"
+                  onClick={handleReject}
+                  disabled={actionDisabled || actionBarBusy}
+                  className="rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                >
+                  {actionLoading === "reject" ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <XCircle size={14} className="mr-1.5" />
+                  )}
+                  {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                </Button>
+              )}
+
+              {/* Cancel Button */}
               {form.request_number && (
-                <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-                </>
+                <Button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={actionDisabled || actionBarBusy}
+                  className="rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                >
+                  {actionLoading === "cancel" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                  {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                </Button>
               )}
-              <Button type="button" variant="secondary"><Paperclip size={15} /> Files</Button>
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+
+              {/* Print Button */}
+              {form.request_number && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
+                  disabled={actionDisabled}
+                  title="Print / PDF"
+                >
+                  <Printer size={14} className="mr-1" /> Print
+                </Button>
+              )}
+
+              {/* Excel Download Button */}
+              {form.request_number && (
+                <Button
+                  aria-label="Excel"
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
+                  disabled={actionDisabled}
+                  title="Download Excel"
+                >
+                  <Download size={14} className="mr-1" /> Excel
+                </Button>
+              )}
+
+              {/* Files Attachment Button */}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
+                disabled={actionDisabled}
+                title="Files"
+              >
+                <Paperclip size={14} className="mr-1" /> Files
+              </Button>
+
+              {/* Close Button */}
+              <Button
+                aria-label="Close"
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="rounded-full h-8 w-8 text-slate-700 hover:bg-slate-200 cursor-pointer"
+                onClick={onClose}
+                disabled={actionBarBusy}
+                title="Close"
+              >
+                <X size={16} />
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -556,7 +667,7 @@ export function BudgetRequestEditor({
           </div>
         )}
 
-        <CardContent className="min-h-0 overflow-auto p-3">
+        <CardContent className="flex-1 min-h-0 overflow-auto p-3">
           {loading ? (
             <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading budget request...</div>
           ) : (
@@ -754,95 +865,7 @@ export function BudgetRequestEditor({
           )}
         </CardContent>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="flex flex-wrap gap-2">
-
-            <Button
-              type="button"
-              onClick={handleSaveAsDraft}
-              disabled={actionDisabled || actionBarBusy}
-              className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60"
-            >
-              {actionLoading === "draft" ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={actionDisabled || actionBarBusy}
-              className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60"
-            >
-              {actionLoading === "submit" ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 h-4 w-4" />
-              )}
-              {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleSendBack}
-              disabled={actionDisabled || actionBarBusy}
-              className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60"
-            >
-              {actionLoading === "sendBack" ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Undo2 className="mr-2 h-4 w-4" />
-              )}
-              {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleReject}
-              disabled={actionDisabled || actionBarBusy}
-              className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60"
-            >
-              {actionLoading === "reject" ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <XCircle className="mr-2 h-4 w-4" />
-              )}
-              {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleCancel}
-              disabled={actionDisabled || actionBarBusy}
-              className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60"
-            >
-              {actionLoading === "cancel" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={actionBarBusy}
-              className="rounded-full shadow-md disabled:opacity-60"
-            >
-              Close
-            </Button>
-
-          </div>
-          <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
-            <Button aria-label="Upload" type="button" variant="outline" size="icon" disabled={actionDisabled}><Upload size={15} /></Button>
-            <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
-            <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
-            <Button type="button" variant="outline" onClick={onClose}>Close</Button>
-          </div>
-        </div>
-      </form>
+        </form>
       <Dialog
         open={importOpen}
         title="Import Budget Excel"

@@ -6,9 +6,7 @@ import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { useToast } from "../../components/ui/AlertToast";
 
-// ═══════════════════════════════════════════════════════════════════
-// TYPES & HELPERS
-// ═══════════════════════════════════════════════════════════════════
+
 type Row = Record<string, unknown>;
 
 function text(v: unknown): string {
@@ -39,15 +37,12 @@ function splitItems(v: unknown): string[] {
     });
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// MAIN PAGE
-// ═══════════════════════════════════════════════════════════════════
+
 export function KpiAcceptancePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
-
   const [periodList, setPeriodList] = useState<Row[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
@@ -57,13 +52,10 @@ export function KpiAcceptancePage() {
   const [existingDate, setExistingDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const totalWeightage = useMemo(
     () => rows.reduce((s, r) => s + Number(r.WEIGHTAGE ?? 0), 0),
     [rows]
   );
-
-  // ─── Load periods (Q1 only) ─────────────────────────────
   const loadPeriods = async () => {
     try {
       const data = await pamsSelect({
@@ -81,7 +73,7 @@ export function KpiAcceptancePage() {
     }
   };
 
-  // ─── Load KPIs + status ─────────────────────────────────
+
   const loadData = async (period: string) => {
     if (!period) return;
     setLoading(true);
@@ -125,15 +117,15 @@ export function KpiAcceptancePage() {
 
   useEffect(() => {
     void loadPeriods();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [loginid, companyCode]);
 
   useEffect(() => {
     if (selectedPeriod) void loadData(selectedPeriod);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [selectedPeriod]);
 
-  // ─── Save ───────────────────────────────────────────────
+
   const saveAcceptance = async (status: "A" | "R") => {
     if (!selectedPeriod) {
       toast.warning("No period available");
@@ -183,12 +175,9 @@ export function KpiAcceptancePage() {
   const isLocked = acceptStatus !== "P";
   const hasData = selectedPeriod && rows.length > 0;
 
-  // ═════════════════════════════════════════════════════════
-  // RENDER
-  // ═════════════════════════════════════════════════════════
+
   return (
     <section className="grid gap-4">
-      {/* ─── Page Title ─────────────────────────── */}
       <div>
         <h1 className="m-0 text-2xl font-semibold text-foreground">
           KPI Acceptance
@@ -198,7 +187,7 @@ export function KpiAcceptancePage() {
         </p>
       </div>
 
-      {/* ─── Main Card ──────────────────────────── */}
+
       <Card>
         <CardHeader className="border-b bg-muted/30">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -216,7 +205,7 @@ export function KpiAcceptancePage() {
                     Annual · Q1
                   </span>
 
-                  {/* Status Badge inline */}
+        
                   {acceptStatus === "A" && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
                       <CheckCircle2 size={12} /> Accepted
@@ -250,7 +239,7 @@ export function KpiAcceptancePage() {
         </CardHeader>
 
         <CardContent className="p-0">
-          {/* ─── KPI Table ─────────────────────── */}
+    
           {loading ? (
             <p className="py-14 text-center text-sm text-muted-foreground">
               Loading KPIs...
@@ -331,7 +320,7 @@ export function KpiAcceptancePage() {
         </CardContent>
       </Card>
 
-      {/* ─── Action Bar ─────────────────────────── */}
+
       {hasData && (
         <Card>
           <CardContent className="grid gap-3 pt-4">

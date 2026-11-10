@@ -742,7 +742,7 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     },
     {
       name: "Finance Trail Balance L2 Report",
-      match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/first_group"),
+      match: ({ pathname }) => isTrialBalanceRoute(pathname),
       element: () => <TrialBalancePage />,
     },
     {
@@ -852,6 +852,11 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       name: "Finance RV Voucher",
       match: ({ pathname }) => isRVoucherRoute(pathname),
       element: () => <RJVDocumentEditor docType={"RJV"} />
+    },
+    {
+      name: "Finance Year End JV",
+      match: ({ pathname }) => isYearEndJVRoute(pathname),
+      element: () => <JVDocumentEditor docType={"EJV"} />
     },
     {
       name: "Finance Bank Reconciliation",
@@ -2063,6 +2068,8 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts/masters/budget_a/c_wise") ||
+      normalized.includes("/finance/accounts/masters/budget_a/c_group") ||
+      normalized.includes("/finance/accounts/masters/budget_ac_group") ||
       normalized.includes("/finance/accounts/masters/budget_ac_wise") ||
       normalized.includes("/finance/accounts/masters/account-wise-budget")
     );
@@ -2209,6 +2216,16 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       normalized.includes("/finance/accounts/masters/a-c_tree") ||
       normalized.includes("/finance/accounts/masters/ac_tree") ||
       normalized.includes("/finance/accounts/masters/a/c_tree")
+    );
+  }
+
+    function isTrialBalanceRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes('trial_balance') ||
+      normalized.includes('trial-balance') ||
+      normalized.includes('trail_balance') ||
+      normalized.includes('trail-balance')
     );
   }
 
@@ -2396,11 +2413,23 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   function isJournalVoucherRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     const isReverse = normalized.includes("rjv") || normalized.includes("reverse");
+    const isYearEnd = normalized.includes("ejv") || normalized.includes("year_end") || normalized.includes("year-end");
     return (
       !isReverse &&
+      !isYearEnd &&
       (normalized.includes("/finance/accounts/transactions/jv") ||
         normalized.includes("/finance/accounts/transactions/provisional") ||
         normalized.includes("/finance/accounts/transactions/journal"))
+    );
+  }
+
+  function isYearEndJVRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/transactions/ejv") ||
+      normalized.includes("/finance/accounts/transactions/year_end_jv") ||
+      normalized.includes("/finance/accounts/transactions/year-end-jv") ||
+      normalized.includes("/finance/accounts/transactions/yearend")
     );
   }
 

@@ -486,7 +486,7 @@ function HrReportShell({ r }: { r: ReturnType<typeof useHrReport> }) {
         error={r.error}
         onExportExcel={r.onExportExcel}
         exportingExcel={r.exportingExcel}
-        onOpenInNewWindow={r.onOpenInNewWindow}
+        //onOpenInNewWindow={r.onOpenInNewWindow}
       />
     </>
   );

@@ -292,51 +292,30 @@ export const HrEmployeeWiseCostReport = forwardRef<HrEmployeeWiseCostReportHandl
               </FloatLabel>
             </div>
 
-            {/* Row 2: Month/Year and Source, Radio Buttons */}
-            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginTop: 10, alignItems: "start" }}>
-              
-              {/* Left Column (Month/Year) */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <FloatLabel label="Pay Month" bgColor={BG}>
-                  <Select value={payMonth} onChange={(e) => setPayMonth(e.target.value)} style={{ fontSize: 12 }}>
-                    {PAY_MONTHS.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
-                  </Select>
-                </FloatLabel>
-                <FloatLabel label="Pay Year" bgColor={BG}>
-                  <Input type="number" value={payYear} onChange={(e) => setPayYear(e.target.value)} />
-                </FloatLabel>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer", marginTop: 4 }}>
-                  <input type="checkbox" checked={historyReport} onChange={(e) => setHistoryReport(e.target.checked)} style={{ width: 16, height: 16 }} />
-                  <span>History Report</span>
-                </label>
-              </div>
-
-              {/* Middle Column (Source) */}
-              <div>
-                <FloatLabel label="Source" bgColor={BG}>
-                  <Select value={source} onChange={(e) => setSource(e.target.value)} style={{ fontSize: 12 }}>
-                    {SOURCE_OPTIONS.map((o) => <option key={o.code} value={o.code}>{o.name}</option>)}
-                  </Select>
-                </FloatLabel>
-              </div>
-
-              {/* Right Column (Radio Buttons) */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 6 }}>
-                {REPORT_TYPES.map((type) => (
-                  <label key={type} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
-                    <input
-                      type="radio"
-                      name="reportType"
-                      value={type}
-                      checked={reportType === type}
-                      onChange={() => setReportType(type)}
-                      style={{ width: 16, height: 16 }}
-                    />
-                    <span>{type}</span>
-                  </label>
-                ))}
-              </div>
-
+            {/* Row 2: Month, Year, Source, Report Type, History */}
+            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "120px 100px 140px 180px auto", justifyContent: "start", gap: 14, marginTop: 10, alignItems: "center" }}>
+              <FloatLabel label="Pay Month" bgColor={BG}>
+                <Select value={payMonth} onChange={(e) => setPayMonth(e.target.value)} style={{ fontSize: 12 }}>
+                  {PAY_MONTHS.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
+                </Select>
+              </FloatLabel>
+              <FloatLabel label="Pay Year" bgColor={BG}>
+                <Input type="number" value={payYear} onChange={(e) => setPayYear(e.target.value)} style={{ fontSize: 12 }} />
+              </FloatLabel>
+              <FloatLabel label="Source" bgColor={BG}>
+                <Select value={source} onChange={(e) => setSource(e.target.value)} style={{ fontSize: 12 }}>
+                  {SOURCE_OPTIONS.map((o) => <option key={o.code} value={o.code}>{o.name}</option>)}
+                </Select>
+              </FloatLabel>
+              <FloatLabel label="Report Type" bgColor={BG}>
+                <Select value={reportType} onChange={(e) => setReportType(e.target.value)} style={{ fontSize: 12 }}>
+                  {REPORT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                </Select>
+              </FloatLabel>
+              <label style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer", marginTop: 6, whiteSpace: "nowrap" }}>
+                <input type="checkbox" checked={historyReport} onChange={(e) => setHistoryReport(e.target.checked)} style={{ width: 16, height: 16, margin: 0, flex: "0 0 16px" }} />
+                <span>History Report</span>
+              </label>
             </div>
           </div>
 

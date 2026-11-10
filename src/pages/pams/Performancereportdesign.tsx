@@ -582,7 +582,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-          {/* Section 4 : Overall Rating (Goals ke niche — final rating) */}
+      
           <table className="prf-tbl prf-sec4">
             <tbody>
               <tr>
@@ -621,7 +621,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-          {/* Section 5 */}
+          
           <table className="prf-tbl prf-sec5">
             <tbody>
               <tr>
