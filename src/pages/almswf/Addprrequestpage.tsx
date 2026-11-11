@@ -255,7 +255,7 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
     TX_COMPNT_PERC_1: taxPercForType(hdr.TAX_TYPE as string),
     TAX_TYPE: "Std.", TX_COMPNTCAT_CODE: "",
     TX_COMPNTCAT_NAME: (hdr as any).TX_COMPNTCAT_NAME ?? "",
-    CAPEX_OPEX_NON_OPEX: "",
+    CAPEX_OPEX_NON_OPEX: "N",
     USER_DT: null, USER_ID: "",
     SUPPLIER_CODE: "", SUPPLIER_NAME: "", CASH_IND: "",
     P_UOM: "", QTY_PUOM: 0, L_UOM: "", QTY_LUOM: 0, UPPP: 0,
@@ -1293,7 +1293,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
     blank.TAX_TYPE = String(header.TAX_TYPE || "No VAT");
     blank.TX_COMPNT_PERC_1 = num((header as any).TX_COMPNT_PERC_1) || taxPercForType(header.TAX_TYPE as string);
     blank.CASH_IND = "N";
-    blank.CAPEX_OPEX_NON_OPEX = "";
+    blank.CAPEX_OPEX_NON_OPEX = "N";
     (blank as any).id = newId();
     setItems([...items, blank]);
   };
@@ -1335,7 +1335,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         blank.ITEM_RATE = r.rate;
         blank.QTY_PUOM = r.qtyPuom;
         blank.QTY_LUOM = r.qtyLuom;
-        blank.CAPEX_OPEX_NON_OPEX = r.capex;
+        blank.CAPEX_OPEX_NON_OPEX = r.capex || "N";
         if (sup) {
           blank.SUPPLIER = String(sup.SUPPLIER_CODE);
           (blank as any).SUPPLIER_NAME = String(sup.SUPPLIER_NAME ?? "");
