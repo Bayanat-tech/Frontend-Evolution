@@ -381,6 +381,7 @@ export function BudgetRequestEditor({
 
   const isLevelOne = editMode && effectiveFlowLevel === 1;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
+  const canSendBackOrReject = isLevelGreaterThanOne;
   const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
   const approvedAmountDisabled = disabled || isLevelOne;
   const isCancelled = form.canceled === "Y";
