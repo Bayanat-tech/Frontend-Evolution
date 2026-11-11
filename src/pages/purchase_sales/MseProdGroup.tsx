@@ -22,6 +22,8 @@ type Notice = { type: "success" | "error"; message: string } | null;
 const LIST_COLUMNS: { key: string; label: string; width?: number }[] = [
   { key: "group_code", label: "Group Code", width: 150 },
   { key: "group_name", label: "Group Name", width: 250 },
+    { key: "gitin_ac_code", label: "GIT-IN A/C", width: 150 },   // NEW
+    { key: "gitin_ac_name", label: "GIT-IN A/C Name", width: 250 },   // NEW
   { key: "inv_ac_code", label: "Inventory A/C", width: 150 },
   { key: "sales_ac_code", label: "Sales A/C", width: 150 },
   { key: "direct_expense_ac", label: "Direct Expense A/C", width: 150 },
@@ -116,7 +118,27 @@ const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProductGroupRow | null>(null);
+const [gitinNames, setGitinNames] = useState<Record<string, string>>({});
 
+useEffect(() => {
+  const loadGitinNames = async () => {
+    try {
+      const res = await getDynamicLookup({
+        parameter: "PURCHASE_SALES_MSE_PROD_GROUP_DROP_DOWN_GITIN_ACCOUNT",
+        loginid: loginId,
+        code1: companyCode,
+      });
+      const map: Record<string, string> = {};
+      (Array.isArray(res) ? res : []).forEach((r: any) => {
+        map[String(r.ac_code)] = String(r.ac_name ?? "");
+      });
+      setGitinNames(map);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  void loadGitinNames();
+}, []);
   const loadRows = async () => {
     setLoading(true);
     try {
@@ -141,13 +163,34 @@ const [deleting, setDeleting] = useState(false);
     void loadRows();
   }, []);
 
-  const filteredRows = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((row) =>
-      Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term))
-    );
-  }, [rows, query]);
+  
+
+const enrichedRows = useMemo(
+  () =>
+    rows.map((row) => ({
+      ...row,
+      gitin_ac_name:
+        row.gitin_ac_name ?? gitinNames[String(row.gitin_ac_code ?? "")] ?? "",
+    })),
+  [rows, gitinNames]
+);
+
+const filteredRows = useMemo(() => {
+  const term = query.trim().toLowerCase();
+  const base = term
+    ? enrichedRows.filter((row) =>
+        Object.values(row).some((value) =>
+          String(value ?? "").toLowerCase().includes(term)
+        )
+      )
+    : enrichedRows;
+
+  return [...base].sort((a:any, b:any) =>
+    String(b.group_code ?? "").localeCompare(String(a.group_code ?? ""), undefined, {
+      numeric: true,
+    })
+  );
+}, [enrichedRows, query]);
 
   const openAdd = () => {
     setEditMode(false);
@@ -175,53 +218,59 @@ const [deleting, setDeleting] = useState(false);
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = async () => {
-    setError("");
-    if (!form.group_name?.trim()) {
-      setError("Product Group Name is required");
-      return;
-    }
+const handleSubmit = async () => {
+  setError("");
 
-    try {
-      setSaving(true);
+  if (!form.group_name?.trim()) {
+    setError("Product Group Name is required");
+    return;
+  }
 
-      // empty on create → backend auto-generates
-      const groupCode = editMode && original?.group_code
-        ? String(original.group_code)
-        : form.group_code
-          ? String(form.group_code)
-          : undefined;
+  if (!form.gitin_ac_code || !String(form.gitin_ac_code).trim()) {
+    setError("GIT-IN A/C Code is required");
+    return;
+  }
 
-      await executeDynamicMutation({
-        parameter: "PURCHASE_SALES_INS_UPD_MSE_PRODGROUP",
-        loginid: loginId,
-        // key / WHERE
-        wval1s1: companyCode,
-        wval1s2: groupCode,
-        // values
-        val1s2: form.group_name ? String(form.group_name) : undefined,
-        val1s3: form.gitin_ac_code ? String(form.gitin_ac_code) : undefined,
-        val1s4: form.inv_ac_code ? String(form.inv_ac_code) : undefined,
-        val1s5: form.gitout_ac_code ? String(form.gitout_ac_code) : undefined,
-        val1s6: form.sales_ac_code ? String(form.sales_ac_code) : undefined,
-        val1s7: form.costofsales_ac_code ? String(form.costofsales_ac_code) : undefined,
-        val1s8: form.prodtype_code ? String(form.prodtype_code) : undefined,
-        val1s9: form.direct_expense_ac ? String(form.direct_expense_ac) : undefined,
-      });
+  try {
+    setSaving(true);
 
-const wasEdit = editMode;
-handleCloseEditor();
-setNotice({
-  type: "success",
-  message: wasEdit ? "Product group updated successfully." : "Product group created successfully.",
-});
-await loadRows();
-    } catch (err: any) {
-      setError(err?.message || "Unable to save product group");
-    } finally {
-      setSaving(false);
-    }
-  };
+    // empty on create → backend auto-generates
+    const groupCode = editMode && original?.group_code
+      ? String(original.group_code)
+      : form.group_code
+        ? String(form.group_code)
+        : undefined;
+
+    await executeDynamicMutation({
+      parameter: "PURCHASE_SALES_INS_UPD_MSE_PRODGROUP",
+      loginid: loginId,
+      wval1s1: companyCode,
+      wval1s2: groupCode,
+      val1s2: form.group_name ? String(form.group_name) : undefined,
+      val1s3: form.gitin_ac_code ? String(form.gitin_ac_code) : undefined,
+      val1s4: form.inv_ac_code ? String(form.inv_ac_code) : undefined,
+      val1s5: form.gitout_ac_code ? String(form.gitout_ac_code) : undefined,
+      val1s6: form.sales_ac_code ? String(form.sales_ac_code) : undefined,
+      val1s7: form.costofsales_ac_code ? String(form.costofsales_ac_code) : undefined,
+      val1s8: form.prodtype_code ? String(form.prodtype_code) : undefined,
+      val1s9: form.direct_expense_ac ? String(form.direct_expense_ac) : undefined,
+    });
+
+    const wasEdit = editMode;
+    handleCloseEditor();
+    setNotice({
+      type: "success",
+      message: wasEdit
+        ? "Product group updated successfully."
+        : "Product group created successfully.",
+    });
+    await loadRows();
+  } catch (err: any) {
+    setError(err?.message || "Unable to save product group");
+  } finally {
+    setSaving(false);
+  }
+};
 
 const deleteRow = async () => {
   if (!deleteTarget) return;

@@ -831,7 +831,8 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     {
       name: "Finance Account Wise Budget",
       match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
-      element: () => <AccountWiseBudgetPage />,
+      element: ({ pathname }) => <AccountWiseBudgetPage mode={isAccountGroupBudgetRoute(pathname) ? "group" : "account"} />,
+
     },
     {
       name: "Finance Commercial Documents",
@@ -2061,6 +2062,14 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       normalized.includes("/finance/accounts/masters/bank") &&
       !normalized.includes("bank_code") &&
       !normalized.includes("bank-code")
+    );
+  }
+
+  function isAccountGroupBudgetRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/masters/budget_a/c_group") ||
+      normalized.includes("/finance/accounts/masters/budget_ac_group")
     );
   }
 
