@@ -25,6 +25,8 @@ export interface BudgetRequestRow {
   curr_code?: string;
   description?: string;
   status?: string;
+  last_action?: string;
+  final_approved?: string;
   canceled?: string;
   flow_level_running?: number;
   flow_level?: number;
@@ -64,7 +66,14 @@ export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
     if (clearNotice) setNotice(null);
     try {
       const response = await fetchBudgetRequests();
-      setRows(response);
+      const normalized = response.map((r) => ({
+        ...r,
+        canceled:
+          String(r.last_action || "").toUpperCase() === "CANCELED"
+            ? "Y"
+            : String(r.canceled || "N"),
+      }));
+      setRows(normalized);
       setTotalRows(response.length);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load budget requests" });
@@ -139,7 +148,26 @@ useEffect(() => {
     {
       accessorKey: "canceled",
       header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
+      cell: ({ row }) => {
+        const lastAction = String(row.original.last_action || "").toUpperCase();
+        const finalApproved = String(row.original.final_approved || "").toUpperCase();
+        if (String(row.original.canceled || "N") === "Y" || lastAction === "CANCELED") {
+          return <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge>;
+        }
+        if (lastAction === "REJECTED") {
+          return <Badge variant="outline" className="border-rose-600 text-rose-700">Rejected</Badge>;
+        }
+        if (lastAction === "SENDBACK" || lastAction === "SENTBACK") {
+          return <Badge variant="outline" className="border-amber-600 text-amber-700">Sent Back</Badge>;
+        }
+        if (finalApproved === "Y" || finalApproved === "YES" || lastAction === "CLOSED") {
+          return <Badge className="bg-emerald-600 text-white">Approved</Badge>;
+        }
+        if (lastAction === "SUBMITTED") {
+          return <Badge className="bg-blue-600 text-white">Submitted</Badge>;
+        }
+        return <Badge variant="secondary">Draft</Badge>;
+      },
     },
     {
       id: "actions",
