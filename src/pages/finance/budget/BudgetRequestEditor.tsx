@@ -13,7 +13,9 @@ import { useAuth } from "../../../state/AuthContext";
 import { BudgetRequestRow } from "./BudgetRequestPage";
 import { upsertBulkAccountBudgetEntryApi } from "../../../api/transactions";
 import { Dialog } from "../../../components/ui/Dialog";
+import * as XLSX from "xlsx";
 import ImportBudgetEdi, { type ImportedBudgetRow } from "./ExportToExcel";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
 // Year range this org is currently budgeting for. Bump the upper bound when a new year opens up.
@@ -315,6 +317,7 @@ export function BudgetRequestEditor({
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [importOpen, setImportOpen] = useState(false);
   // Tracks which single workflow button is currently in-flight, so only that button shows a spinner
@@ -381,6 +384,7 @@ export function BudgetRequestEditor({
 
   const isLevelOne = editMode && effectiveFlowLevel === 1;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
+  const canSendBackOrReject = isLevelGreaterThanOne;
   const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
   const approvedAmountDisabled = disabled || isLevelOne;
   const isCancelled = form.canceled === "Y";
@@ -492,6 +496,81 @@ export function BudgetRequestEditor({
     runAction("sendBack", async () => {
       await sendBackBudgetRequest(form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Budget request sent back");
+
+  const handleExportExcel = () => {
+    const sheetRows = rows.map((row, idx) => ({
+      No: idx + 1,
+      "Request Number": form.request_number || "New",
+      Division: form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code,
+      Currency: form.curr_code,
+      "Cost Code": row.cost_code,
+      "Cost Name": row.cost_name,
+      Month: row.month_budget,
+      Year: row.budget_year || form.budget_year,
+      "Requested Amount": Number(row.requested_amt || 0),
+      "Approved Amount": Number(row.approved_amt || 0),
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(sheetRows);
+    XLSX.utils.book_append_sheet(wb, ws, "BudgetAllocation");
+    const safeName = (form.request_number || "New_Budget_Request").replace(/[/\\?%*:|"<>]/g, "_");
+    XLSX.writeFile(wb, `${safeName}.xlsx`);
+  };
+
+  const handlePrint = () => {
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) {
+      window.print();
+      return;
+    }
+    const lineRowsHtml = rows
+      .map(
+        (r, i) => `<tr>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;">${i + 1}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;">${r.cost_code}${r.cost_name ? ` - ${r.cost_name}` : ""}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;">${r.month_budget || "-"}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;">${r.budget_year || form.budget_year}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:right;">${Number(r.requested_amt || 0).toFixed(2)}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:right;">${Number(r.approved_amt || 0).toFixed(2)}</td>
+        </tr>`
+      )
+      .join("");
+    win.document.write(`<!doctype html><html><head><title>Budget Request ${form.request_number || ""}</title></head>
+      <body style="font-family:Arial,sans-serif;padding:24px;color:#0f172a;">
+        <h2 style="margin:0 0 8px;color:#00378C;">Budget Allocation Request</h2>
+        <p style="margin:0 0 16px;font-size:13px;">
+          <strong>Request No:</strong> ${form.request_number || "New"} &nbsp;|&nbsp;
+          <strong>Date:</strong> ${form.request_date || ""} &nbsp;|&nbsp;
+          <strong>Division:</strong> ${form.div_code} ${form.div_name || ""} &nbsp;|&nbsp;
+          <strong>Currency:</strong> ${form.curr_code} &nbsp;|&nbsp;
+          <strong>Year:</strong> ${form.budget_year}
+        </p>
+        ${form.description ? `<p style="font-size:13px;"><strong>Description:</strong> ${form.description}</p>` : ""}
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:12px;">
+          <thead>
+            <tr style="background:#00378C;color:#fff;">
+              <th style="border:1px solid #cbd5e1;padding:6px;">No</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;text-align:left;">Cost Code</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Month</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Year</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;text-align:right;">Requested</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;text-align:right;">Approved</th>
+            </tr>
+          </thead>
+          <tbody>${lineRowsHtml}</tbody>
+          <tfoot>
+            <tr style="font-weight:bold;background:#f8fafc;">
+              <td colspan="4" style="border:1px solid #cbd5e1;padding:6px;text-align:right;">Total</td>
+              <td style="border:1px solid #cbd5e1;padding:6px;text-align:right;">${totalRequested.toFixed(2)}</td>
+              <td style="border:1px solid #cbd5e1;padding:6px;text-align:right;">${totalApproved.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
 
   // True while any workflow action button is in-flight; used to disable the whole bar so a
   // second button can't be clicked mid-request.
@@ -607,7 +686,8 @@ export function BudgetRequestEditor({
                   variant="secondary"
                   size="sm"
                   className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
-                  disabled={actionDisabled}
+                  onClick={handlePrint}
+                  disabled={actionBarBusy}
                   title="Print / PDF"
                 >
                   <Printer size={14} className="mr-1" /> Print
@@ -622,7 +702,8 @@ export function BudgetRequestEditor({
                   variant="secondary"
                   size="sm"
                   className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
-                  disabled={actionDisabled}
+                  onClick={handleExportExcel}
+                  disabled={actionBarBusy}
                   title="Download Excel"
                 >
                   <Download size={14} className="mr-1" /> Excel
@@ -635,7 +716,8 @@ export function BudgetRequestEditor({
                 variant="secondary"
                 size="sm"
                 className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
-                disabled={actionDisabled}
+                onClick={() => setAttachmentOpen(true)}
+                disabled={!form.request_number || actionBarBusy}
                 title="Files"
               >
                 <Paperclip size={14} className="mr-1" /> Files
@@ -846,7 +928,7 @@ export function BudgetRequestEditor({
                             />
                           </td>
                           <td className="px-2 py-1">
-                            <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button></td>
+                            <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" title="Remove Line" aria-label="Remove Line" className="text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => removeRow(row.id)}><Trash2 size={14} /></Button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -866,6 +948,19 @@ export function BudgetRequestEditor({
         </CardContent>
 
         </form>
+      <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.request_number}
+        title="Budget Request Attachments"
+        module="FINANCE"
+        type="BUDGET_REQUEST"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || user?.username || ""}
+        flowLevel={effectiveFlowLevel || 1}
+        readOnly={actionDisabled}
+      />
+
       <Dialog
         open={importOpen}
         title="Import Budget Excel"
