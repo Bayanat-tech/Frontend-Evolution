@@ -266,7 +266,7 @@ useEffect(() => {
       </div>
 
       {editor && (
-        <div className="fixed inset-0 z-50 bg-background">
+        <div className="finance-document-editor fixed inset-0 z-50 bg-background flex flex-col">
           <BudgetRequestEditor
             key={editor?.mode === "edit" ? editor.row.request_number : editor?.mode || "create"}
             editor={editor}
