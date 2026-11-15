@@ -959,7 +959,7 @@ export function LeaveRequestDialog({
             requestNumber={requestNumber}
             companyCode={companyCode}
             loginId={loginId}
-            readOnly={fieldsDisabled}
+            //readOnly={fieldsDisabled}
             onCountChange={setAttachmentCount}
           />
         ) : (
