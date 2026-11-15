@@ -76,8 +76,9 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SI: { title: "Sales", subtitle: "Sales invoice document", addLabel: "Add Sales" },
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
-  RJV: { title: "Journal Voucher", subtitle: "Reverse ledger journal", addLabel: "Add Voucher" },
+  RJV: { title: "Provisional / Reverse Journal Voucher", subtitle: "Provisional & reverse ledger journal", addLabel: "Add Voucher" },
   EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
+  PJV: { title: "PDC Journal Voucher", subtitle: "Post dated cheque journal", addLabel: "Add PDC JV" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
