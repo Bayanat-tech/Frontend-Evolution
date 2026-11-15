@@ -2555,11 +2555,12 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     const normalized = pathname.toLowerCase();
     const isReverse = normalized.includes("rjv") || normalized.includes("reverse");
     const isYearEnd = normalized.includes("ejv") || normalized.includes("year_end") || normalized.includes("year-end");
+    const isProvisional = normalized.includes("provisional") || normalized.includes("pjv");
     return (
       !isReverse &&
       !isYearEnd &&
+      !isProvisional &&
       (normalized.includes("/finance/accounts/transactions/jv") ||
-        normalized.includes("/finance/accounts/transactions/provisional") ||
         normalized.includes("/finance/accounts/transactions/journal"))
     );
   }
@@ -2580,7 +2581,10 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       normalized.includes("/finance/accounts/transactions/rjv") ||
       normalized.includes("/finance/accounts/transactions/reverse_jv") ||
       normalized.includes("/finance/accounts/transactions/reverse-jv") ||
-      normalized.includes("/finance/accounts/transactions/reverse")
+      normalized.includes("/finance/accounts/transactions/reverse") ||
+      normalized.includes("/finance/accounts/transactions/provisional") ||
+      normalized.includes("/finance/accounts/transactions/provisional_jv") ||
+      normalized.includes("/finance/accounts/transactions/provisional-jv")
     );
   }
 
