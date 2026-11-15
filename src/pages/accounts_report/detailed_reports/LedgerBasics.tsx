@@ -1,9 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-// ⚠️ Adjust these paths to match your project (this was the cause of the previous error)
-
-
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import {
@@ -14,20 +11,60 @@ import {
   openLedgerWithDetailsReport,
   openLedgerOppositeEntryReport,
   exportLedgerWithDetailsExcel,
+  openSalesRegisterReport,
+  exportSalesRegisterExcel,
+  openPurchaseRegisterReport,
+  exportPurchaseRegisterExcel,
+  openDayBookReport,
+  exportDayBookExcel,
+  openTransactionListingReport,
+  exportTransactionListingExcel,
+  openLedgerBasicReport,
+  exportLedgerBasicExcel,
+  openSummaryDumpReport,
+  openDetailDumpReport,
 } from "../../../api/transactions";
 import { NewReportDialog, NewReportPage, ReportFieldConfig, ReportOption } from "../../../components/new_report_format";
 
-type ReportOptionKey =
-  | "chequeDateWise"
+export type ReportOptionKey =
+  | "ledgerBasic"
   | "ledgerWithDetails"
   | "ledgerWithOppositeEntry"
-  | "acPayeeWise";
+  | "chequeDateWise"
+  | "acPayeeWise"
+  | "salesRegister"
+  | "purchaseRegister"
+  | "dayBook"
+  | "transactionListing"
+  | "summaryDump"
+  | "detailDump";
 
 const REPORT_OPTIONS: { key: ReportOptionKey; label: string }[] = [
-  { key: "chequeDateWise", label: "Cheque Date Wise" },
+  { key: "ledgerBasic", label: "A/c Ledger Basic" },
   { key: "ledgerWithDetails", label: "Ledger With Details" },
   { key: "ledgerWithOppositeEntry", label: "Ledger With Opposite Entry" },
+  { key: "chequeDateWise", label: "Cheque Date Wise" },
   { key: "acPayeeWise", label: "A/c Payee Wise" },
+  { key: "salesRegister", label: "Sales Register / Sales List" },
+  { key: "purchaseRegister", label: "Purchase Register / Purchase List" },
+  { key: "dayBook", label: "Day Book Report" },
+  { key: "transactionListing", label: "Transaction Listing (Payments / Receipts / Vouchers)" },
+  { key: "summaryDump", label: "Summary Dump" },
+  { key: "detailDump", label: "Detail Dump" },
+];
+
+const DOC_TYPE_OPTIONS: ReportOption[] = [
+  { value: "ALL", label: "All Document Types" },
+  { value: "BP", label: "BP - Bank / Cheque Payment" },
+  { value: "BR", label: "BR - Bank / Cheque Receipt" },
+  { value: "CP", label: "CP - Cash Payment" },
+  { value: "CR", label: "CR - Cash Receipt" },
+  { value: "JV", label: "JV - Journal Voucher" },
+  { value: "DN", label: "DN - Debit Note" },
+  { value: "CN", label: "CN - Credit Note" },
+  { value: "SI", label: "SI - Sales Invoice" },
+  { value: "PI", label: "PI - Purchase Invoice" },
+  { value: "PO", label: "PO - Purchase Order (LPO)" },
 ];
 
 const formatDate = (date: string) => {
@@ -39,10 +76,20 @@ const formatDate = (date: string) => {
   return `${day}-${month}-${year}`;
 };
 
-export default function FinanceReportFilter() {
+export interface FinanceReportFilterProps {
+  initialReportType?: ReportOptionKey;
+  initialDocType?: string;
+  pageTitle?: string;
+}
+
+export default function FinanceReportFilter({
+  initialReportType = "ledgerBasic",
+  initialDocType = "ALL",
+  pageTitle,
+}: FinanceReportFilterProps) {
   const { user } = useAuth();
 
-  // ── Filter values (driven by NewReportPage) ───────────────────────────────
+  // ── Filter values ──
   const [values, setValues] = useState<Record<string, any>>({
     division: "",
     dateFrom: "2026-05-01",
@@ -51,19 +98,33 @@ export default function FinanceReportFilter() {
     amountTo: "",
     acPayee: ["All"],
     remarks: "",
-    reportType: "chequeDateWise" as ReportOptionKey,
+    reportType: initialReportType,
+    docType: initialDocType,
+    docnoFrom: "",
+    docnoTo: "",
     acCodes: ["All"],
     l4Codes: ["All"],
   });
 
-  // ── Lookup data ───────────────────────────────────────────────────────────
+  // Sync if initialReportType changes via route navigation
+  useEffect(() => {
+    if (initialReportType) {
+      setValues((prev) => ({
+        ...prev,
+        reportType: initialReportType,
+        docType: initialDocType || prev.docType,
+      }));
+    }
+  }, [initialReportType, initialDocType]);
+
+  // ── Lookup data ──
   const [divisionList, setDivisionList] = useState<any[]>([]);
   const [accountItems, setAccountItems] = useState<any[]>([]);
   const [groupItems, setGroupItems] = useState<any[]>([]);
   const [acPayeeItems, setAcPayeeItems] = useState<any[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
 
-  // ── Dialog / report state ─────────────────────────────────────────────────
+  // ── Dialog / report state ──
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -71,9 +132,9 @@ export default function FinanceReportFilter() {
   const [reportError, setReportError] = useState<string | null>(null);
 
   const division = values.division as string;
-  const reportType = (values.reportType || "chequeDateWise") as ReportOptionKey;
+  const reportType = (values.reportType || "ledgerBasic") as ReportOptionKey;
 
-  // ── Fetch divisions on mount ──────────────────────────────────────────────
+  // ── Fetch divisions on mount ──
   useEffect(() => {
     const fetchDivisions = async () => {
       try {
@@ -90,7 +151,7 @@ export default function FinanceReportFilter() {
     fetchDivisions();
   }, [user?.company_code, user?.loginid, user?.username]);
 
-  // ── When division changes: load groups + accounts ─────────────────────────
+  // ── When division changes: load groups + accounts ──
   useEffect(() => {
     if (!division) {
       setAccountItems([]);
@@ -106,7 +167,7 @@ export default function FinanceReportFilter() {
     fetchAccounts(division);
   }, [division]);
 
-  // ── Load A/c payee list once ──────────────────────────────────────────────
+  // ── Load A/c payee list once ──
   useEffect(() => {
     const fetchPayees = async () => {
       try {
@@ -160,7 +221,7 @@ export default function FinanceReportFilter() {
     }
   };
 
-  // ── Options for NewReportPage fields ──────────────────────────────────────
+  // ── Options memoization ──
   const divisionOptions: ReportOption[] = useMemo(
     () =>
       divisionList.map((d: any) => ({
@@ -206,9 +267,9 @@ export default function FinanceReportFilter() {
     []
   );
 
-  // ── Field config ──────────────────────────────────────────────────────────
-  const fields: ReportFieldConfig[] = useMemo(
-    () => [
+  // ── Field config ──
+  const fields: ReportFieldConfig[] = useMemo(() => {
+    const list: ReportFieldConfig[] = [
       {
         key: "division",
         label: "Division",
@@ -240,6 +301,50 @@ export default function FinanceReportFilter() {
         required: true,
         colSpan: 3,
       },
+    ];
+
+    if (reportType === "transactionListing") {
+      list.push({
+        key: "docType",
+        label: "Document Type",
+        type: "select",
+        options: DOC_TYPE_OPTIONS,
+        colSpan: 3,
+      });
+      list.push({
+        key: "docnoFrom",
+        label: "Doc No From",
+        type: "text",
+        placeholder: "Optional",
+        colSpan: 3,
+      });
+      list.push({
+        key: "docnoTo",
+        label: "Doc No To",
+        type: "text",
+        placeholder: "Optional",
+        colSpan: 3,
+      });
+    }
+
+    if (reportType === "salesRegister" || reportType === "purchaseRegister") {
+      list.push({
+        key: "docnoFrom",
+        label: "Voucher From",
+        type: "text",
+        placeholder: "Optional",
+        colSpan: 3,
+      });
+      list.push({
+        key: "docnoTo",
+        label: "Voucher To",
+        type: "text",
+        placeholder: "Optional",
+        colSpan: 3,
+      });
+    }
+
+    list.push(
       {
         key: "amountFrom",
         label: "Amount From",
@@ -288,20 +393,22 @@ export default function FinanceReportFilter() {
         placeholder: "All",
         colSpan: 6,
         disabled: !division,
-      },
-    ],
-    [
-      divisionOptions,
-      reportTypeOptions,
-      acPayeeOptions,
-      accountOptions,
-      groupOptions,
-      division,
-      optionsLoading,
-    ]
-  );
+      }
+    );
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+    return list;
+  }, [
+    divisionOptions,
+    reportTypeOptions,
+    reportType,
+    acPayeeOptions,
+    accountOptions,
+    groupOptions,
+    division,
+    optionsLoading,
+  ]);
+
+  // ── Handlers ──
   const handleChange = useCallback((key: string, value: any) => {
     setValues((prev) => ({ ...prev, [key]: value }));
     setReportError(null);
@@ -316,12 +423,15 @@ export default function FinanceReportFilter() {
       amountTo: "",
       acPayee: ["All"],
       remarks: "",
-      reportType: "chequeDateWise",
+      reportType: initialReportType,
+      docType: initialDocType,
+      docnoFrom: "",
+      docnoTo: "",
       acCodes: ["All"],
       l4Codes: ["All"],
     });
     setReportError(null);
-  }, []);
+  }, [initialReportType, initialDocType]);
 
   const buildParams = useCallback(() => {
     const ac = (values.acCodes as string[]) || [];
@@ -340,15 +450,19 @@ export default function FinanceReportFilter() {
       code8: values.amountTo || "",
       code9: payees.length && !payees.includes("All") ? payees.join(",") : "",
       code10: String(formatDate(values.dateFrom)),
+      doc_type: values.docType || "ALL",
+      docno_from: values.docnoFrom || null,
+      docno_to: values.docnoTo || null,
       code20: reportType === "ledgerWithDetails" || reportType === "chequeDateWise" ? "DATE_WISE" : "RAWSQL",
       parameter: "Account_Report_Transaction",
     };
   }, [values, division, reportType, user]);
 
   const reportTitle = useMemo(() => {
+    if (pageTitle) return pageTitle;
     const found = REPORT_OPTIONS.find((o) => o.key === reportType);
     return found ? found.label : "Finance Report";
-  }, [reportType]);
+  }, [reportType, pageTitle]);
 
   const handleGenerate = async () => {
     if (!division) {
@@ -366,6 +480,27 @@ export default function FinanceReportFilter() {
       let html: string;
 
       switch (reportType) {
+        case "salesRegister":
+          html = await openSalesRegisterReport(params);
+          break;
+        case "purchaseRegister":
+          html = await openPurchaseRegisterReport(params);
+          break;
+        case "dayBook":
+          html = await openDayBookReport(params);
+          break;
+        case "transactionListing":
+          html = await openTransactionListingReport(params);
+          break;
+        case "ledgerBasic":
+          html = await openLedgerBasicReport(params);
+          break;
+        case "summaryDump":
+          html = await openSummaryDumpReport(params);
+          break;
+        case "detailDump":
+          html = await openDetailDumpReport(params);
+          break;
         case "ledgerWithDetails":
           html = await openLedgerWithDetailsReport({ ...params, code20: "DATE_WISE" });
           break;
@@ -401,6 +536,21 @@ export default function FinanceReportFilter() {
     try {
       const params = buildParams();
       switch (reportType) {
+        case "salesRegister":
+          await exportSalesRegisterExcel(params);
+          break;
+        case "purchaseRegister":
+          await exportPurchaseRegisterExcel(params);
+          break;
+        case "dayBook":
+          await exportDayBookExcel(params);
+          break;
+        case "transactionListing":
+          await exportTransactionListingExcel(params);
+          break;
+        case "ledgerBasic":
+          await exportLedgerBasicExcel(params);
+          break;
         case "ledgerWithDetails":
         case "ledgerWithOppositeEntry":
           await exportLedgerWithDetailsExcel(params);
@@ -424,7 +574,7 @@ export default function FinanceReportFilter() {
   return (
     <>
       <NewReportPage
-        title="Finance Report"
+        title={pageTitle || "Finance Report"}
         fields={fields}
         values={values}
         onChange={handleChange}
@@ -448,7 +598,6 @@ export default function FinanceReportFilter() {
         loading={generating}
         error={reportError}
         onExportExcel={handleExportExcel}
-        exportingExcel={generatingExcel}
       />
     </>
   );
