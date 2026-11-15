@@ -113,10 +113,35 @@ export function PurchaseReportPreviewDialog({
             <div className="freight-report-preview-message" role="alert">
               <strong>Unable to generate report</strong>
               <p>{error}</p>
+              {error.toLowerCase().includes("dynamically imported module") ? (
+              <div style={{ marginTop: "12px" }}>
+                <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "8px" }}>
+                  The report engine was updated after server restart. Please reload the page to load fresh modules.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  style={{
+                    background: "#00378c",
+                    color: "#ffffff",
+                    padding: "6px 16px",
+                    borderRadius: "6px",
+                    border: "none",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontSize: "13px",
+                  }}
+                >
+                  Reload Page & Retry
+                </button>
+              </div>
+            ) : (
               <p>Close this preview and generate the report again.</p>
+            )}
             </div>
           ) : pdfUrl ? (
             <iframe title={`${title} PDF preview`} src={`${pdfUrl}#zoom=100`} />
+           
           ) : (
             <div className="freight-report-preview-message" role="status">
               <Loader2 size={28} className="animate-spin" />
@@ -140,7 +165,7 @@ export function PurchaseReportPreviewDialog({
             ) : (
               <button type="button" className="primary" disabled><Download size={16} />Download PDF</button>
             )}
-            <button type="button" onClick={onClose}>Close</button>
+            {/* <button type="button" onClick={onClose}>Close</button> */}
           </div>
         </footer>
       </div>

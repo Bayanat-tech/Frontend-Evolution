@@ -27,16 +27,43 @@ export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit }: P
   const set = (name: string, val: unknown) =>
     setForm((cur) => ({ ...cur, [name]: val }));
 
-  const applyPrincipal = (value: string, row: LookupRow | null) =>
+  const applyPrincipal = (value: string, row: LookupRow | null) => {
+    // 1. Handle Deselect / Clear (when row is null)
+    if (!row) {
+      setForm((cur) => ({
+        ...cur,
+        prin_code: "",
+        prin_name: "",
+        prin_dept_code: "",
+        prin_div_code: "",
+        dept_code: "",
+        dept_name: "",
+        div_code: "",
+        div_name: "",
+      }));
+      return;
+    }
+
+    // 2. Handle Selection
+    const hasValidDept = row["DEPT_NAME"] || row["dept_name"];
+    const hasValidDiv = row["DIV_NAME"] || row["div_name"];
+
     setForm((cur) => ({
       ...cur,
       prin_code: value,
-      prin_name: row ? String(row["prin_name"] ?? row["PRIN_NAME"] ?? cur.prin_name ?? "") : cur.prin_name,
-      dept_code: row ? String(row["prin_dept_code"] ?? row["PRIN_DEPT_CODE"] ?? cur.dept_code ?? "") : cur.dept_code,
-      dept_name: row ? String(row["dept_name"] ?? row["DEPT_NAME"] ?? cur.dept_name ?? "") : cur.dept_name,
-      div_code:  row ? String(row["div_code"] ?? row["DIV_CODE"] ?? cur.div_code ?? "") : cur.div_code,
-      div_name:  row ? String(row["div_name"] ?? row["DIV_NAME"] ?? cur.div_name ?? "") : cur.div_name,
+      prin_name: String(row["prin_name"] ?? row["PRIN_NAME"] ?? ""),
+      
+      // Save these to use as WHERE filters in the lookups
+      prin_dept_code: String(row["prin_dept_code"] ?? row["PRIN_DEPT_CODE"] ?? ""),
+      prin_div_code:  String(row["div_code"] ?? row["DIV_CODE"] ?? ""),
+
+      // Auto-select only if the names are valid, otherwise clear
+      dept_code: hasValidDept ? String(row["prin_dept_code"] ?? row["PRIN_DEPT_CODE"] ?? "") : "",
+      dept_name: hasValidDept ? String(row["dept_name"] ?? row["DEPT_NAME"] ?? "") : "",
+      div_code:  hasValidDiv ? String(row["div_code"] ?? row["DIV_CODE"] ?? "") : "",
+      div_name:  hasValidDiv ? String(row["div_name"] ?? row["DIV_NAME"] ?? "") : "",
     }));
+  };
 
   const applyDepartment = (value: string, row: LookupRow | null) =>
     setForm((cur) => ({
@@ -46,6 +73,7 @@ export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit }: P
       div_code:  row ? String(row["div_code"]  ?? row["DIV_CODE"]  ?? cur.div_code ?? "") : cur.div_code,
       div_name:  row ? String(row["div_name"]  ?? row["DIV_NAME"]  ?? cur.div_name ?? "") : cur.div_name,
     }));
+
 
   const applyDivision = (value: string, row: LookupRow | null) =>
     setForm((cur) => ({
@@ -131,8 +159,10 @@ export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit }: P
               { field: "dept_name", header: "Department Name" },
               { field: "div_code",  header: "Division" },
             ]}
-            loadOptions={() => loadInboundDepartmentLookup(companyCode, String(form.div_code || ""))}
+            // 👇 Added prin_dept_code as a filter
+            loadOptions={() => loadInboundDepartmentLookup(companyCode, String(form.div_code || ""),)}
             onChange={applyDepartment}
+            required
           />
 
           <FormLookup
@@ -145,8 +175,10 @@ export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit }: P
               { field: "div_code",  header: "Code" },
               { field: "div_name",  header: "Division Name" },
             ]}
-            loadOptions={() => loadInboundDivisionLookup(companyCode)}
+            // 👇 Added prin_div_code as a filter
+            loadOptions={() => loadInboundDivisionLookup(companyCode,)}
             onChange={applyDivision}
+            required
           />
 
           <FormSelect

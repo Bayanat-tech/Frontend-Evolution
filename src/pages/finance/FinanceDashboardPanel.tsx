@@ -164,6 +164,7 @@ export function FinanceDashboardPanel() {
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const companyName = String(userRecord.company_name || userRecord.COMPANY_NAME || companyCode);
+  const companyLogo = String(userRecord.company_logo || userRecord.COMPANY_LOGO || "");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
 
   const [fyPeriod, setFyPeriod] = useState<string>("");
@@ -172,6 +173,7 @@ export function FinanceDashboardPanel() {
   const [data, setData] = useState<DashboardData>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [logoFailed, setLogoFailed] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -220,7 +222,14 @@ export function FinanceDashboardPanel() {
     companyCode === "GRL" ||
     companyCode === "BTIND" ||
     companyName.toUpperCase().includes("INDIA");
-  const currencyCode = data.currency_code || (isIndiaCompany ? "INR" : "OMR");
+  const currencyCode = String(
+    data.currency_code ||
+      userRecord.base_curr_code ||
+      userRecord.BASE_CURR_CODE ||
+      userRecord.currency ||
+      userRecord.CURRENCY ||
+      (isIndiaCompany ? "INR" : "OMR")
+  ).trim().toUpperCase();
   const currencyDecimals =
     data.currency_decimals != null
       ? data.currency_decimals
@@ -347,7 +356,16 @@ export function FinanceDashboardPanel() {
           <label>
             <span>Company</span>
             <strong>
-              <Building2 size={13} />
+              {companyLogo && !logoFailed ? (
+                <img
+                  src={companyLogo}
+                  alt=""
+                  className="h-3.5 w-3.5 object-contain rounded-sm inline-block"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <Building2 size={13} />
+              )}
               {companyName}
             </strong>
           </label>
@@ -1406,14 +1424,22 @@ function number(val: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatCurrency(val: number, isBalance = false, symbol = "¤", decimals = 2): string {
+function sanitizeCurrencySymbol(symbol: string, code = "OMR"): string {
+  if (!symbol || symbol.includes("?") || /[Ø±â\ufffd]/.test(symbol)) {
+    return currencySymbolFor(code);
+  }
+  return symbol.trim();
+}
+
+function formatCurrency(val: number, isBalance = false, symbol = "OMR", decimals = 2): string {
+  const cleanSymbol = sanitizeCurrencySymbol(symbol);
   const absFormatted = Math.abs(val).toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
-  const amount = usesCurrencySuffix(symbol)
-    ? `${absFormatted} ${symbol}`
-    : `${symbol}${needsCurrencyGap(symbol) ? " " : ""}${absFormatted}`;
+  const amount = usesCurrencySuffix(cleanSymbol)
+    ? `${absFormatted} ${cleanSymbol}`
+    : `${cleanSymbol}${needsCurrencyGap(cleanSymbol) ? " " : ""}${absFormatted}`;
   if (isBalance && val < 0) {
     return `(${amount})`;
   }
@@ -1429,37 +1455,43 @@ function usesCurrencySuffix(symbol: string): boolean {
 }
 
 function formatCompactCurrency(value: number, symbol: string): string {
+  const cleanSymbol = sanitizeCurrencySymbol(symbol);
   const compact = compactNumber(value);
-  return usesCurrencySuffix(symbol)
-    ? `${compact} ${symbol}`
-    : `${symbol}${needsCurrencyGap(symbol) ? " " : ""}${compact}`;
+  return usesCurrencySuffix(cleanSymbol)
+    ? `${compact} ${cleanSymbol}`
+    : `${cleanSymbol}${needsCurrencyGap(cleanSymbol) ? " " : ""}${compact}`;
 }
 
 function currencySymbolFor(code: string): string {
   const symbols: Record<string, string> = {
-    AED: "د.إ",
+    AED: "AED",
     EUR: "€",
     GBP: "£",
     INR: "₹",
-    OMR: "ر.ع.",
-    QAR: "ر.ق",
-    SAR: "ر.س",
+    OMR: "OMR",
+    QAR: "QAR",
+    SAR: "SAR",
     USD: "$",
-    KWD: "د.ك",
-    KD: "د.ك",
-    BHD: "ب.د",
+    KWD: "KWD",
+    KD: "KWD",
+    BHD: "BHD",
     JPY: "¥",
   };
-  return symbols[code.toUpperCase()] || code.toUpperCase() || "¤";
+  return symbols[code.toUpperCase()] || code.toUpperCase() || "OMR";
 }
 
 function isUsableCurrencySymbol(symbol: string, code: string): boolean {
-  return Boolean(
-    symbol &&
-    !symbol.includes("?") &&
-    symbol.trim() !== "" &&
-    symbol.toUpperCase() !== code.toUpperCase()
-  );
+  if (!symbol) return false;
+  const clean = symbol.trim();
+  if (
+    !clean ||
+    clean.includes("?") ||
+    /[^A-Za-z0-9$€£¥₹\s]/.test(clean) ||
+    clean.toUpperCase() === code.toUpperCase()
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function compactNumber(val: number): string {

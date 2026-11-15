@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react";
 import { CSSProperties, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
@@ -6,12 +6,16 @@ import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } fr
 type LookupColumn = {
   field: string;
   header: string;
+  width?: string | number;
 };
 
 type LookupFieldProps = {
   label?: string;
   value: string;
   displayValue?: string;
+  subText?: string;
+  subTextClassName?: string;
+  triggerClassName?: string;
   columns: LookupColumn[];
   valueField: string;
   displayFields: string[];
@@ -27,13 +31,19 @@ type LookupFieldProps = {
   multiSelect?: boolean;
   showLabelInCompact?: boolean;
   renderRowActions?: (row: LookupRow) => ReactNode;
+  popoverWidth?: number;
   className?: string;
+  forceOpenDown?: boolean;
+  allowCustomValue?: boolean;
 };
 
 export function LookupField({
   label,
   value,
   displayValue,
+  subText,
+  subTextClassName,
+  triggerClassName,
   columns,
   valueField,
   displayFields,
@@ -49,7 +59,10 @@ export function LookupField({
   enforceRequired,
   multiSelect,
   renderRowActions,
+  popoverWidth,
   className,
+  forceOpenDown = false,
+  allowCustomValue = false,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -82,20 +95,21 @@ export function LookupField({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    const minIdealWidth = 540;
+    const autoMinWidth = columns.length <= 2 ? 390 : 540;
+    const minIdealWidth = popoverWidth ?? autoMinWidth;
+    const maxAllowedWidth = popoverWidth ?? 780;
     const width = Math.min(
       Math.max(rect.width, minIdealWidth),
-      Math.min(780, viewportWidth - 24),
+      Math.min(maxAllowedWidth, viewportWidth - 24),
     );
 
-    // Leave a comfortable 28px margin from top and bottom screen edges (taskbar safety)
-    const spaceBelow = Math.max(0, viewportHeight - rect.bottom - 28);
-    const spaceAbove = Math.max(0, rect.top - 28);
-
-    // If trigger is in the lower half of viewport or space below is tight (< 380px), open ABOVE!
-    const opensAbove = (spaceBelow < 380 && spaceAbove >= 200) || (spaceAbove > spaceBelow);
-    const availableSpace = opensAbove ? spaceAbove : spaceBelow;
-    const maxHeight = Math.min(520, Math.max(220, availableSpace));
+    // Prefer below; only flip when it cannot fit a usable results list.
+    const gap = 4;
+    const viewportMargin = 12;
+    const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap - viewportMargin);
+    const spaceAbove = Math.max(0, rect.top - gap - viewportMargin);
+    const opensAbove = forceOpenDown ? false : (spaceBelow < 220 && spaceAbove > spaceBelow);
+    const maxHeight = Math.min(520, opensAbove ? spaceAbove : Math.max(160, spaceBelow));
 
     let left = rect.left;
     if (left + width > viewportWidth - 12) {
@@ -107,21 +121,15 @@ export function LookupField({
     const nextStyle: CSSProperties = {
       position: "fixed",
       left,
+      top: opensAbove ? "auto" : rect.bottom + gap,
+      bottom: opensAbove ? viewportHeight - rect.top + gap : "auto",
       width,
       maxHeight,
       zIndex: 9999,
     };
 
-    if (opensAbove) {
-      nextStyle.bottom = viewportHeight - rect.top + 4;
-      nextStyle.top = "auto";
-    } else {
-      nextStyle.top = rect.bottom + 4;
-      nextStyle.bottom = "auto";
-    }
-
     setPopoverStyle(nextStyle);
-  }, []);
+  }, [columns.length, popoverWidth, forceOpenDown]);
 
   useEffect(() => {
     if (!open) return;
@@ -176,13 +184,89 @@ export function LookupField({
     }
   }, [highlightedIndex, open]);
 
+  const loadOptionsRef = useRef(loadOptions);
   useEffect(() => {
-    if (!open) return;
+    loadOptionsRef.current = loadOptions;
+  }, [loadOptions]);
+
+  // ───── NEW: resolve display name for a preset value without opening the popover ─────
+  const resolvingRef = useRef(false);
+  useEffect(() => {
+    if (!value || displayValue !== undefined || rows.length > 0 || resolvingRef.current) return;
+    resolvingRef.current = true;
+    (async () => {
+      try {
+        const raw = await loadOptionsRef.current("");
+        const unique: LookupRow[] = [];
+        const seen = new Set<string>();
+        for (const r of Array.isArray(raw) ? raw : []) {
+          const val = String(getLookupValue(r, valueField) ?? JSON.stringify(r));
+          if (!seen.has(val)) {
+            seen.add(val);
+            unique.push(r);
+          }
+        }
+        setRows(unique);
+      } catch {
+        resolvingRef.current = false; // allow a retry later
+      }
+    })();
+  }, [value, displayValue, rows.length, valueField]);  useEffect(() => {
+    loadOptionsRef.current = loadOptions;
+  }, [loadOptions]);
+
+  const lastFetchedQueryRef = useRef<string | null>(null);
+
+  const openLookup = async () => {
+    if (disabled) return;
+    setOpen(true);
+    setLoading(true);
+    setError("");
+    setHighlightedIndex(0);
+    lastFetchedQueryRef.current = query;
+    try {
+      const raw = await loadOptionsRef.current(query);
+      const unique = [];
+      const seen = new Set();
+      for (const r of raw) {
+        const val = String(getLookupValue(r, valueField) ?? JSON.stringify(r));
+        if (!seen.has(val)) {
+          seen.add(val);
+          unique.push(r);
+        }
+      }
+      setRows(unique);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load lookup");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) {
+      lastFetchedQueryRef.current = null;
+      return;
+    }
+    if (lastFetchedQueryRef.current === query) {
+      return;
+    }
     const timer = window.setTimeout(async () => {
       setLoading(true);
       setError("");
+      lastFetchedQueryRef.current = query;
       try {
-        setRows(await loadOptions(query));
+        const raw = await loadOptionsRef.current(query);
+      const unique = [];
+      const seen = new Set();
+      for (const r of raw) {
+        const val = String(getLookupValue(r, valueField) ?? JSON.stringify(r));
+        if (!seen.has(val)) {
+          seen.add(val);
+          unique.push(r);
+        }
+      }
+      setRows(unique);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load lookup");
       } finally {
@@ -191,22 +275,7 @@ export function LookupField({
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [loadOptions, open, query]);
-
-  const openLookup = async () => {
-    if (disabled) return;
-    setOpen(true);
-    setLoading(true);
-    setError("");
-    setHighlightedIndex(0);
-    try {
-      setRows(await loadOptions(query));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load lookup");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [open, query]);
 
   const selectRow = (row: LookupRow) => {
     const rowValue = String(getLookupValue(row, valueField) ?? "");
@@ -255,20 +324,22 @@ export function LookupField({
   };
 
   const currentText =
-    displayValue ||
-    (multiSelect
-      ? rows
-        .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
-        .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
-        .join(", ") || value || ""
-      : value
-        ? getLookupText(
-          rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
-            [valueField]: value,
-          },
-          displayFields.length ? displayFields : [valueField],
-        ) || String(value)
-        : "");
+    displayValue !== undefined
+      ? displayValue
+      : (multiSelect
+        ? rows
+          .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
+          .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
+          .join(", ") || value || ""
+        : value
+          ? getLookupText(
+            rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
+              [valueField]: value,
+              ...(displayFields.includes("label") ? { label: value } : {}),
+            },
+            displayFields.length ? displayFields : [valueField],
+          ) || String(value)
+          : "");
 
   const totalCols = columns.length + (renderRowActions ? 1 : 0);
   const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
@@ -292,14 +363,18 @@ export function LookupField({
           className={`lookup-field-trigger relative flex w-full min-w-0 items-center overflow-hidden rounded-md border transition-all ${
             disabled
               ? "bg-slate-100/90 border-slate-200 cursor-not-allowed"
-              : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20"
-          } ${dense ? "h-7" : compact ? "h-7" : "h-8"}`}
+              : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20 shadow-2xs"
+          } ${dense ? "h-7" : subText ? "h-[34px] min-h-[32px]" : compact ? "h-7" : "h-8"} ${triggerClassName || ""}`}
         >
           {enforceRequired && !disabled && (
             <input
               ref={validityRef}
               tabIndex={-1}
               aria-hidden="true"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-form-type="other"
+              name="hidden_validity_no_autofill"
               className="pointer-events-none absolute inset-0 -z-10 h-0 w-0 border-0 bg-transparent p-0 text-transparent opacity-0"
               style={{ opacity: 0, color: "transparent", width: 0, height: 0, pointerEvents: "none" }}
               value={value}
@@ -309,25 +384,35 @@ export function LookupField({
             />
           )}
           <button
-            className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate ${
+            className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate flex flex-col justify-center ${
               disabled ? "cursor-not-allowed text-slate-700 font-medium" : "cursor-pointer"
-            } ${
-              dense || compact ? "px-2" : "px-2.5"
-            } ${!disabled && currentText ? "text-slate-800 font-medium text-[11px]" : !disabled ? "text-slate-400 text-[10px]" : "text-[11px]"}`}
+            } px-1.5 ${subText ? "py-0" : ""}`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
+            title={subText ? `${currentText} - ${subText}` : currentText}
           >
-            <span className={`block truncate ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
+            <span className={`block truncate ${!disabled && currentText ? "text-inherit font-semibold text-[11px] leading-tight" : !disabled ? "text-slate-400 text-[10.5px] leading-tight" : "text-[10.5px] leading-tight"} ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
               {currentText ||
                 (placeholder
                   ? `${placeholder.replace(/\.*$/, "")}...`
                   : `${cleanLabel || label || ""}...`)}
             </span>
+            {subText && (
+              <div className="flex items-center min-w-0 leading-none">
+                <span
+                  className={`truncate leading-tight ${
+                    subTextClassName || "block text-[9px] font-medium text-slate-500"
+                  }`}
+                >
+                  {subText}
+                </span>
+              </div>
+            )}
           </button>
           {value && !disabled && (
             <button
-              className={`${dense || compact ? "w-6" : "w-6.5"} shrink-0 grid place-items-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer`}
+              className="w-4.5 shrink-0 grid place-items-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer self-stretch"
               type="button"
               aria-label="Clear lookup"
               onClick={(e) => {
@@ -335,19 +420,19 @@ export function LookupField({
                 onChange("", null);
               }}
             >
-              <X size={dense ? 11 : 13} />
+              <X size={10} />
             </button>
           )}
           <button
-            className={`${dense || compact ? "w-6" : "w-7"} shrink-0 grid place-items-center ${
+            className={`w-4.5 shrink-0 grid place-items-center ${
               disabled ? "text-slate-300 pointer-events-none" : "text-slate-400 hover:bg-slate-100 cursor-pointer"
-            }`}
+            } self-stretch`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
             aria-label="Open lookup"
           >
-            <ChevronDown size={dense ? 13 : 15} />
+            <ChevronDown size={11} />
           </button>
         </div>
       </label>
@@ -367,6 +452,10 @@ export function LookupField({
                 <input
                   ref={searchInputRef}
                   autoFocus
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  name="lookup_query_no_autofill"
                   className="lookup-search-input w-full h-8.5 min-h-[34px] pl-8 pr-7 rounded-lg border border-slate-300 focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/20 bg-white text-slate-800 text-[11.5px] placeholder:text-slate-400 focus:outline-none transition-all shadow-xs"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -386,6 +475,24 @@ export function LookupField({
             </div>
 
             {error && <div className="m-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-200">{error}</div>}
+            {allowCustomValue && query.trim() && (
+              <div className="flex items-center justify-between px-3 py-1.5 bg-blue-50/90 border-b border-blue-200 text-xs shrink-0">
+                <span className="text-slate-700 text-[11px] truncate mr-2">
+                  Use custom entry: <strong className="text-[#00378C]">"{query.trim()}"</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const customVal = query.trim();
+                    onChange(customVal, { [valueField]: customVal, label: customVal, value: customVal });
+                    setOpen(false);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-white bg-[#00378C] hover:bg-[#002b6d] rounded-md transition-colors shadow-2xs shrink-0 cursor-pointer"
+                >
+                  <Plus size={12} /> Select "{query.trim()}"
+                </button>
+              </div>
+            )}
 
             {/* Scrollable table body with custom scrollbar */}
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto select-none bg-white">
@@ -395,8 +502,9 @@ export function LookupField({
                     {columns.map((column, columnIndex) => (
                       <th
                         className={`px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-white select-none whitespace-nowrap ${
-                          columnIndex === 0 ? "w-[130px] min-w-[110px]" : "w-auto"
+                          column.width ? "" : columnIndex === 0 ? "min-w-[130px]" : "w-auto min-w-[160px]"
                         }`}
+                        style={column.width ? { width: column.width, minWidth: column.width } : undefined}
                         key={column.field}
                         title={column.header}
                       >
@@ -458,9 +566,10 @@ export function LookupField({
                               <td
                                 className={`px-3 py-1.5 text-xs ${
                                   columnIndex === 0
-                                    ? "font-mono font-semibold text-[#00378C] text-[11.5px] whitespace-nowrap w-[130px] min-w-[110px]"
+                                    ? "font-semibold text-[#00378C] text-[11.5px] whitespace-normal break-words"
                                     : "text-slate-800 font-medium text-[11.5px] whitespace-normal break-words leading-snug"
                                 }`}
+                                style={column.width ? { width: column.width, minWidth: column.width } : undefined}
                                 key={column.field}
                                 title={cellText}
                               >
@@ -488,14 +597,14 @@ export function LookupField({
             </div>
 
             {/* Pagination & Action Footer */}
-            <div className="lookup-footer flex-none px-3 py-2 border-t border-slate-200 bg-slate-50/95 flex items-center justify-between text-xs text-slate-600 gap-2 flex-wrap">
-              <span className="text-[11.5px] font-medium text-slate-500 whitespace-nowrap">
-                Showing <strong className="text-slate-800">{startRecord}–{endRecord}</strong> of <strong className="text-slate-800">{filteredRows.length.toLocaleString()}</strong>
+            <div className="lookup-footer flex-none px-3 py-1.5 border-t border-slate-200 bg-slate-50/95 flex items-center justify-between text-xs text-slate-600 gap-2">
+              <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap shrink-0">
+                Showing <strong className="text-slate-800 font-semibold">{startRecord}–{endRecord}</strong> of <strong className="text-slate-800 font-semibold">{filteredRows.length.toLocaleString()}</strong>
               </span>
 
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <select
-                  className="h-7 px-2 rounded-md border border-slate-300 bg-white text-[11px] font-semibold text-slate-700 focus:outline-none focus:border-[#00378C] cursor-pointer shadow-2xs"
+                  className="h-6.5 px-1.5 rounded border border-slate-300 bg-white text-[10.5px] font-medium text-slate-700 focus:outline-none focus:border-[#00378C] cursor-pointer shadow-2xs"
                   value={rowsPerPage}
                   onChange={(e) => {
                     setRowsPerPage(Number(e.target.value));
@@ -504,18 +613,18 @@ export function LookupField({
                   }}
                   title="Rows per page"
                 >
-                  {[10, 25, 50, 100, 250, 500].map((size) => (
+                  {[10, 25, 50, 100].map((size) => (
                     <option key={size} value={size}>
-                      {size} / page
+                      {size} / pg
                     </option>
                   ))}
                 </select>
 
                 {totalPages > 1 && (
-                  <div className="inline-flex items-center gap-1">
+                  <div className="inline-flex items-center gap-0.5">
                     <button
                       type="button"
-                      className="h-7 px-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
+                      className="h-6.5 w-6 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
                       disabled={page === 1}
                       onClick={() => {
                         setPage(1);
@@ -523,11 +632,11 @@ export function LookupField({
                       }}
                       title="First page"
                     >
-                      <ChevronsLeft size={14} />
+                      <ChevronsLeft size={13} />
                     </button>
                     <button
                       type="button"
-                      className="h-7 px-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
+                      className="h-6.5 w-6 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
                       disabled={page === 1}
                       onClick={() => {
                         setPage((current) => Math.max(1, current - 1));
@@ -535,14 +644,14 @@ export function LookupField({
                       }}
                       title="Previous page"
                     >
-                      <ChevronLeft size={14} />
+                      <ChevronLeft size={13} />
                     </button>
-                    <span className="text-[11px] font-semibold text-slate-700 px-1.5 whitespace-nowrap min-w-[42px] text-center">
-                      {page} / {totalPages}
+                    <span className="text-[10.5px] font-semibold text-slate-700 px-1 whitespace-nowrap min-w-[34px] text-center">
+                      {page}/{totalPages}
                     </span>
                     <button
                       type="button"
-                      className="h-7 px-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
+                      className="h-6.5 w-6 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
                       disabled={page === totalPages}
                       onClick={() => {
                         setPage((current) => Math.min(totalPages, current + 1));
@@ -550,11 +659,11 @@ export function LookupField({
                       }}
                       title="Next page"
                     >
-                      <ChevronRight size={14} />
+                      <ChevronRight size={13} />
                     </button>
                     <button
                       type="button"
-                      className="h-7 px-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
+                      className="h-6.5 w-6 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
                       disabled={page === totalPages}
                       onClick={() => {
                         setPage(totalPages);
@@ -562,14 +671,14 @@ export function LookupField({
                       }}
                       title="Last page"
                     >
-                      <ChevronsRight size={14} />
+                      <ChevronsRight size={13} />
                     </button>
                   </div>
                 )}
 
                 <button
                   type="button"
-                  className="h-7 px-3 rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300 text-[11px] font-semibold transition-colors cursor-pointer ml-1 shadow-2xs"
+                  className="h-6.5 px-2.5 rounded bg-slate-200 text-slate-800 hover:bg-slate-300 text-[10.5px] font-semibold transition-colors cursor-pointer ml-0.5 shadow-2xs"
                   onClick={() => {
                     setOpen(false);
                     setQuery("");

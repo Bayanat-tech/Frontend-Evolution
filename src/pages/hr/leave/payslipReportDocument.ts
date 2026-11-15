@@ -216,7 +216,7 @@ export async function buildPayslipPdfDefinition(report: FreightReportDocument, i
 
 export async function createPayslipPdf(report: FreightReportDocument, identity: ReportIdentity) {
   const [{ default: pdfMake }, definition, vfs] = await Promise.all([
-    import("pdfmake/build/pdfmake.js"), buildPayslipPdfDefinition(report, identity), fontVfs(),
+    import("pdfmake/build/pdfmake"), buildPayslipPdfDefinition(report, identity), fontVfs(),
   ]);
   const fonts = { Inter: { normal: "Inter-Regular.ttf", bold: "Inter-Bold.ttf", italics: "Inter-Regular.ttf", bolditalics: "Inter-Bold.ttf" } };
   return new Promise<Blob>((resolve, reject) => {

@@ -14,7 +14,6 @@ import {
   type FormMode,
   type ManpowerFormHandle,
 } from "./AddHrManpower";
-
 export type TManpowerTransaction = {
   company_code?: string;
   doc_type?: string;

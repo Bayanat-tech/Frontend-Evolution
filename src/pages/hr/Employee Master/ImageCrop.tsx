@@ -17,61 +17,55 @@ const ImageCrop = (props: ImageCropProps) => {
   const { open, onClose, onSubmit, dialogTitle } = props;
 
   const [selectedImage, setSelectedImage] = useState<string | null | undefined>(null);
-  const [selectedImageName, setSelectedImageName] = useState<string>("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isFileUploading, setIsFileUploading] = useState<boolean>(false);
   const [isErrorInUploadImages, setIsErrorInUploadImages] = useState<boolean>(false);
 
   const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
     setSelectedImage(null);
+    setSelectedFile(null);
     setIsErrorInUploadImages(false);
-    let selectedFile;
-    if (event.target.files) {
-      selectedFile = event.target.files[0];
-    }
-    if (selectedFile) {
-      if (!selectedFile.type.startsWith("image/")) {
-        setIsErrorInUploadImages(true);
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target) {
-          setSelectedImage(e.target.result ? String(e.target.result) : null);
-        }
-      };
-      setSelectedImageName(selectedFile.name);
-      reader.readAsDataURL(selectedFile);
-    }
-  };
 
-  const dataURLtoBlob = (dataURL: string) => {
-    const byteString = atob(dataURL.split(",")[1]);
-    const mimeString = dataURL.split(",")[0].split(":")[1].split(";")[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i);
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setIsErrorInUploadImages(true);
+      return;
     }
-    return new Blob([ab], { type: mimeString });
+
+    setSelectedFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target) {
+        setSelectedImage(e.target.result ? String(e.target.result) : null);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleFileUploadSubmit = async () => {
+    if (!selectedFile) return;
+
     setIsFileUploading(true);
-    if (selectedImage) {
-      const blob = dataURLtoBlob(selectedImage);
+    try {
+      // Pass the original File (which carries its own name) to the uploader.
       const response: { success: boolean; data?: any } | undefined = await uploadFile(
-        blob,
-        selectedImageName,
+        selectedFile,
+        selectedFile.name,
       );
       if (response && response.success) {
         onSubmit(response?.data);
       }
+    } finally {
+      setIsFileUploading(false);
     }
-    setIsFileUploading(false);
   };
 
   const handleClose = () => {
     setSelectedImage(null);
+    setSelectedFile(null);
     setIsErrorInUploadImages(false);
     onClose();
   };
@@ -102,7 +96,7 @@ const ImageCrop = (props: ImageCropProps) => {
 
         {selectedImage && (
           <div className="flex justify-end">
-            <Button disabled={!selectedImage || isFileUploading} onClick={handleFileUploadSubmit}>
+            <Button disabled={!selectedFile || isFileUploading} onClick={handleFileUploadSubmit}>
               <UploadCloud size={15} /> {isFileUploading ? "Uploading..." : "Upload image"}
             </Button>
           </div>

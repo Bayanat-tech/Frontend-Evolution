@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, FileText, Plus, RefreshCw, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { Edit2, Eye, FileText, Plus, RefreshCw, Save, Trash2, X, ArrowLeft, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookupaccount } from "../../api/lookups";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
@@ -53,6 +53,7 @@ export function ExpenseMasterPage() {
   const companyCode = user?.company_code || "";
 
   const [rows, setRows] = useState<ExpenseMasterRow[]>([]);
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [popup, setPopup] = useState<PopupState>({ open: false, mode: "add", data: {} });
@@ -96,6 +97,14 @@ export function ExpenseMasterPage() {
     void loadRows();
   }, [loadRows]);
 
+  const filteredRows = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) =>
+      Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term))
+    );
+  }, [query, rows]);
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -127,29 +136,38 @@ export function ExpenseMasterPage() {
       { accessorKey: "ac_code", header: "A/C Code", size: 140, enableSorting: false },
       {
         id: "actions",
-        header: "Actions",
+        header: () => <div className="text-center">Actions</div>,
         size: 100,
         enableColumnFilter: false,
+        enableSorting: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-center gap-1">
             <Button
               size="icon"
               variant="ghost"
               title="Edit"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
               onClick={() => setPopup({ open: true, mode: "edit", data: row.original })}
             >
-              <Edit2 size={14} />
+              <Edit2 size={15} />
             </Button>
             <Button
               size="icon"
               variant="ghost"
               title="View"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
               onClick={() => setPopup({ open: true, mode: "view", data: row.original })}
             >
-              <Eye size={14} />
+              <Eye size={15} />
             </Button>
-            <Button size="icon" variant="ghost" title="Delete" onClick={() => setDeleteTarget(row.original)}>
-              <Trash2 size={14} />
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              title="Delete" 
+              className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 size={15} />
             </Button>
           </div>
         ),
@@ -161,117 +179,139 @@ export function ExpenseMasterPage() {
   const formOpen = popup.open;
   const readonly = popup.mode === "view";
   const closeForm = () => setPopup((p) => ({ ...p, open: false }));
-  const pageTitle = !formOpen
-    ? "Expense Master"
-    : popup.mode === "add"
-      ? "New Expense"
-      : popup.mode === "edit"
-        ? "Edit Expense"
-        : "View Expense";
 
-  return (
-    <section className="grid gap-2 p-1">
-      {/* ---------- Top Header ---------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
-            <FileText size={14} />
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Full-page, Freight-style header
+     ───────────────────────────────────────────────────────── */
+  if (formOpen) {
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        
+        {/* WMS-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                  {popup.mode === "add" ? "New Expense" : popup.mode === "edit" ? "Edit Expense" : "View Expense"}
+                </h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {popup.mode === "view" ? "Viewing" : popup.mode === "edit" ? "Editing" : "Draft"}
+                </span>
+              </div>
+            </div>
           </div>
-          <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">{pageTitle}</h1>
-        </div>
 
-        {formOpen ? (
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
             {!readonly && (
               <Button
                 type="button"
+                size="sm"
                 variant="outline"
                 onClick={() => setResetKey((k) => k + 1)}
                 disabled={formSaving}
                 title="Reset form"
-                className="h-7 gap-1 rounded-md px-3 text-xs font-semibold"
               >
-                <RotateCcw size={13} /> Reset
+                <RotateCcw size={14} /> Reset
               </Button>
             )}
-
-
+            <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={formSaving}>
+              <ArrowLeft size={14} /> List
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={formSaving}>
+              <X size={14} /> Close
+            </Button>
             {!readonly && (
-              <Button
-                type="submit"
-                form="expense-master-form"
-                disabled={formSaving}
-                className="h-7 gap-1 rounded-md bg-[#00378C] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[#002d72]"
-              >
-                <Save size={13} /> {formSaving ? "Saving..." : popup.mode === "edit" ? "Update" : "Save"}
+              <Button type="submit" form="expense-master-form" size="sm" disabled={formSaving}>
+                <Save size={14} /> {formSaving ? "Saving" : popup.mode === "edit" ? "Update" : "Save"}
               </Button>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={closeForm}
-              disabled={formSaving}
-              aria-label="Close"
-              title="Close"
-              className="h-7 w-7 rounded-md"
-            >
-              <X size={14} />
-            </Button>
           </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={() => setPopup({ open: true, mode: "add", data: {} })}
-              className="h-8 gap-1.5 rounded-lg bg-[#00378C] px-3.5 text-xs font-semibold text-white hover:bg-[#002d72]"
-            >
-              <Plus size={14} strokeWidth={2.5} /> Add
-            </Button>
-            <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows(false)}>
-              <RefreshCw size={15} />
-            </Button>
+        </div>
+
+        {/* Form content wrapped in Freight tabs shell */}
+        <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
+          <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
+            <div className="p-3 grid gap-3">
+              <AddExpenseMasterForm
+                key={`${popup.mode}-${popup.data.expense_code ?? "new"}-${resetKey}`}
+                mode={popup.mode}
+                existingData={popup.data}
+                onSavingChange={setFormSaving}
+                onClose={(shouldRefetch?: boolean) => {
+                  const wasEdit = popup.mode === "edit";
+                  closeForm();
+                  if (shouldRefetch) {
+                    setNotice({ type: "success", message: wasEdit ? "Successfully updated" : "Successfully created" });
+                    void loadRows(false);
+                  }
+                }}
+              />
+            </div>
           </div>
-        )}
+        </div>
+      </section>
+    );
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — Freight style (buttons inside DataTable toolbar)
+     ───────────────────────────────────────────────────────── */
+  return (
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Page title only — buttons live inside the DataTable toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Expense Master
+          </h2>
+        </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      {/* ---------- EDITOR (in-page) ---------- */}
-      {formOpen && (
-        <AddExpenseMasterForm
-          key={`${popup.mode}-${popup.data.expense_code ?? "new"}-${resetKey}`}
-          mode={popup.mode}
-          existingData={popup.data}
-          onSavingChange={setFormSaving}
-          onClose={(shouldRefetch?: boolean) => {
-            const wasEdit = popup.mode === "edit";
-            closeForm();
-            if (shouldRefetch) {
-              setNotice({ type: "success", message: wasEdit ? "Successfully updated" : "Successfully created" });
-              void loadRows(false);
-            }
-          }}
-        />
-      )}
-
-      {/* ---------- LIST ---------- */}
-      {!formOpen && (
-        <DataTable
-          columns={columns}
-          data={rows}
-          title={`${rows.length.toLocaleString()} Records`}
-          subtitle="Expense Master List"
-          searchPlaceholder="Search expense code, name, A/C code..."
-          loading={loading}
-          height="calc(100dvh - 150px)"
-          minWidth={900}
-          density="grid"
-          enablePagination
-          pageSize={100}
-          getRowId={(row) => `${row.company_code}-${row.expense_code}`}
-        />
-      )}
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={`${filteredRows.length.toLocaleString()} Records`}
+        subtitle="Expense Master List"
+        searchValue={query}
+        onSearchChange={(value) => setQuery(value)}
+        searchPlaceholder="Search expense code, name, A/C code..."
+        loading={loading}
+        height="calc(100dvh - 150px)"
+        minWidth={900}
+        density="grid"
+        enablePagination
+        pageSize={100}
+        getRowId={(row) => `${row.company_code}-${row.expense_code}`}
+        toolbar={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPopup({ open: true, mode: "add", data: {} })}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => void loadRows(false)}
+              className="flex items-center justify-center h-[30px] w-[30px] rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all shadow-sm cursor-pointer"
+              title="Refresh"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+        }
+      />
 
       {/* ---------- DELETE CONFIRM ---------- */}
       <Dialog
@@ -292,7 +332,7 @@ export function ExpenseMasterPage() {
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground m-0">
           Confirm delete for expense code <strong>{deleteTarget?.expense_code}</strong>?
         </p>
       </Dialog>

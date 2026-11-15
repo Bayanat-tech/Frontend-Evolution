@@ -1,236 +1,362 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+// PrRegisterPage.tsx
+"use client";
+
+import React, { useState, useRef, useCallback } from "react";
+import { FileText, ListOrdered, Loader2, RotateCcw, Search, X } from "lucide-react";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
+import { PurchaseReportPreview } from "../purchase_sales/Reports/Purchasereportpreview";
+import { openPurchaseReport } from "../purchase_sales/Reports/PurchaseReportPreviewState";
+import { ReportFilterHeader } from "../../components/reports/ReportFilterHeader";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { LookupField } from "../../components/ui/LookupField";
+import { getDynamicLookup } from "../../api/lookups";
 import { useAuth } from "../../state/AuthContext";
-import { almsCommonSelect } from "../../api/alms";
-import {
-  exportPRPurchaseSummaryExcel,
-  getPRRegisterReportHtml,
-} from "../../api/transactions";
-import { NewReportDialog, NewReportPage, ReportFieldConfig, ReportOption } from "../../components/new_report_format";
+import { getPrRegisterDetailReportExcel, getPrRegisterDetailReportHtml, getPrRegisterSummaryReportExcel, getPrRegisterSummaryReportHtml } from "../../api/transactions";
 
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Params {
-  division: string;
-  status: string;
+interface PrRegisterParams {
+    loginid: string;
+    company_code: string;
+    fromdate: string;
+    todate: string;
+    user_id: string;
+    search_text: string;
+    status: string;
+    report_type: string;
+    [key: string]: any;
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+type ReportType = "SUMMARY" | "DETAILS";
 
-export default function PurchaseRequestRegisterReport() {
-  const { user } = useAuth();
-  const companyCode = user?.company_code ?? "";
-  const loginid = user?.loginid ?? "";
+// Display Value -> Data Value (data value is compared with PURCH_STATUS in the procedure)
+const STATUS_OPTIONS: { displayValue: string; dataValue: string }[] = [
+    { displayValue: "ALL", dataValue: "All" },
+    { displayValue: "PENDING", dataValue: "PENDING" },
+    { displayValue: "APPROVED", dataValue: "APPROVED" },
+    { displayValue: "REJECTED", dataValue: "REJECTED" },
+    { displayValue: "PO GENERATED", dataValue: "PO GENERATED" },
+];
 
-  // ── Dialog state
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState<string>("");
-  const [reportHtml, setReportHtml] = useState<string | null>(null);
+// ─── Field wrapper ──────────────────────────────────────────────────────────
+// NOTE: this is a <div>, not a <label>. A <label> forwards clicks to the first
+// input inside it, which interferes with the BiscDatePicker calendar.
 
-  // ── Parameter options
-  const [divisionOptions, setDivisionOptions] = useState<ReportOption[]>([]);
-  const [statusOptions, setStatusOptions] = useState<ReportOption[]>([]);
-  const [optLoading, setOptLoading] = useState(false);
-  const [optError, setOptError] = useState<string>("");
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="grid gap-1.5 text-xs font-semibold text-slate-600">
+            {label}
+            {children}
+        </div>
+    );
+}
 
-  // ── Parameter values
-  const [params, setParams] = useState<Params>({
-    division: "ALL",
-    status: "ALL",
-  });
+function SectionTitle({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="col-span-full flex items-center gap-3 pt-1">
+            <span className="text-xs font-semibold text-slate-500">{children}</span>
+            <span className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+        </div>
+    );
+}
 
-  const optionsLoadedRef = useRef(false);
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
-  // ── Load options ──────────────────────────────────────────────────────────
-  const loadOptions = useCallback(async () => {
-    if (optionsLoadedRef.current) return;
-    optionsLoadedRef.current = true;
+// Converts whatever BiscDatePicker gives (string / Date / event) into yyyy-mm-dd.
+// Parsed manually so dd/mm/yyyy is never mis-read as mm/dd/yyyy.
+const pickValue = (v: any): string => {
+    if (v === null || v === undefined || v === "") return "";
 
-    setOptLoading(true);
-    setOptError("");
-
-    try {
-      const divisionResult = await almsCommonSelect({
-        parameter: "PS_PREQUEST_ENTRY_DIVISION",
-        loginid,
-        code1: companyCode,
-        code2: "",
-        code3: "",
-        code4: "",
-      });
-
-      const statusResult = await almsCommonSelect({
-        parameter: "PS_PREQUEST_ENTRY_STATUS_LIST",
-        loginid,
-        code1: companyCode,
-        code2: "",
-        code3: "",
-        code4: "",
-      });
-
-      const divisions: ReportOption[] = [
-        { value: "ALL", label: "All Divisions" },
-        ...(divisionResult || []).map((row: Record<string, unknown>) => ({
-          value: String(row.DIV_CODE || ""),
-          label: String(row.DIV_NAME || ""),
-        })),
-      ];
-
-      let statuses: ReportOption[] = [];
-      if (statusResult && statusResult.length > 0) {
-        statuses = (statusResult || []).map((row: Record<string, unknown>) => ({
-          value: String(row.STATUS_CODE || ""),
-          label: String(row.STATUS_NAME || ""),
-        }));
-      } else {
-        const STATUS_LABELS: Record<string, string> = {
-          SAVEASDRAFT: "Draft",
-          SUBMITTED: "Submitted",
-          APPROVED: "Approved",
-          REJECTED: "Rejected",
-          SENDBACK: "Sent Back",
-          CANCELED: "Canceled",
-        };
-        statuses = [
-          { value: "ALL", label: "All" },
-          ...Object.entries(STATUS_LABELS).map(([code, label]) => ({
-            value: code,
-            label,
-          })),
-        ];
-      }
-
-      setDivisionOptions(divisions);
-      setStatusOptions(statuses);
-    } catch (e: any) {
-      console.error("Failed to load options", e);
-      setOptError(e?.message ?? "Failed to load filter options");
-      optionsLoadedRef.current = false;
-    } finally {
-      setOptLoading(false);
+    // Date object -> use LOCAL parts (toISOString would shift the day in India time)
+    if (v instanceof Date) {
+        return isNaN(v.getTime()) ? "" : `${v.getFullYear()}-${pad2(v.getMonth() + 1)}-${pad2(v.getDate())}`;
     }
-  }, [companyCode, loginid]);
 
-  useEffect(() => {
-    loadOptions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Event object
+    if (typeof v === "object") return pickValue(v?.target?.value);
 
-  // ── Fetch the report HTML ─────────────────────────────────────────────────
-  const fetchReport = useCallback(
-    async (p: Params) => {
-      setLoading(true);
-      setError("");
-      setReportHtml(null);
-      setDialogOpen(true);
+    const s = String(v).trim();
 
-      try {
-        const html = await getPRRegisterReportHtml({
-          parameter: "PS_PREQUEST_ENTRY_SUMMARY_REPORT",
-          loginid: loginid,
-          code1: companyCode,
-          code2: p.division,
-          code3: p.status,
-          code4: "",
-        });
+    // yyyy-mm-dd (also yyyy-mm-ddTHH:mm...)
+    let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (m) return `${m[1]}-${pad2(+m[2])}-${pad2(+m[3])}`;
 
-        setReportHtml(html);
-      } catch (e: any) {
-        setError(e?.message ?? "Failed to load report. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [companyCode, loginid]
-  );
+    // dd/mm/yyyy or dd-mm-yyyy
+    m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (m) return `${m[3]}-${pad2(+m[2])}-${pad2(+m[1])}`;
 
-  // ── Excel export ───────────────────────────────────────────────────────────
-  const handleExcel = async () => {
-    setExporting(true);
-    try {
-      await exportPRPurchaseSummaryExcel({
-        parameter: "PS_PREQUEST_ENTRY_SUMMARY_REPORT",
-        loginid: loginid,
-        code1: companyCode,
-        code2: params.division,
-        code3: params.status,
-        code4: "",
-      });
-    } catch (e: any) {
-      alert("Excel export failed. Please try again.");
-    } finally {
-      setExporting(false);
+    return "";
+};
+
+// ─── Main Component ─────────────────────────────────────────────────────────
+
+export default function PrRegisterPage() {
+    const { user } = useAuth();
+    const companyCode = user?.company_code ?? "";
+    const loginId = user?.loginid ?? user?.username ?? "ADMIN";
+
+    // Dates are stored as yyyy-mm-dd
+    const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
+
+    // User ID (lookup on PR_REGISTER_USERID -> CREATE_USER, RPT_NAME)
+    const [userId, setUserId] = useState("");
+    const [userName, setUserName] = useState("");
+
+    // Search (manual free text)
+    const [searchText, setSearchText] = useState("");
+
+    // Status (Display Value -> Data Value)
+    const [status, setStatus] = useState(STATUS_OPTIONS[0].dataValue);
+
+    // Report Type
+    const [reportType, setReportType] = useState<ReportType>("SUMMARY");
+
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState("Select filters and run the report.");
+
+    const lastRequestRef = useRef<PrRegisterParams | null>(null);
+    const lastReportTypeRef = useRef<ReportType>("SUMMARY");
+
+    // Derived values (declared AFTER the state they use)
+    const fromDateIso = fromDate;
+    const toDateIso = toDate;
+    const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
+
+    const buildRequestParams = (): PrRegisterParams => ({
+        loginid: loginId,
+        company_code: companyCode,
+        fromdate: fromDateIso || "All",
+        todate: toDateIso || "All",
+        user_id: userId || "All",
+        search_text: searchText || "All",
+        status: status || "All",
+        report_type: reportType,
+    });
+
+    // Picks the right HTML/Excel API function based on which Report Type is selected
+    const getReportHtmlFn = (type: ReportType) =>
+        type === "DETAILS" ? getPrRegisterDetailReportHtml : getPrRegisterSummaryReportHtml;
+
+    const getReportExcelFn = (type: ReportType) =>
+        type === "DETAILS" ? getPrRegisterDetailReportExcel : getPrRegisterSummaryReportExcel;
+
+    const handleGenerateReport = useCallback(async () => {
+        if (!dateRangeValid) return;
+
+        const params = buildRequestParams();
+        lastRequestRef.current = params;
+        lastReportTypeRef.current = reportType;
+
+        setLoading(true);
+        setMessage("");
+
+        const preview = openPurchaseReport(
+            reportType === "DETAILS" ? "Purchase Request Register - Details" : "Purchase Request Register - Summary"
+        );
+
+        try {
+            const fetchHtml = getReportHtmlFn(reportType);
+            const html = await fetchHtml(params);
+            preview.ready({
+                html,
+                filename: `pr_register_${reportType.toLowerCase()}_${new Date().toISOString().slice(0, 10)}`,
+                orientation: reportType === "DETAILS" ? "landscape" : "portrait",
+                onExcel: async () => {
+                    const fetchExcel = getReportExcelFn(reportType);
+                    await fetchExcel(params);
+                },
+            });
+            setMessage("Report generated.");
+        } catch (err: any) {
+            const errorMessage = err?.message ?? "Failed to load report. Please try again.";
+            preview.fail(new Error(errorMessage));
+            setMessage(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRangeValid, fromDate, toDate, userId, searchText, status, reportType, companyCode, loginId]);
+
+    function resetFilters() {
+        setFromDate("");
+        setToDate("");
+        setUserId("");
+        setUserName("");
+        setSearchText("");
+        setStatus(STATUS_OPTIONS[0].dataValue);
+        setReportType("SUMMARY");
+        setMessage("Select filters and run the report.");
     }
-  };
 
-  // ── Generate report ───────────────────────────────────────────────────────
-  const handleGenerateReport = () => {
-    fetchReport(params);
-  };
+    return (
+        <section className="freight-ui-standard freight-report-screen">
+            <div className="freight-report-card">
+                <div className="freight-report-titlebar">
+                    <h1>Purchase Request Register</h1>
+                    <span className="freight-report-title-dot" aria-hidden="true" />
+                </div>
 
-  // ── Field change handler (matches NewReportPage's onChange signature) ─────
-  const handleFieldChange = (key: string, value: any) => {
-    setParams((prev) => ({ ...prev, [key]: value }));
-  };
+                <ReportFilterHeader onClear={resetFilters} />
 
-  const handleClearAll = () => {
-    setParams({ division: "ALL", status: "ALL" });
-    setError("");
-  };
+                <div className="freight-report-fields grid gap-x-4 gap-y-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {/* ── Period & requester ── */}
+                    <SectionTitle>Filters</SectionTitle>
 
-  // ── Field config for NewReportPage ────────────────────────────────────────
-  const fields: ReportFieldConfig[] = [
-    {
-      key: "division",
-      label: "Division",
-      type: "select",
-      options: divisionOptions,
-      placeholder: "Select Division",
-      loading: optLoading,
-      colSpan: 6,
-    },
-    {
-      key: "status",
-      label: "Status",
-      type: "select",
-      options: statusOptions,
-      placeholder: "Select Status",
-      loading: optLoading,
-      colSpan: 6,
-    },
-  ];
+                    <Field label="From">
+                        <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
+                            <BiscDatePicker
+                                value={fromDate}
+                                onChange={(v: any) => setFromDate(pickValue(v))}
+                            />
+                        </ClearableDate>
+                    </Field>
 
-  return (
-    <>
-      <NewReportPage
-        title="Purchase Request Register Report"
-        fields={fields}
-        values={params}
-        onChange={handleFieldChange}
-        onClearAll={handleClearAll}
-        onGenerate={handleGenerateReport}
-        loading={loading}
-        optionsLoading={optLoading}
-        error={optError || error || null}
-        onClearError={() => {
-          setError("");
-          setOptError("");
-        }}
-      />
+                    <Field label="To">
+                        <ClearableDate value={toDate} onClear={() => setToDate("")}>
+                            <BiscDatePicker
+                                value={toDate}
+                                onChange={(v: any) => setToDate(pickValue(v))}
+                            />
+                        </ClearableDate>
+                        {!dateRangeValid && (
+                            <span className="text-[11px] font-normal text-red-600">
+                                "To" date must be on or after "From" date
+                            </span>
+                        )}
+                    </Field>
 
-      <NewReportDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        title="Purchase Request Register Report"
-        htmlContent={reportHtml}
-        loading={loading}
-        error={error || null}
-        onExportExcel={handleExcel}
-        exportingExcel={exporting}
-        meta={{ division: params.division, status: params.status }}
-      />
-    </>
-  );
+                    <Field label="User ID">
+                        <LookupField
+                            label=""
+                            value={userId}
+                            displayValue={userName ? `${userId} - ${userName}` : userId}
+                            columns={[
+                                { field: "CREATE_USER", header: "User ID" },
+                                { field: "RPT_NAME", header: "Name" },
+                            ]}
+                            valueField="CREATE_USER"
+                            displayFields={["CREATE_USER", "RPT_NAME"]}
+                            loadOptions={() =>
+                                getDynamicLookup({
+                                    parameter: "PR_REGISTER_USERID",
+                                    loginid: loginId,
+                                })
+                            }
+                            disabled={false}
+                            onChange={(value: string, row?: any) => {
+                                setUserId(value);
+                                setUserName(row?.rpt_name ?? "");
+                            }}
+                        />
+                    </Field>
+
+                    <Field label="Search">
+                        <Input
+                            className="h-8"
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            placeholder="Request no, item, description"
+                        />
+                    </Field>
+
+                    <Field label="Status">
+                        <select
+                            className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value)}
+                        >
+                            {STATUS_OPTIONS.map((opt) => (
+                                <option key={opt.dataValue} value={opt.dataValue}>
+                                    {opt.displayValue}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+
+                    <div className="sm:col-span-1">
+                        <Field label="Report Type">
+                            <div
+                                className="flex flex-row items-center gap-x-7 rounded-md px-4 py-1 shadow-sm"
+                                style={{ border: "1px solid #aebdce", background: "#f4f7fb", minHeight: 30, display: "flex", flexDirection: "row", alignItems: "center" }}
+                            >
+                                {[
+                                    { value: "SUMMARY" as const, label: "Summary" },
+                                    { value: "DETAILS" as const, label: "Details" },
+                                ].map((opt) => (
+                                    <div
+                                        key={opt.value}
+                                        onClick={() => setReportType(opt.value)}
+                                        className="flex flex-row items-center gap-2 cursor-pointer select-none whitespace-nowrap"
+                                        style={{ display: "flex", flexDirection: "row", alignItems: "center" }}
+                                    >
+                                        {/* Radio Circle */}
+                                        <span
+                                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${reportType === opt.value ? "border-blue-600" : "border-gray-300"
+                                                }`}
+                                            style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+                                        >
+                                            {reportType === opt.value && (
+                                                <span className="h-2 w-2 rounded-full bg-blue-600" />
+                                            )}
+                                        </span>
+
+                                        {/* Text Label */}
+                                        <span
+                                            className={`text-sm font-normal ${reportType === opt.value ? "text-blue-700" : "text-foreground"
+                                                }`}
+                                        >
+                                            {opt.label}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </Field>
+                    </div>
+                </div>
+
+                <div className="freight-report-actions flex items-center gap-2">
+                    <Button type="button" size="sm" onClick={handleGenerateReport} disabled={loading || !dateRangeValid}>
+                        {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
+                    </Button>
+                    {/* <Button type="button" size="sm" variant="outline" onClick={resetFilters} disabled={loading}>
+                        <RotateCcw size={15} /> Reset
+                    </Button> */}
+                </div>
+                {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
+            </div>
+
+            <PurchaseReportPreview />
+        </section>
+    );
+}
+
+function ClearableDate({
+    value,
+    onClear,
+    children,
+}: {
+    value: string;
+    onClear: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="relative">
+            {children}
+            {value && (
+                <button
+                    type="button"
+                    aria-label="Clear date"
+                    title="Clear"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onClear();
+                    }}
+                    className="absolute right-9 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-black transition-colors hover:bg-slate-200"
+                >
+                    <X size={14} strokeWidth={2.5} />
+                </button>
+            )}
+        </div>
+    );
 }

@@ -1,8 +1,10 @@
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import { openFreightReport } from "../../components/freight/reportPreviewStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { Activity, AlertTriangle, ArrowLeft, Ban, Briefcase, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, Printer, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, Ban, Briefcase, CreditCard, Eye, List, MapPinned, PackageCheck, Paperclip, Plus, Printer, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import { getLookupValue, type LookupRow } from "../../api/lookups";
@@ -163,6 +165,32 @@ const tosOptions = ["ORIGIN", "DESTINATION"];
 const memberTypes = ["", "IFLN", "AFFAL", "None"];
 const saleTypes = ["Normal", "FreeIn"];
 const shipmentStatusOptions = ["FCL/FCL", "FCL/LCL", "LCL/LCL", "LCL/FCL"];
+const containerTypeOptions = [
+  "STANDARD",
+  "HIGHCUBE",
+  "REFER",
+  "HIGH CUBE REFER",
+  "OPEN TOP",
+  "FLAT RACK",
+  "MAIN DECK PALLET",
+  "LOWER DECK PALLET",
+  "LD-2",
+  "LD-3",
+  "LD-4",
+  "LD-7",
+  "LD-11",
+  "TANK",
+  "BULK",
+  "OPEN SIDE",
+  "PLAT FORM",
+  "VENTILATED",
+];
+const tfOptions = [
+  { value: "T", label: "TEU" },
+  { value: "F", label: "FEU" },
+  { value: "V", label: "45FT" },
+  { value: "E", label: "48FT" },
+];
 const jobCategories = ["International", "Combined services", "Clearance", "Others"];
 const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }[] = [
   { key: "cargo", label: "Cargo", icon: PackageCheck },
@@ -171,6 +199,14 @@ const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }
   { key: "payment", label: "Payment", icon: CreditCard },
   { key: "activities", label: "Activities", icon: Activity },
 ];
+
+const containerTypes = [
+  "STANDARD", "HIGHCUBE", "REFER", "HIGH CUBE REFER", "OPEN TOP", "FLAT RACK",
+  "MAIN DECK PALLET", "LOWER DECK PALLET", "LD-2", "LD-3", "LD-4", "LD-7",
+  "LD-11", "TANK", "BULK", "OPEN SIDE", "PLATFORM", "VENTILATED",
+];
+const loadContainerTypeLookup = async () =>
+  containerTypes.map((value) => ({ container_type: value }) as LookupRow);
 
 type FreightEnquiryMainPageProps = {
   target?: FreightWorkspaceTarget;
@@ -617,6 +653,18 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
         }
         if (field === "quantity" || field === "cost_rate") {
           next.cost = multiplyText(next.quantity, next.cost_rate);
+        }
+        if (field === "bill") {
+          const qty = Number(next.quantity) || 0;
+          if (qty > 0) {
+            next.bill_rate = (Number(value || 0) / qty).toFixed(3);
+          }
+        }
+        if (field === "cost") {
+          const qty = Number(next.quantity) || 0;
+          if (qty > 0) {
+            next.cost_rate = (Number(value || 0) / qty).toFixed(3);
+          }
         }
         return next;
       }),
@@ -1083,6 +1131,24 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);
   };
 
+  const syncJourneyPorts = () => {
+    if (!header.origin_port && !header.destination_port) {
+      setNotice({ type: "error", text: "Journey origin and destination ports are not set in the Journey tab." });
+      return;
+    }
+    setDetails((current) =>
+      current.map((row) => ({
+        ...row,
+        origin_port: header.origin_port || row.origin_port,
+        destination_port: header.destination_port || row.destination_port,
+      }))
+    );
+    setNotice({
+      type: "success",
+      text: `Journey ports synced to ${details.length} activity line(s): ${header.origin_port || "-"} → ${header.destination_port || "-"}`,
+    });
+  };
+
   const removeDetail = (index: number) => {
     setInvalidLineIndices((prev) => {
       const next = new Set<number>();
@@ -1097,7 +1163,17 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     );
   };
 
-  const persistEnquiry = async () => {
+  // const persistEnquiry = async () => {
+  // const loginid = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || "");
+    const persistEnquiry = async () => {
+    const zeroAmountRows = details
+    .map((row, idx) => (row.act_code.trim() && !(Number(row.bill) > 0) ? idx : -1))
+    .filter((idx) => idx >= 0);
+  if (zeroAmountRows.length > 0) {
+    setInvalidLineIndices(new Set(zeroAmountRows));
+    setActiveTab("activities");
+    throw new Error(`Bill amount must be greater than 0 (line ${zeroAmountRows.map((i) => i + 1).join(", ")})`);
+  }
   const loginid = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || "");
   const payload = {
     header: {
@@ -1123,6 +1199,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     })),
   };
 
+  assertFreightRecords("TF_ENQUIRY", [payload.header], "Header");
+  assertFreightRecords("TF_ENQUIRY_DET", payload.details, "Activity line");
   const response = await api.post<{ success?: boolean; message?: string; data?: { enquiry_nr?: string } }>(
     isRfq ? "/api/freight/rfq/save" : "/api/freight/enquiry/save",
     payload
@@ -1142,51 +1220,10 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
       return;
     }
 
-    // Character limit validations
-    if (header.remarks && header.remarks.length > 250) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Remarks." });
-      return;
-    }
-    if (header.spl_instructions && header.spl_instructions.length > 250) {
-      setActiveTab("payment");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Special Instructions." });
-      return;
-    }
-    if (header.cargo_detail && header.cargo_detail.length > 250) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Cargo Detail." });
-      return;
-    }
-    if (header.shipper_name && header.shipper_name.length > 100) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Shipper Name." });
-      return;
-    }
-    if (header.shipper_address && header.shipper_address.length > 250) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Shipper Address." });
-      return;
-    }
-    if (header.consignee_name && header.consignee_name.length > 100) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Consignee Name." });
-      return;
-    }
-    if (header.consignee_address && header.consignee_address.length > 250) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Consignee Address." });
-      return;
-    }
-
-    // Check line character limits
-    for (const d of details) {
-      if (d.remarks && d.remarks.length > 250) {
-        setActiveTab("activities");
-        setNotice({ type: "error", text: "You have exceeded the character limit for Line Remarks." });
-        return;
-      }
-    }
+    const headerError = freightValidationError("TF_ENQUIRY", header);
+    const lineError = details.map((row, index) => { const error = freightValidationError("TF_ENQUIRY_DET", row); return error ? `Line ${index + 1}: ${error}` : null; }).find(Boolean);
+    const schemaError = headerError || lineError;
+    if (schemaError) { setNotice({ type: "error", text: schemaError }); return; }
 
     // Missing field validation on lines (activities)
     if (!details || details.length === 0) {
@@ -1594,7 +1631,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     value={header.commodity}
     valueField="prodtype_desc"
     displayFields={["prodtype_desc", "prodtype_code"]}
-    columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]}
+    columns={[{ field: "prodtype_code", header: "Code" } , { field: "prodtype_desc", header: "Commodity" }]}
     loadOptions={() => loadCommodityLookup(header.company_code)}
     onChange={(value, row) => applyHeaderLookup("commodity", value, row)}
     className="sm:col-span-2 lg:col-span-1"
@@ -1605,14 +1642,17 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     onChange={(value) => setHeaderField("cargo_detail", value)}
     className="sm:col-span-2"
     inputClassName="truncate"
-    maxLength={250}
+    maxLength={freightTextLimit("TF_ENQUIRY", "cargo_detail")}
   />
 
   {header.transport_mode === "S" && (
     <>
-      <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
+      {/* <FormDropdown label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} options={containerTypes} /> */}
+      <div className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+        <span>Container Type</span>
+        <CellDropdown value={header.container_type} options={containerTypes.map((v) => ({ value: v, label: v }))} onChange={(value) => setHeaderField("container_type", value)} />
+     </div>
       <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
-      <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
     </>
   )}
   {header.transport_mode === "R" && (
@@ -1644,17 +1684,118 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-7" icon={MapPinned} title="Parties">     
-                  <div className="grid gap-1 sm:grid-cols-1">
-                    <FormInput label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} inputClassName="truncate" maxLength={100} />
-                    <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact maxLength={250} />
-                    <FormInput label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} inputClassName="truncate" maxLength={100} />
-                    <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact maxLength={250} />
+                  <div className="grid gap-2 sm:grid-cols-1">
+                    <div className="grid gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+                          Shipper Name
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <div className="flex-1">
+                          <Input
+                            type="text"
+                            className={`${fieldClassName} truncate`}
+                            value={header.shipper_name}
+                            onChange={(e) => setHeaderField("shipper_name", e.target.value)}
+                            placeholder="Enter or search Shipper Name"
+                            maxLength={freightTextLimit("TF_ENQUIRY", "shipper_name")}
+                            maxBytes={freightTextLimit("TF_ENQUIRY", "shipper_name")}
+                          />
+                        </div>
+                        <div className="w-[110px] shrink-0">
+                          <LookupField
+                            compact
+                            label="Shipper"
+                            value={header.shipper_name}
+                            displayValue={header.shipper_name ? "Change" : "Lookup"}
+                            popoverWidth={420}
+                            columns={[
+                              { field: "shipper_name", header: "Shipper Name" },
+                            ]}
+                            valueField="shipper_name"
+                            displayFields={["shipper_name"]}
+                            loadOptions={() => loadShipperLookup(header.company_code)}
+                            onChange={(val, row) => {
+                              if (row) {
+                                setHeaderField("shipper_name", lookupText(row, "shipper_name") || val);
+                                const addr = lookupText(row, "shipper_address");
+                                if (addr) setHeaderField("shipper_address", addr);
+                              } else if (val) {
+                                setHeaderField("shipper_name", val);
+                              }
+                            }}
+                            placeholder="Lookup"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <FormTextarea
+                      label="Shipper Address"
+                      value={header.shipper_address}
+                      onChange={(value) => setHeaderField("shipper_address", value)}
+                      compact
+                      maxLength={freightTextLimit("TF_ENQUIRY", "shipper_address")}
+                    />
+
+                    <div className="grid gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+                          Consignee Name
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <div className="flex-1">
+                          <Input
+                            type="text"
+                            className={`${fieldClassName} truncate`}
+                            value={header.consignee_name}
+                            onChange={(e) => setHeaderField("consignee_name", e.target.value)}
+                            placeholder="Enter or search Consignee Name"
+                            maxLength={freightTextLimit("TF_ENQUIRY", "consignee_name")}
+                            maxBytes={freightTextLimit("TF_ENQUIRY", "consignee_name")}
+                          />
+                        </div>
+                        <div className="w-[110px] shrink-0">
+                          <LookupField
+                            compact
+                            label="Consignee"
+                            value={header.consignee_name}
+                            displayValue={header.consignee_name ? "Change" : "Lookup"}
+                            popoverWidth={420}
+                            columns={[
+                              { field: "consignee_name", header: "Consignee Name" },
+                            ]}
+                            valueField="consignee_name"
+                            displayFields={["consignee_name"]}
+                            loadOptions={() => loadConsigneeLookup(header.company_code)}
+                            onChange={(val, row) => {
+                              if (row) {
+                                setHeaderField("consignee_name", lookupText(row, "consignee_name") || val);
+                                const addr = lookupText(row, "consignee_address");
+                                if (addr) setHeaderField("consignee_address", addr);
+                              } else if (val) {
+                                setHeaderField("consignee_name", val);
+                              }
+                            }}
+                            placeholder="Lookup"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <FormTextarea
+                      label="Consignee Address"
+                      value={header.consignee_address}
+                      onChange={(value) => setHeaderField("consignee_address", value)}
+                      compact
+                      maxLength={freightTextLimit("TF_ENQUIRY", "consignee_address")}
+                    />
                   </div>
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-12" icon={CreditCard} title="Cargo Notes">
                   <div className="grid grid-cols-1">
-                    <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact maxLength={250} />
+                    <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact maxLength={freightTextLimit("TF_ENQUIRY", "remarks")} />
                   </div>
                 </SectionPanel>
 
@@ -1668,17 +1809,17 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 <SectionPanel className="lg:col-span-7" icon={MapPinned} title="Routing" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
-                    <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
+                    <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "country_origin")} />
                     <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
-                    <FormInput label="Country Destination" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
+                    <FormInput label="Country Destination" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "country_destination")} />
                   </div>
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-5" icon={ShipWheel} title="Shipment Reference" meta={header.job_number || "Job pending"}>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-3">
-                    <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} />
+                    <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "via")} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
-                    <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours" />
+                    <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours"  maxLength={freightTextLimit("TF_ENQUIRY", "transit_time")} />
                     {header.transport_mode === "S" && (
                     <>
                     <FormSelect label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} options={["", ...shipmentStatusOptions].map((value) => ({ value, label: value }))} />
@@ -1698,7 +1839,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 <SectionPanel className="lg:col-span-6" icon={Activity} title="Schedule And Sales" meta={header.salesman_code || "Sales executive pending"}>
                   <div className="grid gap-1 sm:grid-cols-3">
-                    <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
+                    <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "frequency")} />
                     <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
                    </div>
                 </SectionPanel>
@@ -1758,55 +1899,89 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-12" icon={Activity} title="Instructions" meta={header.spl_instructions ? "Added" : "Pending"}>
-                  <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} maxLength={250} />
+                  <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} maxLength={freightTextLimit("TF_ENQUIRY", "spl_instructions")} />
                 </SectionPanel>
               </div>
             </section>
           )}
 
 {activeTab === "activities" && (
-  <section>
-    <div className="mb-2 flex items-center justify-between gap-2">
-      <div className="grid gap-0.5">
-        <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Activity Lines</h2>
-        <p className="m-0 text-[11px] text-slate-500">Service activities with quantity, rates, and cost breakdown</p>
-      </div>
-      <Button
-        type="button"
-        size="sm"
-        onClick={addDetail}
-        disabled={isReadOnly}
-        className="cursor-pointer font-semibold shadow-xs"
-      >
-        <Plus size={14} />
-        Add Line
-      </Button>
-    </div>
+  <section className="finance-document-ui">
+    <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
+      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+            <List size={14} />
+          </span>
+          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            Activity Lines
+          </span>
+          <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            {details.length} {details.length === 1 ? "line" : "lines"}
+          </span>
 
-    <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-xs max-h-[50vh]">
-      <table className="w-full min-w-[1450px] text-xs text-left border-collapse">
-        <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-xs z-10">
+          <div className="hidden sm:flex items-center gap-2 ml-2 text-[11px]">
+            <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+              <span className="text-blue-700 font-bold">Total Bill:</span> {details.reduce((sum, d) => sum + (Number(d.bill) || 0), 0).toFixed(2)}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
+              <span className="text-slate-600 font-bold">Total Cost:</span> {details.reduce((sum, d) => sum + (Number(d.cost) || 0), 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={syncJourneyPorts}
+            disabled={isReadOnly || details.length === 0}
+            className="h-7 text-xs font-medium text-slate-700 hover:text-[#00378C] hover:bg-blue-50 border-slate-300 shadow-xs cursor-pointer"
+            title="Copy Journey Origin & Destination ports from header to all activity lines"
+          >
+            <MapPinned size={13} className="mr-1 text-[#00378C]" />
+            Sync Journey Ports
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={addDetail}
+            disabled={isReadOnly}
+            className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+          >
+            <Plus size={13} className="mr-1" />
+            Add Line
+          </Button>
+        </div>
+      </div>
+
+      <div className="commercial-lines-scroll overflow-auto max-h-[50vh] min-h-[280px]">
+        <table className="finance-lines-table w-full min-w-[1580px] text-xs text-left border-collapse">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-30 whitespace-nowrap border-b-2 border-slate-300">
           <tr>
-            <th className="px-2 py-2 text-center w-10 text-white font-semibold">#</th>
-            <th className="px-2 py-2 w-[180px] text-white font-semibold">Activity Code</th>
-            <th className="px-2 py-2 w-[220px] text-white font-semibold">Activity Name</th>
-            <th className="px-2 py-2 w-[100px] text-white font-semibold">UOC</th>
-            <th className="px-2 py-2 w-[100px] text-white font-semibold">MOC</th>
-            <th className="px-2 py-2 text-center w-[75px] text-white font-semibold">Mode</th>
-            <th className="px-2 py-2 w-[120px] text-white font-semibold">Origin</th>
-            <th className="px-2 py-2 w-[120px] text-white font-semibold">Destination</th>
-            <th className="px-2 py-2 text-right w-[80px] text-white font-semibold">Qty</th>
-            <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Bill Rate</th>
-            <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Bill</th>
-            <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Cost Rate</th>
-            <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Cost</th>
-            <th className="px-2 py-2 min-w-[150px] text-white font-semibold">Remarks</th>
-            <th className="px-2 py-2 text-center w-12 text-white font-semibold">Action</th>
+            <th className="sticky left-0 z-30 bg-slate-100 px-2 py-2 text-center w-10 text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">#</th>
+            <th className="sticky left-10 z-30 bg-slate-100 px-2 py-2 w-[110px] text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">Activity Code</th>
+            <th className="sticky left-[150px] z-30 bg-slate-100 px-2 py-2 w-[220px] text-slate-700 font-bold border-r-2 !border-r-slate-400 shadow-[inset_-2px_0_0_#94a3b8,3px_0_5px_-2px_rgba(0,0,0,0.15)]">Activity Name</th>
+            <th className="px-2 py-2 w-[100px] text-slate-700 font-bold border-l-2 !border-l-slate-400 border-r border-slate-200">UOC</th>
+            <th className="px-2 py-2 w-[100px] text-slate-700 font-bold border-r border-slate-200">MOC</th>
+            <th className="px-2 py-2 text-center w-[75px] text-slate-700 font-bold border-r border-slate-200">Mode</th>
+            <th className="px-2 py-2 w-[140px] text-slate-700 font-bold border-r border-slate-200">Origin Port</th>
+            <th className="px-2 py-2 w-[140px] text-slate-700 font-bold border-r border-slate-200">Dest Port</th>
+            <th className="px-2 py-2 text-right w-[80px] text-slate-700 font-bold border-r border-slate-200">Qty</th>
+            <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Bill Rate</th>
+            <th className="px-2 py-2 text-right w-[120px] text-slate-700 font-bold border-r border-slate-200">Bill</th>
+            <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Cost Rate</th>
+            <th className="px-2 py-2 text-right w-[120px] text-slate-700 font-bold border-r border-slate-200">Cost</th>
+            <th className="px-2 py-2 min-w-[220px] text-slate-700 font-bold border-r border-slate-200">Remarks</th>
+            <th className="sticky right-0 z-30 bg-slate-100 px-2 py-2 text-center w-12 text-slate-700 font-bold border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200">
           {details.map((row, index) => {
             const isInvalid = invalidLineIndices.has(index);
+            const rowBg = isInvalid ? "bg-rose-50" : index % 2 === 1 ? "bg-slate-50" : "bg-white";
             return (
               <tr
                 key={`${row.srno}-${index}`}
@@ -1819,17 +1994,17 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 }`}
               >
                 {/* # */}
-                <td className="px-2 py-1.5 text-center text-slate-500 font-mono text-[11px] font-semibold">
+                <td className={`sticky left-0 z-10 ${rowBg} px-2 py-1.5 text-center text-slate-500 font-mono text-[11px] font-semibold border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]`}>
                   {index + 1}
                 </td>
 
                 {/* Activity Code */}
-                <td className="px-1.5 py-1">
+                <td className={`sticky left-10 z-10 ${rowBg} px-1.5 py-1 border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]`}>
                   <LookupField
                     compact
                     label="Activity Code"
                     value={row.act_code}
-                    displayValue={row.act_code ? (row.activity ? `${row.act_code} - ${row.activity}` : row.act_code) : ""}
+                    displayValue={row.act_code}
                     valueField="activity_code"
                     displayFields={["activity_code", "activity"]}
                     columns={[
@@ -1844,9 +2019,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Activity Name */}
-                <td className="px-1.5 py-1">
+                <td className={`sticky left-[150px] z-10 ${rowBg} px-1.5 py-1 border-r-2 !border-r-slate-400 shadow-[inset_-2px_0_0_#94a3b8,3px_0_5px_-2px_rgba(0,0,0,0.15)]`}>
                   <div
-                    className="flex h-7 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-medium text-slate-700 truncate"
+                    className="flex h-7 items-center rounded-md border border-slate-200 bg-slate-50/80 px-2 text-[11px] font-medium text-slate-700 truncate"
                     title={row.activity}
                   >
                     {row.activity || "-"}
@@ -1854,24 +2029,28 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* UOC */}
-                <td className="px-1.5 py-1">
+                {/* <td className="px-1.5 py-1">
                   <select
                     className={fieldClassName}
                     value={row.uoc}
                     onChange={(e) => setDetailField(index, "uoc", e.target.value)}
                     disabled={isReadOnly}
                   >
-                    <option value="">Select</option>
+                    <option value=""> </option>
                     {uocOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </select>
+                </td> */}
+
+                <td className="px-1.5 py-1 border-l-2 !border-l-slate-400 border-r border-slate-200">
+                  <CellDropdown value={row.uoc} options={uocOptions} disabled={isReadOnly} onChange={(value) => setDetailField(index, "uoc", value)} />
                 </td>
 
                 {/* MOC */}
-                <td className="px-1.5 py-1">
+                <td className="px-1.5 py-1 border-r border-slate-200">
                   <LookupField
                     compact
                     label="MOC"
@@ -1891,39 +2070,49 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Mode */}
-                <td className="px-1.5 py-1 text-center">
+                <td className="px-1.5 py-1 text-center border-r border-slate-200">
                   <span className="inline-flex items-center justify-center rounded px-2 py-0.5 text-[10px] font-bold bg-[#00378C]/10 text-[#00378C]">
                     {modeLabel(header.transport_mode || row.transport_mode)}
                   </span>
                 </td>
 
                 {/* Origin */}
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <LookupField
+                    compact
+                    label="Origin Port"
                     value={row.origin_port}
-                    onChange={(e) => setDetailField(index, "origin_port", e.target.value)}
-                    className={fieldClassName}
+                    displayValue={row.origin_port}
+                    valueField="port_code"
+                    displayFields={["port_code", "port_name"]}
+                    columns={portColumns}
+                    loadOptions={() => loadPortLookup(header.company_code)}
+                    onChange={(value) => setDetailField(index, "origin_port", value)}
                     placeholder="Origin"
                     disabled={isReadOnly}
                   />
                 </td>
 
                 {/* Destination */}
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <LookupField
+                    compact
+                    label="Dest Port"
                     value={row.destination_port}
-                    onChange={(e) => setDetailField(index, "destination_port", e.target.value)}
-                    className={fieldClassName}
+                    displayValue={row.destination_port}
+                    valueField="port_code"
+                    displayFields={["port_code", "port_name"]}
+                    columns={portColumns}
+                    loadOptions={() => loadPortLookup(header.company_code)}
+                    onChange={(value) => setDetailField(index, "destination_port", value)}
                     placeholder="Dest"
                     disabled={isReadOnly}
                   />
                 </td>
 
                 {/* Qty */}
-                <td className="px-1.5 py-1">
-                  <input
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <Input
                     type="number"
                     value={row.quantity}
                     onChange={(e) => setDetailField(index, "quantity", e.target.value)}
@@ -1933,8 +2122,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Bill Rate */}
-                <td className="px-1.5 py-1">
-                  <input
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <Input
                     type="number"
                     value={row.bill_rate}
                     onChange={(e) => setDetailField(index, "bill_rate", e.target.value)}
@@ -1944,8 +2133,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Bill */}
-                <td className="px-1.5 py-1">
-                  <input
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <Input
                     type="number"
                     value={row.bill}
                     onChange={(e) => setDetailField(index, "bill", e.target.value)}
@@ -1955,8 +2144,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Cost Rate */}
-                <td className="px-1.5 py-1">
-                  <input
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <Input
                     type="number"
                     value={row.cost_rate}
                     onChange={(e) => setDetailField(index, "cost_rate", e.target.value)}
@@ -1966,8 +2155,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Cost */}
-                <td className="px-1.5 py-1">
-                  <input
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <Input
                     type="number"
                     value={row.cost}
                     onChange={(e) => setDetailField(index, "cost", e.target.value)}
@@ -1977,20 +2166,20 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Remarks */}
-                <td className="px-1.5 py-1">
-                  <input
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <Input
                     type="text"
                     value={row.remarks}
-                    maxLength={265}
+                    maxLength={freightTextLimit("TF_ENQUIRY_DET", "remarks")}
                     onChange={(e) => setDetailField(index, "remarks", e.target.value)}
                     className={fieldClassName}
                     placeholder="Line remarks"
                     disabled={isReadOnly}
-                  />
+                   maxBytes={freightTextLimit("TF_ENQUIRY_DET", "remarks")} />
                 </td>
 
                 {/* Actions */}
-                <td className="px-1.5 py-1 text-center">
+                <td className={`sticky right-0 z-10 ${rowBg} px-1.5 py-1 text-center border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]`}>
                   <Button
                     type="button"
                     size="icon"
@@ -2007,18 +2196,29 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             );
           })}
         </tbody>
+        {details.length > 0 && (
+          <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-10 whitespace-nowrap">
+            <tr>
+              <td colSpan={10} className="px-3 py-1.5 text-right font-extrabold uppercase text-slate-600">
+                Totals ({details.length} lines):
+              </td>
+              <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900">
+                {details.reduce((sum, d) => sum + (Number(d.bill) || 0), 0).toFixed(2)}
+              </td>
+              <td className="px-2 py-1.5 text-right">-</td>
+              <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">
+                {details.reduce((sum, d) => sum + (Number(d.cost) || 0), 0).toFixed(2)}
+              </td>
+              <td colSpan={2} className="px-2 py-1.5 text-center text-slate-500 font-mono text-[10px]">
+                OMR
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
-
-    {/* Summary Footer */}
-    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 rounded-b-md">
-      <span>Showing {details.length} activity line{details.length === 1 ? "" : "s"}</span>
-      <div className="flex items-center gap-4 font-mono font-semibold">
-        <span>Total Bill: <strong className="text-slate-900">{details.reduce((sum, d) => sum + (Number(d.bill) || 0), 0).toFixed(2)}</strong></span>
-        <span>Total Cost: <strong className="text-slate-900">{details.reduce((sum, d) => sum + (Number(d.cost) || 0), 0).toFixed(2)}</strong></span>
-      </div>
-    </div>
-  </section>
+  </div>
+</section>
 )}
         </div>
         </fieldset>
@@ -2057,7 +2257,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
         </div>
         <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
           Cancel Remarks
-          <Input value={cancelRemarks} onChange={(event) => setCancelRemarks(event.target.value)} placeholder="Enter reason..." />
+          <Input value={cancelRemarks} maxLength={freightTextLimit("TF_ENQUIRY", "cancel_remarks")} maxBytes={freightTextLimit("TF_ENQUIRY", "cancel_remarks")} onChange={(event) => setCancelRemarks(event.target.value)} placeholder="Enter reason..." />
         </label>
       </div>
     </Dialog>
@@ -2150,7 +2350,7 @@ function SectionPanel({
             <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-slate-800">{title}</h3>
           </div>
         </div>
-        {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>}
+        {/* {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>} */}
       </div>
       <div className="freight-panel-body p-3">{children}</div>
     </section>
@@ -2504,20 +2704,31 @@ function FormInput({
   maxLength?: number;
 }) {
   const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
-  const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
+  // const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
+  // const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
   return (
     <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
       <span className="flex items-center justify-between">
         <span className="flex items-center gap-0.5">
           {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
         </span>
-        {maxLength !== undefined && value && value.length > 0 && (
+        {/* {maxLength !== undefined && value && value.length > 0 && (
           <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-slate-400"}`}>
             {value.length}/{maxLength}
           </span>
-        )}
+        )} */}
       </span>
-      <Input
+      {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={value}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={value}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input
         className={`h-7.5 text-[11.5px] font-medium border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 ${type === "number" ? "text-right tabular-nums" : ""} ${isOverLimit ? "border-red-500 focus-visible:ring-red-500" : "focus:border-[#00378C]"} ${inputClassName}`}
         value={value}
         type={type}
@@ -2525,11 +2736,11 @@ function FormInput({
         required={required}
         placeholder={placeholder}
         disabled={disabled}
-        maxLength={maxLength ? maxLength + 15 : undefined}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+       maxBytes={maxLength} />)}
     </label>
   );
 }
@@ -2643,6 +2854,97 @@ function FormSelect({
   );
 }
 
+function CellDropdown({ value, onChange, options, disabled }: { value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; disabled?: boolean }) {
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  useEffect(() => {
+    if (!pos) return;
+    const close = (e: Event) => { if (listRef.current?.contains(e.target as Node)) return; setPos(null); };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [pos]);
+
+  useEffect(() => {
+    if (!pos) return;
+    listRef.current?.children[activeIdx]?.scrollIntoView({ block: "nearest" });
+  }, [activeIdx, pos]);
+
+  const allOptions = [{ value: "", label: "\u00A0" }, ...options];
+
+  const openAt = () => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const up = window.innerHeight - rect.bottom < 220 && rect.top > 220;
+    setPos({ left: rect.left, width: Math.max(rect.width, 200), ...(up ? { bottom: window.innerHeight - rect.top + 2 } : { top: rect.bottom + 2 }) });
+    const cur = allOptions.findIndex((o) => o.value === value);
+    setActiveIdx(cur >= 0 ? cur : 0);
+  };
+
+  const toggle = () => {
+    if (pos) { setPos(null); return; }
+    openAt();
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (!pos) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        openAt();
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(i + 1, allOptions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const opt = allOptions[activeIdx];
+      if (opt) onChange(opt.value);
+      setPos(null);
+    } else if (e.key === "Escape" || e.key === "Tab") {
+      setPos(null);
+    }
+  };
+
+  const selected = options.find((o) => o.value === value)?.label ?? value;
+
+  return (
+    <>
+      <button ref={btnRef} type="button" disabled={disabled} className={`${fieldClassName} items-center justify-between text-left`} onClick={toggle} onKeyDown={onKeyDown}>
+        <span className="truncate">{selected}</span>
+        <span className="text-slate-400">▾</span>
+      </button>
+      {pos && (
+        <>
+          <div className="fixed inset-0 z-40" onMouseDown={() => setPos(null)} />
+          <ul ref={listRef} className="fixed z-50 m-0 max-h-48 list-none overflow-y-auto rounded-md border border-slate-300 bg-white p-0 shadow-lg" style={pos}>
+            {allOptions.map((opt, i) => (
+              <li
+                key={opt.value || "blank"}
+                className={`cursor-pointer px-2 py-1.5 text-[11px] font-medium hover:bg-blue-50 ${
+                  i === activeIdx ? "bg-blue-100 text-[#00378C]" : opt.value === value ? "bg-blue-50 text-[#00378C]" : "text-slate-800"
+                }`}
+                onMouseEnter={() => setActiveIdx(i)}
+                onClick={() => { onChange(opt.value); setPos(null); }}
+              >
+                {opt.label}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  );
+}
+
 function FormTextarea({
   label,
   value,
@@ -2659,24 +2961,18 @@ function FormTextarea({
   maxLength?: number;
 }) {
   const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
-  const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
   return (
     <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
       <span className="flex items-center justify-between">
         <span>{label}</span>
-        {maxLength !== undefined && value && value.length > 0 && (
-          <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-muted-foreground/70"}`}>
-            {value.length}/{maxLength}
-          </span>
-        )}
       </span>
-      <input
+      <Input
         type="text"
         className={`${fieldClassName} truncate ${isOverLimit ? "border-red-500 focus:border-red-500" : ""}`}
         value={value}
-        maxLength={maxLength ? maxLength + 15 : undefined}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
-      />
+       maxBytes={maxLength} />
     </label>
   );
 }
@@ -2695,7 +2991,11 @@ function CellInput({
   return (
     <td className="px-1.5 py-1.5">
       {/* <Input className={`h-7 text-xs ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} /> */}
-     <Input className={`h-7 text-sm font-medium text-foreground ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+     {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={value}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={value}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input className={`h-7 text-sm font-medium text-foreground ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />)}
     </td>
   );
 }
@@ -2754,6 +3054,14 @@ function carrierLookupProps(mode: string, companyCode: string) {
 
 async function loadPrincipalLookup(companyCode: string) {
   return loadFreightLookup("freight_principal", companyCode);
+}
+
+async function loadShipperLookup(companyCode: string) {
+  return loadFreightLookup("freight_shipper", companyCode);
+}
+
+async function loadConsigneeLookup(companyCode: string) {
+  return loadFreightLookup("freight_consignee", companyCode);
 }
 
 async function loadWalkinPrincipalLookup(companyCode: string) {
@@ -2815,7 +3123,7 @@ async function loadReferenceEnquiryLookup(companyCode: string) {
 }
 
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") {
-  const rows = await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 });
+  const rows = await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 1000 });
   return Array.isArray(rows) ? rows.map(normalizeLookupRow) : [];
 }
 

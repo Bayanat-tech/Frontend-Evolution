@@ -16,6 +16,7 @@ type BudgetRow = {
   doc_no: string;
   doc_date: string;
   doc_type: string;
+  version: string;
   budget_year: string;
   div_code: string;
   div_name: string;
@@ -64,7 +65,11 @@ const inputClass =
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
-export function AccountWiseBudgetPage() {
+export function AccountWiseBudgetPage({ mode = "account" }: { mode?: "account" | "group" }) {
+  const isGroupMode = mode === "group";
+  const docType = isGroupMode ? "BDG" : "BDA";
+  const screenTitle = isGroupMode ? "A/c Group Budget" : "A/c Wise Budget";
+  const accountLabel = isGroupMode ? "Account Group" : "Account";
   const { user } = useAuth();
   const [rows, setRows] = useState<BudgetRow[]>([]);
   const [query, setQuery] = useState("");
@@ -81,7 +86,7 @@ export function AccountWiseBudgetPage() {
         parameter: "MS_BUDGET_ACWISE_PAGE",
         loginid: user?.loginid || "",
         code1: user?.company_code || "",
-        code2: "",
+        code2: docType,
         code3: "",
         code4: "",
         number1: 0,
@@ -108,8 +113,9 @@ export function AccountWiseBudgetPage() {
   };
 
   useEffect(() => {
+    setEditor(null);
     void loadRows();
-  }, []);
+  }, [mode]);
 
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -119,6 +125,15 @@ export function AccountWiseBudgetPage() {
 
   const columns = useMemo<ColumnDef<BudgetRow>[]>(() => [
     {
+      accessorKey: "version",
+      header: "Version",
+      cell: ({ row }) => (
+        <button type="button" className="text-left font-mono font-medium text-slate-700 hover:text-primary transition-colors cursor-pointer" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Click to edit">
+          {String(row.original.version || "V1")}
+        </button>
+      ),
+      },
+      {
       accessorKey: "doc_type",
       header: "Type",
       cell: ({ row }) => (
@@ -140,7 +155,7 @@ export function AccountWiseBudgetPage() {
     { accessorKey: "budget_year", header: "Year" },
     {
       id: "account",
-      header: "Account",
+      header: accountLabel,
       accessorFn: (row) => `${row.ac_code} ${row.ac_name}`,
       cell: ({ row }) => <span className="block max-w-[220px] truncate">{row.original.ac_code} {row.original.ac_name ? `- ${row.original.ac_name}` : ""}</span>,
     },
@@ -224,6 +239,7 @@ export function AccountWiseBudgetPage() {
     <section className="finance-list-page finance-utility-page grid gap-2 p-1">
       {editor ? (
         <BudgetEditor
+          mode={mode}
           editor={editor}
           onClose={() => setEditor(null)}
           onSaved={async () => {
@@ -241,7 +257,7 @@ export function AccountWiseBudgetPage() {
                 <FileText size={14} />
               </div>
               <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">
-                A/c Wise Budget
+                {screenTitle}
               </h1>
             </div>
           </div>
@@ -283,7 +299,7 @@ export function AccountWiseBudgetPage() {
                     exportToCsv(
                       filteredRows,
                       columns,
-                      `account-wise-budget-${new Date().toISOString().slice(0, 10)}.csv`,
+                      `${isGroupMode ? "account-group" : "account-wise"}-budget-${new Date().toISOString().slice(0, 10)}.csv`,
                     )
                   }
                   onRefresh={() => void loadRows(false)}
@@ -322,17 +338,64 @@ export function AccountWiseBudgetPage() {
 /*  Editor (in-page, same layout as Budget Version)                    */
 /* ------------------------------------------------------------------ */
 
-function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState, null>; onClose: () => void; onSaved: () => Promise<void> }) {
+function BudgetEditor({ mode = "account", editor, onClose, onSaved }: { mode?: "account" | "group"; editor: Exclude<EditorState, null>; onClose: () => void; onSaved: () => Promise<void> }) {
+  const isGroupMode = mode === "group";
+  const docType = isGroupMode ? "BDG" : "BDA";
+  const accountLabel = isGroupMode ? "Account Group" : "Account";
   const { user } = useAuth();
   const readOnly = editor.mode === "view";
   const isEdit = editor.mode === "edit";
   const [form, setForm] = useState<BudgetRow>(() => ({
-    ...emptyBudget(user?.company_code || ""),
+    ...emptyBudget(user?.company_code || "", docType),
     ...(editor.row || {}),
+    doc_type: editor.row?.doc_type || docType,
     doc_date: toInputDate(editor.row?.doc_date) || new Date().toISOString().slice(0, 10),
   }));
+  const [annualInput, setAnnualInput] = useState<string>(() =>
+    editor.row ? money(editor.row.total_budget || calcTotal(editor.row)) : "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (editor.mode !== "create" || form.div_code) return;
+    let mounted = true;
+    void (async () => {
+      try {
+        const divs = await getDynamicLookup({
+          parameter: "Account_division",
+          loginid: user?.loginid || "",
+          code1: user?.company_code || "",
+        });
+        if (!mounted || !divs.length) return;
+        const divCode = String(getLookupValue(divs[0], "div_code") || "");
+        const divName = getLookupText(divs[0], ["div_name", "DIV_NAME", "division_name"]);
+        if (divCode) {
+          setForm((prev) => (prev.div_code ? prev : { ...prev, div_code: divCode, div_name: divName }));
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { mounted = false; };
+  }, [editor.mode, user?.company_code, user?.loginid]);
+
+  // PowerBuilder uof_dwitemchanged('amount'): distribute annual amount evenly across 12 months
+  const distributeAnnualBudget = (rawAmount: string) => {
+    setAnnualInput(rawAmount);
+    const annual = Number(rawAmount);
+    if (!Number.isFinite(annual) || annual < 0) return;
+    const perMonth = Math.round((annual / 12) * 100) / 100;
+    const decAmount = Math.round((annual - perMonth * 11) * 100) / 100;
+    setForm((prev) => {
+      const next: BudgetRow = { ...prev };
+      MONTHS.forEach((m, idx) => {
+        next[m.field] = (idx === 11 ? decAmount : perMonth).toFixed(2);
+      });
+      next.total_budget = annual.toFixed(2);
+      return next;
+    });
+  };
 
   const total = useMemo(() => MONTHS.reduce((sum, month) => sum + numberValue(form[month.field]), 0), [form]);
 
@@ -342,8 +405,8 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
     event.preventDefault();
     if (readOnly) return;
     setError("");
-    if (!form.budget_year || !form.ac_code || !form.div_code || !form.doc_type) {
-      setError("Version, Budget Year, Division and Account are required.");
+    if (!form.budget_year || !form.ac_code || !form.div_code || !form.version) {
+      setError(`Version, Budget Year, Division and ${accountLabel} are required.`);
       return;
     }
 
@@ -355,8 +418,11 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
         ac_code: form.ac_code,
         div_code: form.div_code,
         doc_no: isEdit ? numberValue(form.doc_no) : 0,
-        doc_type: form.doc_type,
+        doc_type: form.doc_type || docType,
+        version: form.version,
         doc_date: form.doc_date,
+        curr_code: "INR",
+        ex_rate: 1,
         jan_budget_month: numberValue(form.jan_budget_month),
         feb_budget_month: numberValue(form.feb_budget_month),
         mar_budget_month: numberValue(form.mar_budget_month),
@@ -379,7 +445,8 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
     }
   };
 
-  const pageTitle = editor.mode === "create" ? "New A/c Wise Budget" : readOnly ? "View A/c Wise Budget" : "Edit A/c Wise Budget";
+  const modeTitle = isGroupMode ? "A/c Group Budget" : "A/c Wise Budget";
+  const pageTitle = editor.mode === "create" ? `New ${modeTitle}` : readOnly ? `View ${modeTitle}` : `Edit ${modeTitle}`;
 
   return (
     <>
@@ -445,8 +512,8 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
               <LookupField
                 label="Version"
                 required
-                value={form.doc_type}
-                displayValue={form.doc_type}
+                value={form.version}
+                displayValue={form.version}
                 columns={[
                   { field: "version_code", header: "Version" },
                   { field: "version_desc", header: "Description" },
@@ -454,8 +521,8 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
                 valueField="version_code"
                 displayFields={["version_code", "version_desc"]}
                 disabled={readOnly}
-                loadOptions={() => getDynamicLookup({ parameter: "AC_BUDGET_GET_VERSION", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-                onChange={(value) => setField("doc_type", value)}
+                loadOptions={() => getDynamicLookup({ parameter: "AC_BUDGET_GET_VERSION", loginid: user?.loginid || "", code1: user?.company_code || "", code2: form.budget_year || "" })}
+                onChange={(value) => setField("version", value)}
               />
               <div className="flex flex-col">
                 <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
@@ -498,23 +565,55 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
               />
             </div>
 
-            {/* Account */}
-            <div className="mt-2.5 grid grid-cols-1 lg:grid-cols-2 gap-x-3">
+            {/* Account / Group & Annual Auto-Split */}
+            <div className="mt-2.5 grid grid-cols-1 lg:grid-cols-2 gap-x-3 gap-y-2.5">
               <LookupField
-                label="Account"
+                label={accountLabel}
                 required
                 value={form.ac_code}
                 displayValue={form.ac_code ? `${form.ac_code}${form.ac_name ? ` - ${form.ac_name}` : ""}` : ""}
                 columns={[
-                  { field: "ac_code", header: "Account Code" },
-                  { field: "ac_name", header: "Account Name" },
+                  { field: "ac_code", header: isGroupMode ? "Group Code" : "Account Code" },
+                  { field: "ac_name", header: isGroupMode ? "Group Name" : "Account Name" },
                 ]}
                 valueField="ac_code"
                 displayFields={["ac_code", "ac_name"]}
                 disabled={readOnly}
-                loadOptions={() => getDynamicLookup({ parameter: "MS_BUDGET_ACCOUNT_CODE_LIST", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-                onChange={(value, row) => setForm((prev) => ({ ...prev, ac_code: value, ac_name: row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "" }))}
+                loadOptions={() =>
+                  getDynamicLookup({
+                    parameter: isGroupMode ? "MS_BUDGET_AC_GROUP_LIST" : "MS_BUDGET_ACCOUNT_CODE_LIST",
+                    loginid: user?.loginid || "",
+                    code1: user?.company_code || "",
+                  })
+                }
+                onChange={(value, row) => setForm((prev) => ({ ...prev, ac_code: value, ac_name: row ? getLookupText(row, ["ac_name", "AC_NAME", "l4_description", "account_name"]) : "" }))}
               />
+              <div className="flex flex-col">
+                <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
+                  Annual Amount (Auto ÷ 12 Months)
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    className={`${inputClass} text-right tabular-nums`}
+                    type="number"
+                    placeholder="Enter annual budget to split across 12 months..."
+                    value={annualInput}
+                    disabled={readOnly}
+                    onChange={(event) => distributeAnnualBudget(event.target.value)}
+                  />
+                  {!readOnly && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0 px-2.5 text-xs"
+                      onClick={() => distributeAnnualBudget(annualInput || String(total))}
+                    >
+                      Split ÷ 12
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -561,13 +660,14 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
 /*  Helpers (unchanged)                                                */
 /* ------------------------------------------------------------------ */
 
-function emptyBudget(companyCode: string): BudgetRow {
+function emptyBudget(companyCode: string, docType = "BDA"): BudgetRow {
   const year = String(new Date().getFullYear());
   return {
     company_code: companyCode,
     doc_no: "",
     doc_date: new Date().toISOString().slice(0, 10),
-    doc_type: "BDA",
+    doc_type: docType,
+    version: "V1",
     budget_year: year,
     div_code: "",
     div_name: "",
@@ -595,6 +695,7 @@ function mapBudgetRow(row: LookupRow): BudgetRow {
     doc_no: String(getLookupValue(row, "doc_no") || ""),
     doc_date: String(getLookupValue(row, "doc_date") || ""),
     doc_type: String(getLookupValue(row, "doc_type") || ""),
+    version: String(getLookupValue(row, "version") || ""), 
     budget_year: String(getLookupValue(row, "budget_year") || ""),
     div_code: String(getLookupValue(row, "div_code") || ""),
     div_name: String(getLookupValue(row, "div_name") || ""),

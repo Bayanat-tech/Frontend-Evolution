@@ -163,9 +163,7 @@ async function saveHeader() {
 
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
-        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setSelectedJob(null))}>
-          <ArrowLeft size={14} /> List
-        </Button>
+        {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={() => setSelectedJob(null)} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
         <Button type="button" size="sm" variant="outline" onClick={() => void loadSheet(activeJob || selectedJob)} disabled={loading}>
           <RefreshCw size={14} /> Refresh
         </Button>

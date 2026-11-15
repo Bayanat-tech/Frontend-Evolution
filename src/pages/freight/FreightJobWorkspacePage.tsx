@@ -1,11 +1,13 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowRight, Ban, Bell,  CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowRight, TrendingUp, Ban, Bell,  CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
@@ -13,6 +15,7 @@ import { FreightJobPage } from "./FreightJobPage";
 import { FreightPacklistPage } from "./FreightPacklistPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
+import { FreightJobFinancialAuditDialog } from "../../components/freight/FreightJobFinancialAuditDialog";
 
 type JobTab = "job" | "packlist" | "alerts" | "instructions" | "documents" | "deposits" | "activities";
 type WorkspaceMode = "list" | "steps";
@@ -80,6 +83,13 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [workspaceActions, setWorkspaceActions] = useState<ReactNode>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [auditJob, setAuditJob] = useState<LookupRow | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
+
+  const openFinancialAudit = (row: LookupRow) => {
+    setAuditJob(row);
+    setAuditOpen(true);
+  };
   const targetMode = (target?.mode || "air") as keyof typeof modeLabel;
   const targetDirection = (target?.direction || "import") as keyof typeof directionLabel;
   const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
@@ -141,20 +151,54 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     { accessorKey: "prin_name", header: "Principal Name", size: 240 },
     { accessorKey: "doc_ref", header: targetMode === "air" ? "MAWB" : "BL / Doc Ref", size: 145 },
     { accessorKey: "hawb", header: targetMode === "air" ? "HAWB" : "House Ref", size: 130 },
-    { accessorKey: "port_code", header: "Origin", size: 90 },
-    { accessorKey: "destination_port", header: "Destination", size: 115 },
+    { accessorKey: "port_code_name", header: "Origin", size: 90, cell: ({ row }) => text(row.original, "port_code_name") || text(row.original, "port_code") },
+    { accessorKey: "destination_name", header: "Destination", size: 115, cell: ({ row }) => text(row.original, "destination_port_name") || text(row.original, "destination_port") },
     { accessorKey: "invoice_date", header: "Invoice", size: 110, cell: ({ row }) => text(row.original, "invoice_date") ? <StatusChip tone="green" label="Invoiced" /> : <StatusChip tone="slate" label="Pending" /> },
     { accessorKey: "canceled", header: "Status", size: 95, cell: ({ row }) => text(row.original, "canceled") === "Y" ? <StatusChip tone="red" label="Cancelled" /> : <StatusChip tone="green" label="Open" /> },
     {
       id: "actions",
-      header: "Open",
-      size: 90,
+      header: "Actions",
+      size: 180,
       enableColumnFilter: false,
-      cell: ({ row }) => (
-        <Button type="button" size="sm" variant="ghost" className="freight-table-text-action h-6 px-2 text-xs" onClick={() => openSteps(row.original, "job")}>
-          Steps <ArrowRight size={13} />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const isConfirmed =
+          text(row.original, "confirmed") === "Y" ||
+          Boolean(text(row.original, "confirm_date")) ||
+          Boolean(text(row.original, "invoice_date")) ||
+          text(row.original, "completed") === "Y";
+
+        return (
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              disabled={!isConfirmed}
+              onClick={() => openFinancialAudit(row.original)}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all shadow-2xs border ${
+                isConfirmed
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                  : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+              }`}
+              title={
+                isConfirmed
+                  ? "Open Financial Audit 360°"
+                  : "Job must be Confirmed to view Financial 360°"
+              }
+            >
+              <TrendingUp size={11} className={isConfirmed ? "text-emerald-700" : "text-slate-400"} />
+              <span>Financial 360°</span>
+            </button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="freight-table-text-action h-6 px-1.5 text-xs text-slate-600 hover:text-slate-900"
+              onClick={() => openSteps(row.original, "job")}
+            >
+              Steps <ArrowRight size={13} />
+            </Button>
+          </div>
+        );
+      },
     },
   ], [targetMode]);
 
@@ -202,15 +246,15 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
         <DataTable
           columns={columns}
           data={filteredRows}
-          toolbar={
-            <button
+          actionButton={
+            <div className="flex items-center gap-2"><button
               type="button"
               onClick={() => openSteps(null, "job")}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
             >
               <Plus size={14} />
               Add Job
-            </button>
+            </button><FinanceListActionsMenu onExport={() => exportToCsv(filteredRows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]))), columns, `freight-${targetMode}-${targetDirection}-jobs.csv`)} onRefresh={() => void loadRows()} /></div>
           }
           loading={loading}
           searchValue={query}
@@ -221,7 +265,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           density="grid"
           enablePagination
           pageSize={25}
-          enableExport
+          enableExport={false}
           exportFilename={`freight-${targetMode}-${targetDirection}-jobs.csv`}
           onRowClick={(row) => openSteps(row, "job")}
           rowClassName={(row) =>
@@ -232,6 +276,24 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                 : "bg-blue-50/50"
           }
         />
+
+        {auditJob && (
+          <FreightJobFinancialAuditDialog
+            open={auditOpen}
+            onClose={() => {
+              setAuditOpen(false);
+              setAuditJob(null);
+            }}
+            companyCode={companyCode}
+            prinCode={text(auditJob, "prin_code")}
+            jobNo={text(auditJob, "job_no")}
+            prinName={text(auditJob, "prin_name")}
+            jobDate={text(auditJob, "job_date")}
+            transportMode={targetMode}
+            confirmedDate={text(auditJob, "confirm_date")}
+            invoicedDate={text(auditJob, "invoice_date")}
+          />
+        )}
       </section>
     );
   }
@@ -243,13 +305,14 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
         <div className="freight-workspace-header-shell">
           <div className="freight-workspace-title-cluster">
+            <button type="button" onClick={returnToList} aria-label="Back to job list" title="Back to job list" className="freight-back-button"><ArrowLeft size={18} /></button>
             <div className={`freight-workspace-mode-mark mode-${modeCode[targetMode].toLowerCase()}`} aria-hidden="true">
               <WorkspaceModeIcon size={30} strokeWidth={1.5} />
             </div>
-            <div className="freight-workspace-title-block">
+            {/* <div className="freight-workspace-title-block">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="m-0 text-[20px] font-bold leading-tight text-foreground">
-                  {selectedJob ? `Job ${text(selectedJob, "job_no")}` : "New Job"}
+                  {selectedJob ? "Job" : "New Job"}
                 </h1>
                 {selectedJob && (
                   <>
@@ -260,12 +323,23 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                       {formatDate(text(selectedJob, "job_date"))}
                     </span>
                   </>
-                )}
+                )}  
               </div>
               <p className="m-0 text-xs font-semibold text-slate-600 freight-workspace-mode-subtitle">
                 {modeLabel[targetMode]} Freight &bull; {directionLabel[targetDirection]}
               </p>
-            </div>
+            </div> */}
+            <div className="flex flex-wrap items-center gap-2">
+  <h1 className="m-0 text-[16px] font-bold leading-tight text-foreground">
+  {modeLabel[targetMode]} {directionLabel[targetDirection]} Job
+</h1>
+  <span className="freight-doc-pill">
+    JOB NO - <b>{selectedJob ? text(selectedJob, "job_no") : "NEW"}</b>
+  </span>
+  <span className="freight-doc-pill">
+    DATE - <b>{formatDate(text(selectedJob, "job_date")) || new Date().toLocaleDateString("en-GB")}</b>
+  </span>
+</div>
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
           <div className="freight-workspace-tabs">
@@ -376,8 +450,17 @@ function smartAdvice(health: ReturnType<typeof buildHealth>) {
   return "No urgent job gaps found for this list.";
 }
 
+// function normalizeLookupRow(row: LookupRow) {
+//   return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key.toUpperCase(), value])) as LookupRow;
+// }
+
 function normalizeLookupRow(row: LookupRow) {
-  return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key.toUpperCase(), value])) as LookupRow;
+  const next: LookupRow = {};
+  Object.entries(row || {}).forEach(([key, value]) => {
+    next[key.toUpperCase()] = value;
+    next[key.toLowerCase()] = value;
+  });
+  return next;
 }
 
 function text(row: LookupRow | null | undefined, key: string) {

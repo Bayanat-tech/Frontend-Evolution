@@ -258,8 +258,12 @@ export function DataTable<TData, TValue>({
     pageCount: manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : undefined,
   });
 
-  const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
-  const exportRows = (manualPagination || manualFiltering ? table.getCoreRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
+  const visibleRows = manualPagination
+    ? table.getSortedRowModel().rows
+    : enablePagination
+      ? table.getRowModel().rows
+      : table.getSortedRowModel().rows;
+  const exportRows = (manualPagination ? table.getSortedRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
   const showExport = enableExport ?? Boolean(onSearchChange || enablePagination || manualPagination);
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;

@@ -282,7 +282,6 @@
   .ui-input,
   .ui-select,
   .lookup-field-trigger,
-  .commercial-line-description,
   .bisc-date-picker-trigger,
   input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
   select
@@ -594,11 +593,13 @@
 }
 
 /* Active / Selected detail row in Payment Detail Table */
-:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail {
-  background-color: #eff6ff !important;
+:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr:focus-within {
+  background-color: #f0f7ff !important;
 }
-:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail td:first-child {
-  border-left: 3px solid #00378C !important;
+:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail td:first-child,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr:focus-within td:first-child {
+  border-left: 3.5px solid #00378C !important;
 }
 
 /* Modern BISC Table Row Inline Inputs & Controls */
@@ -606,7 +607,6 @@
   .ui-input,
   .ui-select,
   .lookup-field-trigger,
-  .commercial-line-description,
   input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
   select
 ) {
@@ -628,7 +628,6 @@
   .ui-input,
   .ui-select,
   .lookup-field-trigger,
-  .commercial-line-description,
   input,
   select
 ):hover {
@@ -671,14 +670,29 @@
 
 /* Table description cell */
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table textarea.commercial-line-description {
-  height: 25px !important;
-  min-height: 25px !important;
-  max-height: 25px !important;
-  line-height: 21px !important;
-  resize: none !important;
-  overflow: hidden !important;
-  white-space: nowrap !important;
-  padding: 1px 6px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 80px !important;
+  line-height: 1.3 !important;
+  resize: vertical !important;
+  overflow-y: auto !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  padding: 4px 7px !important;
+  font-size: 11.5px !important;
+  border-radius: 4px !important;
+  border: 1px solid #cbd5e1 !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02) !important;
+  transition: height 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table textarea.commercial-line-description:focus {
+  height: 48px !important;
+  min-height: 48px !important;
+  border-color: #00378c !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(0, 55, 140, 0.15) !important;
 }
 
 /* Table select (Cr/Dr) */
@@ -1075,7 +1089,7 @@
 .finance-document-editor .commercial-line-totals > div { display:flex; gap:6px; border:0; padding:0; margin:0; }
 .finance-document-editor .finance-lines-table { --finance-col-no:36px; --finance-col-account:230px; width:100% !important; }
 .finance-document-editor .finance-lines-table .finance-col-account { left: var(--finance-col-no, 38px) !important; }
-.finance-document-editor .finance-lines-table td:has(.commercial-line-description) { width:220px !important; min-width:180px !important; max-width:260px !important; }
+.finance-document-editor .finance-lines-table td:has(.commercial-line-description) { width:320px !important; min-width:260px !important; max-width:480px !important; }
 .finance-document-editor .finance-lines-table .finance-amount-cell { width:88px !important; min-width:82px !important; }
 .finance-document-editor .finance-money-input { min-width:0 !important; }
 .finance-document-editor .commercial-sticky-footer { padding:4px 10px !important; min-height:32px; }
@@ -1621,4 +1635,186 @@ button.commercial-add-line-btn:hover svg {
 @media (max-width: 768px) {
   .finance-document-editor .finance-allocation-cell { padding-left: 16px !important; padding-right: 8px !important; }
   .finance-document-editor .finance-allocation-branch { max-width: calc(100cqw - 40px); padding-left: 10px; }
+}
+
+/* Ensure Commercial Document Workbench always remains a full-width vertical grid layout */
+form.commercial-document-workbench {
+  display: grid !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.commercial-document-workbench .commercial-editor-body {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* ── Base Transaction Amount in Detail Lines: Crisp White with Bold Slate Text ── */
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-amount-input,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-amount-input,
+.finance-lines-table td input.commercial-amount-input {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1.5px solid #94a3b8 !important;
+  font-weight: 800 !important;
+  text-align: right !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-amount-input:focus,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-amount-input:focus,
+.finance-lines-table td input.commercial-amount-input:focus {
+  background-color: #ffffff !important;
+  border-color: #00378c !important;
+  box-shadow: 0 0 0 2px rgba(0, 55, 140, 0.2) !important;
+}
+
+/* ── Statutory Tax / VAT in Detail Lines: Distinct Amber Theme Matching Summary Card ── */
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-tax-amt-input,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-tax-perc-input,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-tax-amt-input,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-tax-perc-input,
+.finance-lines-table td input.commercial-tax-amt-input,
+.finance-lines-table td input.commercial-tax-perc-input {
+  background-color: #fffbeb !important;
+  color: #78350f !important;
+  border: 1.5px solid #fcd34d !important;
+  font-weight: 700 !important;
+  text-align: right !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-tax-amt-input:focus,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-tax-perc-input:focus,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-tax-amt-input:focus,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-tax-perc-input:focus,
+.finance-lines-table td input.commercial-tax-amt-input:focus,
+.finance-lines-table td input.commercial-tax-perc-input:focus {
+  background-color: #fef3c7 !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) !important;
+}
+
+/* ── Table Header for Tax Columns ── */
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table thead th.finance-th-tax,
+.commercial-document-workbench .commercial-lines-table-separated thead th.finance-th-tax,
+.finance-lines-table thead th.finance-th-tax {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border-bottom: 2px solid #f59e0b !important;
+  font-weight: 700 !important;
+}
+
+/* ── Base Amount (L.C. Functional Currency) in Detail Lines: Soft Blue with Royal Navy Text ── */
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-base-amount-input,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-base-amount-input:disabled,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-base-amount-input,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-base-amount-input:disabled,
+.finance-lines-table td input.commercial-base-amount-input,
+.finance-lines-table td input.commercial-base-amount-input:disabled {
+  background-color: #eff6ff !important;
+  color: #00378c !important;
+  border: 1.5px solid #bfdbfe !important;
+  font-weight: 800 !important;
+  text-align: right !important;
+}
+
+/* ── Table Header for Base Amount Column ── */
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table thead th.finance-th-base-amt,
+.commercial-document-workbench .commercial-lines-table-separated thead th.finance-th-base-amt,
+.finance-lines-table thead th.finance-th-base-amt {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-bottom: 2px solid #38bdf8 !important;
+  font-weight: 700 !important;
+}
+
+/* Job / Expense allocation panel only (Invoice has 8 cols, so it is untouched) */
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) {
+  min-width: 400px !important;
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-table {
+  width: 45% !important;
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(2) {
+  width: 180px !important;  /* JOB NO */
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(3),
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(4) {
+  width: 230px !important;  /* DOC REF, DOC REF 2 */
+}
+
+/* ── Finance list pages: no page scroll, table scrolls inside ── */
+.workspace-content:has(.finance-list-page:not(.finance-document-editing)) {
+  overflow: hidden !important;
+}
+
+
+/* Main document details only; nested allocation tables keep their own palette. */
+.finance-document-editor .finance-detail-table > thead > tr > th {
+ background: #f1f5f9 !important; color: #334155 !important;
+ border-right: 1px solid #cbd5e1 !important; border-bottom: 2px solid #94a3b8 !important;
+ font-weight: 700 !important; text-transform: uppercase; letter-spacing: .035em !important;
+}
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td { border-right: 1px solid #dbe3ed !important; border-bottom: 1px solid #e2e8f0; }
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row):hover > td { background-color: #f0f6ff !important; }
+.finance-document-editor .finance-detail-table > thead > tr > th:last-child, .finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td:last-child { border-right: 0 !important; }
+.finance-document-editor .finance-detail-table > thead > tr > th.finance-amount-cell:not(.finance-th-tax):not(.finance-th-base-amt) {
+ background: #ecfdf5 !important; color: #047857 !important; border-bottom-color: #34d399 !important;
+}
+.finance-document-editor .finance-detail-table > thead > tr > th.finance-th-tax {
+ background: #fffbeb !important; color: #92400e !important; border-bottom-color: #fbbf24 !important;
+}
+.finance-document-editor .finance-detail-table > thead > tr > th.finance-th-base-amt {
+ background: #eff6ff !important; color: #1d4ed8 !important; border-bottom-color: #60a5fa !important;
+}
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input.commercial-amount-input {
+ background: #ecfdf5 !important; color: #047857 !important; border-color: #a7f3d0 !important;
+ font-weight: 700 !important; font-variant-numeric: tabular-nums; opacity: 1; -webkit-text-fill-color: #047857;
+}
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input.commercial-amount-input:focus {
+ border-color: #059669 !important; box-shadow: 0 0 0 2px rgb(5 150 105 / 15%) !important;
+}
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input:is(.commercial-tax-amt-input, .commercial-tax-perc-input) {
+ color: #92400e !important; background: #fffbeb !important; font-variant-numeric: tabular-nums;
+ opacity: 1; -webkit-text-fill-color: #92400e;
+}
+/* Keep invalid amount fields visibly marked. */
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input.commercial-amount-input[class*="!border-rose-500"] { border-color: #f43f5e !important; }
+.finance-list-table-wrap {
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+.finance-list-table-wrap .data-table-scroll {
+  height: calc(100dvh - 350px) !important;   /* shorter table: tune this number */
+  min-height: 550px;
+  max-height: none !important;
+  overflow: auto !important;                 /* the only scrollbar */
+}
+
+.finance-list-table-wrap .data-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Document Setup: allow the page to scroll (overrides the finance-list-page overflow lock) */
+.workspace-content:has(.finance-list-page.document-setup-page:not(.finance-document-editing)) {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+/* Keep empty and populated allocation panels aligned to their column widths. */
+.finance-document-editor .finance-allocation-branch > .finance-allocation-panel {
+  width: var(--allocation-panel-width, max-content) !important;
+  max-width: 100% !important;
+}
+
+/* Document Setup: gap under title */
+.document-setup-page .finance-list-heading {
+  margin-bottom: 0 !important;
+  padding-bottom: 2px !important;
+}
+.document-setup-page .data-table-header {
+  margin-top: 0 !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
 }

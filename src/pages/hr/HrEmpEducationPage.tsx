@@ -5,6 +5,7 @@
 //  • Filters in a SectionPanel (Division → Department → Section → Employee)
 //  • Education grid in a DataTable with "Add Row" inside the toolbar
 //  • toast feedback instead of NoticeToast
+//  • Mandatory fields: red * in headers/labels + red cell border on failed save
 //
 // All data logic (cascade resets, skip-hydrate guard, soft-delete via
 // status_flag "D", upsert payload) is unchanged.
@@ -49,6 +50,16 @@ type EduRow = {
   studied_at: string;
   status_flag: string;
 };
+
+// Mandatory columns (End Date is optional)
+const REQUIRED_FIELDS: { key: keyof EduRow; label: string }[] = [
+  { key: "edu_desc_code", label: "Educational Discipline" },
+  { key: "edu_level_code", label: "Educational Level" },
+  { key: "start_date", label: "Start Date" },
+  { key: "year_of_passing", label: "Year Passed" },
+  { key: "studied_at", label: "University / Institution" },
+  { key: "status_flag", label: "Status" },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +112,15 @@ function buildParams(
 // ── Freight building blocks ───────────────────────────────────────────────────
 // (Same as in the Grade / Product forms — worth moving to components/ui later.)
 
+/** Red mandatory-field star, used in labels and grid headers. */
+function RequiredMark() {
+  return (
+    <span className="ml-0.5 font-bold text-red-600" aria-hidden="true">
+      *
+    </span>
+  );
+}
+
 function SectionPanel({
   title,
   icon: Icon,
@@ -142,22 +162,27 @@ function Field({
     <label className={`freight-field-label group flex flex-col gap-0.5 ${className ?? ""}`}>
       <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
         {label}
-        {required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
+        {required && <RequiredMark />}
       </span>
       {children}
     </label>
   );
 }
 
+// Red border for an invalid cell (works on the inner <input>/<select>)
+const INVALID_CLASS = "[&_input]:!border-red-500 [&_select]:!border-red-500";
+
 // ── Inline editable text cell ─────────────────────────────────────────────────
 
 function EditableTextCell({
   initialValue,
   type = "text",
+  invalid = false,
   onBlur,
 }: {
   initialValue: string;
   type?: string;
+  invalid?: boolean;
   onBlur: (value: string) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -167,12 +192,14 @@ function EditableTextCell({
   }, [initialValue]);
 
   return (
-    <Input
-      ref={ref}
-      type={type}
-      defaultValue={initialValue}
-      onBlur={(e) => onBlur(e.target.value)}
-    />
+    <div className={invalid ? INVALID_CLASS : ""}>
+      <Input
+        ref={ref}
+        type={type}
+        defaultValue={initialValue}
+        onBlur={(e) => onBlur(e.target.value)}
+      />
+    </div>
   );
 }
 
@@ -182,24 +209,36 @@ function EditableSelectCell({
   value,
   options,
   disabled = false,
+  invalid = false,
   onChange,
 }: {
   value: string;
   options: { code: string; label: string }[];
   disabled?: boolean;
+  invalid?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
-    <Select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Select...</option>
-      {options.map((o) => (
-        <option key={o.code} value={o.code}>
-          {o.label}
-        </option>
-      ))}
-    </Select>
+    <div className={invalid ? INVALID_CLASS : ""}>
+      <Select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Select...</option>
+        {options.map((o) => (
+          <option key={o.code} value={o.code}>
+            {o.label}
+          </option>
+        ))}
+      </Select>
+    </div>
   );
 }
+
+/** Grid header with a red star for mandatory columns. */
+const requiredHeader = (label: string) => () => (
+  <span>
+    {label}
+    <RequiredMark />
+  </span>
+);
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -222,6 +261,9 @@ export function HrEmpEducationPage() {
 
   // ── Grid state ─────────────────────────────────────────────────────────────
   const [rows, setRows] = useState<EduRow[]>([]);
+
+  // Turns on red highlighting of empty mandatory cells (after a Save attempt)
+  const [showErrors, setShowErrors] = useState(false);
 
   // Scoped skip-hydrate guard: the post-save refetch must not clobber local
   // rows, but it must only apply to the employee we just saved for.
@@ -326,6 +368,7 @@ export function HrEmpEducationPage() {
 
   useEffect(() => {
     if (!employee) setRows([]);
+    setShowErrors(false); // new employee → start with a clean form
   }, [employee]);
 
   // ── Row update helpers ─────────────────────────────────────────────────────
@@ -367,8 +410,11 @@ export function HrEmpEducationPage() {
   const visibleRows = useMemo(() => rows.filter((r) => r.status_flag !== "D"), [rows]);
 
   // ── Columns ────────────────────────────────────────────────────────────────
-  const columns = useMemo<ColumnDef<EduRow>[]>(
-    () => [
+  const columns = useMemo<ColumnDef<EduRow>[]>(() => {
+    // A cell is invalid only after a Save attempt and when it is empty
+    const bad = (v: string) => showErrors && !String(v ?? "").trim();
+
+    return [
       {
         id: "index",
         header: "#",
@@ -377,11 +423,12 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "edu_desc_code",
-        header: "Educational Discipline *",
+        header: requiredHeader("Educational Discipline"),
         size: 240,
         cell: ({ row }) => (
           <EditableSelectCell
             value={row.original.edu_desc_code}
+            invalid={bad(row.original.edu_desc_code)}
             options={eduDiscOpts.map((o) => ({ code: o.edu_disc_code, label: o.edu_disc_desc }))}
             onChange={(v) => updateRowSelect(row.original._rowId, "edu_desc_code", v)}
           />
@@ -389,11 +436,12 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "edu_level_code",
-        header: "Educational Level *",
+        header: requiredHeader("Educational Level"),
         size: 200,
         cell: ({ row }) => (
           <EditableSelectCell
             value={row.original.edu_level_code}
+            invalid={bad(row.original.edu_level_code)}
             options={eduLevelOpts.map((o) => ({ code: o.edu_level_code, label: o.edu_level_desc }))}
             onChange={(v) => updateRowSelect(row.original._rowId, "edu_level_code", v)}
           />
@@ -401,11 +449,12 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "start_date",
-        header: "Start Date *",
+        header: requiredHeader("Start Date"),
         size: 160,
         cell: ({ row }) => (
           <EditableTextCell
             initialValue={row.original.start_date}
+            invalid={bad(row.original.start_date)}
             type="date"
             onBlur={(v) => updateRowText(row.original._rowId, "start_date", v)}
           />
@@ -413,7 +462,7 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "end_date",
-        header: "End Date",
+        header: "End Date", // optional
         size: 160,
         cell: ({ row }) => (
           <EditableTextCell
@@ -425,11 +474,12 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "year_of_passing",
-        header: "Year Passed *",
+        header: requiredHeader("Year Passed"),
         size: 120,
         cell: ({ row }) => (
           <EditableTextCell
             initialValue={row.original.year_of_passing}
+            invalid={bad(row.original.year_of_passing)}
             onBlur={(v) => {
               const clean = v.replace(/\D/g, "").slice(0, 4);
               updateRowText(row.original._rowId, "year_of_passing", clean);
@@ -439,22 +489,24 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "studied_at",
-        header: "University / Institution *",
+        header: requiredHeader("University / Institution"),
         size: 220,
         cell: ({ row }) => (
           <EditableTextCell
             initialValue={row.original.studied_at}
+            invalid={bad(row.original.studied_at)}
             onBlur={(v) => updateRowText(row.original._rowId, "studied_at", v)}
           />
         ),
       },
       {
         accessorKey: "status_flag",
-        header: "Status *",
+        header: requiredHeader("Status"),
         size: 130,
         cell: ({ row }) => (
           <EditableSelectCell
             value={row.original.status_flag}
+            invalid={bad(row.original.status_flag)}
             options={[
               { code: "A", label: "Active" },
               { code: "I", label: "Inactive" },
@@ -481,9 +533,8 @@ export function HrEmpEducationPage() {
           </div>
         ),
       },
-    ],
-    [eduDiscOpts, eduLevelOpts, updateRowSelect, updateRowText, deleteRow],
-  );
+    ];
+  }, [eduDiscOpts, eduLevelOpts, updateRowSelect, updateRowText, deleteRow, showErrors]);
 
   // ── Save ───────────────────────────────────────────────────────────────────
   const mutation = useMutation({
@@ -492,6 +543,19 @@ export function HrEmpEducationPage() {
       if (visibleRows.length === 0 && rows.every((r) => r.status_flag === "D")) {
         throw new Error("Add at least one education record");
       }
+
+      // Mandatory-field check on rows that are not being deleted
+      const missing = new Set<string>();
+      for (const r of visibleRows) {
+        for (const f of REQUIRED_FIELDS) {
+          if (!String(r[f.key] ?? "").trim()) missing.add(f.label);
+        }
+      }
+      if (missing.size > 0) {
+        setShowErrors(true); // red-highlight the empty cells
+        throw new Error(`Please fill mandatory fields: ${Array.from(missing).join(", ")}`);
+      }
+      setShowErrors(false);
 
       // Send ALL rows, including status_flag "D", so the backend can remove them.
       const education_details = rows.map((r) => ({
@@ -539,6 +603,7 @@ export function HrEmpEducationPage() {
     setSection(null);
     setEmployee(null);
     setRows([]);
+    setShowErrors(false);
     setResetKey((k) => k + 1); // remount LookupFields → fresh option lists
     void queryClient.invalidateQueries({ queryKey: ["edu-level", companyCode] });
     void queryClient.invalidateQueries({ queryKey: ["edu-discipline", companyCode] });

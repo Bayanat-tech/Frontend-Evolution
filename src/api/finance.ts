@@ -6,6 +6,11 @@ export type AccountTreeNode = {
   parent_code?: string | null;
   level: number;
   children: AccountTreeNode[];
+  ac_active?: string;
+  ac_status?: string;
+  approved_by?: string;
+  delete_blocked?: boolean;
+  delete_block_reason?: string | null;
 };
 // Ac-Tree Level5
 export type ApprovalDetail={
@@ -127,6 +132,11 @@ function normalizeAccountTreeNode(raw: unknown, index: number): AccountTreeNode 
     parent_code: text(record.parent_code ?? record.PARENT_CODE) || null,
     level: Number.isFinite(level) ? level : 1,
     children: normalizeAccountTree(children),
+    ac_active: text(record.ac_active ?? record.AC_ACTIVE),
+    ac_status: text(record.ac_status ?? record.AC_STATUS),
+    approved_by: text(record.approved_by ?? record.APPROVED_BY),
+    delete_blocked: record.delete_blocked === true || record.DELETE_BLOCKED === true,
+    delete_block_reason: text(record.delete_block_reason ?? record.DELETE_BLOCK_REASON) || null,
   };
 }
 

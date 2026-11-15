@@ -103,10 +103,6 @@ const errorMessage = (e: any, fallback: string): string => {
   return data?.message || e?.message || fallback;
 };
 
-// Rows with a code + name pair → { value: "code::name", label: "code - name" }.
-// The option value is a unique composite of code+name, mirroring the pattern
-// used for principal/department/product options in the stock ageing report,
-// so the same code can appear more than once under a different name.
 const mapCodeNameOptions = (
   rows: Array<{ code: string; name: string }>,
 ): ReportOption[] => {
@@ -131,12 +127,6 @@ const codesFromSelection = (values: string[]): string[] => {
   return Array.from(codes);
 };
 
-// The Purchase Order backend endpoints take a single code per field
-// (supplier_code, product_from, product_to, doc_no) rather than an array.
-// Selecting a value in these multiselects still lets a user pick only one
-// meaningful filter at a time; we take the first selected code when building
-// the request body. If the backend is updated to accept a list, swap
-// firstCodeFromSelection(...) below for codesFromSelection(...).
 const firstCodeFromSelection = (values: string[]): string => {
   const codes = codesFromSelection(values);
   return codes[0] === "All" ? "All" : codes[0];

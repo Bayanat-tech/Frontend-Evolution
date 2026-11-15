@@ -315,8 +315,12 @@ export function DataTable<TData, TValue>({
     pageCount: manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : undefined,
   });
 
-  const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
-  const exportRows = (manualPagination || manualFiltering ? table.getCoreRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
+  const visibleRows = manualPagination
+    ? table.getSortedRowModel().rows
+    : enablePagination
+      ? table.getRowModel().rows
+      : table.getSortedRowModel().rows;
+  const exportRows = (manualPagination ? table.getSortedRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
   const showExport = enableExport ?? Boolean(onSearchChange || enablePagination || manualPagination);
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
@@ -1213,11 +1217,18 @@ function hasFilterValue(value: unknown): boolean {
 
 function toDateOnly(value: unknown) {
   if (!value) return "";
-  const raw = String(value);
+  const raw = String(value).trim();
+  const ymdMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    const [, y, m, d] = ymdMatch;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  const dmyMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const [, d, m, y] = dmyMatch;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  const match = raw.match(/^(\d{4}-\d{2}-\d{2})|^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!match) return "";
-  if (match[1]) return match[1];
-  return `${match[4]}-${match[3]}-${match[2]}`;
+  return "";
 }

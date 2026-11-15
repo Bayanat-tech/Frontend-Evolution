@@ -1,104 +1,22 @@
-import { Edit2, FileText, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, Wallet } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { LookupField } from "../../components/ui/LookupField";
-import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
+import { LookupField } from "../../components/ui/LookupField";
+import { Input } from "../../components/ui/Input";
+import type { ReactNode } from "react";
 
 /* ------------------------------------------------------------------ */
 /*  Types & field definitions                                          */
 /* ------------------------------------------------------------------ */
 
-type ProductRow = Record<string, unknown>;
-
-type LookupConfig = {
-  parameter: string;
-  valueField: string;
-  nameField: string;
-  valueHeader: string;
-  nameHeader: string;
-};
-
-type ProductField = {
-  name: string;
-  label: string;
-  section: string;
-  type?: "text" | "number" | "textarea";
-  lookup?: LookupConfig;
-  required?: boolean;
-  disabledOnEdit?: boolean;
-  fullRow?: boolean;
-};
-
-const lookup = (
-  parameter: string,
-  valueField: string,
-  nameField: string,
-  valueHeader: string,
-  nameHeader: string,
-): LookupConfig => ({ parameter, valueField, nameField, valueHeader, nameHeader });
-
-const FIELDS: ProductField[] = [
-  // Product Details
-  { name: "prod_code", label: "Product Code", section: "Product Details", required: true, disabledOnEdit: true },
-  { name: "prod_name", label: "Product Name", section: "Product Details", required: true },
-  { name: "model_number", label: "Model Number", section: "Product Details" },
-  { name: "group_code", label: "Group Code", section: "Product Details", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_GROUP", "group_code", "group_name", "Group Code", "Group Name") },
-  { name: "brand_code", label: "Brand Code", section: "Product Details", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_BRAND", "brand_code", "brand_name", "Brand Code", "Brand Name") },
-  { name: "category_code", label: "Category Code", section: "Product Details", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY", "category_code", "category_name", "Category Code", "Category Name") },
-  { name: "prodtype_code", label: "Product Type Code", section: "Product Details", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE", "prodtype_code", "prodtype_name", "Type Code", "Type Name") },
-  { name: "season_code", label: "Season Code", section: "Product Details" },
-
-  // Barcode and QR Code
-  { name: "barcode", label: "Barcode", section: "Barcode and QR Code" },
-  { name: "size_code", label: "Size Code", section: "Barcode and QR Code" },
-  { name: "active", label: "Active", section: "Barcode and QR Code" },
-  { name: "co_packing", label: "Co Packing", section: "Barcode and QR Code" },
-  { name: "product_stage", label: "Product Stage", section: "Barcode and QR Code" },
-
-  // Unit of Measurement
-  { name: "uom_count", label: "No. of UOMs", section: "Unit of Measurement", type: "number" },
-  { name: "p_uom", label: "Primary UOM", section: "Unit of Measurement", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_UOM", "uom_code", "uom_name", "UOM Code", "UOM Name") },
-  { name: "l_uom", label: "Lower UOM", section: "Unit of Measurement", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_UOM", "uom_code", "uom_name", "UOM Code", "UOM Name") },
-  { name: "uppp", label: "UPPP", section: "Unit of Measurement", type: "number" },
-
-  // Division
-  { name: "div_code", label: "Division Code", section: "Division", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION", "div_code", "div_name", "Division Code", "Division Name") },
-  { name: "color_code", label: "Color Code", section: "Division" },
-
-  // Dimensions
-  { name: "length", label: "Length", section: "Dimensions", type: "number" },
-  { name: "breadth", label: "Breadth", section: "Dimensions", type: "number" },
-  { name: "height", label: "Height", section: "Dimensions", type: "number" },
-  { name: "volume", label: "Volume", section: "Dimensions", type: "number" },
-  { name: "net_wt", label: "Net Weight", section: "Dimensions", type: "number" },
-
-  // Remarks
-  { name: "remarks", label: "Remarks", section: "Remarks", type: "textarea", fullRow: true },
-
-  // Additional
-  { name: "manu_code", label: "Manufacturer Code", section: "Additional" },
-  { name: "origin_country", label: "Origin Country", section: "Additional" },
-  { name: "cost_rate", label: "Cost Rate Unit", section: "Additional", type: "number" },
-  { name: "retail_rate", label: "Retail Price", section: "Additional", type: "number" },
-  { name: "sales_rate", label: "Sales Rate", section: "Additional", type: "number" },
-  { name: "reorder_qty", label: "Reorder Qty", section: "Additional", type: "number" },
-  { name: "alt_prod_code", label: "Alternate Product", section: "Additional" },
-
-  // Tax Component
-  { name: "tx_compt_1", label: "Tax Component 1", section: "Tax Component" },
-  { name: "tx_compt_2", label: "Tax Component 2", section: "Tax Component" },
-  { name: "tx_compt_3", label: "Tax Component 3", section: "Tax Component" },
-  { name: "tx_compt_4", label: "Tax Component 4", section: "Tax Component" },
-];
-
-const SECTIONS = Array.from(new Set(FIELDS.map((field) => field.section)));
+type ProductRow = Record<string, any>;
 
 const LIST_COLUMNS: { key: string; label: string; width?: number }[] = [
   { key: "prod_code", label: "Product Code", width: 150 },
@@ -112,10 +30,123 @@ const LIST_COLUMNS: { key: string; label: string; width?: number }[] = [
   { key: "sales_rate", label: "Sales Rate", width: 120 },
 ];
 
-const inputClass =
-  "h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500";
-
 type Notice = { type: "success" | "error"; message: string } | null;
+
+const makeEmpty = (): ProductRow => ({
+  prod_code: "", prod_name: "", prin_code: "", brand_code: "", group_code: "",
+  model_number: "", variant_code: "", p_uom: "", l_uom: "", uppp: 0, upp: 0,
+  uom_count: 0, length: 0, breadth: 0, height: 0, volume: 0, gross_wt: 0, net_wt: 0,
+  manu_code: "", alt_prod_code: "", site_ind: "", category_abc: "", prod_status: "O",
+  prod_type: 0, product_stage: "", base_price: 0, wave_code: 0, shelf_life: 0,
+  co_pack: "N", barcode: "", size_code: "", color_code: "", div_code: "",
+  active: "Y", remarks: "", cost_rate: 0, retail_rate: 0, sales_rate: 0,
+  reorder_qty: 0, tx_compt_1: "N", tx_compt_2: "N", tx_compt_3: "N", tx_compt_4: "N",
+});
+
+/* Input sizing — same as Employee Master */
+const CTL = "h-7 text-xs";
+
+/* ─────────────── UI building blocks (Employee Master style) ─────────────── */
+
+function HeaderBlock({
+  label,
+  icon,
+  children,
+  gridCols = "grid-cols-2",
+  bodyClass,
+  className = "",
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+  bodyClass?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`overflow-hidden rounded-md border border-[#cbd5e1] bg-card ${className}`}>
+      <div className="flex items-center gap-2 border-b border-[#cbd5e1] bg-slate-50 px-2.5 py-1">
+        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
+          {icon}
+        </span>
+        <span className="text-xs font-bold text-[#00378C]">{label}</span>
+      </div>
+      <div
+        className={
+          bodyClass ?? `grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CField({
+  label,
+  required,
+  error,
+  className = "",
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+        {label}
+        {required && <span className="ml-1 text-destructive">*</span>}
+      </span>
+      {children}
+      {error && <span className="text-[10px] text-destructive">{error}</span>}
+    </label>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Checkbox — native, blue, side-by-side (uses DIV, not label)
+   ───────────────────────────────────────────────────────────── */
+function CheckboxField({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1.5 select-none h-7">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ accentColor: "#00378C", width: "13px", height: "13px" }}
+        className="shrink-0 cursor-pointer rounded border border-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00378C]/25 disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      {label && (
+        <span
+          onClick={() => !disabled && onChange(!checked)}
+          className={`text-[10.5px] font-medium text-slate-700 leading-none transition-colors ${
+            disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:text-slate-900"
+          }`}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* Reusable lookup config for the simple code/name dropdowns */
+const UOM_PARAM = "PURCHASE_SALES_DD_ONLY_COMPANY_UOM";
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -130,14 +161,48 @@ const ProductPurchaseSales = () => {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
-  const [formOpen, setFormOpen] = useState(false);
+
+  // UOM options cache (state kept for any consumers; the promise ref is the source of truth)
+  const [, setUomOptions] = useState<any[]>([]);
+  const uomPromiseRef = useRef<Promise<any[]> | null>(null);
+
+  // View state
+  const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [original, setOriginal] = useState<ProductRow | null>(null);
   const [form, setForm] = useState<ProductRow>(() => makeEmpty());
   const [saving, setSaving] = useState(false);
-
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
+
+  // Both UOMs picked and identical → UPPP is locked to 1
+  const sameUom = Boolean(form.p_uom) && Boolean(form.l_uom) && form.p_uom === form.l_uom;
+
+  /* ---- Shared, cached UOM fetch: one request, reused by every field ---- */
+  const fetchUoms = useCallback((): Promise<any[]> => {
+    if (!uomPromiseRef.current) {
+      uomPromiseRef.current = getDynamicLookup({
+        parameter: UOM_PARAM,
+        loginid: loginId,
+        code1: companyCode,
+      })
+        .then((res) => {
+          const arr = Array.isArray(res) ? res : [];
+          setUomOptions(arr);
+          return arr;
+        })
+        .catch(() => {
+          uomPromiseRef.current = null; // allow retry
+          return [];
+        });
+    }
+    return uomPromiseRef.current;
+  }, [loginId, companyCode]);
+
+  // Warm the cache once the company is known
+  useEffect(() => {
+    if (companyCode) void fetchUoms();
+  }, [fetchUoms, companyCode]);
 
   const loadRows = async (clearNotice = true) => {
     setLoading(true);
@@ -172,53 +237,87 @@ const ProductPurchaseSales = () => {
     setForm(makeEmpty());
     setError("");
     setNotice(null);
-    setFormOpen(true);
+    setView("editor");
   };
 
   const openEdit = (row: ProductRow) => {
     setEditMode(true);
     setOriginal(row);
-    setForm({ ...makeEmpty(), ...row, active: row.active ?? row.is_active ?? "" });
+    setForm({ ...makeEmpty(), ...row });
     setError("");
     setNotice(null);
-    setFormOpen(true);
+    setView("editor");
   };
 
-  const closeForm = () => {
-    setFormOpen(false);
+  const handleCloseEditor = () => {
+    setView("list");
+    setEditMode(false);
+    setOriginal(null);
+  };
+
+  const setField = (key: string, value: any) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  /* ---- UOM change: auto-fill L UOM & UPPP = 1 when P UOM is selected ---- */
+  const setUom = (key: "p_uom" | "l_uom", value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+
+      // Auto-fill Lower UOM when Primary changes (if empty or it was mirroring Primary)
+      if (key === "p_uom" && (!prev.l_uom || prev.l_uom === prev.p_uom)) {
+        next.l_uom = value;
+      }
+
+      const wasSame = Boolean(prev.p_uom) && Boolean(prev.l_uom) && prev.p_uom === prev.l_uom;
+      const isSame = Boolean(next.p_uom) && Boolean(next.l_uom) && next.p_uom === next.l_uom;
+
+      if (isSame) next.uppp = 1;
+      else if (wasSame) next.uppp = 0; // was auto-locked, unlock with clean value
+
+      next.uom_count = next.p_uom && next.l_uom ? (isSame ? 1 : 2) : next.p_uom || next.l_uom ? 1 : 0;
+      return next;
+    });
+  };
+
+  const handleSubmit = async (event?: FormEvent) => {
+    if (event) event.preventDefault();
     setError("");
-  };
 
-
-  const resetForm = () => {
-    if (editMode && original) {
-   
-      setForm({ ...makeEmpty(), ...original, active: original.active ?? original.is_active ?? "" });
-    } else {
-     
-      setForm(makeEmpty());
+    if (!form.prod_name?.trim()) {
+      setError("Product Name is required");
+      return;
     }
-    setError("");
-  };
+    if (!form.group_code) {
+      setError("Group Code is required");
+      return;
+    }
+    if (!form.brand_code) {
+      setError("Brand Code is required");
+      return;
+    }
+    
+    const isBlank = (v:string) => !String(v ?? "").trim();
 
-  const setField = (name: string, value: unknown) => setForm((prev) => ({ ...prev, [name]: value }));
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    setError("");
-    const missing = FIELDS.find((field) => field.required && !String(form[field.name] ?? "").trim());
-    if (missing) {
-      setError(`${missing.label} is required.`);
+    if (isBlank(form.p_uom)) {
+      setError("Primary UOM is required");
+      return;
+    }
+    if (isBlank(form.l_uom)) {
+      setError("Lower UOM is required");
       return;
     }
 
     try {
       setSaving(true);
-      // On edit, keep values of columns that are not shown on this form (e.g. supplier, image path).
-      const data: ProductRow = editMode ? { ...(original || {}), ...form } : form;
+      const data: ProductRow = editMode ? { ...(original || {}), ...form } : { ...form };
+      if (sameUom) {
+        data.uppp = 1;
+        data.uom_count = 1;
+      }
       await saveProduct(data, loginId, companyCode);
       setNotice({ type: "success", message: editMode ? "Successfully updated" : "Successfully created" });
-      setFormOpen(false);
+      handleCloseEditor();
       await loadRows(false);
     } catch (err) {
       setError(getErrorMessage(err, "Unable to save product"));
@@ -295,135 +394,339 @@ const ProductPurchaseSales = () => {
     [],
   );
 
-  const pageTitle = formOpen ? (editMode ? "Edit Product" : "New Product") : "Product";
+  /* Helper to render a compact UOM lookup */
+  const renderUomLookup = (key: "p_uom" | "l_uom") => (
+    <div className="w-full min-w-0">
+      <LookupField
+        // Force remount when l_uom changes to re-resolve the display name
+        key={key === "l_uom" ? `l_uom-${form.l_uom}` : "p_uom"}
+        label=""
+        value={form[key] ?? ""}
+        valueField="uom_code"
+        displayFields={["uom_code", "uom_name"]}
+        columns={[
+          { field: "uom_code", header: "Code" },
+          { field: "uom_name", header: "Name" },
+        ]}
+        loadOptions={fetchUoms}
+        onChange={(value) => setUom(key, value)}
+        compact
+      />
+    </div>
+  );
 
-  return (
-    <section className="grid gap-2 p-1">
-      {/* ---------- Top Header (compact) ---------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
-            <FileText size={14} />
+  /* Helper to render a compact code/name lookup */
+  const renderLookup = (
+    key: string,
+    parameter: string,
+    codeField: string,
+    nameField: string,
+    codeHeader = "Code",
+    nameHeader = "Name",
+  ) => (
+    <div className="w-full min-w-0">
+      <LookupField
+        label=""
+        value={form[key] ?? ""}
+        valueField={codeField}
+        displayFields={[codeField, nameField]}
+        columns={[
+          { field: codeField, header: codeHeader },
+          { field: nameField, header: nameHeader },
+        ]}
+        loadOptions={async () => {
+          return (
+            (await getDynamicLookup({
+              parameter,
+              loginid: loginId,
+              code1: companyCode,
+            })) || []
+          );
+        }}
+        onChange={(value) => setField(key, value)}
+        compact
+      />
+    </div>
+  );
+
+  /* Helpers for plain text / number inputs */
+  const textInput = (key: string) => (
+    <Input
+      className={CTL}
+      value={form[key] ?? ""}
+      onChange={(e) => setField(key, e.target.value)}
+    />
+  );
+  const numInput = (key: string) => (
+    <Input
+      className={CTL}
+      type="number"
+      value={form[key] ?? 0}
+      onChange={(e) => setField(key, Number(e.target.value))}
+    />
+  );
+
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Employee Master style layout
+     ───────────────────────────────────────────────────────── */
+  if (view === "editor") {
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* Header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                {editMode ? "Edit Product" : "New Product"}
+              </h1>
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                {editMode ? "Editing" : "Draft"}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
+                Product Code:
+                <strong className="font-semibold">
+                  {editMode && form.prod_code ? String(form.prod_code) : "Auto-generated"}
+                </strong>
+              </span>
+            </div>
           </div>
-          <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">{pageTitle}</h1>
+
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor}>
+              <List size={14} /> List
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <X size={14} /> Close
+            </Button>
+            <Button type="button" size="sm" onClick={() => handleSubmit()} disabled={saving}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {saving ? "Saving" : "Save"}
+            </Button>
+          </div>
         </div>
 
-        {formOpen && (
-  <div className="flex items-center gap-1.5">
-        <Button
-      type="button"
-      variant="outline"
-      onClick={resetForm}
-      disabled={saving}
-      title="Reset form"
-      className="h-7 gap-1 px-3 text-xs font-semibold rounded-md"
-    >
-      <RotateCcw size={13} /> Reset
-    </Button>
-    <Button
-      type="submit"
-      form="product-form"
-      disabled={saving}
-      className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
-    >
-      <Save size={13} /> {saving ? "Saving..." : editMode ? "Update" : "Save"}
-    </Button>
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      onClick={closeForm}
-      disabled={saving}
-      aria-label="Close"
-      title="Close"
-      className="h-7 w-7 rounded-md"
-    >
-      <X size={14} />
-    </Button>
-  </div>
-)}
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
+            {error}
+          </div>
+        )}
+
+        {/* Form body */}
+        <div style={{ zoom: 0.8 }} className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-1.5">
+
+          {/* ══════════ TOP HALF ══════════ */}
+          <div className="grid items-start gap-1.5 xl:grid-cols-3">
+            {/* Identification (spans 2 cols) */}
+            <div className="xl:col-span-2">
+              <HeaderBlock label="Identification" icon={<IdCard size={11} />} gridCols="grid-cols-1 sm:grid-cols-4">
+                <CField label="Product Name" required className="sm:col-span-2">
+                  {textInput("prod_name")}
+                </CField>
+                <CField label="Model #">
+                  {textInput("model_number")}
+                </CField>
+                <CField label="Variant / Season">
+                  <Input
+                    className={CTL}
+                    value={form.season_code ?? form.variant_code ?? ""}
+                    onChange={(e) => setField("season_code", e.target.value)}
+                  />
+                </CField>
+                <CField label="Barcode">
+                  {textInput("barcode")}
+                </CField>
+                <CField label="Size Code">
+                  {textInput("size_code")}
+                </CField>
+                <CField label="Color Code">
+                  {textInput("color_code")}
+                </CField>
+                <CField label="Product Stage">
+                  {textInput("product_stage")}
+                </CField>
+              </HeaderBlock>
+            </div>
+
+            {/* Classification (1 col) */}
+            <div>
+              <HeaderBlock label="Classification" icon={<LayoutGrid size={11} />} gridCols="grid-cols-2">
+                <CField label="Group Code" required>
+                  {renderLookup("group_code", "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP", "group_code", "group_name", "Group Code", "Group Name")}
+                </CField>
+                <CField label="Brand Code" required>
+                  {renderLookup("brand_code", "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND", "brand_code", "brand_name", "Brand Code", "Brand Name")}
+                </CField>
+                <CField label="Category Code">
+                  {renderLookup("category_code", "PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY", "category_code", "category_name")}
+                </CField>
+                <CField label="Product Type Code">
+                  {renderLookup("prodtype_code", "PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE", "prodtype_code", "prodtype_name")}
+                </CField>
+                <CField label="Division Code" className="col-span-2">
+                  {renderLookup("div_code", "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION", "div_code", "div_name")}
+                </CField>
+              </HeaderBlock>
+            </div>
+          </div>
+
+          {/* ══════════ BOTTOM HALF (4 Columns) ══════════ */}
+          <div className="grid gap-1.5 xl:grid-cols-4">
+
+            {/* Column 1: UOM & Manufacture */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Unit of Measure & Manufacture" icon={<Box size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Primary UOM" required>
+                  {renderUomLookup("p_uom")}
+                </CField>
+                <CField label="Lower UOM" required>
+                  {renderUomLookup("l_uom")}
+                </CField>
+                <CField label="UPPP" required>
+                  <Input
+                    className={CTL}
+                    type="number"
+                    disabled={sameUom}
+                    value={sameUom ? 1 : form.uppp ?? 0}
+                    onChange={(e) => setField("uppp", Number(e.target.value))}
+                  />
+                </CField>
+                <CField label="Manufacturer Code">
+                  {textInput("manu_code")}
+                </CField>
+                <CField label="Origin Country">
+                  {textInput("origin_country")}
+                </CField>
+                <CField label="Alternate Product">
+                  {textInput("alt_prod_code")}
+                </CField>
+              </HeaderBlock>
+            </div>
+
+            {/* Column 2: Dimensions & Weight */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Dimensions & Weight" icon={<Ruler size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                {[
+                  { label: "Length", key: "length" },
+                  { label: "Breadth", key: "breadth" },
+                  { label: "Height", key: "height" },
+                  { label: "Volume", key: "volume" },
+                  { label: "Gross Weight", key: "gross_wt" },
+                  { label: "Net Weight", key: "net_wt" },
+                ].map(({ label, key }) => (
+                  <CField label={label} key={key}>
+                    {numInput(key)}
+                  </CField>
+                ))}
+              </HeaderBlock>
+            </div>
+
+            {/* Column 3: Pricing + Tax */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock label="Pricing & Reorder" icon={<Wallet size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Cost Rate Unit">
+                  {numInput("cost_rate")}
+                </CField>
+                <CField label="Retail Price">
+                  {numInput("retail_rate")}
+                </CField>
+                <CField label="Sales Rate">
+                  {numInput("sales_rate")}
+                </CField>
+                <CField label="Reorder Qty">
+                  {numInput("reorder_qty")}
+                </CField>
+              </HeaderBlock>
+
+              <HeaderBlock className="flex-1" label="Tax Components" icon={<ShieldCheck size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <CField label={`Tax Comp ${n}`} key={`tx_${n}`}>
+                    {textInput(`tx_compt_${n}`)}
+                  </CField>
+                ))}
+              </HeaderBlock>
+            </div>
+
+            {/* Column 4: Attributes & Notes */}
+            <div className="flex h-full flex-col gap-1.5">
+              <HeaderBlock className="flex-1" label="Attributes & Notes" icon={<StickyNote size={11} />} gridCols="grid-cols-1 sm:grid-cols-2">
+                <CField label="Active">
+                  <CheckboxField
+                    checked={form.active === "Y" || form.active === true}
+                    onChange={(v) => setField("active", v ? "Y" : "N")}
+                    label="Yes/No"
+                  />
+                </CField>
+                <CField label="Co Packing">
+                  {textInput("co_packing")}
+                </CField>
+                <CField label="Remarks" className="sm:col-span-2">
+                  {textInput("remarks")}
+                </CField>
+              </HeaderBlock>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — Freight style (buttons inside DataTable toolbar)
+     ───────────────────────────────────────────────────────── */
+  return (
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Page title only — buttons live inside the DataTable toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Products
+          </h2>
+        </div>
       </div>
 
-      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-
-      {/* ---------- EDITOR ---------- */}
-      {formOpen && (
-        <form id="product-form" className="flex flex-col gap-2" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-            {SECTIONS.map((section) => (
-              <div key={section} className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center gap-2 rounded-t-lg border-b border-slate-100 bg-slate-50/70 px-3 py-1.5">
-                  <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
-                    <FileText size={12} />
-                  </div>
-                  <h3 className="m-0 text-xs font-semibold text-slate-800">{section}</h3>
-                </div>
-                <div className="p-3">
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-                    {FIELDS.filter((field) => field.section === section).map((field) => (
-                      <ProductFieldInput
-                        key={field.name}
-                        field={field}
-                        value={form[field.name]}
-                        disabled={Boolean(editMode && field.disabledOnEdit)}
-                        loginId={loginId}
-                        companyCode={companyCode}
-                        onChange={(value) => setField(field.name, value)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Products`}
+        subtitle="Product List"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search product..."
+        loading={loading}
+        emptyText="No products found"
+        height="calc(100dvh - 150px)"
+        minWidth={Math.max(900, LIST_COLUMNS.reduce((sum, column) => sum + (column.width || 160), 120))}
+        density="grid"
+        enablePagination={false}
+        enableExport={false}
+        getRowId={(row, index) => `${String(row.prod_code ?? "")}_${index}`}
+        toolbar={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Product
+            </button>
+            <FinanceListActionsMenu
+              fyPeriod=""
+              fyPeriods={[]}
+              onFyPeriodChange={() => {}}
+              onExport={() =>
+                exportToCsv(filteredRows, columns, `product-${new Date().toISOString().slice(0, 10)}.csv`)
+              }
+              onRefresh={() => void loadRows(false)}
+            />
           </div>
-        </form>
-      )}
-
-      {/* ---------- LIST ---------- */}
-      {!formOpen && (
-        <DataTable
-          columns={columns}
-          data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Records`}
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Search product..."
-          loading={loading}
-          emptyText="No products found"
-          height="calc(100dvh - 150px)"
-          minWidth={Math.max(900, LIST_COLUMNS.reduce((sum, column) => sum + (column.width || 160), 120))}
-          density="grid"
-          enablePagination={false}
-          enableExport={false}
-          actionButton={
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                onClick={openAdd}
-                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
-              >
-                <Plus size={14} strokeWidth={2.5} /> Add
-              </Button>
-              <FinanceListActionsMenu
-                fyPeriod=""
-                fyPeriods={[]}
-                onFyPeriodChange={() => {}}
-                onExport={() =>
-                  exportToCsv(filteredRows, columns, `product-${new Date().toISOString().slice(0, 10)}.csv`)
-                }
-                onRefresh={() => void loadRows(false)}
-              />
-            </div>
-          }
-          getRowId={(row, index) => `${String(row.prod_code ?? "")}_${index}`}
-        />
-      )}
+        }
+      />
 
       {/* ---------- DELETE CONFIRM ---------- */}
       <Dialog
@@ -455,87 +758,6 @@ const ProductPurchaseSales = () => {
 export default ProductPurchaseSales;
 
 /* ------------------------------------------------------------------ */
-/*  Field input                                                        */
-/* ------------------------------------------------------------------ */
-
-function ProductFieldInput({
-  field,
-  value,
-  disabled,
-  loginId,
-  companyCode,
-  onChange,
-}: {
-  field: ProductField;
-  value: unknown;
-  disabled: boolean;
-  loginId: string;
-  companyCode: string;
-  onChange: (value: unknown) => void;
-}) {
-  const labelText = `${field.label}${field.required ? " *" : ""}`;
-  const wrapperClass = `flex flex-col ${field.fullRow ? "col-span-2" : ""}`;
-
-  if (field.lookup) {
-    const config = field.lookup;
-    return (
-      <div className={wrapperClass}>
-        <LookupField
-          label={labelText}
-          value={String(value ?? "")}
-          displayValue={String(value ?? "")}
-          columns={[
-            { field: config.valueField, header: config.valueHeader },
-            { field: config.nameField, header: config.nameHeader },
-          ]}
-          valueField={config.valueField}
-          displayFields={[config.valueField, config.nameField]}
-          disabled={disabled}
-          loadOptions={() =>
-            getDynamicLookup({ parameter: config.parameter, loginid: loginId, code1: companyCode })
-          }
-          onChange={(next) => onChange(next)}
-        />
-      </div>
-    );
-  }
-
-  const label = (
-    <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
-      {field.label}
-      {field.required && <span className="ml-0.5 text-red-500">*</span>}
-    </label>
-  );
-
-  if (field.type === "textarea") {
-    return (
-      <div className={wrapperClass}>
-        {label}
-        <textarea
-          className="w-full h-[52px] rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
-          disabled={disabled}
-          value={String(value ?? "")}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className={wrapperClass}>
-      {label}
-      <input
-        type={field.type === "number" ? "number" : "text"}
-        disabled={disabled}
-        value={String(value ?? "")}
-        onChange={(event) => onChange(event.target.value)}
-        className={inputClass}
-      />
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Save (insert / update)                                             */
 /* ------------------------------------------------------------------ */
 
@@ -551,61 +773,53 @@ async function saveProduct(form: ProductRow, loginid: string, companyCode: strin
     parameter: "purchase_sales_ins_upd_mse_product",
     loginid,
 
-    // keys
-    val1s1: companyCode, // COMPANY_CODE
-    val1s2: toStr(form.prod_code), // PROD_CODE
+    val1s1: companyCode,
+    val1s2: toStr(form.prod_code), // empty on create → backend auto-generates
+    val1s3: toStr(form.prod_name),
+    val1s4: toStr(form.model_number),
+    val1s5: toStr(form.barcode ?? form.bar_code),
+    val1s6: toStr(form.group_code),
+    val1s7: toStr(form.brand_code),
+    val1s8: toStr(form.category_code),
+    val1s9: toStr(form.prodtype_code),
+    val1s10: toStr(form.manu_code),
+    val1s11: toStr(form.alt_prod_code),
+    val1s12: toStr(form.p_uom),
+    val1s13: toStr(form.l_uom),
+    val1s14: toStr(form.origin_country),
+    val1s15: toStr(form.co_packing ?? form.co_pack) ?? "N",
+    val1s16: toStr(form.product_stage),
+    val1s17: toStr(form.div_code),
+    val1s18: toStr(form.size_code),
+    val1s19: toStr(form.color_code),
+    val1s20: toStr(form.season_code),
+    val1s21: toStr(form.remarks),
+    val1s22: toStr(form.is_inventory) ?? "Y",
+    val1s23: toStr(form.active ?? form.is_active) ?? "Y",
+    val1s24: toStr(form.active_status) ?? "Y",
+    val1s25: toStr(form.supplier_code),
+    val1s26: toStr(form.prod_image_path),
+    val1s27: toStr(form.tx_compt_1) ?? "N",
+    val1s28: toStr(form.tx_compt_2) ?? "N",
+    val1s29: toStr(form.tx_compt_3) ?? "N",
+    val1s30: toStr(form.tx_compt_4) ?? "N",
 
-    // strings
-    val1s3: toStr(form.prod_name), // PROD_NAME
-    val1s4: toStr(form.model_number), // MODEL_NUMBER
-    val1s5: toStr(form.barcode ?? form.bar_code), // BAR_CODE
-    val1s6: toStr(form.group_code), // GROUP_CODE
-    val1s7: toStr(form.brand_code), // BRAND_CODE
-    val1s8: toStr(form.category_code), // CATEGORY_CODE
-    val1s9: toStr(form.prodtype_code), // PRODTYPE_CODE
-    val1s10: toStr(form.manu_code), // MANU_CODE
-    val1s11: toStr(form.alt_prod_code), // ALT_PROD_CODE
-    val1s12: toStr(form.p_uom), // P_UOM
-    val1s13: toStr(form.l_uom), // L_UOM
-    val1s14: toStr(form.origin_country), // ORIGIN_COUNTRY
-    val1s15: toStr(form.co_packing ?? form.co_pack) ?? "N", // CO_PACK
-    val1s16: toStr(form.product_stage), // PRODUCT_STAGE
-    val1s17: toStr(form.div_code), // DIV_CODE
-    val1s18: toStr(form.size_code), // SIZE_CODE
-    val1s19: toStr(form.color_code), // COLOR_CODE
-    val1s20: toStr(form.season_code), // SEASON_CODE
-    val1s21: toStr(form.remarks), // REMARKS
-    val1s22: toStr(form.is_inventory) ?? "Y", // IS_INVENTORY
-    val1s23: toStr(form.active ?? form.is_active) ?? "Y", // IS_ACTIVE
-    val1s24: toStr(form.active_status) ?? "Y", // ACTIVE_STATUS
-    val1s25: toStr(form.supplier_code), // SUPPLIER_CODE
-    val1s26: toStr(form.prod_image_path), // PROD_IMAGE_PATH
-    val1s27: toStr(form.tx_compt_1) ?? "N", // TX_COMPNT_1_EXPMT
-    val1s28: toStr(form.tx_compt_2) ?? "N", // TX_COMPNT_2_EXPMT
-    val1s29: toStr(form.tx_compt_3) ?? "N", // TX_COMPNT_3_EXPMT
-    val1s30: toStr(form.tx_compt_4) ?? "N", // TX_COMPNT_4_EXPMT
-
-    // numbers
-    val1n1: toNum(form.uom_count), // UOM_COUNT
-    val1n2: toNum(form.uppp), // UPPP
-    val1n3: toNum(form.length), // LENGTH
-    val1n4: toNum(form.breadth), // BREADTH
-    val1n5: toNum(form.height), // HEIGHT
-    val1n6: toNum(form.volume), // VOLUME
-    val1n7: toNum(form.gross_wt), // GROSS_WT
-    val1n8: toNum(form.net_wt), // NET_WT
-    val1n9: toNum(form.cost_rate), // COST_RATE
-    val1n10: toNum(form.sales_rate), // SALES_RATE
+    val1n1: toNum(form.uom_count),
+    val1n2: toNum(form.uppp),
+    val1n3: toNum(form.length),
+    val1n4: toNum(form.breadth),
+    val1n5: toNum(form.height),
+    val1n6: toNum(form.volume),
+    val1n7: toNum(form.gross_wt),
+    val1n8: toNum(form.net_wt),
+    val1n9: toNum(form.cost_rate),
+    val1n10: toNum(form.sales_rate),
   });
 }
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-function makeEmpty(): ProductRow {
-  return Object.fromEntries(FIELDS.map((field) => [field.name, ""]));
-}
 
 function normalizeRow(row: Record<string, unknown>): ProductRow {
   const normalized: ProductRow = { ...row };

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Briefcase, CheckCircle2, ChevronUp, FileText, Plus, Receipt, RefreshCw, Trash2, Zap } from "lucide-react";
 import { TransactionChildRow, TransactionDetail } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue } from "../../api/lookups";
@@ -18,6 +19,39 @@ function dateInput(value: unknown) {
   const date = new Date(str);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
+function getRowAllocationLimits(r: TransactionChildRow, detailCurrCode?: string) {
+  const detailCurr = String(detailCurrCode || "OMR").trim().toUpperCase();
+  const invCurr = String(r.c_curr_code_origin || (r as any).curr_code_origin || r.curr_code || "OMR").trim().toUpperCase();
+  const isCrossCurrency = invCurr !== "OMR" && detailCurr === "OMR";
+  const invRate = Number(r.c_ex_rate_origin || (r as any).ex_rate_origin || r.ex_rate || 1);
+
+  const rawInvAmt = Number(r.inv_amt || 0);
+  const rawBal = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : rawInvAmt);
+
+  const effectiveInvAmt = isCrossCurrency
+    ? (Number((r as any).lcur_original_amount) || Number((rawInvAmt * invRate).toFixed(3)))
+    : rawInvAmt;
+
+  const effectiveOutstanding = isCrossCurrency
+    ? (Number((r as any).lcur_outstanding) || Number((rawBal * invRate).toFixed(3)))
+    : rawBal;
+
+  const maxAllowed = effectiveInvAmt > 0
+    ? Math.min(effectiveInvAmt, Math.max(0, effectiveOutstanding))
+    : Math.max(0, effectiveOutstanding);
+
+  return {
+    isCrossCurrency,
+    invCurr,
+    invRate,
+    rawInvAmt,
+    rawBal,
+    effectiveInvAmt,
+    effectiveOutstanding,
+    maxAllowed,
+  };
+}
+
 
 interface SmartInlineAllocationTableProps {
   detail: TransactionDetail;
@@ -60,11 +94,37 @@ export function SmartInlineAllocationTable({
   const diff = parentAmount - totalAllocated;
   const isMatched = Math.abs(diff) < 0.001;
 
+  const handleFifoAllocate = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (parentAmount <= 0) return;
+
+    // Sort rows by inv_date ascending (oldest unpaid invoice first)
+    const sorted = [...rows].sort((a, b) => {
+      const dateA = a.inv_date ? new Date(String(a.inv_date)).getTime() : 0;
+      const dateB = b.inv_date ? new Date(String(b.inv_date)).getTime() : 0;
+      return dateA - dateB;
+    });
+
+    let remaining = parentAmount;
+    sorted.forEach((r) => {
+      const { maxAllowed } = getRowAllocationLimits(r, detail.curr_code);
+
+      if (remaining > 0 && maxAllowed > 0) {
+        const toAlloc = Math.min(remaining, maxAllowed);
+        onChange(r.id, { amount: toAlloc });
+        remaining -= toAlloc;
+      } else {
+        onChange(r.id, { amount: 0 });
+      }
+    });
+  };
+
   const handleAllocateAll = (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
     rows.forEach((r) => {
-      const maxAmt = Number(r.c_bal_amt_org || r.inv_amt || 0);
+      const { maxAllowed: maxAmt } = getRowAllocationLimits(r, detail.curr_code);
       if (maxAmt > 0) {
         onChange(r.id, { amount: maxAmt });
       }
@@ -79,8 +139,8 @@ export function SmartInlineAllocationTable({
     for (const r of rows) {
       if (remaining <= 0) break;
       const currentAllocated = Number(r.amount) || 0;
-      const maxAllowed = Number(r.c_bal_amt_org || r.inv_amt || 0);
-      const canAdd = maxAllowed > currentAllocated ? maxAllowed - currentAllocated : remaining;
+      const { maxAllowed } = getRowAllocationLimits(r, detail.curr_code);
+      const canAdd = maxAllowed > currentAllocated ? maxAllowed - currentAllocated : 0;
       const toAdd = Math.min(remaining, canAdd);
       if (toAdd > 0) {
         onChange(r.id, { amount: currentAllocated + toAdd });
@@ -93,37 +153,38 @@ export function SmartInlineAllocationTable({
   const colConfigs =
     childTable === "invoice"
       ? [
-          { key: "sr", header: "#", width: 28, align: "center" },
-          { key: "inv_no", header: "Invoice No", width: 120, align: "left" },
-          { key: "inv_date", header: "Invoice Date", width: 118, align: "left" },
-          { key: "inv_amt", header: "Invoice Amount", width: 110, align: "right" },
-          { key: "outstanding", header: "Outstanding", width: 110, align: "right" },
-          { key: "allocated", header: "Allocated", width: 135, align: "right" },
-          { key: "action", header: "Action", width: 48, align: "center" },
+          { key: "sr", header: "#", width: 26, align: "center" },
+          { key: "inv_no", header: "Invoice No", width: 104, align: "left" },
+          { key: "ref_no", header: "Voucher No", width: 104, align: "left" },
+          { key: "inv_date", header: "Invoice Date", width: 120, align: "left" },
+          { key: "inv_amt", header: "Invoice Amount", width: 104, align: "right" },
+          { key: "outstanding", header: "Outstanding", width: 100, align: "right" },
+          { key: "allocated", header: "Allocated", width: 114, align: "right" },
+          { key: "action", header: "Action", width: 58, align: "center" },
         ]
       : childTable === "job"
         ? [
             { key: "sr", header: "#", width: 28, align: "center" },
-            { key: "job_no", header: "Job No", width: 135, align: "left" },
+            { key: "job_no", header: "Job No", width: 175, align: "left" },
             { key: "doc_refno", header: "Doc Ref", width: 115, align: "left" },
             { key: "doc_refno_2", header: "Doc Ref 2", width: 115, align: "left" },
             { key: "amount", header: "Amount", width: 110, align: "right" },
-            { key: "action", header: "Action", width: 48, align: "center" },
+            { key: "action", header: "Action", width: 58, align: "center" },
           ]
         : [
             { key: "sr", header: "#", width: 28, align: "center" },
-            { key: "exp_type", header: "Expense Type", width: 125, align: "left" },
-            { key: "exp_subtype", header: "Subtype", width: 125, align: "left" },
+            { key: "exp_type", header: "Expense Type", width: 175, align: "left" },
+            { key: "exp_subtype", header: "Subtype", width: 145, align: "left" },
             { key: "description", header: "Description", width: 135, align: "left" },
-            { key: "job_no", header: "Job No", width: 95, align: "left" },
+            { key: "job_no", header: "Job No", width: 175, align: "left" },
             { key: "amount", header: "Amount", width: 110, align: "right" },
-            { key: "action", header: "Action", width: 48, align: "center" },
+            { key: "action", header: "Action", width: 58, align: "center" },
           ];
 
   const totalTableWidth = colConfigs.reduce((sum, col) => sum + col.width, 0);
 
   return (
-    <div className="finance-allocation-panel my-0.5 w-fit min-w-[520px] max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
+    <div style={{ "--allocation-panel-width": `${totalTableWidth}px`, flex: "0 0 auto" } as CSSProperties} className="finance-allocation-panel my-0.5 w-fit min-w-[520px] max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
       {/* Sub-toolbar: Ultra-compact, no unwanted verbose titles */}
       <div className="finance-allocation-toolbar flex items-center justify-between gap-2 border-b px-2 py-1 text-xs">
         <div className="flex items-center gap-1.5 shrink-0">
@@ -159,6 +220,18 @@ export function SmartInlineAllocationTable({
               </span>
 
               {/* Action Buttons: Auto-Fill & Allocate All */}
+              {childTable === "invoice" && rows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleFifoAllocate}
+                  disabled={disabled}
+                  className="inline-flex items-center gap-1 rounded bg-blue-50 hover:bg-blue-100 text-[#00378C] border border-blue-300 px-2 py-0.5 text-[9.5px] font-bold cursor-pointer transition-colors shadow-2xs"
+                  title="FIFO Auto-Allocate: Automatically allocate payment to the oldest unpaid invoices first"
+                >
+                  <Zap size={10} className="text-amber-500 fill-amber-500" /> FIFO Allocate
+                </button>
+              )}
+
               {childTable === "invoice" && rows.length > 0 && !isMatched && diff > 0 && (
                 <button
                   type="button"
@@ -188,38 +261,7 @@ export function SmartInlineAllocationTable({
 
         {/* Right-side actions: Add, Reload, Collapse */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {!childTable && onSetChildTable && (
-            <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-              <span className="text-[11px] text-slate-500 font-semibold mr-0.5">Attach:</span>
-              <button
-                type="button"
-                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("job")}
-                disabled={disabled}
-              >
-                + Job
-              </button>
-              <button
-                type="button"
-                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("expense")}
-                disabled={disabled}
-              >
-                + Expense
-              </button>
-              <button
-                type="button"
-                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("invoice")}
-                disabled={disabled}
-              >
-                + Invoices
-              </button>
-            </div>
-          )}
+          
 
           {childTable === "invoice" && onRefreshInvoices && (
             <button
@@ -267,7 +309,7 @@ export function SmartInlineAllocationTable({
       </div>
 
       {/* Compact child grid with a lighter header to distinguish it from accounting lines. */}
-      <div className="finance-allocation-grid max-h-[132px] overflow-auto">
+      <div className="finance-allocation-grid max-h-[132px] overflow-x-hidden overflow-y-auto">
         <table
           className="finance-allocation-table table-fixed border-collapse text-xs"
           style={{ width: `${totalTableWidth}px` }}
@@ -315,16 +357,18 @@ export function SmartInlineAllocationTable({
             rows.map((row) => {
               const isRowInvalid = Boolean(invalidChildRowIds?.has(row.id));
               const missingList = invalidChildFields?.[row.id] || [];
+              const { isCrossCurrency, invCurr, rawInvAmt, rawBal, effectiveInvAmt, effectiveOutstanding, maxAllowed: maxOutstanding } = getRowAllocationLimits(row, detail.curr_code);
+              const isExceeding = childTable === "invoice" && maxOutstanding > 0 && Number(row.amount || 0) > maxOutstanding + 0.001;
               const isInvNoMissing = isRowInvalid && (missingList.includes("inv_no") || missingList.includes("Invoice No") || !text(row.inv_no).trim());
               const isJobNoMissing = isRowInvalid && (missingList.includes("job_no") || missingList.includes("Job No") || !text(row.job_no).trim());
               const isExpTypeMissing = isRowInvalid && (missingList.includes("exp_type_code") || missingList.includes("Expense Type") || !text(row.exp_type_code).trim());
-              const isAmtMissing = isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || Number(row.amount || 0) <= 0);
+              const isAmtMissing = isExceeding || (isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || missingList.includes("Valid Allocated Amount") || (childTable !== "invoice" && Number(row.amount || 0) <= 0)));
 
               return (
                 <tr
                   key={row.id}
                   className={`border-b border-[#dce7f2] transition-colors ${
-                    isRowInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500" : "bg-white hover:bg-[#f1f7fd]"
+                    isRowInvalid || isExceeding ? "bg-rose-50/70 border-l-4 border-l-rose-500" : "bg-white hover:bg-[#f1f7fd]"
                   }`}
                 >
                   {/* # Column */}
@@ -355,6 +399,17 @@ export function SmartInlineAllocationTable({
                         />
                       </td>
 
+                      {/* Voucher No */}
+                      <td className="px-1 py-0.5">
+                        <input
+                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 font-mono text-xs text-slate-700 focus:border-[#00378C] focus:outline-none transition-colors"
+                          disabled={disabled}
+                          placeholder="Voucher No"
+                          value={text(row.ref_no || (row as any).voucher_doc_no || "")}
+                          onChange={(e) => onChange(row.id, { ref_no: e.target.value })}
+                        />
+                      </td>
+
                       {/* Invoice Date */}
                       <td className="px-1 py-0.5">
                         <BiscDatePicker
@@ -366,56 +421,75 @@ export function SmartInlineAllocationTable({
                       </td>
 
                       {/* Invoice Amount */}
-                      <td className="px-2 py-1 text-right font-mono text-xs font-semibold text-slate-700 truncate">
-                        {row.inv_amt != null && Number(row.inv_amt) > 0
-                          ? formatAmount(Number(row.inv_amt))
-                          : Number(row.amount || 0) > 0
-                            ? formatAmount(Number(row.amount || 0))
-                            : "-"}
+                      <td
+                        className="px-2 py-1 text-right font-mono text-xs font-semibold text-slate-700 truncate"
+                        title={isCrossCurrency ? `${formatAmount(rawInvAmt)} ${invCurr} @ ${row.c_ex_rate_origin || 1}` : undefined}
+                      >
+                        {rawInvAmt > 0
+                          ? isCrossCurrency
+                            ? `${formatAmount(rawInvAmt)} ${invCurr} (${formatAmount(effectiveInvAmt)} OMR)`
+                            : `${formatAmount(rawInvAmt)}${invCurr !== "OMR" ? " " + invCurr : ""}`
+                          : "-"}
                       </td>
 
                       {/* Outstanding */}
-                      <td className="px-2 py-1 text-right font-mono text-xs font-bold text-slate-900 truncate">
-                        {row.c_bal_amt_org != null && Number(row.c_bal_amt_org) > 0
-                          ? formatAmount(Number(row.c_bal_amt_org))
-                          : Number(row.amount || 0) > 0
-                            ? formatAmount(Number(row.amount || 0))
-                            : "-"}
+                      <td
+                        className="px-2 py-1 text-right font-mono text-xs font-bold text-slate-900 truncate"
+                        title={isCrossCurrency ? `Original: ${formatAmount(rawBal)} ${invCurr}` : undefined}
+                      >
+                        {maxOutstanding > 0
+                          ? `${formatAmount(maxOutstanding)}${isCrossCurrency ? " OMR" : ""}`
+                          : "-"}
                       </td>
 
                       {/* Allocated Amount with compact Full button */}
                       <td className="px-1 py-0.5">
-                        <div className="flex items-center gap-1">
-                          <input
-                            className={`h-[25px] w-full rounded border bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
-                              isAmtMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40" : "border-slate-300"
-                            }`}
-                            disabled={disabled}
-                            type="number"
-                            step="0.001"
-                            value={Number(row.amount || 0)}
-                            onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }
-                            }}
-                          />
-                          {Number(row.c_bal_amt_org || row.inv_amt || 0) > 0 && (
-                            <button
-                              type="button"
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1">
+                            <input
+                              className={`h-[25px] w-full rounded border bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
+                                isAmtMissing || isExceeding ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40 text-rose-800" : "border-slate-300"
+                              }`}
                               disabled={disabled}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                onChange(row.id, { amount: Number(row.c_bal_amt_org || row.inv_amt || 0) });
+                              type="number"
+                              step="0.001"
+                              max={maxOutstanding > 0 ? maxOutstanding : undefined}
+                              title={isExceeding ? `Allocated amount cannot exceed outstanding balance (${formatAmount(maxOutstanding)})` : undefined}
+                              value={Number(row.amount || 0)}
+                              onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
+                              onBlur={(e) => {
+                                const val = Number(e.target.value || 0);
+                                if (childTable === "invoice" && maxOutstanding > 0 && val > maxOutstanding) {
+                                  onChange(row.id, { amount: maxOutstanding });
+                                }
                               }}
-                              className="h-[23px] px-1.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
-                              title="Allocate full outstanding amount"
-                            >
-                              Full
-                            </button>
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }
+                              }}
+                            />
+                            {maxOutstanding > 0 && (
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  onChange(row.id, { amount: maxOutstanding });
+                                }}
+                                className="h-[23px] px-1.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
+                                title={isCrossCurrency ? `Allocate full outstanding amount (${formatAmount(maxOutstanding)} OMR)` : "Allocate full outstanding amount"}
+                              >
+                                Full
+                              </button>
+                            )}
+                          </div>
+                          {isExceeding && (
+                            <span className="text-[10px] text-rose-600 font-semibold leading-tight text-right whitespace-nowrap">
+                              Max allowed: {formatAmount(maxOutstanding)}
+                            </span>
                           )}
                         </div>
                       </td>
@@ -434,16 +508,16 @@ export function SmartInlineAllocationTable({
                             columns={[
                               { field: "job_no", header: "Job No" },
                               { field: "job_date", header: "Job Date" },
-                              { field: "confrim_date", header: "Confirm Date" },
+                              { field: "confirm_date", header: "Confirm Date" },
                               { field: "prin_code", header: "Principal Code" },
                             ]}
                             valueField="job_no"
-                            displayFields={["job_no", "job_date", "confrim_date", "prin_code"]}
+                            displayFields={["job_no", "job_date", "confirm_date", "prin_code"]}
                             loadOptions={() =>
                               getDynamicLookup({
                                 parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
-                                loginid: user?.loginid ?? "",
-                                code1: user?.company_code ?? "",
+                                loginid: (user as any)?.loginid ?? (user as any)?.user?.loginid ?? "",
+                                code1: (user as any)?.company_code ?? (user as any)?.user?.company_code ?? "",
                               })
                             }
                             disabled={disabled}
@@ -606,17 +680,29 @@ export function SmartInlineAllocationTable({
 
                       {/* Job No */}
                       <td className="px-1 py-0.5">
-                        <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs text-slate-900 focus:border-[#00378C] focus:outline-none"
-                          disabled={disabled}
+                        <LookupField
+                          label="Job No"
+                          compact
+                          placeholder="Job No"
                           value={text(row.job_no)}
-                          onChange={(e) => onChange(row.id, { job_no: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }
-                          }}
+                          displayValue={text(row.job_no)}
+                          columns={[
+                            { field: "job_no", header: "Job No" },
+                            { field: "job_date", header: "Job Date" },
+                            { field: "confirm_date", header: "Confirm Date" },
+                            { field: "prin_code", header: "Principal Code" },
+                          ]}
+                          valueField="job_no"
+                          displayFields={["job_no", "job_date", "confirm_date", "prin_code"]}
+                          loadOptions={() =>
+                            getDynamicLookup({
+                              parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
+                              loginid: (user as any)?.loginid ?? (user as any)?.user?.loginid ?? "",
+                              code1: (user as any)?.company_code ?? (user as any)?.user?.company_code ?? "",
+                            })
+                          }
+                          disabled={disabled}
+                          onChange={(value) => onChange(row.id, { job_no: value })}
                         />
                       </td>
 

@@ -14,11 +14,12 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
-import { LPO_CONFIG, PO_DOC_TYPE } from "../../purchase_sales/purchase/Purchaseordertypes";
+import { LPO_CONFIG, MRT_CONFIG, PO_DOC_TYPE } from "../../purchase_sales/purchase/Purchaseordertypes";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { MateriaLReturnEditor } from "./MateriaLReturnEditor";
 import { SO_DOC_TYPE } from "../sales/SalesOrdertypes";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
@@ -180,7 +181,7 @@ const loadRows = async (clearNotice = true) => {
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
-      parameter: "PS_POORDER_ENTRY_TAB_List",
+      parameter: "PS_GRN_ENTRY_TAB_List",
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
@@ -205,7 +206,7 @@ const loadRows = async (clearNotice = true) => {
   const results = await Promise.all(
     visibleTabs.map(async (tabValue) => {
       const response = await getDynamicLookup({
-        parameter: "PS_POORDER_ENTRY_TAB_List",
+        parameter: "PS_GRN_ENTRY_TAB_List",
         code1: user?.company_code,
         code2: user?.loginid || user?.username || "ADMIN",
         code3: tabValue,
@@ -320,6 +321,14 @@ useEffect(() => {
   useEffect(() => {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
+   const openEditor = (row: PurchaseOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
+
 
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
@@ -332,11 +341,15 @@ useEffect(() => {
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    {
-      accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
-    },
+  {
+          accessorKey: "cancelled",
+          header: () => <div className="text-center font-bold">Status</div>,
+          cell: ({ getValue }) => (
+            <div className="flex justify-center">
+              <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+            </div>
+          ),
+        },
     {
       id: "reason",
       header: "Reason",
@@ -358,7 +371,7 @@ useEffect(() => {
           <Button
             size="icon"
             variant="ghost"
-            onClick={() => setEditor({ mode: "edit", row: row.original })}
+           onClick={() => openEditor(row.original)}
             title={isViewOnlyTab ? "View" : "Edit"}
           >
             {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
@@ -367,7 +380,7 @@ useEffect(() => {
             <Printer size={15} />
           </Button>
           <Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportPurchaseOrder(row.original)}>
-            <Download size={15} />
+            <Download size={25} />
           </Button>
         </div>
       ),
@@ -506,7 +519,7 @@ useEffect(() => {
         <div className="fixed inset-0 z-50 bg-background">
           <MateriaLReturnEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={LPO_CONFIG}
+            config={MRT_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}

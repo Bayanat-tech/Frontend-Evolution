@@ -381,19 +381,19 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
                   {lookupField(
                     "Designation",
                     "desig",
-                    "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_DESIG_LIST",
-                    "desig_code",
-                    ["desig_name"],
+                    "MST_HR_MS_HR_DESIGNATION_LIST",
+                    "desg_code",
+                    ["desg_name"],
                     [
-                      { field: "desig_code", header: "Code" },
-                      { field: "desig_name", header: "Name" },
+                      { field: "desg_code", header: "Code" },
+                      { field: "desg_name", header: "Name" },
                     ],
                     true,
                   )}
                   {lookupField(
                     "Division",
                     "division",
-                    "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_DIVISION_LIST",
+                    "AC_ASSETS_DEPRECIATION_DIVISION_LIST",
                     "div_code",
                     ["div_name"],
                     [
@@ -415,7 +415,7 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
                   {lookupField(
                     "Grade",
                     "grade",
-                    "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_GRADE_LIST",
+                    "EDUCATION_QUALIFICATION_TICKET_ELIG_GRADE",
                     "grade_code",
                     ["grade_name"],
                     [

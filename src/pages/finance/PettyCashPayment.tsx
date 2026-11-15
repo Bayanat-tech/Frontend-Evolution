@@ -1,3 +1,8 @@
+import { FinanceGstPanel, useFinanceGst } from "../../components/finance/FinanceGstPanel";
+import { amountInWords } from "../../utils/amountInWords";
+import { ColumnModeToggle } from "../../components/ui/ColumnModeToggle";
+import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
+import { taxTreatmentFromMaster } from "../../utils/financeTaxTreatment";
 import { Textarea } from "../../components/ui/Textarea";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
@@ -16,6 +21,7 @@ import {
   getChildTableName,
   getDivisions,
   getDocAccounts,
+  getAccountLiveBalance,
   getFinanceMasterRows,
   getFyPeriods,
   getTransactionChildren,
@@ -31,6 +37,7 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  FinanceOutstandingBalance,
 } from "../../api/transactions";
 import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
@@ -42,6 +49,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
@@ -69,6 +77,7 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
   RJV: { title: "Journal Voucher", subtitle: "Reverse ledger journal", addLabel: "Add Voucher" },
+  EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -104,12 +113,23 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const activeFilters = nextColumnFilters
+        .map((filter) => {
+          const val = filter.value;
+          if (val && typeof val === "object") {
+            const range = val as { from?: string; to?: string };
+            if (range.from || range.to) {
+              return { field: filter.id, values: JSON.stringify(range) };
+            }
+            return null;
+          }
+          const strVal = String(val ?? "").trim();
+          return strVal ? { field: filter.id, values: strVal } : null;
+        })
+        .filter((f): f is { field: string; values: string } => Boolean(f));
+      const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
       const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = nextColumnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
       const params: Record<string, any> = {};
       if (query.trim()) params.search = query.trim();
       if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
@@ -274,7 +294,6 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
               density="grid"
               enablePagination
               manualPagination
-              manualFiltering
               enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
@@ -377,8 +396,10 @@ function PettyCashPaymentDocument({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const taxLabels = useFinanceTaxLabels();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const gst = useFinanceGst(form, docType, editMode);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
@@ -406,24 +427,41 @@ function PettyCashPaymentDocument({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
-                      if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
+                      if (balance) {
+                        if (balance.error || (balance as any).is_cancelled) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: 0,
+                            c_bal_amt_org: 0,
+                            paid_amt: 0,
+                          } as TransactionChildRow;
+                        } else if (balance.original_amount > 0) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: balance.original_amount,
+                            c_bal_amt_org: balance.outstanding_amount,
+                            paid_amt: balance.paid_amount,
+                          } as TransactionChildRow;
+                        }
                       }
                     } catch {
                       // ignore individual failures
@@ -432,11 +470,11 @@ function PettyCashPaymentDocument({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
@@ -534,6 +572,7 @@ function PettyCashPaymentDocument({
     };
   }, [docType, editMode, editor]);
 
+  const [accountBalances, setAccountBalances] = useState<Record<string, { formatted: string; sign: string }>>({});
   const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
   const [invalidChildRowIds, setInvalidChildRowIds] = useState<Set<string>>(new Set());
   const [invalidChildFields, setInvalidChildFields] = useState<Record<string, string[]>>({});
@@ -585,7 +624,7 @@ function PettyCashPaymentDocument({
       const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
       if (code) {
         rMap[code] = rawRate;
-        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
+        tMap[code] = taxTreatmentFromMaster(rawType, rawRate);
       }
     });
     setTaxRateMap((prev) => ({ ...prev, ...rMap }));
@@ -599,18 +638,15 @@ function PettyCashPaymentDocument({
     }
   }, [user?.company_code, loadTaxOptions]);
 
-  const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
-    const trimmed = String(taxCode || "").trim();
-    if (trimmed && taxRateMap[trimmed] !== undefined) {
-      return taxRateMap[trimmed];
-    }
-    if (fallbackPerc != null && !isNaN(Number(fallbackPerc))) {
-      return Number(fallbackPerc);
-    }
-    return 0;
+  const getTaxPercForCode = useCallback((taxCode?: string, existingPerc?: number | null) => {
+    // An assigned voucher rate survives later master-rate changes.
+    if (existingPerc != null && Number.isFinite(Number(existingPerc))) return Number(existingPerc);
+    const code = String(taxCode || "").trim();
+    return code && taxRateMap[code] !== undefined ? taxRateMap[code] : 0;
   }, [taxRateMap]);
 
   useEffect(() => {
+    if (editMode) return;
     setForm((current) => {
       let changed = false;
       const nextDetail = current.detail.map((d) => {
@@ -623,7 +659,7 @@ function PettyCashPaymentDocument({
           }
           return d;
         }
-        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(3));
+        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(4));
         if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === dynamicRate && d.tx_compnt_1_expmt === "S") {
           return d;
         }
@@ -632,12 +668,14 @@ function PettyCashPaymentDocument({
       });
       return changed ? { ...current, detail: nextDetail } : current;
     });
-  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), getTaxPercForCode]);
+  }, [editMode, form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), getTaxPercForCode]);
 
   const disabled = form.canceled === "Y" || saving;
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0), 0);
+  const totalDr = form.detail.filter((d) => Number(d.sign_ind) === 1).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  const totalCr = form.detail.filter((d) => Number(d.sign_ind) === -1).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
   const [lineSearch, setLineSearch] = useState("");
   const filteredDetail = useMemo(() => {
@@ -687,14 +725,9 @@ function PettyCashPaymentDocument({
           const dynamicRate = getTaxPercForCode(merged.tx_compntcat_code_1, merged.tx_compnt_perc_1);
           let taxType = merged.tx_compnt_1_expmt || (dynamicRate > 0 ? "S" : "N");
 
-          if (dynamicRate > 0 && taxType === "N") {
-            taxType = "S";
-            merged.tx_compnt_1_expmt = "S";
-          }
-
           if (taxType === "S") {
             merged.tx_compnt_perc_1 = dynamicRate;
-            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(3));
+            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(4));
           } else {
             merged.tx_compnt_perc_1 = 0;
             merged.tx_compnt_amt_1 = 0;
@@ -722,7 +755,7 @@ function PettyCashPaymentDocument({
       const dynamicRate = getTaxPercForCode(detail.tx_compntcat_code_1, detail.tx_compnt_perc_1);
       const isTaxable = detail.tx_compnt_1_expmt === "S";
       const taxPerc = isTaxable ? dynamicRate : 0;
-      const taxAmt = isTaxable ? Number(((newAmount * taxPerc) / 100).toFixed(3)) : 0;
+      const taxAmt = isTaxable ? Number(((newAmount * taxPerc) / 100).toFixed(4)) : 0;
       const taxPatch = {
         tx_compnt_1_expmt: isTaxable ? "S" : "N",
         tx_compnt_perc_1: isTaxable ? taxPerc : 0,
@@ -898,21 +931,35 @@ function PettyCashPaymentDocument({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo);
+              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
-              if (balance && !balance.error && balance.original_amount > 0) {
+              if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
                   ...m,
+                  inv_no: balance.inv_no || (m as Record<string, unknown>).inv_no,
+                  ref_no: balance.doc_no || (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
-              return m;
+              return {
+                ...m,
+                inv_amt: 0,
+                c_bal_amt_org: 0,
+              } as TransactionChildRow;
             } catch {
               return m;
             }
           }),
         );
+
+        // Filter out fully paid invoices (outstanding <= 0 and not allocated) when creating a new transaction
+        if (!editMode) {
+          mapped = mapped.filter((m) => {
+            const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
+            return bal > 0.001 || Number(m.amount || 0) > 0.001;
+          });
+        }
 
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
@@ -920,8 +967,9 @@ function PettyCashPaymentDocument({
           let remaining = parentAmt;
           mapped = mapped.map((row) => {
             if (remaining <= 0) return { ...row, amount: 0 };
-            const maxAllowed = Number(row.c_bal_amt_org || row.inv_amt || 0);
-            const allocated = Math.min(remaining, maxAllowed > 0 ? maxAllowed : remaining);
+            const maxAllowed = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+            if (maxAllowed <= 0.001) return { ...row, amount: 0 };
+            const allocated = Math.min(remaining, maxAllowed);
             remaining -= allocated;
             return { ...row, amount: allocated };
           });
@@ -974,7 +1022,7 @@ function PettyCashPaymentDocument({
           if (d.id !== dId) return d;
           const dynamicRate = getTaxPercForCode(d.tx_compntcat_code_1, d.tx_compnt_perc_1);
           const isTaxable = d.tx_compnt_1_expmt === "S";
-          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(4)) : 0;
           return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -997,7 +1045,7 @@ function PettyCashPaymentDocument({
           if (d.id !== dId) return d;
           const dynamicRate = getTaxPercForCode(d.tx_compntcat_code_1, d.tx_compnt_perc_1);
           const isTaxable = d.tx_compnt_1_expmt === "S";
-          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(4)) : 0;
           return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1020,6 +1068,9 @@ function PettyCashPaymentDocument({
     if (form.party_phone && form.party_phone.length > 30) {
       return setError("You have exceeded the character limit for Phone (max 30 characters).");
     }
+    if (form.party_phone && form.party_phone.trim() && !isValidPhoneNumber(form.party_phone)) {
+      return setError("Phone must contain numbers only.");
+    }
     if (form.ac_payee && form.ac_payee.length > 70) {
       return setError("You have exceeded the character limit for Account Payee.");
     }
@@ -1037,6 +1088,10 @@ function PettyCashPaymentDocument({
         return setError(`You have exceeded the character limit for Remarks on Line #${d.serial_no || 1}.`);
       }
     }
+
+    setInvalidLineIds(new Set());
+    setInvalidChildRowIds(new Set());
+    setInvalidChildFields({});
 
     // Missing field validation on lines (new row without details / missing account or zero amount)
     const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
@@ -1063,8 +1118,17 @@ function PettyCashPaymentDocument({
             if (!c.job_no?.trim()) missingFields.push("Job No");
             if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
           } else if (d.child_table === "invoice") {
-            if (!c.inv_no?.trim()) missingFields.push("Invoice No");
-            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Allocated Amount");
+            const amt = Number(c.amount || 0);
+            if (amt < 0) {
+              missingFields.push("Valid Allocated Amount");
+            } else if (amt > 0) {
+              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
+              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
+              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
+                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+              }
+            }
           }
 
           if (missingFields.length > 0) {
@@ -1095,6 +1159,7 @@ function PettyCashPaymentDocument({
       console.log("detail child_table:", form.detail.map(d => ({ ac: d.ac_code, table: d.child_table, children: form.children[d.id] })));
       const bulkPayload = buildBulkAccountEntryPayload(form, docType, user?.company_code || "", user?.loginid || "");
       console.log("Bulk payload header:", bulkPayload.header);
+      gst.attachToHeader(bulkPayload.header);
       await upsertBulkAccountEntryApi(bulkPayload);
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
@@ -1104,11 +1169,11 @@ function PettyCashPaymentDocument({
     }
   };
 
-  const fetchOutstanding = async (invNo: string) => {
+  const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
-      console.log("fetchOutstanding called", { div: form.div_code, invNo });
-      const response = await getFinanceOutstanding(form.div_code, invNo);
-      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode, docType });
+      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType, editMode ? form.doc_no : undefined);
+      return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
       return { balances: [] };
@@ -1124,13 +1189,41 @@ function PettyCashPaymentDocument({
       console.log("handleInvNoBlur: parent detail not found for child", childId);
       return;
     }
-    void fetchOutstanding(invNo).then((data) => {
+    const parentDetail = form.detail.find((d) => d.id === parentDetailId);
+    void fetchOutstanding(invNo, parentDetail?.ac_code).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance || balance.error || !(balance.original_amount > 0)) return;
+      if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
+        const errMsg = balance?.error || (balance as any)?.is_cancelled
+          ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no open balance.`)
+          : `Invoice "${invNo}" not found for account ${parentDetail?.ac_code || ""}.`;
+        setError(errMsg);
+        // If invoice is not found or does not belong to this account, clear invalid invoice amount
+        setForm((current) => {
+          const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
+            row.id === childId
+              ? {
+                  ...row,
+                  inv_amt: null,
+                  c_bal_amt_org: null,
+                  ref_no: "",
+                }
+              : row,
+          );
+          return { ...current, children: { ...current.children, [parentDetailId]: rows } };
+        });
+        return;
+      }
+      setError("");
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
-            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
+            ? {
+                ...row,
+                inv_no: balance.inv_no || row.inv_no,
+                ref_no: balance.doc_no || (balance as any).ref_no || row.ref_no || "",
+                inv_amt: balance.original_amount,
+                c_bal_amt_org: balance.outstanding_amount,
+              }
             : row,
         );
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
@@ -1139,10 +1232,22 @@ function PettyCashPaymentDocument({
   };
 
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
-  const [showAllColumns, setShowAllColumns] = useState(false);
+  const [showAllColumns, setShowAllColumns] = useState(true);
 
   return (
-    <form data-header-expanded={showHeaderDetails} className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)]" onSubmit={submit}>
+    <form
+      data-header-expanded={showHeaderDetails}
+      className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)]"
+      onSubmit={submit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.target as HTMLElement)?.tagName !== "TEXTAREA") {
+          const targetType = (e.target as HTMLElement)?.getAttribute("type");
+          if (targetType !== "submit" && (e.target as HTMLElement)?.tagName !== "BUTTON") {
+            e.preventDefault();
+          }
+        }
+      }}
+    >
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-5 py-2.5 text-foreground shadow-2xs">
         <div className="flex min-h-12 items-center justify-between gap-4">
           <FinanceDocumentIdentity title={DOCUMENT_META[docType].title} documentNo={form.doc_no} documentDate={form.doc_date} total={formatAmount(total + totalTax)} onBack={onClose} headerExpanded={showHeaderDetails} onToggleHeader={() => setShowHeaderDetails(value => !value)} />
@@ -1169,6 +1274,7 @@ function PettyCashPaymentDocument({
             </Button>
           </div>
         </div>
+      <FinanceGstPanel editor={gst} disabled={saving || form.canceled === "Y"} />
       </CardHeader>
 
       <CardContent className="commercial-editor-body min-h-0 overflow-auto p-3">
@@ -1251,15 +1357,16 @@ function PettyCashPaymentDocument({
                       />
                       <Field
                         label="Phone"
-                        error={form.party_phone && form.party_phone.length > 30 ? `Exceeded limit (${form.party_phone.length}/30)` : undefined}
+                        error={(form.party_phone && form.party_phone.length > 30 ? `Exceeded limit (${form.party_phone.length}/30)` : undefined) || (form.party_phone && !isValidPhoneNumber(form.party_phone) ? "Must contain numbers only" : undefined)}
                       >
                         <Input
+                          type="tel"
                           maxLength={30}
                           placeholder="Phone"
                           disabled={disabled}
                           value={form.party_phone || ""}
-                          className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(event) => updateField("party_phone", event.target.value)}
+                          className={((form.party_phone && form.party_phone.length > 30) || (form.party_phone && !isValidPhoneNumber(form.party_phone))) ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("party_phone", sanitizePhoneNumber(event.target.value))}
                         />
                       </Field>
                     </div>
@@ -1319,16 +1426,22 @@ function PettyCashPaymentDocument({
                         })}
                         disabled={disabled}
                         onChange={(value, row) => {
-                          const newRate = Number(row?.ex_rate ?? 1);
+                          const newRate = Number(
+                            getLookupValue(row || {}, "ex_rate") ||
+                            (row as any)?.ex_rate ||
+                            (row as any)?.EX_RATE ||
+                            1
+                          );
+                          const validRate = Number.isFinite(newRate) && newRate > 0 ? newRate : 1;
                           const currName = text(getLookupValue(row || {}, "curr_name"));
                           setForm((current) => ({
                             ...current,
                             curr_code: value,
                             curr_name: currName,
-                            ex_rate: newRate,
+                            ex_rate: validRate,
                             detail: current.detail.map((d) =>
                               !d.curr_code || d.curr_code === current.curr_code
-                                ? { ...d, curr_code: value, curr_name: currName, ex_rate: newRate }
+                                ? { ...d, curr_code: value, curr_name: currName, ex_rate: validRate }
                                 : d
                             ),
                           }));
@@ -1406,21 +1519,16 @@ function PettyCashPaymentDocument({
                       Filtered ({filteredDetail.length})
                     </span>
                   )}
+                  {form.detail.length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-0.5 text-[11px] font-bold text-slate-700 shadow-2xs">
+                      <span className="text-emerald-700">Dr: {formatAmount(totalDr)}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-[#00378c]">Cr: {formatAmount(totalCr)}</span>
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAllColumns(!showAllColumns)}
-                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                      showAllColumns
-                        ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
-                        : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                    title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job, Dept & Ex Rate"}
-                  >
-                    <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-                    <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
-                  </button>
+                  <ColumnModeToggle showAllColumns={showAllColumns} onChange={setShowAllColumns} />
 
                   <div className="bisc-table-search">
                     <Search size={13} className="bisc-table-search-icon" />
@@ -1437,12 +1545,12 @@ function PettyCashPaymentDocument({
                       </button>
                     )}
                   </div>
-                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line">
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line (Alt + A)">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[2140px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
@@ -1454,14 +1562,14 @@ function PettyCashPaymentDocument({
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
-                      <th className="px-2 py-2 text-left text-white">Cr/Dr</th>
+                      <th className="px-2 py-2 text-center text-white w-24">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
-                      <th className="px-2 py-2 text-left text-white">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Tax Amt</th>
+                      <th className="finance-th-tax px-2 py-2 text-right">Tax %</th>
+                      <th className="finance-th-tax finance-amount-cell px-2 py-2 text-right">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Dept</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
+                      {showAllColumns && <th className="finance-th-base-amt finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
                       <th className="px-2 py-2 text-center text-white w-14">Action</th>
                     </tr>
                   </thead>
@@ -1470,7 +1578,7 @@ function PettyCashPaymentDocument({
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 17 : 10}>No detail lines yet — click "Add Line" to get started</td></tr>
                     ) : filteredDetail.length === 0 ? (
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 17 : 10}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
-                    ) : filteredDetail.map((detail) => (
+                    ) : filteredDetail.map((detail, index) => (
                       <>
                         <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
                           <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
@@ -1494,7 +1602,14 @@ function PettyCashPaymentDocument({
                                   code4: form.div_code
                                 })}
                                 disabled={disabled}
-                                onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                                onChange={(value, row) => {
+                                  void selectDetailAccount(detail, value, row);
+                                  if (value) {
+                                    void getAccountLiveBalance(value, form.div_code)
+                                      .then((b) => { if (b) setAccountBalances((p) => ({ ...p, [value]: { formatted: b.formatted, sign: b.sign } })); })
+                                      .catch(() => {});
+                                  }
+                                }}
                               />
                             </div>
                           </td>
@@ -1574,7 +1689,7 @@ function PettyCashPaymentDocument({
                                 type="number"
                                 style={{ textAlign: "right" }}
                                 step="0.001"
-                                className={`commercial-number-input finance-money-input ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                                className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
                                   const newAmount = Number(event.target.value || 0);
@@ -1602,11 +1717,35 @@ function PettyCashPaymentDocument({
                               })()}
                             </div>
                           </td>
-                          <td className="w-28 px-2 py-1">
-                            <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                              <option value={1}>Dr</option>
-                              <option value={-1}>Cr</option>
-                            </Select>
+                          <td className="w-24 px-2 py-1 text-center">
+                            <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: 1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === 1
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Debit (Dr)"
+                              >
+                                Dr
+                              </button>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: -1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === -1
+                                    ? "bg-[#00378C] text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Credit (Cr)"
+                              >
+                                Cr
+                              </button>
+                            </div>
                           </td>
                           {showAllColumns && (
                             <td className="w-32 px-2 py-1">
@@ -1661,7 +1800,7 @@ function PettyCashPaymentDocument({
                                   }
 
                                   const lineAmt = Number(detail.amount) || 0;
-                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(4)) : 0;
 
                                   if (valStr && perc > 0) {
                                     setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
@@ -1690,7 +1829,7 @@ function PettyCashPaymentDocument({
                                         ? detail.tx_compnt_perc_1
                                         : getTaxPercForCode(detail.tx_compntcat_code_1 || ""))
                                     : 0;
-                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(4)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,
@@ -1698,15 +1837,15 @@ function PettyCashPaymentDocument({
                                   });
                                 }}
                               >
-                                <option value="N">No Tax</option>
-                                <option value="S">Std Tax</option>
-                                <option value="Z">Zero</option>
-                                <option value="E">Exempt</option>
+                                <option value="N">{taxLabels.N}</option>
+                                <option value="S">{taxLabels.S}</option>
+                                <option value="Z">{taxLabels.Z}</option>
+                                <option value="E">{taxLabels.E}</option>
                               </Select>
                             </td>
                           )}
-                          <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                          <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                          <td className="w-28 px-2 py-1"><Input className="commercial-number-input commercial-tax-perc-input finance-money-input text-right font-semibold" disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
+                          <td className="finance-amount-cell px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                           {showAllColumns && (
                             <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                           )}
@@ -1714,7 +1853,7 @@ function PettyCashPaymentDocument({
                             <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
                           )}
                           {showAllColumns && (
-                            <td className="finance-amount-cell px-2 py-1"><Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                            <td className="finance-amount-cell px-2 py-1"><Input className="commercial-number-input commercial-base-amount-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/60 !border-blue-200 text-right" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
                           )}
                           <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                         </tr>
@@ -1731,7 +1870,32 @@ function PettyCashPaymentDocument({
                                 onChange={(childId, patch) => updateChildRow(childId, patch, detail.id)}
                                 onRemove={(childId) => removeChildRow(childId, detail.id)}
                                 onAdd={() => addChildRow(detail)}
-                                onSetChildTable={(table) => updateDetail(detail.id, { child_table: table })}
+                                onSetChildTable={(table) => {
+                                    updateDetail(detail.id, { child_table: table });
+                                    if (table === 'job') {
+                                      setForm((current) => {
+                                        const currentRows = current.children[detail.id] || [];
+                                        if (currentRows.length === 0) {
+                                          const newRow = emptyChildRow(
+                                            { ...detail, child_table: 'job' },
+                                            current,
+                                            docType,
+                                            user?.company_code || '',
+                                            1
+                                          );
+                                          newRow.amount = Number(detail.amount) || 0;
+                                          newRow.lcur_amount = Number(detail.lcur_amount) || Number(detail.amount) || 0;
+                                          return {
+                                            ...current,
+                                            children: { ...current.children, [detail.id]: [newRow] }
+                                          };
+                                        }
+                                        return current;
+                                      });
+                                    } else if (table === 'invoice') {
+                                      void loadChildrenForDetail({ ...detail, child_table: 'invoice' });
+                                    }
+                                  }}
                                 onRefreshInvoices={() => void loadChildrenForDetail(detail)}
                                 onInvNoBlur={handleInvNoBlur}
                                 onClose={() => toggleRowExpanded(detail.id)}
@@ -1747,19 +1911,19 @@ function PettyCashPaymentDocument({
                   </tbody>
                 </table>
               </div>
-              <div className="commercial-lines-footer flex justify-end">
-                <div className="commercial-summary-chips">
-                  <div className="commercial-summary-chip">
-                    <span className="commercial-summary-label">Total Amount</span>
-                    <span className="commercial-summary-value">{formatAmount(total)}</span>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2.5">
+                <div className="commercial-line-totals flex items-center gap-3">
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600">Total Amount</span>
+                    <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="commercial-summary-chip">
-                    <span className="commercial-summary-label">Tax Amount</span>
-                    <span className="commercial-summary-value">{formatAmount(totalTax)}</span>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-amber-300 bg-amber-50/90 px-3 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Tax Amount</span>
+                    <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-amber-700">{formatAmount(totalTax)}</strong>
                   </div>
-                  <div className="commercial-summary-chip commercial-summary-net">
-                    <span className="commercial-summary-label">Net Total</span>
-                    <span className="commercial-summary-value font-bold text-[#00378C]">{formatAmount(total + totalTax)}</span>
+                  <div className="flex min-h-10 items-center gap-3 rounded-md border-2 border-[#00378c]/60 bg-blue-50 px-4 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">Net Total</span>
+                    <strong className="font-mono text-base md:text-lg font-black tabular-nums text-[#00378c]">{formatAmount(total + totalTax)}</strong>
                   </div>
                 </div>
               </div>
@@ -1923,13 +2087,13 @@ function ChildAllocationTable({
                       placeholder="Job No"
                       value={text(row.job_no)}
                       displayValue={text(row.job_no)}
-                      columns={[{ field: "job_no", header: "Job No" }, { field: "job_date", header: "Job Date" }, { field: "confrim_date", header: "Confirm Date" }, { field: "prin_code", header: "Principal Code" }]}
+                      columns={[{ field: "job_no", header: "Job No" }, { field: "job_date", header: "Job Date" }, { field: "confirm_date", header: "Confirm Date" }, { field: "prin_code", header: "Principal Code" }]}
                       valueField="job_no"
-                      displayFields={["job_no", "job_date", "confrim_date", "prin_code"]}
+                      displayFields={["job_no", "job_date", "confirm_date", "prin_code"]}
                       loadOptions={() => getDynamicLookup({
                         parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
-                        loginid: user?.user?.loginid ?? "",
-                        code1: user?.user?.company_code ?? "",
+                        loginid: (user as any)?.loginid ?? (user as any)?.user?.loginid ?? "",
+                        code1: (user as any)?.company_code ?? (user as any)?.user?.company_code ?? "",
                       })}
                       disabled={disabled}
                       onChange={(value) => onChange(row.id, { job_no: value })}
@@ -2427,6 +2591,9 @@ function groupChildren(form: TransactionHeader) {
       cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
       cleaned.amount = Number(cleaned.amount || 0);
       cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+      if (table === "invoice") {
+        cleaned.indicator_origin = "N";
+      }
       grouped[table].push(cleaned);
     });
   });
@@ -2472,13 +2639,13 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals = 2) {
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
 function formatExRate(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   return value < 0 ? `(${amount})` : amount;
 }
 

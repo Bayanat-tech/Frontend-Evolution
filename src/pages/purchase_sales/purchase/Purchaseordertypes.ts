@@ -90,6 +90,7 @@ export interface PurchaseOrderLineRow {
 
 export interface PurchaseOrderForm {
   pr_req_no?: string;
+  job_card_no?:string;
 warranty_period?: number;
   warranty_uom?: "D" | "M" | "Y";
   warranty_desc?: string;
@@ -385,7 +386,7 @@ export interface SendBackUserOption {
 
 export const PO_DOC_TYPE = {
   LPO: "LPO",
-  PQA: "PQA",
+  PQO: "PQO",
   GRN: "GRN",
   JO: "JO",
   FGP: "FGP",
@@ -430,8 +431,8 @@ export const LPO_CONFIG: PurchaseConfig = {
   detailParameter: "PS_POORDER_ENTRY_DETAIL_PAGE",
 };
 
-export const PQA_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.PQA,
+export const PQO_CONFIG: PurchaseConfig = {
+  docType: PO_DOC_TYPE.PQO,
   headerParameter: "PS_QUOTATION_ENTRY_HEADER_PAGE",
   detailParameter: "PS_QUOTATION_ENTRY_DETAIL_PAGE",
 };
@@ -440,6 +441,11 @@ export const GRN_CONFIG: PurchaseConfig = {
   docType: PO_DOC_TYPE.GRN,
   headerParameter: "PS_GRN_ENTRY_HEADER_PAGE",
   detailParameter: "PS_GRN_ENTRY_DETAIL_PAGE",
+};
+export const MRT_CONFIG: PurchaseConfig = {
+  docType: PO_DOC_TYPE.MRT,
+  headerParameter: "PS_GRN_ENTRY_MATERIAL_HEADER_PAGE",
+  detailParameter: "PS_GRN_ENTRY_MATERIAL_DETAIL_PAGE",
 };
 
 export const JO_CONFIG: PurchaseConfig = {

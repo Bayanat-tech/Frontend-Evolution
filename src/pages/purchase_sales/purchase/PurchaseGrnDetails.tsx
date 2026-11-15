@@ -22,6 +22,7 @@ import {
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 
 
@@ -109,6 +110,7 @@ export function PurchaseGrnDetailsTable({
     const finalTotal = grandTotal + totalTaxAmount;
     const [lineSearch, setLineSearch] = useState("");
     const [showAllColumns, setShowAllColumns] = useState(false);
+    const [uppTip, setUppTip] = useState<{ value: number; x: number; y: number } | null>(null);
     const filteredRows = useMemo(() => {
         const q = lineSearch.trim().toLowerCase();
         if (!q) return rows;
@@ -188,9 +190,9 @@ export function PurchaseGrnDetailsTable({
                             <th style={plainHeaderStyle(undefined, 0)}></th>
                             <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#dbeafe")}>PO Primary</th>
                             <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#e2e8f0")}>PO Lowest</th>
-                            <th colSpan={3} style={plainHeaderStyle(undefined, 0)}></th>
-                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Rvd Primary</th>
-                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#fde68a")}>Rvd Lowest</th>
+                            <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Recived Primary</th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#fde68a")}>Recived Lowest</th>
                             <th colSpan={3} style={plainHeaderStyle(undefined, 0)}></th>
                         </tr>
                         {/* Row 2: every column title */}
@@ -209,7 +211,7 @@ export function PurchaseGrnDetailsTable({
                             <th className=" px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
                             <th className="px-2 py-2 text-center" style={plainHeaderStyle(80, GROUP_ROW_HEIGHT)}>Qty</th>
                             <th className="px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}>Rvd Quantity</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}>Recived Quantity</th>
                             <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160, GROUP_ROW_HEIGHT)}>Remarks</th>
                             <th className="px-2 py-2 text-center" style={plainHeaderStyle(60, GROUP_ROW_HEIGHT)}>Action</th>
                         </tr>
@@ -239,7 +241,12 @@ export function PurchaseGrnDetailsTable({
                                     </td>
 
 
-                                    <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20">
+                                    <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20"
+                                        onMouseEnter={(event) => {
+                                            const rect = event.currentTarget.getBoundingClientRect();
+                                            setUppTip({ value: numberOrZero(row.uppp), x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+                                        }}
+                                        onMouseLeave={() => setUppTip(null)}>
                                         {/* DISPLAY ONLY */}
                                         <LookupField
                                             label=""
@@ -252,9 +259,9 @@ export function PurchaseGrnDetailsTable({
                                             disabled
                                             onChange={() => { }}
                                         />
-                                        <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                                        {/* <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                                             Unit Per Primary: {row.uppp}
-                                        </span>
+                                        </span> */}
                                     </td>
 
                                     {/* PO Primary: Qty — DISPLAY ONLY */}
@@ -379,7 +386,7 @@ export function PurchaseGrnDetailsTable({
                                     </td>
                                     {/* Remarks — DISPLAY ONLY */}
                                     <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
-                                        <textarea disabled readOnly value={row.line_remarks} />
+                                        <textarea disabled readOnly value={row.porder_remarks} />
                                     </td>
                                     <td className="finance-sticky-col-right px-1 py-1 text-center">
                                         <button
@@ -428,6 +435,22 @@ export function PurchaseGrnDetailsTable({
                     <strong className="text-base text-emerald-600">{formatAmount(finalTotal)}</strong>
                 </div>
             </div> */}
+                {uppTip &&
+                    createPortal(
+                      <div
+                        className="pointer-events-none whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg"
+                        style={{
+                          position: "fixed",
+                          top: uppTip.y,
+                          left: uppTip.x,
+                          transform: "translateX(-50%)",
+                          zIndex: 9999,
+                        }}
+                      >
+                        Unit Per Primary: {uppTip.value}
+                      </div>,
+                      document.body
+                    )}
         </div>
     );
 }

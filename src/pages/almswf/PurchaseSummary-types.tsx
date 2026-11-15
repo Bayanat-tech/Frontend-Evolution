@@ -88,6 +88,7 @@ export interface TPRHeader {
   TX_COMPNTCAT_NAME?: string;
   DISCOUNT_AMOUNT?: number;
   DISC_AMOUNT?: number;
+  NEXT_ACTION_BY?: string;
 }
 
 export type TPRItem = {
@@ -107,6 +108,7 @@ export type TPRItem = {
   ITEM_QTY: number;
   ITEM_RATE: number;
   DISCOUNT_AMOUNT: number;
+  DISC_PERC: number;
   FINAL_RATE: number;
   AMOUNT: number;
   LCURR_AMT: number;
@@ -141,6 +143,10 @@ export type TPRItem = {
   QUANTITY: number;
   AMOUNT_BEFORE_DISC: number;
   DISC_PRICE: number;
+  APPROVED_QTY_PUOM: number;
+  APPROVED_QTY_LUOM: number;
+  APPROVED_UPPP: number;
+  productNameOf?: (code: unknown) => string;
 };
 
 export type TPRterm = {
@@ -151,6 +157,7 @@ export type TPRterm = {
   TERM_VALUE: '';
   IS_MANDATORY: 'N';
   REMARKS: '';
+
 };
 
 export interface TPPOGenerated {

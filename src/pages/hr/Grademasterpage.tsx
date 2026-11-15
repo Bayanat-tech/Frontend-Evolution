@@ -1,13 +1,15 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  ArrowLeft, Edit2, Eye, FileText, Plus, RefreshCw, Save, Trash2, X,
+  ArrowLeft, Edit2, Eye, FileText, Plus, Printer, RefreshCw, Save, Trash2, X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getHrReportHtml } from "../../api/hr";
 import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
+import { NewReportDialog } from "../../components/new_report_format";
 import { useAuth } from "../../state/AuthContext";
 import { AddGradeMasterForm, type GradeFormHandle } from "./Addgrademasterform";
 
@@ -31,6 +33,9 @@ export type GradeRow = {
 
 type EditorMode = "add" | "edit" | "view";
 
+/** Backend report route (see grademasterreport.ts) */
+const GRADE_REPORT_ENDPOINT = "/hr/reports/grade_master";
+
 // NOTE: reuses the same list proc your old GradeComponentsPage.tsx used
 // (MST_HR_MS_HR_Grade_Page). Swap the parameter name if yours differs —
 // insUpdHrGrade only covers save, not list/delete.
@@ -51,6 +56,15 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error && typeof error === "object") {
+    const anyErr = error as any;
+    const msg = anyErr.response?.data?.message || anyErr.data?.message || anyErr.message;
+    if (msg && typeof msg === "string") return msg;
+  }
+  return error instanceof Error ? error.message : fallback;
+};
+
 export function GradeMasterPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -67,11 +81,16 @@ export function GradeMasterPage() {
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
 
-
   // delete state
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GradeRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // report preview state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
 
   // Ref to the form so the header Save button can trigger it
   const formRef = useRef<GradeFormHandle>(null);
@@ -133,6 +152,41 @@ export function GradeMasterPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  /* ── Print (backend report in the new report dialog) ── */
+  const openGradeReport = async (gradeCode: string, rowCompany?: string) => {
+    setReportHtml(null);
+    setReportError("");
+    setReportLoading(true);
+    setPreviewOpen(true);
+
+    try {
+      const html = await getHrReportHtml(GRADE_REPORT_ENDPOINT, {
+        company_code: rowCompany || companyCode,
+        code2: gradeCode || "All",
+      });
+      setReportHtml(html);
+    } catch (error) {
+      setReportError(getErrorMessage(error, "Unable to open Grade Master report"));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    setPreviewOpen(false);
+    setReportHtml(null);
+    setReportError("");
+  };
+
+  const openReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    if (!win) toast.error("Please allow pop-ups to open the report");
   };
 
   /* ── Delete ── */
@@ -201,10 +255,18 @@ export function GradeMasterPage() {
       {
         id: "actions",
         header: "Actions",
-        size: 110,
+        size: 140,
         enableColumnFilter: false,
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => void openGradeReport(row.original.grade_code, row.original.company_code)}
+              title="Print grade"
+            >
+              <Printer size={13} />
+            </button>
             <button
               type="button"
               className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
@@ -234,7 +296,7 @@ export function GradeMasterPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [companyCode],
   );
 
   /* ─────────────────────────────────────────────────────────
@@ -349,6 +411,16 @@ export function GradeMasterPage() {
 
             <button
               type="button"
+              onClick={() => void openGradeReport("All")}
+              title="Print all grades"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Printer size={14} />
+              Print All
+            </button>
+
+            <button
+              type="button"
               onClick={() => openEditor("add")}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
             >
@@ -383,6 +455,23 @@ export function GradeMasterPage() {
           <strong>{deleteTarget?.grade_code}</strong>?
         </p>
       </Dialog>
+
+      {/* Report preview (new report format) */}
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closeReportPreview}
+        title="Grade Master"
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError || null}
+        meta={{
+          companyName: companyCode,
+          user: loginid,
+          period: "All",
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onOpenInNewWindow={openReportInNewWindow}
+      />
     </section>
   );
 }

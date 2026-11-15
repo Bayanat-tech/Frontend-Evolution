@@ -11,7 +11,7 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
-import { toInputDate } from "../../hooks/apiDate";
+import { toApiDateInput, toInputDate } from "../../hooks/apiDate";
 
 /* ================= TYPES ================= */
 
@@ -25,11 +25,13 @@ type THeaderFilters = {
 type TPayUnitRow = {
   row_id: string;
   pay_unit_code: string;
+  curr_code: string;
+  pay_comp_earn_ded: string;
   pay_unit_name: string;
   amount: string;
-  pay_unit_status: string; // code: A | R | P
-  approved_on: string; // YYYY-MM-DD
-  status: string; // code: A | I
+  pay_unit_status: string;
+  approved_on: string; 
+  status: string; 
   remarks: string;
   dirty: boolean;
   is_new: boolean;
@@ -66,17 +68,26 @@ const SECTION_COLUMNS = [
 const EMPLOYEE_COLUMNS = [
   { field: "employee_code", header: "Employee Code" },
   { field: "rpt_name", header: "Employee Name" },
-  { field: "div_name", header: "Division" },
-  { field: "dept_name", header: "Department" },
-  { field: "section_name", header: "Section" },
 ];
 
-const P_DIVISION = "MST_HR_ACCOUNT_DIVISION";
-const P_DEPARTMENT = "MST_HR_MS_HR_DEPARTMENT";
-const P_SECTION = "MST_HR_MS_HR_SECTION_DDL";
-const P_EMPLOYEE = "MST_HR_VW_HR_EMP_MASTER_DDL";
+const PAY_UNIT_COLUMNS = [
+  { field: "PAY_COMP_ID", header: "Code" },
+  { field: "PAY_COMP_DESC", header: "Description" },
+];
+
+const CURRENCY_COLUMNS = [
+  { field: "CURR_CODE", header: "Code" },
+  { field: "CURR_NAME", header: "Description" },
+];
+
+const P_CURRENCY= 'HR_DROPDOWN_MS_CURRENCY';
+const P_DIVISION = "HR_DROPDOWN_MS_DIVISION";
+const P_DEPARTMENT = "HR_DROPDOWN_MS_DEPARTMENT";
+const P_SECTION = "HR_DROPDOWN_MS_SECTION";
+const P_EMPLOYEE = "HR_DROPDOWN_MS_HR_EMPLOYEE";
 const P_RETRIEVE = "MST_HR_EMPLOYEE_PAY_UNITS_SELECT";
 
+const P_PAY_UNIT = "MST_HR_CONSOLIDATE_PAY_UNIT";
 /* ================= HELPERS ================= */
 
 /** Accepts either a code ("P") or a label ("Pending") from the backend and returns the code. */
@@ -92,6 +103,8 @@ const makeNewRow = (): TPayUnitRow => ({
   pay_unit_code: "",
   pay_unit_name: "",
   amount: "0",
+  curr_code: "",
+  pay_comp_earn_ded: "",
   pay_unit_status: "P",
   approved_on: today(),
   status: "A",
@@ -109,6 +122,16 @@ const NULLS = {
 
 /* ================= PAGE ================= */
 
+function localTimestamp(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  );
+}
+
+const now = localTimestamp();
+
 export function HrEmployeePayUnits() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -122,28 +145,55 @@ export function HrEmployeePayUnits() {
 
   const patchHeader = (p: Partial<THeaderFilters>) => setHeader((prev) => ({ ...prev, ...p }));
   const employeeReady = !!companyCode && !!header.employee_id;
+  
+  const totalAmount = useMemo(
+    () =>
+      rows.reduce((net, r) => {
+        const amt = Number(r.amount) || 0;
+        const kind = String(r.pay_comp_earn_ded ?? "").trim().toUpperCase();
+        if (kind === "E") return net + amt;
+        if (kind === "D") return net - amt;
+        return net;
+      }, 0),
+    [rows],
+  );  
 
   /* ── Lookups ── */
   const loadLookupRows = useCallback(
-    async (parameter: string, code1: string, code2 = "NULL", code3 = "NULL"): Promise<LookupRow[]> => {
+    async (parameter: string, code1: string, code2 = "", code3 = "", code4 = ""): Promise<LookupRow[]> => {
       const response = await getDynamicLookup({
-        parameter, loginid, code1, code2, ...NULLS, code3,
+        parameter, loginid, code1, code2, ...NULLS, code3, code4,
       });
       return Array.isArray(response) ? (response as LookupRow[]) : [];
     },
     [loginid],
   );
 
-  const loadEmployeeOptions = useCallback(async () => {
-    const all = await loadLookupRows(P_EMPLOYEE, companyCode);
-    return all.filter((row) => {
+  const loadPayUnitOptions = useCallback(async (): Promise<LookupRow[]> => {
+    const data = await loadLookupRows(P_PAY_UNIT, companyCode);
+    return data.map((row) => {
       const r = row as Record<string, unknown>;
-      if (header.div_code && r.div_code !== header.div_code) return false;
-      if (header.dept_code && r.dept_code !== header.dept_code) return false;
-      if (header.section_code && r.section_code !== header.section_code) return false;
-      return true;
+      return {
+        ...r,
+        PAY_COMP_ID: String(r.PAY_COMP_ID ?? r.pay_comp_id ?? ""),
+        PAY_COMP_DESC: String(r.PAY_COMP_DESC ?? r.pay_comp_desc ?? ""),
+        PAY_COMP_SHORT_DESC: String(r.PAY_COMP_SHORT_DESC ?? r.pay_comp_short_desc ?? ""),
+        PAY_COMP_EARN_DED: String(r.PAY_COMP_EARN_DED ?? r.pay_comp_earn_ded ?? ""), 
+      } as LookupRow;
     });
-  }, [loadLookupRows, companyCode, header.div_code, header.dept_code, header.section_code]);
+  }, [loadLookupRows, companyCode]);
+
+
+    const loadCurrencyOptions = useCallback(async (): Promise<LookupRow[]> => {
+    const data = await loadLookupRows(P_CURRENCY, companyCode);
+    return data.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        ...r,
+        CURR_CODE: String(r.CURR_CODE ?? r.curr_code ?? ""),
+      } as LookupRow;
+    });
+  }, [loadLookupRows, companyCode]);
 
   /* ── Retrieve ── */
   const handleRetrieve = useCallback(async () => {
@@ -153,15 +203,18 @@ export function HrEmployeePayUnits() {
       const response = await getDynamicLookup({
         parameter: P_RETRIEVE, loginid, code1: companyCode, code2: header.employee_id, ...NULLS,
       });
+      console.log('response',response);
       const list = (Array.isArray(response) ? response : []) as Record<string, any>[];
       setRows(
         list.map((r, idx) => ({
           row_id: `${r.pay_unit_code ?? "row"}-${idx}`,
           pay_unit_code: r.pay_unit_code ?? "",
           pay_unit_name: r.pay_unit_name ?? "",
+          curr_code: r.curr_code ?? "",
+          pay_comp_earn_ded: r.pay_comp_earn_ded ?? "",
           amount: r.amount != null ? String(r.amount) : "0",
           pay_unit_status: toCode(r.pay_unit_status, PAY_UNIT_STATUS_OPTIONS, "P"),
-          approved_on: toInputDate(r.approved_on),
+          approved_on: toApiDateInput(r.approved_on),
           status: toCode(r.status, STATUS_OPTIONS, "A"),
           remarks: r.remarks ?? "",
           dirty: false,
@@ -218,23 +271,25 @@ export function HrEmployeePayUnits() {
     }
 
     setSaving(true);
-    try {
-      const now = new Date().toISOString();
-      const payloads: THrEmpComponentPayload[] = dirtyRows.map((row) => ({
+    try {      
+        const payloads: THrEmpComponentPayload[] = dirtyRows.map((row) => ({
         employee_id: header.employee_id,
         pay_comp_id: row.pay_unit_code,
         pay_comp_amt: Number(row.amount) || 0,
+        pay_comp_earn_ded : row.pay_comp_earn_ded,
         pay_roll_status: row.pay_unit_status,
-        status_flag: row.status,
+        curr_code: row.curr_code,
+        status_flag: 'P',
         remarks: row.remarks,
         company_code: companyCode,
+        comp_status: row.status,
         user_id: loginid,
         user_dt: now,
         entered_on: now,
         entered_by: loginid,
-        approved_on: row.approved_on ? new Date(`${row.approved_on}T00:00:00`).toISOString() : now,
+        approved_on: toApiDateInput(row.approved_on) ? new Date(`${row.approved_on}T00:00:00`).toISOString() : now,
       }));
-
+      console.log('payload',payloads);
       const results = await upsertHrEmpComponentsApi(payloads);
       const failed = results
         .map((result, i) => ({ result, row: dirtyRows[i] }))
@@ -273,12 +328,26 @@ export function HrEmployeePayUnits() {
           return (
             <div className="flex items-center gap-1">
               {r.is_new ? (
-                <Input
-                  className="h-7 px-2 text-sm"
-                  value={r.pay_unit_code}
-                  placeholder="Pay unit code"
-                  onChange={(e) => updateRow(r.row_id, { pay_unit_code: e.target.value })}
-                />
+                <div className="min-w-[200px] flex-1">
+                  <LookupField
+                    compact
+                    label="Pay Unit"
+                    value={r.pay_unit_code}
+                    displayValue={r.pay_unit_code ? `${r.pay_unit_code} — ${r.pay_unit_name}` : ""}
+                    columns={PAY_UNIT_COLUMNS}
+                    valueField="PAY_COMP_ID"
+                    displayFields={["PAY_COMP_ID", "PAY_COMP_DESC"]}
+                    loadOptions={loadPayUnitOptions}
+                    onChange={(value, row) =>
+                      updateRow(r.row_id, {
+                        pay_unit_code: value,
+                        pay_unit_name: String(row?.PAY_COMP_DESC ?? ""),
+                        pay_comp_earn_ded: String(row?.PAY_COMP_EARN_DED ?? "")
+                      })
+                    }
+                    placeholder="Pay unit code or name"
+                  />
+                </div>
               ) : (
                 <span>
                   <span className="font-medium">{r.pay_unit_code}</span>
@@ -306,6 +375,35 @@ export function HrEmployeePayUnits() {
             onChange={(e) => updateRow(row.original.row_id, { amount: e.target.value })}
           />
         ),
+      },
+      {
+        id: "curr_code",
+        header: "Currency",
+        size: 130,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+                <div className="min-w-[130px] flex-1">
+                  <LookupField
+                    compact
+                    label="Currency"
+                    value={r.curr_code}
+                    displayValue={r.curr_code ? `${r.curr_code}` : ""}
+                    columns={CURRENCY_COLUMNS}
+                    valueField="curr_code"
+                    displayFields={["curr_code", "curr_name"]}
+                    loadOptions={loadCurrencyOptions}
+                    onChange={(value, row) =>
+                      updateRow(r.row_id, {
+                        curr_code: value,
+                      })
+                    }
+                    placeholder="Currency code or name"
+                  />
+                </div>
+          );
+        },
       },
       {
         id: "pay_unit_status",
@@ -388,7 +486,7 @@ export function HrEmployeePayUnits() {
           ) : null,
       },
     ],
-    [updateRow, removeNewRow],
+    [updateRow, removeNewRow, loadPayUnitOptions],
   );
 
   /* ── UI ── */
@@ -402,7 +500,7 @@ export function HrEmployeePayUnits() {
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">HR Employee - Pay Units</h1>
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Employee Pay Units</h1>
               <span className="text-xs text-muted-foreground">
                 {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
               </span>
@@ -430,7 +528,7 @@ export function HrEmployeePayUnits() {
 
       {/* Employee selection */}
       <SectionPanel title="Employee Selection" icon={Users}>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <Field label="Division" required>
             <LookupField
               compact
@@ -450,7 +548,6 @@ export function HrEmployeePayUnits() {
           <Field label="Department" required>
             <LookupField
               compact
-              disabled={!header.div_code}
               value={header.dept_code}
               columns={DEPARTMENT_COLUMNS}
               valueField="dept_code"
@@ -464,7 +561,6 @@ export function HrEmployeePayUnits() {
           <Field label="Section" required>
             <LookupField
               compact
-              disabled={!header.dept_code}
               value={header.section_code}
               columns={SECTION_COLUMNS}
               valueField="section_code"
@@ -475,7 +571,7 @@ export function HrEmployeePayUnits() {
             />
           </Field>
 
-          <Field label="Employee" required className="md:col-span-3">
+          <Field label="Employee" required>
             <LookupField
               compact
               disabled={!companyCode}
@@ -483,7 +579,7 @@ export function HrEmployeePayUnits() {
               columns={EMPLOYEE_COLUMNS}
               valueField="employee_id"
               displayFields={["employee_code", "rpt_name"]}
-              loadOptions={loadEmployeeOptions}
+              loadOptions={() => loadLookupRows(P_EMPLOYEE, companyCode, header.div_code, header.dept_code, header.section_code)}
               onChange={(value) => patchHeader({ employee_id: value })}
               placeholder="Employee code or name"
             />
@@ -504,6 +600,27 @@ export function HrEmployeePayUnits() {
         density="grid"
         getRowId={(row) => row.row_id}
       />
+
+      {/* Total amount footer — matches AbsentMemo styling */}
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-3 rounded-md border border-[#cbd5e1] bg-slate-50/95 px-4 py-2 shadow-sm">
+          <div className="flex items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3.5 py-1.5 shadow-2xs">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">Rows</span>
+            <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">
+              {rows.length.toLocaleString()}
+            </strong>
+          </div>
+          <div className="flex min-h-9 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">Total Amount</span>
+            <strong className="font-mono text-base font-black tabular-nums text-[#00378c]">
+              {totalAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3,
+              })}
+            </strong>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -82,7 +82,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
         if (/(origin|port)/.test(text)) return 50;
         if (/(job\s*no|quotation\s*no|invoice\s*no|doc\s*no|rfq\s*no|enquiry)/.test(text)) return 68;
         if (/(gross\s*wt|volume|weight)/.test(text)) return 46;
-        if (/(duty|demurrage|cost|revenue|profit|expense|price|share|sell|bill)/.test(text)) return 58;
+        if (/(duty|demurrage|cost|revenue|profit|expense|price|share|sell|bill|brokerage)/.test(text)) return 58;
         return "*";
       });
       // Ensure at least one column is '*' so table spans full width
@@ -242,7 +242,7 @@ async function fontVfs() {
 
 export async function createFreightPdf(report: FreightReportDocument, identity: ReportIdentity) {
   const [{ default: pdfMake }, definition, vfs] = await Promise.all([
-    import("pdfmake/build/pdfmake.js"), buildFreightPdfDefinition(report, identity), fontVfs(),
+    import("pdfmake/build/pdfmake"), buildFreightPdfDefinition(report, identity), fontVfs(),
   ]);
   const fonts = { Inter: { normal: "Inter-Regular.ttf", bold: "Inter-Bold.ttf", italics: "Inter-Regular.ttf", bolditalics: "Inter-Bold.ttf" } };
   const tableLayouts = {

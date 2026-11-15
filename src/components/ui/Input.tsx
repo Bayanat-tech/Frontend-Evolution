@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  maxBytes?: number;
   /** If false, disables the floating overflow tooltip. Defaults to true. */
   showOverflowTooltip?: boolean;
 }
@@ -11,6 +12,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   (
     {
       className,
+      maxBytes,
       showOverflowTooltip = true,
       onMouseEnter,
       onMouseLeave,
@@ -56,6 +58,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
     const checkAndShowTooltip = useCallback(() => {
       if (!showOverflowTooltip) return;
+      if (!isFocusedRef.current) return;
       // Skip non-text or security inputs
       if (type === "password" || type === "number" || type === "date" || type === "checkbox" || type === "radio" || type === "hidden") {
         setTooltip(null);
@@ -66,7 +69,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (!el) return;
       const val = String(el.value ?? props.value ?? "");
 
-      // If maxLength is defined, always show the character limit card
+      // If maxLength is defined, always show the character limit card when focused
       if (props.maxLength != null) {
         updateTooltipPosition(val);
         return;
@@ -114,13 +117,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             className,
           )}
           onMouseEnter={(e) => {
-            checkAndShowTooltip();
             onMouseEnter?.(e);
           }}
           onMouseLeave={(e) => {
-            if (!isFocusedRef.current) {
-              hideTooltip();
-            }
             onMouseLeave?.(e);
           }}
           onFocus={(e) => {
@@ -135,6 +134,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           }}
           onChange={(e) => {
             const nextVal = e.target.value;
+            if (maxBytes != null) e.currentTarget.setCustomValidity(new TextEncoder().encode(nextVal).length > maxBytes ? `Maximum ${maxBytes} UTF-8 bytes allowed` : "");
             if (props.maxLength != null) {
               updateTooltipPosition(nextVal);
             } else if (tooltip) {
@@ -177,6 +177,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                     <span className="opacity-75 ml-2">({props.maxLength - tooltip.text.length} left)</span>
                   )}
                 </div>
+              )}
+              {maxBytes != null && new TextEncoder().encode(tooltip.text).length !== tooltip.text.length && (
+                <div className="mt-1 text-[10.5px] font-mono">{new TextEncoder().encode(tooltip.text).length} / {maxBytes} UTF-8 bytes</div>
               )}
             </div>,
             document.body,

@@ -48,11 +48,13 @@ type DashboardData = {
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export function FreightDashboardPanel() {
+// export function FreightDashboardPanel() {
+//   const { user } = useAuth();
+//   const now = new Date();
+//   const [year, setYear] = useState(now.getFullYear());
+//   const [month, setMonth] = useState(now.getMonth() + 1);
+export function FreightDashboardPanel({ year, month, refreshKey = 0 }: { year: number; month: number; refreshKey?: number }) {
   const { user } = useAuth();
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
   const [data, setData] = useState<DashboardData>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -80,7 +82,7 @@ export function FreightDashboardPanel() {
 
   useEffect(() => {
     void loadDashboard();
-  }, [loadDashboard]);
+  }, [loadDashboard, refreshKey]);
 
   const summary = data.summary || {};
   const commercialCards: MetricProps[] = [
@@ -103,21 +105,6 @@ export function FreightDashboardPanel() {
 
   return (
     <div className="freight-dashboard">
-      <header className="freight-dashboard-header">
-        <div>
-          <h1>Freight Dashboard</h1>
-          <p>Operational overview for {companyName}</p>
-        </div>
-        <div className="freight-dashboard-filters">
-          <label><span>Company</span><strong><BriefcaseBusiness size={14} />{companyName}</strong></label>
-          <label><span>Year</span><select value={year} onChange={(event) => setYear(Number(event.target.value))}>{yearOptions(now.getFullYear()).map((item) => <option key={item}>{item}</option>)}</select></label>
-          <label><span>Month</span><select value={month} onChange={(event) => setMonth(Number(event.target.value))}>{months.map((item, index) => <option key={item} value={index + 1}>{item}</option>)}</select></label>
-          <button type="button" onClick={() => void loadDashboard()} disabled={loading} title="Refresh dashboard">
-            {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-          </button>
-        </div>
-      </header>
-
       {error && <div className="freight-dashboard-error"><AlertTriangle size={15} />{error}<button type="button" onClick={() => void loadDashboard()}>Try again</button></div>}
 
       <DashboardSection title="Freight Performance Snapshot">
@@ -202,3 +189,19 @@ function number(value: unknown) { const parsed = Number(value); return Number.is
 function compact(value: number) { return Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value); }
 function dateText(value: unknown) { if (!value) return "-"; const parsed = new Date(String(value)); return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); }
 function yearOptions(current: number) { return Array.from({ length: 5 }, (_, index) => current - index); }
+
+export function FreightFilterBar({ year, month, onYear, onMonth, onRefresh }: {
+  year: number; month: number; onYear: (v: number) => void; onMonth: (v: number) => void; onRefresh: () => void;
+}) {
+  const { user } = useAuth();
+  const rec = (user || {}) as Record<string, unknown>;
+  const companyName = String(rec.company_name || rec.COMPANY_NAME || rec.company_code || rec.COMPANY_CODE || "BSG");
+  return (
+    <div className="freight-dashboard-filters">
+      <label><span>Company</span><strong><BriefcaseBusiness size={14} />{companyName}</strong></label>
+      <label><span>Year</span><select value={year} onChange={(e) => onYear(Number(e.target.value))}>{yearOptions(new Date().getFullYear()).map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label><span>Month</span><select value={month} onChange={(e) => onMonth(Number(e.target.value))}>{months.map((item, index) => <option key={item} value={index + 1}>{item}</option>)}</select></label>
+      <button type="button" onClick={onRefresh} title="Refresh"><RefreshCw size={16} /></button>
+    </div>
+  );
+}
