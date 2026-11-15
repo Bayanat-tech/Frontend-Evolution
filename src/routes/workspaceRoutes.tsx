@@ -43,7 +43,6 @@
   import MyTaskPage from "../pages/pams/MyTaskpage";
   import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
   import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
-  import AppraisalSummaryReportDesign from "../pages/pams/AppraisalSummaryReportDesign";
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
 
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
@@ -247,6 +246,7 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 import { useAuth } from "../state/AuthContext";
 import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
+import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -1193,11 +1193,7 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     {
       name: "PAMS Appraisal Summary Report",
       match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
-      element: () => <AppraisalSummaryReportDesign required_values={{
-        loginid: undefined,
-        company_code: undefined,
-        period_label: undefined,
-      }} />,
+      element: () => <EmployeeListingReport />,
     },
     {
       name: "PAMS Appraisal Division Summary Report",
@@ -3082,10 +3078,16 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   }
 
   function isPamsAppraisalSummaryRoute(pathname: string) {
-    const normalized = pathname.toLowerCase();
-    return normalized.includes("/appraisal_listing_summary") ||
-      normalized.includes("/appraisal-listing-summary");
-  }
+  const normalized = pathname.toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/employee_listing") ||
+    normalized.includes("/employee-listing") ||
+    normalized.includes("/appraisal_listing_summary") ||
+    normalized.includes("/appraisal-listing-summary") ||
+    compact.includes("appraisallistingsummary")
+  );
+}
 
   function isPamsAppraisalDivisionSummaryRoute(pathname: string) {
     const normalized = pathname.toLowerCase();

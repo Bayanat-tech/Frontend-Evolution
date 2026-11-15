@@ -160,6 +160,17 @@ export async function pamsPopulateDepartmentKpi(params: {
   return response.data;
 }
 
+export async function getEmployeeListingReportHtml(
+  params: Record<string, unknown>
+): Promise<string> {
+  const response = await api.post(
+    "/api/pams/gm/reports/EmployeeListingReport/html",
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
 function normalizeParams(params: PamsProcedureParams) {
   return {
     code2: "NULL",
