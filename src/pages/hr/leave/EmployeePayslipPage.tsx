@@ -1,12 +1,16 @@
 import { ArrowRight, FileText, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {  getHrEmployees,getPayslipreport , type HrEmployee } from "../../../api/hr";
+import type { LookupRow } from "../../../api/lookups";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
-import { Select } from "../../../components/ui/Select";
 import { Input } from "../../../components/ui/Input";
+import { LookupField } from "../../../components/ui/LookupField"; // adjust path if LookupField lives elsewhere
 import { useAuth } from "../../../state/AuthContext";
 import { openPayslipReport } from "./payslipPreviewStore";
 import { PayslipReportPreview } from "./PayslipReportPreview";
+
+// LookupField takes an async loader; for lists we already hold in memory we just return them.
+const loadStatic = (rows: LookupRow[]) => async () => rows;
 
 export function EmployeePayslipPage() {
   const { user } = useAuth();
@@ -39,6 +43,24 @@ export function EmployeePayslipPage() {
       .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load employees" }))
       .finally(() => setLoading(false));
   }, [loginId]);
+
+  // ---------- Rows + display text for the Employee LookupField ----------
+  const employeeRows = useMemo<LookupRow[]>(
+    () =>
+      employees.map((employee) => ({
+        CODE: String(employee.EMPLOYEE_ID || ""),
+        NAME: String(employee.RPT_NAME || employee.EMPLOYEE_NAME || ""),
+      })),
+    [employees]
+  );
+
+  const employeeDisplay = useMemo(() => {
+    if (!employeeId) return "";
+    const match = employees.find((employee) => String(employee.EMPLOYEE_ID || "") === employeeId);
+    if (!match) return employeeId;
+    const name = String(match.RPT_NAME || match.EMPLOYEE_NAME || "");
+    return name ? `${employeeId} - ${name}` : employeeId;
+  }, [employees, employeeId]);
 
   const viewPayslip = async () => {
     if (!employeeId || !period) {
@@ -112,22 +134,22 @@ export function EmployeePayslipPage() {
         </div>
 
         <div className="grid gap-4">
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-muted-foreground">
-            <span>Employee</span>
-            <Select
-              value={employeeId}
-              onChange={(event) => setEmployeeId(event.target.value)}
-              disabled={loading}
-              className="rounded-xl h-10"
-            >
-              <option value="">{loading ? "Loading employees..." : "Select employee"}</option>
-              {employees.map((employee) => (
-                <option key={String(employee.EMPLOYEE_ID || "")} value={String(employee.EMPLOYEE_ID || "")}>
-                  {String(employee.EMPLOYEE_ID || "")} - {String(employee.RPT_NAME || employee.EMPLOYEE_NAME || "")}
-                </option>
-              ))}
-            </Select>
-          </label>
+          {/* Employee lookup (LookupField renders its own label) */}
+          <LookupField
+            label="Employee"
+            value={employeeId}
+            displayValue={employeeDisplay}
+            columns={[
+              { field: "CODE", header: "Emp ID", width: 120 },
+              { field: "NAME", header: "Name" },
+            ]}
+            valueField="CODE"
+            displayFields={["CODE", "NAME"]}
+            loadOptions={loadStatic(employeeRows)}
+            onChange={(code) => setEmployeeId(code)}
+            disabled={loading}
+            placeholder={loading ? "Loading employees" : "Select employee"}
+          />
 
           <label className="flex flex-col gap-1.5 text-xs font-semibold text-muted-foreground">
             <span>Pay Period</span>

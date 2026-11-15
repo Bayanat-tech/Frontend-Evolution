@@ -2,15 +2,19 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarDays, Search, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { executeHrRawSql, getHrEmployees, getHrLeaveHistory, type HrEmployee } from "../../../api/hr";
+import type { LookupRow } from "../../../api/lookups";
 import { Badge } from "../../../components/ui/Badge";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Input } from "../../../components/ui/Input";
+import { LookupField } from "../../../components/ui/LookupField"; // adjust path if LookupField lives elsewhere
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
-import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
 
 type Row = Record<string, unknown>;
+
+// LookupField takes an async loader; for lists we already hold in memory we just return them.
+const loadStatic = (rows: LookupRow[]) => async () => rows;
 
 export function LeaveRegisterPage() {
   const { user } = useAuth();
@@ -66,6 +70,39 @@ export function LeaveRegisterPage() {
     });
     return Array.from(map, ([code, label]) => ({ code, label })).sort((a, b) => a.label.localeCompare(b.label));
   }, [history, balances]);
+
+  // ---------- Rows + display text for the LookupFields ----------
+  const employeeRows = useMemo<LookupRow[]>(
+    () =>
+      employees.map((employee) => ({
+        CODE: String(employee.EMPLOYEE_ID || ""),
+        ALTERNATE_ID: String(employee.ALTERNATE_ID || ""),
+        NAME: String(employee.RPT_NAME || employee.EMPLOYEE_NAME || ""),
+      })),
+    [employees]
+  );
+
+  const leaveTypeRows = useMemo<LookupRow[]>(
+    () => [
+      { CODE: "ALL", DESC: "All Leave Types" },
+      ...leaveTypes.map((type) => ({ CODE: type.code, DESC: type.label })),
+    ],
+    [leaveTypes]
+  );
+
+  const employeeDisplay = useMemo(() => {
+    if (!employeeId) return "";
+    const match = employees.find((employee) => String(employee.EMPLOYEE_ID || "") === employeeId);
+    if (!match) return employeeId;
+    const alt = String(match.ALTERNATE_ID || "");
+    const name = String(match.RPT_NAME || match.EMPLOYEE_NAME || "");
+    return alt ? `${alt} - ${name}` : name || employeeId;
+  }, [employees, employeeId]);
+
+  const leaveTypeDisplay = useMemo(() => {
+    if (!leaveType || leaveType === "ALL") return "All Leave Types";
+    return leaveTypes.find((type) => type.code === leaveType)?.label || leaveType;
+  }, [leaveTypes, leaveType]);
 
   const loadRegister = async (showNotice = true) => {
     if (!employeeId) return;
@@ -258,38 +295,40 @@ export function LeaveRegisterPage() {
       {/* Modern Filter Card */}
       <div className="rounded-2xl border border-border bg-card p-3 shadow-sm grid gap-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
-          <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
-            <span>Employee</span>
-            <Select
-              value={employeeId}
-              onChange={(event) => setEmployeeId(event.target.value)}
-              disabled={loading}
-              className="rounded-xl"
-            >
-              <option value="">Select employee</option>
-              {employees.map((employee) => (
-                <option key={String(employee.EMPLOYEE_ID || "")} value={String(employee.EMPLOYEE_ID || "")}>
-                  {String(employee.ALTERNATE_ID || "")} - {String(employee.RPT_NAME || employee.EMPLOYEE_NAME || "")}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
-            <span>Leave Type</span>
-            <Select
-              value={leaveType}
-              onChange={(event) => setLeaveType(event.target.value)}
-              disabled={!employeeId}
-              className="rounded-xl"
-            >
-              <option value="ALL">All Leave Types</option>
-              {leaveTypes.map((type) => (
-                <option key={type.code} value={type.code}>
-                  {type.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+          {/* Employee lookup (LookupField renders its own label) */}
+          <LookupField
+            label="Employee"
+            value={employeeId}
+            displayValue={employeeDisplay}
+            columns={[
+              { field: "ALTERNATE_ID", header: "Emp ID", width: 110 },
+              { field: "NAME", header: "Name" },
+            ]}
+            valueField="CODE"
+            displayFields={["NAME"]}
+            loadOptions={loadStatic(employeeRows)}
+            onChange={(code) => setEmployeeId(code)}
+            disabled={loading}
+            placeholder="Select employee"
+          />
+
+          {/* Leave type lookup; clearing it falls back to "All Leave Types" */}
+          <LookupField
+            label="Leave Type"
+            value={leaveType}
+            displayValue={leaveTypeDisplay}
+            columns={[
+              { field: "CODE", header: "Code", width: 90 },
+              { field: "DESC", header: "Description" },
+            ]}
+            valueField="CODE"
+            displayFields={["DESC"]}
+            loadOptions={loadStatic(leaveTypeRows)}
+            onChange={(code) => setLeaveType(code || "ALL")}
+            disabled={!employeeId}
+            placeholder="All Leave Types"
+          />
+
           <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
             <span>From Date</span>
             <Input
@@ -457,4 +496,3 @@ function registerStatusBadge(status: string) {
   }
   return "inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700";
 }
-
