@@ -592,6 +592,8 @@ export function BudgetRequestEditor({
               documentNo={form.request_number}
               documentDate={form.request_date}
               total={formatAmount(totalRequested)}
+              divCode={form.div_code}
+              divName={form.div_name}
               onBack={onClose}
             />
 
@@ -607,7 +609,7 @@ export function BudgetRequestEditor({
                 type="button"
                 onClick={handleSaveAsDraft}
                 disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                className="h-8 gap-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs cursor-pointer disabled:opacity-60"
               >
                 {actionLoading === "draft" ? (
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -622,7 +624,7 @@ export function BudgetRequestEditor({
                 type="button"
                 onClick={handleSubmit}
                 disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                className="h-8 gap-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs cursor-pointer disabled:opacity-60"
               >
                 {actionLoading === "submit" ? (
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -638,7 +640,7 @@ export function BudgetRequestEditor({
                   type="button"
                   onClick={handleSendBack}
                   disabled={actionDisabled || actionBarBusy}
-                  className="rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                  className="h-8 gap-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs shadow-xs cursor-pointer disabled:opacity-60"
                 >
                   {actionLoading === "sendBack" ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -655,7 +657,7 @@ export function BudgetRequestEditor({
                   type="button"
                   onClick={handleReject}
                   disabled={actionDisabled || actionBarBusy}
-                  className="rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                  className="h-8 gap-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs cursor-pointer disabled:opacity-60"
                 >
                   {actionLoading === "reject" ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -672,7 +674,7 @@ export function BudgetRequestEditor({
                   type="button"
                   onClick={handleCancel}
                   disabled={actionDisabled || actionBarBusy}
-                  className="rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-md disabled:opacity-60 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                  className="h-8 gap-1.5 px-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs shadow-xs cursor-pointer disabled:opacity-60"
                 >
                   {actionLoading === "cancel" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                   {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
@@ -685,7 +687,7 @@ export function BudgetRequestEditor({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
+                  className="h-8 gap-1.5 px-3 rounded-lg font-semibold text-xs shadow-xs cursor-pointer"
                   onClick={handlePrint}
                   disabled={actionBarBusy}
                   title="Print / PDF"
@@ -701,7 +703,7 @@ export function BudgetRequestEditor({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
+                  className="h-8 gap-1.5 px-3 rounded-lg font-semibold text-xs shadow-xs cursor-pointer"
                   onClick={handleExportExcel}
                   disabled={actionBarBusy}
                   title="Download Excel"
@@ -715,7 +717,7 @@ export function BudgetRequestEditor({
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="rounded-full text-xs h-8 px-2.5 cursor-pointer"
+                className="h-8 gap-1.5 px-3 rounded-lg font-semibold text-xs shadow-xs cursor-pointer"
                 onClick={() => setAttachmentOpen(true)}
                 disabled={!form.request_number || actionBarBusy}
                 title="Files"
@@ -728,13 +730,12 @@ export function BudgetRequestEditor({
                 aria-label="Close"
                 type="button"
                 variant="secondary"
-                size="icon"
-                className="rounded-full h-8 w-8 text-slate-700 hover:bg-slate-200 cursor-pointer"
+                className="payment-header-close-btn !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] h-8 px-3.5 rounded-lg text-xs font-semibold cursor-pointer"
                 onClick={onClose}
                 disabled={actionBarBusy}
                 title="Close"
               >
-                <X size={16} />
+                Close
               </Button>
             </div>
           </div>
@@ -766,26 +767,9 @@ export function BudgetRequestEditor({
                 <div className="payment-header-grid grid grid-cols-4 gap-2.5 p-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
                   {editMode && <Field label="Budget Number"><Input disabled value={form.request_number || ""} /></Field>}
 
-                  <LookupField
-                    label="Division"
-                    required
-                    value={form.div_code}
-                    displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                    columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                    valueField="div_code"
-                    displayFields={["div_code", "div_name"]}
-                    loadOptions={() => getDynamicLookup({
-                      parameter: "Account_division",
-                      code1: user?.company_code,
-                      loginid: user?.loginid || user?.username || "ADMIN",
-                    })}
-                    disabled={headerAndLineDisabled}
-                    onChange={(value, row) => setForm((current) => ({
-                      ...current,
-                      div_code: value,
-                      div_name: text(getLookupValue(row || {}, "div_name")),
-                    }))}
-                  />
+                  <Field label="Division">
+                    <Input disabled value={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code} />
+                  </Field>
 
                   <LookupField
                     label="Currency"
@@ -927,8 +911,18 @@ export function BudgetRequestEditor({
                               onChange={(event) => updateRow(row.id, { approved_amt: Number(event.target.value || 0) })}
                             />
                           </td>
-                          <td className="px-2 py-1">
-                            <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" title="Remove Line" aria-label="Remove Line" className="text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => removeRow(row.id)}><Trash2 size={14} /></Button></td>
+                          <td className="px-2 py-1 text-center">
+                            <button
+                              disabled={headerAndLineDisabled}
+                              type="button"
+                              title="Delete row"
+                              aria-label="Delete row"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer disabled:opacity-40"
+                              onClick={() => removeRow(row.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
