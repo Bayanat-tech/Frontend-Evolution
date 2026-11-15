@@ -18,6 +18,7 @@ import { Input } from "../../../components/ui/Input";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../../components/ui/LookupField"; // adjust path if LookupField lives elsewhere
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker"; // adjust path if BiscDatePicker lives elsewhere
 import { useAuth } from "../../../state/AuthContext";
 import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate";
 import { getDynamicLookupaccount, type LookupRow } from "../../../api/lookups";
@@ -1080,21 +1081,21 @@ export function LeaveRequestDialog({
             </LookupWrap>
 
             <Field label="Leave Start Date *" error={fieldErrors.leaveStartDate}>
-              <Input
-                type="date"
+              <BiscDatePicker
                 value={form.leaveStartDate}
-                onChange={(event) => update("leaveStartDate", event.target.value)}
+                onChange={(value) => update("leaveStartDate", value)}
                 disabled={fieldsDisabled}
+                error={Boolean(fieldErrors.leaveStartDate)}
               />
             </Field>
             {/* User picks the end date; after the API call it is replaced by start date + leave days */}
             <Field label="Leave End Date *" error={fieldErrors.leaveEndDate}>
-              <Input
-                type="date"
+              <BiscDatePicker
                 value={form.leaveEndDate}
                 min={form.leaveStartDate || undefined}
-                onChange={(event) => update("leaveEndDate", event.target.value)}
+                onChange={(value) => update("leaveEndDate", value)}
                 disabled={fieldsDisabled}
+                error={Boolean(fieldErrors.leaveEndDate)}
               />
             </Field>
 
@@ -1120,10 +1121,9 @@ export function LeaveRequestDialog({
 
             {tenantName === "MHDL" && (
               <Field label="Duty Resume Date *">
-                <Input
-                  type="date"
+                <BiscDatePicker
                   value={form.dutyresumedate}
-                  onChange={(event) => update("dutyresumedate", event.target.value)}
+                  onChange={(value) => update("dutyresumedate", value)}
                   disabled={fieldsDisabled}
                 />
               </Field>
@@ -1246,19 +1246,17 @@ export function LeaveRequestDialog({
 
             <div className="grid grid-cols-2 gap-2">
               <Field label="Travel Start Date">
-                <Input
-                  type="date"
+                <BiscDatePicker
                   value={form.travelDate}
-                  onChange={(event) => update("travelDate", event.target.value)}
+                  onChange={(value) => update("travelDate", value)}
                   disabled={fieldsDisabled}
                 />
               </Field>
               <Field label="Travel End Date">
-                <Input
-                  type="date"
+                <BiscDatePicker
                   value={form.travelEndDate}
                   min={form.travelDate || undefined}
-                  onChange={(event) => update("travelEndDate", event.target.value)}
+                  onChange={(value) => update("travelEndDate", value)}
                   disabled={fieldsDisabled}
                 />
               </Field>
@@ -1294,19 +1292,17 @@ export function LeaveRequestDialog({
               </label>
             </div>
             <Field label="Actual Resume Date">
-              <Input
-                type="date"
+              <BiscDatePicker
                 value={form.actualresumedate}
-                onChange={(event) => update("actualresumedate", event.target.value)}
+                onChange={(value) => update("actualresumedate", value)}
                 disabled={fieldsDisabled}
               />
             </Field>
             {tenantName === "ALMS" && (
               <Field label="Duty Resume Date">
-                <Input
-                  type="date"
+                <BiscDatePicker
                   value={form.dutyresumedate}
-                  onChange={(event) => update("dutyresumedate", event.target.value)}
+                  onChange={(value) => update("dutyresumedate", value)}
                   disabled={fieldsDisabled}
                 />
               </Field>

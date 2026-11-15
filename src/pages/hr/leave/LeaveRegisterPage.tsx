@@ -6,8 +6,8 @@ import type { LookupRow } from "../../../api/lookups";
 import { Badge } from "../../../components/ui/Badge";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { DataTable } from "../../../components/ui/DataTable";
-import { Input } from "../../../components/ui/Input";
-import { LookupField } from "../../../components/ui/LookupField"; // adjust path if LookupField lives elsewhere
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker"; 
+import { LookupField } from "../../../components/ui/LookupField"; 
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
 import { useAuth } from "../../../state/AuthContext";
 
@@ -331,21 +331,11 @@ export function LeaveRegisterPage() {
 
           <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
             <span>From Date</span>
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={(event) => setFromDate(event.target.value)}
-              className="rounded-xl text-xs h-9"
-            />
+            <BiscDatePicker value={fromDate} onChange={(value) => setFromDate(value)} />
           </label>
           <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
             <span>To Date</span>
-            <Input
-              type="date"
-              value={toDate}
-              onChange={(event) => setToDate(event.target.value)}
-              className="rounded-xl text-xs h-9"
-            />
+            <BiscDatePicker value={toDate} onChange={(value) => setToDate(value)} />
           </label>
         </div>
 
