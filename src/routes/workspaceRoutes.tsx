@@ -247,6 +247,7 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 import { useAuth } from "../state/AuthContext";
 import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
+import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listing_Report";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -1185,6 +1186,13 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       match: (context) => isPurchaseRequestTaskRoute(context),
       element: () => <Purchase_Request_page initialTab={0} />
     },
+
+
+   {
+  name: 'Credit Request Register',
+  match: (context) => isCRListingReportRoute(context),
+  element: () => <CreditRequestRegisterPage />
+},
 
 
 
@@ -2961,6 +2969,21 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       !normalized.includes("/edit/")
     );
   }
+
+
+
+
+  function isCRListingReportRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    (normalized.includes("/credit_request_listing") ||
+      normalized.includes("/credit-request-listing") ||
+      compact.includes("creditrequestlisting")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
 
   function isAlmsMyTaskTabRoute(context: WorkspaceRouteContext, tabKeys: string[]) {
     if (!isMyTaskRoute(context)) return false;

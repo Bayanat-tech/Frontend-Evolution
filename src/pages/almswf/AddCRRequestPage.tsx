@@ -25,7 +25,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { CardContent, CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsCommonSelect } from "../../api/alms";
-import { executeDynamicMutationColumn90 } from "../../api/lookups";
+import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
@@ -184,6 +184,9 @@ const SUBMIT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
   REMARKS: "Remarks",
 };
 
+// Approval levels that must NOT see the Send Back button
+const SEND_BACK_HIDDEN_LEVELS = [1, 5];
+
 const Required = () => <span className="ml-0.5 text-destructive">*</span>;
 
 const GRID_4 = "grid grid-cols-1 gap-0.5 p-1 md:grid-cols-2 xl:grid-cols-4";
@@ -238,11 +241,15 @@ const AddCRRequestPage = ({
   const [remarkText, setRemarkText] = useState("");
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [userLevel, setUserLevel] = useState<number | null>(null);
 
   const isCancelled = String(header.LAST_ACTION || "").toUpperCase() === "CANCELED";
   const disabled = isViewMode || saving || isCancelled;
   const canTakeAction = !isViewMode && isPendingTab && !isCancelled;
   const canSendBackOrReject = canTakeAction && isEditMode && !!requestNumber;
+  // Send Back is hidden for the levels in SEND_BACK_HIDDEN_LEVELS (and while the level is unknown)
+  const canSendBack =
+    canSendBackOrReject && userLevel !== null && !SEND_BACK_HIDDEN_LEVELS.includes(userLevel);
   const busy = saving || actionLoading !== null;
 
   const { data: hdrList = [], isLoading: hdrLoading, isError: hdrError } = useQuery<TCRHeader[]>({
@@ -261,6 +268,34 @@ const AddCRRequestPage = ({
     if (hdrList.length > 0) setHeader(hdrList[0]);
     if (!(isEditMode || isViewMode) || !hdrLoading) setLoading(false);
   }, [hdrList, hdrLoading, isEditMode, isViewMode]);
+
+  // Logged-in user's approval level (decides who sees "Send Back")
+  useEffect(() => {
+    if (!companyCode) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const rows = await getDynamicLookup({
+          parameter: "PS_CREDITREQUEST_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
+          code1: companyCode,
+          code2: loginid || user?.username || "ADMIN",
+          code3: "credit_request_form",
+        });
+        if (!mounted) return;
+        const first = (rows || [])[0] as Record<string, unknown> | undefined;
+        const level = first
+          ? Number(first.level ?? first.LEVEL ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0])
+          : 0;
+        setUserLevel(Number.isFinite(level) ? level : 0);
+      } catch {
+        // If the level can't be read, hide Send Back instead of showing it to everyone
+        if (mounted) setUserLevel(null);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [companyCode, loginid, user?.username]);
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
     setHeader((prev) => ({
@@ -534,25 +569,26 @@ const AddCRRequestPage = ({
                     {actionLoading === "submit" ? "Submitting..." : "Submit"}
                   </Button>
 
+                  {canSendBack && (
+                    <Button
+                      type="button"
+                      onClick={openSendBack}
+                      disabled={busy}
+                      className="rounded-full bg-yellow-500 shadow-md hover:bg-yellow-600 disabled:opacity-60"
+                    >
+                      <ChevronLeft size={15} /> {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                    </Button>
+                  )}
+
                   {canSendBackOrReject && (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={openSendBack}
-                        disabled={busy}
-                        className="rounded-full bg-yellow-500 shadow-md hover:bg-yellow-600 disabled:opacity-60"
-                      >
-                        <ChevronLeft size={15} /> {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={openReject}
-                        disabled={busy}
-                        className="rounded-full bg-red-600 shadow-md hover:bg-red-700 disabled:opacity-60"
-                      >
-                        {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-                      </Button>
-                    </>
+                    <Button
+                      type="button"
+                      onClick={openReject}
+                      disabled={busy}
+                      className="rounded-full bg-red-600 shadow-md hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </Button>
                   )}
 
                   {!!requestNumber && (
