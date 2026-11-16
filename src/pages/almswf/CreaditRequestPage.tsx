@@ -97,6 +97,10 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   });
   const isInProgressTab = tab === "INPROGRESS";
 
+    const isClosedTab = tab === "CLOSED";
+  // Edit icon is hidden on these tabs (view only)
+  const hideEdit = isInProgressTab || isClosedTab;
+
   // ── Popup state (Add / Edit / View) ─────────────────────────────────────────
   const [taskPopup, setTaskPopup] = useState({
     open: false,
@@ -330,7 +334,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
             <Button size="icon" variant="ghost" onClick={() => handleActions("view", row.original)} title="View">
               <Eye size={15} />
             </Button>
-            {!isInProgressTab && (
+                       {!hideEdit && (
               <Button size="icon" variant="ghost" onClick={() => handleActions("edit", row.original)} title="Edit">
                 <Edit2 size={15} />
               </Button>
@@ -349,8 +353,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
         ),
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isInProgressTab, printingNo, exportingNo, user?.company_code]
+        [hideEdit, printingNo, exportingNo, user?.company_code]
   );
 
   if (taskPopup.open) {
