@@ -152,7 +152,7 @@
   import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
   import ProductPurchaseSales from "../pages/purchase_sales/PS_Productmaster";
 
-  import { ProductTypePage } from "../pages/purchase_sales/PS_ProductTypePage";
+  // import { ProductTypePage } from "../pages/purchase_sales/PS_ProductTypePage";
 
   import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
 
@@ -500,11 +500,11 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     element: () => <ProductPurchaseSales />
   },
 
-    {
-    name: "Purchase Sales Product Type",
-    match: ({ pathname }) => isProductTypeRoute(pathname),
-    element: () => <ProductTypePage />,
-    },
+    // {
+    // name: "Purchase Sales Product Type",
+    // match: ({ pathname }) => isProductTypeRoute(pathname),
+    // element: () => <ProductTypePage />,
+    // },
 
 
 

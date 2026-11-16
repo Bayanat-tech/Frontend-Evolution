@@ -62,6 +62,8 @@ export function PurchaseInvoiceHeaderForm({
     setdetails,
     calculateDiscount,
     rows,
+    amountDecimals = 3,
+
 
 }: {
     form: PurchaseOrderForm;
@@ -76,6 +78,7 @@ export function PurchaseInvoiceHeaderForm({
     setdetails?: (details: any[]) => void;
     calculateDiscount: (type: "amount" | "percent", value: number) => void;
     rows?: PurchaseOrderLineRow[];
+    amountDecimals?: number;
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
   const [taxCats, setTaxCats] = useState<any[]>([]);
@@ -117,7 +120,7 @@ const dateCls = (v?: string | null) =>
     const cleanAmount = (v: string) => {
         const cleaned = v.replace(/[^0-9.]/g, "");
         const [int, ...rest] = cleaned.split(".");
-        return rest.length ? `${int}.${rest.join("").slice(0, 3)}` : int;
+        return rest.length ? `${int}.${rest.join("").slice(0, amountDecimals)}` : int;
     };
 
     return (
@@ -591,8 +594,8 @@ const dateCls = (v?: string | null) =>
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
                                     value={
                                         discountScope === "ITEM"
-                                            ? TotalDiscAmount(rows || []).toFixed(3)
-                                            : numberOrZero(form.disc_hdr_price).toFixed(3)
+                                            ? TotalDiscAmount(rows || []).toFixed(amountDecimals)
+                                            : numberOrZero(form.disc_hdr_price).toFixed(amountDecimals)
                                     }
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
@@ -609,8 +612,8 @@ const dateCls = (v?: string | null) =>
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
                                     value={
                                         discountScope === "ITEM"
-                                            ? DiscAmountPercentage(form, rows || []).toFixed(2)
-                                            : numberOrZero(form.disc_hdr_percent).toFixed(2)
+                                            ? DiscAmountPercentage(form, rows || []).toFixed(amountDecimals)
+                                            : numberOrZero(form.disc_hdr_percent).toFixed(amountDecimals)
                                     }
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);

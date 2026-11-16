@@ -63,7 +63,8 @@ export function SalesInvoiceHeaderForm({
     docType,
     setdetails,
     calculateDiscount,
-    rows
+    rows,
+    amountDecimals = 3,
 }: {
     form: PurchaseOrderForm;
     setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -77,6 +78,7 @@ export function SalesInvoiceHeaderForm({
     setdetails?: (details: any[]) => void;
     calculateDiscount: (type: "amount" | "percent", value: number) => void;
     rows?: SalesOrderLineRow[];
+    amountDecimals?: number;
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
     const discountScope = form.discount_scoope || "ITEM";
@@ -113,7 +115,7 @@ export function SalesInvoiceHeaderForm({
     const cleanAmount = (v: string) => {
         const cleaned = v.replace(/[^0-9.]/g, "");
         const [int, ...rest] = cleaned.split(".");
-        return rest.length ? `${int}.${rest.join("").slice(0, 3)}` : int;
+        return rest.length ? `${int}.${rest.join("").slice(0, amountDecimals)}` : int;
     };
 
     return (
@@ -575,8 +577,8 @@ export function SalesInvoiceHeaderForm({
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
                                     value={
                                         discountScope === "ITEM"
-                                            ? TotalDiscAmount(rows || []).toFixed(3)
-                                            : numberOrZero(form.disc_hdr_price).toFixed(3)
+                                            ? TotalDiscAmount(rows || []).toFixed(amountDecimals)
+                                            : numberOrZero(form.disc_hdr_price).toFixed(amountDecimals)
                                     }
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
@@ -593,8 +595,8 @@ export function SalesInvoiceHeaderForm({
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
                                     value={
                                         discountScope === "ITEM"
-                                            ? DiscAmountPercentage(form, rows || []).toFixed(3)
-                                            : numberOrZero(form.disc_hdr_percent).toFixed(3)
+                                            ? DiscAmountPercentage(form, rows || []).toFixed(amountDecimals)
+                                            : numberOrZero(form.disc_hdr_percent).toFixed(amountDecimals)
                                     }
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);

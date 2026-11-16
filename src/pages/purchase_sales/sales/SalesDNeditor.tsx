@@ -62,7 +62,13 @@ export function SalesDNEditor({
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
 }) {
-  const { user } = useAuth();
+   const { user } = useAuth();
+  const amountDecimals = Number.isInteger(user?.amount_decimal_nos)
+    ? Math.min(Math.max(Number(user?.amount_decimal_nos), 0), 20)
+    : 2;
+  const priceDecimals = Number.isInteger(user?.price_decimal_nos)
+    ? Math.min(Math.max(Number(user?.price_decimal_nos), 0), 20)
+    : 2;
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [rows, setRows] = useState<SalesOrderLineRow[]>(() =>
@@ -697,7 +703,7 @@ export function SalesDNEditor({
                 title="Delivery Note"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(finalTotal)}
+                total={formatAmount(finalTotal,amountDecimals)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -866,6 +872,7 @@ export function SalesDNEditor({
                       loginid={user?.loginid || user?.username}
                       setdetails={setRows}
                       calculateDiscount={applyDiscountCalculation}
+                      amountDecimals={amountDecimals}
                     />
 
 
@@ -885,6 +892,8 @@ export function SalesDNEditor({
                   discAmt={form.disc_price}
                   companyCode={user?.company_code}
                   loginid={user?.loginid || user?.username}
+                  amountDecimals={amountDecimals}
+                  priceDecimals={priceDecimals}
                 />
               </div>
             )}

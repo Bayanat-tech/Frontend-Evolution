@@ -72,6 +72,12 @@ export function PurchaseInvoiceEditor({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const amountDecimals = Number.isInteger(user?.amount_decimal_nos)
+    ? Math.min(Math.max(Number(user?.amount_decimal_nos), 0), 20)
+    : 2;
+  const priceDecimals = Number.isInteger(user?.price_decimal_nos)
+    ? Math.min(Math.max(Number(user?.price_decimal_nos), 0), 20)
+    : 2;
   const prevTaxType = useRef<string | null>(null);
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
@@ -699,7 +705,7 @@ export function PurchaseInvoiceEditor({
                 title="Purchase Invoice"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(finalTotal)}
+                total={formatAmount(finalTotal, amountDecimals)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -857,6 +863,7 @@ export function PurchaseInvoiceEditor({
                       loginid={user?.loginid || user?.username}
                       calculateDiscount={applyDiscountCalculation}
                       rows={rows}
+                                              amountDecimals={amountDecimals}
 
                     />
                   </div>
@@ -875,6 +882,8 @@ export function PurchaseInvoiceEditor({
                   discAmt={form.disc_price}
                   companyCode={user?.company_code}
                   loginid={user?.loginid || user?.username}
+                   amountDecimals={amountDecimals}
+                    priceDecimals={priceDecimals}
                 />
               </div>
             )}

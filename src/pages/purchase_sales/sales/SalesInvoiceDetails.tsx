@@ -7,9 +7,9 @@ import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 
 import { PurchaseOrderForm, SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
-import { computeQuantity, formatAmount, isSameUom, LcurrDisAmount, lineAmount, lineDiscPoPrice, lineDiscPrice, lineLcurrAmount, lineLcurrPOAmount, linePOAmount, lineTaxAmount, lineTaxpoAmount, numberOrZero, taxLcurrAmount, taxLcurrpoAmount, text } from "./SalesOrderutils";
+import { computeQuantity, isSameUom, LcurrDisAmount, lineAmount, lineDiscPoPrice, lineDiscPrice, lineLcurrAmount, lineLcurrPOAmount, linePOAmount, lineTaxAmount, lineTaxpoAmount, numberOrZero, taxLcurrAmount, taxLcurrpoAmount, text } from "./SalesOrderutils";
 import { PODocType, PurchaseOrderLineRow } from "../purchase/Purchaseordertypes";
-import { amountBeforeDiscPrice, TotalDiscAmount } from "../purchase/Purchaseorderutils";
+import { amountBeforeDiscPrice, formatAmount, TotalDiscAmount } from "../purchase/Purchaseorderutils";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ColumnModeToggle } from "../../../components/ui/ColumnModeToggle";
@@ -105,7 +105,9 @@ export function SalesInvoiceLinesTable({
   companyCode,
   loginid,
   ex_rate,
-  docType
+  docType,
+  amountDecimals = 3,
+  priceDecimals = 3,
 }: {
   form: PurchaseOrderForm;
   setdetails?: (rows: SalesOrderLineRow[]) => void;
@@ -119,6 +121,8 @@ export function SalesInvoiceLinesTable({
   loginid?: string;
   ex_rate?: number;
   docType?: PODocType | SODocType | null;
+  amountDecimals?: number;
+  priceDecimals?: number;
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -419,7 +423,7 @@ export function SalesInvoiceLinesTable({
                   </td>
                   {/* Unit Price */}
                   <td className="px-2 py-1">
-                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
+                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price.toFixed(priceDecimals)} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
                   </td>
                   {/* Amount (before discount) */}
                   <td className={AMOUNT_CELL}>
@@ -433,7 +437,7 @@ export function SalesInvoiceLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_percent}
+                      value={row.disc_percent.toFixed(amountDecimals)}
                       onChange={(event) => {
                         const discPercent = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -453,7 +457,7 @@ export function SalesInvoiceLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_price}
+                      value={row.disc_price.toFixed(amountDecimals)}
                       onChange={(event) => {
                         const discPrice = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -471,7 +475,7 @@ export function SalesInvoiceLinesTable({
                   <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
                   {/* TAX: Tax % */}
                   <td className="px-2 py-1">
-                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
+                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1.toFixed(amountDecimals)} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
                   </td>
                   {/* TAX: Tax Amount */}
                   <td className={AMOUNT_CELL}>{formatAmount(lineTaxpoAmount(row))}</td>
@@ -620,23 +624,23 @@ export function SalesInvoiceLinesTable({
         </div> */}
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Amount</span>
-          <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
+          <strong className="text-emerald-600">{formatAmount(totalAmountDisct, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Discount</span>
-          <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
+          <strong>{formatAmount(TotalDiscAmount(rows), amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Amount Excluding Tax</span>
-          <strong>{formatAmount(grandTotal)}</strong>
+          <strong>{formatAmount(grandTotal, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Tax</span>
-          <strong>{formatAmount(totalTaxAmount)}</strong>
+          <strong>{formatAmount(totalTaxAmount, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
           <span className="font-semibold text-[#00378C]">Total Amount Including Tax</span>
-          <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
+          <strong className="text-sm text-emerald-600">{formatAmount(finalTotal, amountDecimals)}</strong>
         </div>
       </div>
           {uppTip &&

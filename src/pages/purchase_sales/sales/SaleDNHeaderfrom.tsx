@@ -72,7 +72,8 @@ export function SalesDNHeaderForm({
     docType,
     setdetails,
     rows,
-    calculateDiscount
+    calculateDiscount,
+    amountDecimals,
 }: {
     form: PurchaseOrderForm;
     setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -86,6 +87,7 @@ export function SalesDNHeaderForm({
     setdetails?: (details: any[]) => void;
     rows?: PurchaseOrderLineRow[];
     calculateDiscount: (type: "amount" | "percent", value: number) => void;
+    amountDecimals?: number;
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
           const [taxCats, setTaxCats] = useState<any[]>([]);
@@ -573,7 +575,7 @@ const dateCls = (v?: string | null) =>
                                     type="number"
                                     step="0.01"
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
-                                    value={numberOrZero(form[discPriceField]).toFixed(3)} // CHANGED
+                                    value={numberOrZero(form[discPriceField]).toFixed(amountDecimals)} // CHANGED
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
                                         updateField(discPriceField, value); // CHANGED
@@ -587,7 +589,7 @@ const dateCls = (v?: string | null) =>
                                     type="number"
                                     step="0.001"
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
-                                    value={numberOrZero(form[discPercentField]).toFixed(2)} // CHANGED
+                                    value={numberOrZero(form[discPercentField]).toFixed(amountDecimals)} // CHANGED
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
                                         updateField(discPercentField, value); // CHANGED

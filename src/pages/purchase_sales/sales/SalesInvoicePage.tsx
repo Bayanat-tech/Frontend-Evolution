@@ -1,7 +1,7 @@
 import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions } from "../../../api/transactions";
+import { CompanyInfo, Division, getCompanyInfo, getDivisions } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -83,6 +83,7 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
   const isPendingTab = tab === "PENDING";
   const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";
   const canViewCanceledTab = approvalLevel <= 1;
+    const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
@@ -103,6 +104,9 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
   const loadLookups = async () => {
     setDivisionsLoading(true);
     try {
+       const [cInfo] = await Promise.all([getCompanyInfo()]);
+
+      setCompanyInfo(cInfo);
       const divisionData = await getDivisions();
       setDivisions(divisionData);
     } finally {

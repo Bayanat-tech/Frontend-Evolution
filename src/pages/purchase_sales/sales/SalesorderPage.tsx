@@ -116,8 +116,8 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
     setDivisionsLoading(true);
     try {
       const [cInfo] = await Promise.all([getCompanyInfo()]);
-      
-            setCompanyInfo(cInfo);
+
+      setCompanyInfo(cInfo);
       const divisionData = await getDivisions();
       setDivisions(divisionData);
     } finally {
@@ -434,16 +434,16 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
                   setPageIndex(0);
                 }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
-                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
-                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
                   }`}
               >
                 <span>{item.label}</span>
 
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
-                      ? "bg-white/20 text-white"
-                      : "bg-muted text-muted-foreground"
+                    ? "bg-white/20 text-white"
+                    : "bg-muted text-muted-foreground"
                     }`}
                 >
                   {getTabCount(item.value)}

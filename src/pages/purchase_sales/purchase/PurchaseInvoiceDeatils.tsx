@@ -124,7 +124,9 @@ export function PurchaseInvoiceLinesTable({
   companyCode,
   loginid,
   ex_rate,
-  docType
+  docType,
+     amountDecimals = 3,
+  priceDecimals = 3,
 }: {
   form: PurchaseOrderForm;
   setdetails?: (rows: PurchaseOrderLineRow[]) => void;
@@ -138,6 +140,8 @@ export function PurchaseInvoiceLinesTable({
   loginid?: string;
   ex_rate?: number;
   docType?: PODocType | SODocType | null;
+   amountDecimals?: number;
+  priceDecimals?: number;
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -439,11 +443,11 @@ export function PurchaseInvoiceLinesTable({
                   </td>
                   {/* Unit Price */}
                   <td className="px-2 py-1">
-                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
+                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price.toFixed(priceDecimals)} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
                   </td>
                   {/* Amount (before discount) */}
                   <td className={AMOUNT_CELL}>
-                    {formatAmount(amountBeforeDiscPrice(row))}
+                    {formatAmount(amountBeforeDiscPrice(row), amountDecimals)}
                   </td>
                   {/* Discount: Disc % */}
                   <td className="px-2 py-1">
@@ -453,7 +457,7 @@ export function PurchaseInvoiceLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_percent.toFixed(2)}
+                      value={row.disc_percent.toFixed(amountDecimals)}
                       onChange={(event) => {
                         const discPercent = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -473,7 +477,7 @@ export function PurchaseInvoiceLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_price.toFixed(3)}
+                      value={row.disc_price.toFixed(amountDecimals)}
                       onChange={(event) => {
                         const discPrice = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);

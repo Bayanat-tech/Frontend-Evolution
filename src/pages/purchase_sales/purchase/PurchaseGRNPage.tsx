@@ -1,7 +1,7 @@
 import { Download, Edit2, Eye, Loader2, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions, getGrnPrintReportPreviewUrl, exportGrnPrintReportExcel } from "../../../api/transactions";
+import { Division, getDivisions, getGrnPrintReportPreviewUrl, exportGrnPrintReportExcel, CompanyInfo, getCompanyInfo } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -112,6 +112,7 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
   const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
+    const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
@@ -129,6 +130,9 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   const loadLookups = async () => {
     setDivisionsLoading(true);
     try {
+       const [cInfo] = await Promise.all([getCompanyInfo()]);
+      
+            setCompanyInfo(cInfo);
       const divisionData = await getDivisions();
       setDivisions(divisionData);
     } finally {

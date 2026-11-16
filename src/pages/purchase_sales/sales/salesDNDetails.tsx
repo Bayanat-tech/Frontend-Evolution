@@ -89,7 +89,9 @@ export function SalesDnDetailsTable({
   companyCode,
   loginid,
   ex_rate,
-  docType
+  docType,
+  amountDecimals = 3,
+  priceDecimals = 3,
 }: {
   form: PurchaseOrderForm;
   setdetails?: (rows: SalesOrderLineRow[]) => void;
@@ -103,6 +105,8 @@ export function SalesDnDetailsTable({
   loginid?: string;
   ex_rate?: number;
   docType?: PODocType | SODocType | null;
+  amountDecimals?: number;
+  priceDecimals?: number;
 }) {
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
@@ -350,11 +354,11 @@ export function SalesDnDetailsTable({
 
                   {/* Unit Price — DISPLAY ONLY */}
                   <td className="px-2 py-1">
-                    <Input className={`finance-money-input ${INPUT_BG}`} disabled readOnly type="number" style={{ textAlign: "right" }} step="0.0001" value={row.so_unit_price} />
+                    <Input className={`finance-money-input ${INPUT_BG}`} disabled readOnly type="number" style={{ textAlign: "right" }} step="0.0001" value={row.so_unit_price?.toFixed(priceDecimals)} />
                   </td>
                   {/* SO Quantity */}
                   <td className="finance-amount-cell px-2 py-1 text-right bg-slate-200">
-                    {formatAmount(so_quantity)}
+                    {formatAmount(so_quantity, amountDecimals)}
                   </td>
 
                   {/* Delivered Primary: Qty — EDITABLE */}
@@ -419,11 +423,11 @@ export function SalesDnDetailsTable({
 
                   {/* Delivered Quantity */}
                   <td className="finance-amount-cell px-2 py-1 text-right bg-slate-200">
-                    {formatAmount(quantity)}
+                    {formatAmount(quantity, amountDecimals)}
                   </td>
                   {/* Amount (before discount) */}
                   <td className={AMOUNT_CELL}>
-                    {formatAmount(amountBeforeDiscPrice(row))}
+                    {formatAmount(amountBeforeDiscPrice(row), amountDecimals)}
                   </td>
                   {/* Discount: Disc % */}
                   <td className="px-2 py-1">
@@ -469,7 +473,7 @@ export function SalesDnDetailsTable({
                   </td>
 
                   {/* Net Amount (Excl Tax) */}
-                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
+                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row), amountDecimals)}</td>
                   {/* TAX: Tax % */}
                   <td className="px-2 py-1">
                     <Input
@@ -489,13 +493,13 @@ export function SalesDnDetailsTable({
                     />
                   </td>
                   {/* TAX: Tax Amount */}
-                  <td className={AMOUNT_CELL}>{formatAmount(lineTaxAmount(row))}</td>
+                  <td className={AMOUNT_CELL}>{formatAmount(lineTaxAmount(row), amountDecimals)}</td>
                   {/* Total Amount (Incl Tax) = Net + Tax */}
-                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row) + lineTaxAmount(row))}</td>
+                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row) + lineTaxAmount(row), amountDecimals)}</td>
 
                   {/* ---------- All Columns view only ---------- */}
                   {showAllColumns && (<td className={AMOUNT_CELL}>
-                    {formatAmount(lcurrAmountValue)}
+                    {formatAmount(lcurrAmountValue, amountDecimals)}
                   </td>)}
                   {showAllColumns && (<td className="px-2 py-1">
                     <Select
@@ -579,10 +583,10 @@ export function SalesDnDetailsTable({
                     />
                   </td>)}
                   {showAllColumns && (<td className={AMOUNT_CELL}>
-                    {formatAmount(taxLcurrAmountValue)}
+                    {formatAmount(taxLcurrAmountValue, amountDecimals)}
                   </td>)}
                   {showAllColumns && (<td className={`w-32 ${AMOUNT_CELL}`}>
-                    {formatAmount(lcurrAmountValue + taxLcurrAmountValue)}
+                    {formatAmount(lcurrAmountValue + taxLcurrAmountValue, amountDecimals)}
                   </td>)}
                   {showAllColumns && (<td className="w-32 px-2 py-1">
                     <Input className={INPUT_BG} type="date" disabled={headerAndLineDisabled} value={row.required_dt} onChange={(event) => updateRow(row.id, { required_dt: event.target.value })} />
@@ -620,23 +624,23 @@ export function SalesDnDetailsTable({
       >
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Amount</span>
-          <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
+          <strong className="text-emerald-600">{formatAmount(totalAmountDisct, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Discount</span>
-          <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
+          <strong>{formatAmount(TotalDiscAmount(rows), amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Amount Excluding Tax</span>
-          <strong>{formatAmount(grandTotal)}</strong>
+          <strong>{formatAmount(grandTotal, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Tax</span>
-          <strong>{formatAmount(totalTaxAmount)}</strong>
+          <strong>{formatAmount(totalTaxAmount, amountDecimals)}</strong>
         </div>
         <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
           <span className="font-semibold text-[#00378C]">Total Amount Including Tax</span>
-          <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
+          <strong className="text-sm text-emerald-600">{formatAmount(finalTotal, amountDecimals)}</strong>
         </div>
       </div>
       {uppTip &&
