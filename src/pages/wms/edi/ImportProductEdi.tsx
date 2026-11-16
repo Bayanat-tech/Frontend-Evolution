@@ -8,7 +8,7 @@ import { executeCommonProcedure, getDynamicLookup } from '../../../api/lookups';
 import { useToast } from '../../../components/ui/AlertToast';
 import { Button } from '../../../components/ui/Button';
 import { clearProductEDI, getProductEDI, uploadProductEDI } from '../../../api/edi';
-
+import { Download } from "lucide-react"; 
 interface ImportProductProps {
   onClose: () => void;
   onSuccess: () => void;
@@ -52,28 +52,69 @@ const ImportProductEdi: React.FC<ImportProductProps> = ({ onClose, onSuccess }) 
   // ===============================
   // Handle File Selection
   // ===============================
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
 
-    const reader = new FileReader();
+  // ── helpers (above the component) ──
+const HEADER_ALIASES: Record<string, string> = {
+  PRINCIPAL: 'PRIN_CODE',
+  GROUP: 'GROUP_CODE',
+  BRAND: 'BRAND_CODE',
+  PRODUCT_CODE: 'PROD_CODE',
+  PRODUCT_NAME: 'PROD_NAME',
+  GROSS_WEIGHT: 'GROSS_WT',
+  NET_WEIGHT: 'NET_WT',
+};
 
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+const normalizeHeader = (key: string) => {
+  const k = key.replace(/^\uFEFF/, '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  return HEADER_ALIASES[k] || k;
+};
 
-        setExcelData(jsonData);
-        setFileSelected(true);
-      } catch (err: any) {
-        toast.error(err.message || 'Failed to read Excel file');
+const normalizeRow = (row: Record<string, any>) => {
+  const out: Record<string, any> = {};
+  Object.entries(row).forEach(([k, v]) => {
+    out[normalizeHeader(k)] = v;
+  });
+  return out;
+};
+
+// "00001 - FROZEN" -> "00001"
+const codeOnly = (v: unknown) => String(v ?? '').split(' - ')[0].trim();
+const text = (v: unknown) => String(v ?? '').trim();
+const num = (v: unknown) => {
+  const n = parseFloat(String(v ?? '').trim());
+  return Number.isFinite(n) ? n : undefined;
+};
+
+
+const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target?.result as ArrayBuffer);
+      // raw:true keeps CSV values as text, so 00001 stays "00001"
+      const workbook = XLSX.read(data, { type: 'array', raw: true });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils
+        .sheet_to_json<Record<string, any>>(worksheet, { defval: '', raw: false })
+        .map(normalizeRow);
+
+      if (!jsonData.length || !('PRIN_CODE' in jsonData[0])) {
+        toast.error('Column headers not recognised. Please use the downloaded template.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
       }
-    };
 
-    reader.readAsArrayBuffer(file);
+      setExcelData(jsonData);
+      setFileSelected(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to read file');
+    }
   };
+  reader.readAsArrayBuffer(file);
+};
 
   // ===============================
   // Upload to EDI Table
@@ -83,27 +124,27 @@ const ImportProductEdi: React.FC<ImportProductProps> = ({ onClose, onSuccess }) 
     try {
       setIsLoading(true);
 
-      const mappedProducts = excelData.map((row: any) => ({
-              prin_code: row.PRIN_CODE?.toString() || '',
-              prod_code: row.PROD_CODE?.toString() || '',
-              prod_name: row.PROD_NAME?.toString() || '',
-              group_code: row.GROUP_CODE?.toString() || '',
-              brand_code: row.BRAND_CODE?.toString() || '',
-              p_uom: row.P_UOM?.toString() || '',
-              l_uom: row.L_UOM?.toString(),
-              length: row.LENGTH ? parseFloat(row.LENGTH) : undefined,
-              breadth: row.BREADTH ? parseFloat(row.BREADTH) : undefined,
-              height: row.HEIGHT ? parseFloat(row.HEIGHT) : undefined,
-              volume: row.VOLUME ? parseFloat(row.VOLUME) : undefined,
-              gross_wt: row.GROSS_WT ? parseFloat(row.GROSS_WT) : undefined,
-              net_wt: row.NET_WT ? parseFloat(row.NET_WT) : undefined,
-              uom_count: row.UOM_COUNT ? parseFloat(row.UOM_COUNT) : 1,
-              upp: row.UPP ? parseFloat(row.UPP) : undefined,
-              uppp: row.UPPP ? parseFloat(row.UPPP) : undefined,
-              site_ind: row.SITE_IND?.toString(),
-              prod_status: 'O',
-              model_number: row.MODEL_NUMBER?.toString(),
-      }));
+    const mappedProducts = excelData.map((row: any) => ({
+      prin_code: codeOnly(row.PRIN_CODE),
+      prod_code: text(row.PROD_CODE),
+      prod_name: text(row.PROD_NAME),
+      group_code: codeOnly(row.GROUP_CODE),
+      brand_code: codeOnly(row.BRAND_CODE),
+      p_uom: text(row.P_UOM),
+      l_uom: text(row.L_UOM),
+      length: num(row.LENGTH),
+      breadth: num(row.BREADTH),
+      height: num(row.HEIGHT),
+      volume: num(row.VOLUME),
+      gross_wt: num(row.GROSS_WT),
+      net_wt: num(row.NET_WT),
+      uom_count: num(row.UOM_COUNT) ?? 1,
+      upp: num(row.UPP),
+      uppp: num(row.UPPP),
+      site_ind: text(row.SITE_IND),
+      prod_status: 'O',
+      model_number: text(row.MODEL_NUMBER),
+    }));
 
       const result = await uploadProductEDI(
         mappedProducts
@@ -364,7 +405,7 @@ const ImportProductEdi: React.FC<ImportProductProps> = ({ onClose, onSuccess }) 
             type="file"
             ref={fileInputRef}
             onChange={handleFileUpload}
-            accept=".xlsx, .xls"
+            accept=".xlsx, .xls, .csv"
             className="hidden"
           />
 

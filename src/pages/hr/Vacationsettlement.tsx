@@ -55,6 +55,10 @@ type LeaveSettlementRow = {
   section_name:     string;
 };
 
+const SETTLED_OPTIONS: { value: SettledMode; label: string }[] = [
+  { value: "N", label: "Non Settled" },
+  { value: "S", label: "Settled" },
+];
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Same signature as HrEmpLanguagePage's buildParams (P_CODE1..P_CODE4 only —
@@ -579,31 +583,81 @@ export function VacationSettlementPage() {
           </Field>
 
           {/* Settled / Non Settled toggle */}
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium text-muted-foreground">Settlement Status</span>
-            <div className="flex h-8 items-center gap-4">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] font-medium text-slate-700">
-                <input
-                  type="radio"
-                  name="settledMode"
-                  checked={settledMode === "N"}
-                  onChange={() => changeMode("N")}
-                  style={{ accentColor: "#00378C" }}
-                />
-                Non Settled
-              </label>
-              <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] font-medium text-slate-700">
-                <input
-                  type="radio"
-                  name="settledMode"
-                  checked={settledMode === "S"}
-                  onChange={() => changeMode("S")}
-                  style={{ accentColor: "#00378C" }}
-                />
-                Settled
-              </label>
-            </div>
-          </div>
+         {/* Settled / Non Settled toggle */}
+<div className="flex flex-col gap-1">
+  <span className="text-[11px] font-semibold uppercase text-muted-foreground">
+    Settlement Status
+  </span>
+  <div
+    className="rounded-md border border-slate-300 bg-blue-50/60 px-2.5 text-[12px] font-medium"
+    style={{
+      display: "flex",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: 16,
+      minHeight: 32,
+      width: "fit-content",
+      maxWidth: "100%",
+      boxSizing: "border-box",
+    }}
+  >
+    {SETTLED_OPTIONS.map((o) => (
+      <div
+        key={o.value}
+        role="radio"
+        aria-checked={settledMode === o.value}
+        tabIndex={0}
+        onClick={() => changeMode(o.value)}
+        onKeyDown={(e) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            changeMode(o.value);
+          }
+        }}
+        className={settledMode === o.value ? "text-blue-600" : "text-foreground"}
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+          lineHeight: 1,
+        }}
+      >
+        {/* custom radio circle (native input global CSS se bada ho jata hai) */}
+        <span
+          aria-hidden="true"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 14,
+            height: 14,
+            flexShrink: 0,
+            borderRadius: "50%",
+            border: `1.5px solid ${settledMode === o.value ? "#2563eb" : "#94a3b8"}`,
+            background: "#fff",
+          }}
+        >
+          {settledMode === o.value && (
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "#2563eb",
+                display: "block",
+              }}
+            />
+          )}
+        </span>
+        <span>{o.label}</span>
+      </div>
+    ))}
+  </div>
+</div>
         </div>
       </CollapsibleSection>
 

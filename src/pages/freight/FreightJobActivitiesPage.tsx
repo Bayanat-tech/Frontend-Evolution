@@ -2189,6 +2189,7 @@ function ActivityLookup({
       columns={[
         { field: "ACT_CODE", header: "Code" },
         { field: "ACTIVITY", header: "Activity Name" },
+        { field: "ACT_GROUP_NAME", header: "Group" },
       ]}
       loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
       onChange={(val, row) => {
@@ -2775,7 +2776,7 @@ function calculateTotals(lines: ActivityLine[]) {
 }
 
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") {
-  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 1000 })).map(normalizeLookupRow);
+  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 5000 })).map(normalizeLookupRow);
 }
 
 function normalizeLookupRow(row: LookupRow) {

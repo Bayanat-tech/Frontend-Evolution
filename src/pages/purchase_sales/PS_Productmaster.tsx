@@ -450,13 +450,22 @@ const ProductPurchaseSales = () => {
   );
 
   /* Helpers for plain text / number inputs */
-  const textInput = (key: string) => (
+  const textInput = (key: string, maxLength?: number) => (
     <Input
       className={CTL}
+      // Removed the native maxLength attribute to stop the browser tooltip
       value={form[key] ?? ""}
-      onChange={(e) => setField(key, e.target.value)}
+      onChange={(e) => {
+        let val = e.target.value;
+        // Manually enforce the character limit
+        if (maxLength && val.length > maxLength) {
+          val = val.slice(0, maxLength);
+        }
+        setField(key, val);
+      }}
     />
   );
+  
   const numInput = (key: string) => (
     <Input
       className={CTL}
@@ -522,7 +531,7 @@ const ProductPurchaseSales = () => {
             <div className="xl:col-span-2">
               <HeaderBlock label="Identification" icon={<IdCard size={11} />} gridCols="grid-cols-1 sm:grid-cols-4">
                 <CField label="Product Name" required className="sm:col-span-2">
-                  {textInput("prod_name")}
+                 {textInput("prod_name", 75)}
                 </CField>
                 <CField label="Model #">
                   {textInput("model_number")}

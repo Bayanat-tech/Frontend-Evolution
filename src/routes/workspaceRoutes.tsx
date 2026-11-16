@@ -43,9 +43,7 @@
   import MyTaskPage from "../pages/pams/MyTaskpage";
   import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
   import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
-  import AppraisalSummaryReportDesign from "../pages/pams/AppraisalSummaryReportDesign";
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
-
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
   import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
@@ -247,6 +245,8 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 import { useAuth } from "../state/AuthContext";
 import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
+import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
+import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -621,7 +621,11 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
       element: () => <EmployeeTransferPage />
     },
-
+    // {
+    //   name: "HR Visa and Labour Card Cancel",
+    //   match: (context) => isHrRoute(context) && isHrVisaLabourCardCancelRoute(context),
+    //   element: () => <VisaLabourCardCancelPage />,
+    // },
     {
       name: "HR Employee Profile",
       match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -906,7 +910,12 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       element: () => <JVDocumentEditor docType={"JV"} />
     },
     {
-      name: "Finance RV Voucher",
+      name: "Finance Provisional Journal Voucher",
+      match: ({ pathname }) => isProvisionalJVRoute(pathname),
+      element: () => <JVDocumentEditor docType={"RJV"} />
+    },
+    {
+      name: "Finance Reverse Journal Voucher",
       match: ({ pathname }) => isRVoucherRoute(pathname),
       element: () => <RJVDocumentEditor docType={"RJV"} />
     },
@@ -1020,8 +1029,14 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     },
     {
       name: "Product Master",
-      match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/wms/wms/masters/gm/product"),
-      element: () => <ProductWmsPage />
+      match: ({ pathname }) => {
+        const n = pathname.toLowerCase().replace(/\/+$/, "");
+        return (
+          n.endsWith("/wms/wms/masters/gm/product") ||
+          n.endsWith("/wms/wms/masters/gm/product_master")
+        );
+      },
+      element: () => <ProductWmsPage />,
     },
     {
       name: "WMS Stock Summary Report",
@@ -1249,11 +1264,7 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     {
       name: "PAMS Appraisal Summary Report",
       match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
-      element: () => <AppraisalSummaryReportDesign required_values={{
-        loginid: undefined,
-        company_code: undefined,
-        period_label: undefined,
-      }} />,
+      element: () => <EmployeeListingReport />,
     },
     {
       name: "PAMS Appraisal Division Summary Report",
@@ -1748,11 +1759,18 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
     },
 
-    // {
-    //   name: "Purchase Sales Product Type",
-    //   match: ({ pathname }) => isProductTypeRoute(pathname),
-    //   element: () => <ProductTypePage />,
-    // },
+    {
+      name: "WMS Product Type",
+      match: ({ pathname }) => {
+        const n = pathname.toLowerCase().replace(/\/+$/, "");
+        return (
+          n.includes("/wms/wms/masters/gm/product_type") ||
+          n.includes("/wms/wms/masters/gm/product-type") ||
+          n.includes("/wms/wms/masters/gm/producttype")
+        );
+      },
+      element: () => <WmsSimpleMasterPage config={wmsSimpleMasterConfigs.productType} />,
+    },
 
     {
       name: "Purchase Sales Product Category",
@@ -2307,7 +2325,12 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts_report/detailed_reports/sales_register") ||
-      normalized.includes("sales_register")
+      normalized.includes("sales_register") ||
+      normalized.includes("sales-register") ||
+      normalized.includes("salesregister") ||
+      normalized.includes("sales_list") ||
+      normalized.includes("sales-list") ||
+      normalized.includes("saleslist")
     );
   }
 
@@ -2315,7 +2338,12 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts_report/detailed_reports/purchase_register") ||
-      normalized.includes("purchase_register")
+      normalized.includes("purchase_register") ||
+      normalized.includes("purchase-register") ||
+      normalized.includes("purchaseregister") ||
+      normalized.includes("purchase_list") ||
+      normalized.includes("purchase-list") ||
+      normalized.includes("purchaselist")
     );
   }
 
@@ -2323,7 +2351,9 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts_report/detailed_reports/day_book") ||
-      normalized.includes("day_book")
+      normalized.includes("day_book") ||
+      normalized.includes("day-book") ||
+      normalized.includes("daybook")
     );
   }
 
@@ -2543,16 +2573,30 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     );
   }
 
+  function isProvisionalJVRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/transactions/provisional") ||
+      normalized.includes("/finance/accounts/transactions/provisional_jv") ||
+      normalized.includes("/finance/accounts/transactions/provisional-jv") ||
+      normalized.includes("/finance/accounts/transactions/pjv") ||
+      normalized.includes("provisional_jv") ||
+      normalized.includes("provisional-jv") ||
+      normalized.includes("provisionaljv")
+    );
+  }
+
   function isRVoucherRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
-      normalized.includes("/finance/accounts/transactions/rjv") ||
-      normalized.includes("/finance/accounts/transactions/reverse_jv") ||
-      normalized.includes("/finance/accounts/transactions/reverse-jv") ||
-      normalized.includes("/finance/accounts/transactions/reverse") ||
-      normalized.includes("/finance/accounts/transactions/provisional") ||
-      normalized.includes("/finance/accounts/transactions/provisional_jv") ||
-      normalized.includes("/finance/accounts/transactions/provisional-jv")
+      !isProvisionalJVRoute(pathname) &&
+      (normalized.includes("/finance/accounts/transactions/rjv") ||
+        normalized.includes("/finance/accounts/transactions/reverse_jv") ||
+        normalized.includes("/finance/accounts/transactions/reverse-jv") ||
+        normalized.includes("/finance/accounts/transactions/reverse") ||
+        normalized.includes("reverse_jv") ||
+        normalized.includes("reverse-jv") ||
+        normalized.includes("reversejv"))
     );
   }
 
@@ -3186,10 +3230,16 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   }
 
   function isPamsAppraisalSummaryRoute(pathname: string) {
-    const normalized = pathname.toLowerCase();
-    return normalized.includes("/appraisal_listing_summary") ||
-      normalized.includes("/appraisal-listing-summary");
-  }
+  const normalized = pathname.toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/employee_listing") ||
+    normalized.includes("/employee-listing") ||
+    normalized.includes("/appraisal_listing_summary") ||
+    normalized.includes("/appraisal-listing-summary") ||
+    compact.includes("appraisallistingsummary")
+  );
+}
 
   function isPamsAppraisalDivisionSummaryRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
@@ -3449,7 +3499,14 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
     return compact.includes("employeetransfer") || compact.includes("employeetransfers") || compact.includes("hremployeetransfer");
   }
-
+  function isHrVisaLabourCardCancelRoute(context: WorkspaceRouteContext) {
+    const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+    return (
+      compact.includes("visaandlabourcardcancel") ||
+      compact.includes("visalabourcardcancel") ||
+      compact.includes("labourcardcancel")
+    );
+  }
   function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
     const normalized = getHrMatchText(context);
     return (
@@ -3476,15 +3533,13 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   }
 
 
-  function isProductTypeRoute(pathname: string) {
-    const normalized = pathname.toLowerCase();
-
-    return (
-      normalized.includes("/ims/purchase_sales/masters/product_type") ||
-      normalized.includes("/ims/purchase_sales/masters/product%20type") ||
-      normalized.includes("/ims/purchase_sales/masters/product-type")
-    );
-  }
+function isProductTypeRoute(pathname: string) {
+  const n = pathname.toLowerCase();
+  return (
+    n.includes("/ims/purchase_sales/masters/product_type") ||
+    n.includes("/purchase_sales/masters/product-type")
+  ) && !n.includes("/wms/");
+}
 
   function isProductCategoryRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
