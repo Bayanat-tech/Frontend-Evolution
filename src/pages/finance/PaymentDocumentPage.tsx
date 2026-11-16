@@ -1773,8 +1773,10 @@ function PaymentDocumentEditor({
                     <div className="finance-payment-header-fields">
                       <div className="col-span-2 max-md:col-span-1">
                         <LookupField
-                          label="Account *"
+                          label="Account"
                           value={form.ac_code}
+                          required
+                          enforceRequired
                           displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                           columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                           valueField="ac_code"
@@ -1829,7 +1831,9 @@ function PaymentDocumentEditor({
                         />
                       </div>
                       <LookupField
-                        label="Currency *"
+                        label="Currency"
+                        required
+                        enforceRequired
                         value={form.curr_code}
                         displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -1857,7 +1861,7 @@ function PaymentDocumentEditor({
                           }));
                         }}
                       />
-                      <Field label="Exchange Rate *">
+                      <Field label="Exchange Rate" required>
                         <ExchangeRateInput
                           disabled={disabled}
                           required
@@ -1954,7 +1958,7 @@ function PaymentDocumentEditor({
                     </tr>
                   </thead>
                   <tbody>
-                    {form.detail.length === 0 ? (
+                    {form.detail.length === 0 ? ( 
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No detail lines yet — click "Add Line" to get started</td></tr>
                     ) : filteredDetail.length === 0 ? (
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
@@ -1975,6 +1979,8 @@ function PaymentDocumentEditor({
                             <div className={`w-full max-w-[460px] truncate ${invalidLineIds.has(detail.id) && !detail.ac_code?.trim() ? "ring-2 ring-rose-400 rounded-md" : ""}`}>
                               <LookupField
                                 label="Detail Account"
+                                required
+                                enforceRequired
                                 compact
                                 placeholder="A/c code"
                                 value={detail.ac_code}
