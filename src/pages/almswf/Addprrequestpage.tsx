@@ -34,6 +34,7 @@ const BTN_BLUE = "rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-m
 // 2019070493 = ESHRAQ, 2010080035 = SHAHAB
 const SUPPLIER_USER_CODES: string[] = ["2019070493", "2010080035"];
 const AMOUNT_CHECK_USER_CODES: string[] = ["2019070493", "2010080035"];
+const LEVEL2_CREATOR_EXCEPTIONS = [{ loginid: "2016090408", flowCode: "003" }];
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;
@@ -470,9 +471,17 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         });
         if (cancelled) return;
         if (result && result.length > 0) {
-          setUserApprovalLevel(Number(result[0].FLOW_LEVEL) || 0);
-          const ll = Number(result[0].LAST_LEVEL) || 0;
-          if (ll > 0) setLastApprovalLevel(ll);
+  const rawLevel = Number(result[0].FLOW_LEVEL) || 0;
+  const isOwnDoc =
+    String(header.CREATE_USER || "").trim().toUpperCase() === loginid.toUpperCase();
+  const isException = LEVEL2_CREATOR_EXCEPTIONS.some(
+    (e) => e.loginid === loginid && e.flowCode === String(header.FLOW_CODE || "").trim()
+  );
+  // Own doc in an exception flow => behave like level 1 (creator form).
+  // Docs coming from level 1 => normal level 2 (approver) logic.
+  setUserApprovalLevel(rawLevel === 2 && isException && isOwnDoc ? 1 : rawLevel);
+  const ll = Number(result[0].LAST_LEVEL) || 0;
+  if (ll > 0) setLastApprovalLevel(ll);
         } else {
           setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
         }
