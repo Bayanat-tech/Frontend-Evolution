@@ -323,6 +323,30 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
     void loadRows();
   }, [fyPeriod, docType, query, pageIndex, pageSize]);
 
+  // Auto-open document if doc_no is passed in query params (e.g. from drilldown report)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const targetDocNo = params.get("doc_no") || params.get("docNo");
+    if (!targetDocNo || editor !== null) return;
+
+    const match = rows.find((r) => String(r.doc_no) === String(targetDocNo));
+    if (match) {
+      setEditor({ mode: "edit", row: match });
+    } else if (!loading) {
+      setEditor({
+        mode: "edit",
+        row: {
+          doc_no: targetDocNo,
+          doc_type: docType,
+          doc_date: "",
+          remarks: "",
+          amount: 0,
+          div_code: "",
+        } as TransactionDocumentRow,
+      });
+    }
+  }, [rows, loading, docType, editor]);
+
   const confirmCancel = async () => {
     if (!cancelTarget) return;
     try {

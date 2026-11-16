@@ -25,6 +25,7 @@ import {
   openDetailDumpReport,
 } from "../../../api/transactions";
 import { NewReportDialog, NewReportPage, ReportFieldConfig, ReportOption } from "../../../components/new_report_format";
+import { VoucherPreviewModal, openTransactionScreen } from "../../../components/finance/VoucherPreviewModal";
 
 export type ReportOptionKey =
   | "ledgerBasic"
@@ -130,6 +131,41 @@ export default function FinanceReportFilter({
   const [generating, setGenerating] = useState(false);
   const [generatingExcel, setGeneratingExcel] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+
+  // ── Voucher preview modal state (Audit-compliant safe inspection mode) ──
+  const [voucherModal, setVoucherModal] = useState<{
+    open: boolean;
+    docType: string;
+    docNo: string;
+  }>({ open: false, docType: "", docNo: "" });
+
+  // ── Listen for messages from report iframes (OPEN_DOCUMENT, OPEN_DOCUMENT_SCREEN) ──
+  useEffect(() => {
+    const handler = (ev: MessageEvent) => {
+      if (!ev.data) return;
+      if (ev.data.type === "OPEN_DOCUMENT") {
+        const { docType, docNo } = ev.data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          setVoucherModal({
+            open: true,
+            docType: String(docType),
+            docNo: String(docNo),
+          });
+        }
+        return;
+      }
+      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
+        const { docType, docNo } = ev.data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          openTransactionScreen(String(docType), String(docNo));
+        }
+        return;
+      }
+    };
+
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   const division = values.division as string;
   const reportType = (values.reportType || "ledgerBasic") as ReportOptionKey;
@@ -598,6 +634,14 @@ export default function FinanceReportFilter({
         loading={generating}
         error={reportError}
         onExportExcel={handleExportExcel}
+      />
+
+      {/* Audit-Compliant Read-Only Voucher Preview Dialog with "Open in Screen" button */}
+      <VoucherPreviewModal
+        open={voucherModal.open}
+        onClose={() => setVoucherModal({ open: false, docType: "", docNo: "" })}
+        docType={voucherModal.docType}
+        docNo={voucherModal.docNo}
       />
     </>
   );
