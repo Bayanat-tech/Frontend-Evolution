@@ -423,8 +423,8 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
       { name: "activity_subgroup_code", label: "Activity Subgroup", dropdownParam: "DROP_DOWN_ACTIVITY_SUBGROUP", dropdownValueKey: "activity_subgroup_code", dropdownDisplayFields: ["activity_subgroup_code", "act_subgroup_name"], dropdownDisplaySeparator: " - ", width: 180, tab: "basic", section: "Classification" },
       { name: "charge_code", label: "Income Account (Sales GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing" },
       { name: "exp_code", label: "Expense Account (Cost GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing" },
-      { name: "bill", label: "Default Bill Rate", type: "number", width: 140, tab: "billing", section: "Billing" },
-      { name: "cost", label: "Default Cost Rate", type: "number", width: 140, tab: "billing", section: "Billing" },
+      { name: "bill", label: "Default Bill Rate", type: "number", min: 0, width: 140, tab: "billing", section: "Billing" },
+      { name: "cost", label: "Default Cost Rate", type: "number", min: 0, width: 140, tab: "billing", section: "Billing" },
       { name: "uom_code", label: "UOM", dropdownParam: "DROP_DOWN_UOM", dropdownValueKey: "uom_code", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", width: 130, tab: "billing", section: "Billing" },
       { name: "status", label: "Status", type: "select", options: activeStatus, width: 120, tab: "billing", section: "Billing" },
     ],
@@ -460,6 +460,8 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
       const isFrozen = form.status === "I" ? "Y" : "N";
       const cost = Number(form.cost || 0);
       const bill = Number(form.bill || 0);
+      if (cost < 0) throw new Error("Default Cost Rate cannot be negative.");
+      if (bill < 0) throw new Error("Default Bill Rate cannot be negative.");
 
       await freightSave({
         parameter: "freight_activity",
@@ -573,7 +575,7 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
     routeKeys: ["activitysubgroup", "activity_subgroup", "activity-subgroup", "freight_activity_subgroup", "freight-activity-subgroup", "ms_activity_subgroup"],
     keyField: "activity_subgroup_code",
     fields: [
-      { name: "activity_subgroup_code", label: "Sub Group Code", required: true, disabledOnEdit: true, width: 170 },
+      { name: "activity_subgroup_code", label: "Sub Group Code", required: true, disabledOnEdit: true, width: 170, maxLength: 5 },
       { name: "act_subgroup_name", label: "Sub Group Name", required: true, width: 260 },
       { name: "act_group_code", label: "Activity Group Code", required: true, width: 180, maxLength: 5, dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownDisplayFields: ["activity_group_code", "act_group_name"], dropdownLabelKey: "act_group_name", dropdownValueKey: "activity_group_code" },
     ],
