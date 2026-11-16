@@ -433,7 +433,7 @@ export function LeaveRequestDialog({
     () =>
       uniqueLeaveTypes.map((leaveType) => ({
         CODE: String(leaveType.LEAVE_TYPE || ""),
-        DESC: String(leaveType.LEAVE_TYPE_DESC || ""),
+        DESC: String(leaveType.LEAVE_DESC || leaveType.LEAVE_TYPE_DESC || ""),
       })),
     [uniqueLeaveTypes]
   );
@@ -1133,7 +1133,7 @@ export function LeaveRequestDialog({
               type="button"
               variant="outline"
               onClick={() => void validate()}
-              disabled={fieldsDisabled || validating || !selectedEmployee}
+              disabled={validating }
               className="mt-1 h-9 w-full justify-center gap-2 rounded-full text-xs font-semibold"
             >
               {validating ? <Loader2 className="animate-spin" size={14} /> : <ShieldCheck size={14} />}
