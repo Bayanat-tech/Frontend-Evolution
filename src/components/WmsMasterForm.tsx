@@ -489,6 +489,7 @@ export function WmsMasterForm({
         <TextControl
           {...(characterLimitCards ? { maxBytes: field.maxLength } : {})}
           disabled={disabled}
+          min={field.min}
           maxLength={characterLimitCards ? field.maxLength : undefined}
           type={
             field.type === "number"

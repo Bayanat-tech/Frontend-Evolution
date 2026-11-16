@@ -421,8 +421,8 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
       { name: "activity", label: "Activity Name", required: true, width: 280, tab: "basic", section: "Identity" },
       { name: "activity_group_code", label: "Activity Group", dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownValueKey: "activity_group_code", dropdownDisplayFields: ["activity_group_code", "act_group_name"], dropdownDisplaySeparator: " - ", width: 170, tab: "basic", section: "Classification", required: true },
       { name: "activity_subgroup_code", label: "Activity Subgroup", dropdownParam: "DROP_DOWN_ACTIVITY_SUBGROUP", dropdownValueKey: "activity_subgroup_code", dropdownDisplayFields: ["activity_subgroup_code", "act_subgroup_name"], dropdownDisplaySeparator: " - ", width: 180, tab: "basic", section: "Classification" },
-      { name: "charge_code", label: "Income Account (Sales GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing" },
-      { name: "exp_code", label: "Expense Account (Cost GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing" },
+      { name: "charge_code", label: "Income Account (Sales GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing", required: true },
+      { name: "exp_code", label: "Expense Account (Cost GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing", required: true },
       { name: "bill", label: "Default Bill Rate", type: "number", min: 0, width: 140, tab: "billing", section: "Billing" },
       { name: "cost", label: "Default Cost Rate", type: "number", min: 0, width: 140, tab: "billing", section: "Billing" },
       { name: "uom_code", label: "UOM", dropdownParam: "DROP_DOWN_UOM", dropdownValueKey: "uom_code", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", width: 130, tab: "billing", section: "Billing" },
@@ -462,6 +462,8 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
       const bill = Number(form.bill || 0);
       if (cost < 0) throw new Error("Default Cost Rate cannot be negative.");
       if (bill < 0) throw new Error("Default Bill Rate cannot be negative.");
+      if (!chargeCode || !chargeCode.trim()) throw new Error("Income Account (Sales GL) is compulsory. Please select an account.");
+      if (!expCode || !expCode.trim()) throw new Error("Expense Account (Cost GL) is compulsory. Please select an account.");
 
       await freightSave({
         parameter: "freight_activity",
@@ -508,7 +510,7 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
       { name: "act_group_type", label: "Group Type", width: 140, maxLength: 2 },
       { name: "account_code", label: "Account Code", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownValueKey: "ac_code", width: 150, required: true },
       { name: "alternate_accode", label: "Alternate Account", width: 160 },
-      { name: "exp_account_code", label: "Expense Account", width: 160 },
+      { name: "exp_account_code", label: "Expense Account", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownValueKey: "ac_code", width: 160, required: true },
       { name: "freight_flag", label: "Freight", type: "select", options: yesNo, width: 110 },
       { name: "sw_flag", label: "SW Flag", type: "select", options: yesNo, width: 110 },
       { name: "rpt_group_name", label: "Report Group", width: 180 },
