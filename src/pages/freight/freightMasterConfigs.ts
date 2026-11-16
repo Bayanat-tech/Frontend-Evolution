@@ -417,12 +417,14 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
     keyField: "activity_code",
     fieldsPerRow: 3,
     fields: [
-      { name: "activity_code", label: "Activity Code", required: true, disabledOnEdit: true, width: 150, tab: "basic", section: "Identity" },
+      { name: "activity_code", label: "Activity Code", required: true, disabledOnEdit: true, width: 150, maxLength: 5, tab: "basic", section: "Identity" },
       { name: "activity", label: "Activity Name", required: true, width: 280, tab: "basic", section: "Identity" },
-      { name: "activity_group_code", label: "Activity Group", dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownValueKey: "activity_group_code", dropdownDisplayFields: ["activity_group_code", "activity_group"], dropdownDisplaySeparator: " - ", width: 170, tab: "basic", section: "Classification" },
-      { name: "activity_subgroup_code", label: "Activity Subgroup", dropdownParam: "DROP_DOWN_ACTIVITY_SUBGROUP", dropdownValueKey: "activity_subgroup_code", dropdownDisplayFields: ["activity_subgroup_code", "activity_subgroup"], dropdownDisplaySeparator: " - ", width: 180, tab: "basic", section: "Classification" },
-      { name: "trp_mode", label: "Transport Mode", type: "select", options: transportMode, width: 150, tab: "basic", section: "Classification" },
-      { name: "charge_code", label: "Charge Code", width: 150, tab: "billing", section: "Billing" },
+      { name: "activity_group_code", label: "Activity Group", dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownValueKey: "activity_group_code", dropdownDisplayFields: ["activity_group_code", "act_group_name"], dropdownDisplaySeparator: " - ", width: 170, tab: "basic", section: "Classification", required: true },
+      { name: "activity_subgroup_code", label: "Activity Subgroup", dropdownParam: "DROP_DOWN_ACTIVITY_SUBGROUP", dropdownValueKey: "activity_subgroup_code", dropdownDisplayFields: ["activity_subgroup_code", "act_subgroup_name"], dropdownDisplaySeparator: " - ", width: 180, tab: "basic", section: "Classification" },
+      { name: "charge_code", label: "Income Account (Sales GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing" },
+      { name: "exp_code", label: "Expense Account (Cost GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing" },
+      { name: "bill", label: "Default Bill Rate", type: "number", width: 140, tab: "billing", section: "Billing" },
+      { name: "cost", label: "Default Cost Rate", type: "number", width: 140, tab: "billing", section: "Billing" },
       { name: "uom_code", label: "UOM", dropdownParam: "DROP_DOWN_UOM", dropdownValueKey: "uom_code", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", width: 130, tab: "billing", section: "Billing" },
       { name: "status", label: "Status", type: "select", options: activeStatus, width: 120, tab: "billing", section: "Billing" },
     ],
@@ -432,20 +434,60 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
       const data = await executeWmsInboundSql(`
         SELECT a.company_code, a.activity_code, a.activity, a.activity_group_code, g.act_group_name,
                a.activity_subgroup_code, s.act_subgroup_name, a.uom AS uom_code,
-               a.income_code AS charge_code, CASE WHEN NVL(a.freeze_flag, 'N') = 'Y' THEN 'I' ELSE 'A' END AS status
+               a.income_code AS charge_code, a.exp_code, NVL(a.bill, 0) AS bill, NVL(a.cost, 0) AS cost,
+               CASE WHEN NVL(a.freeze_flag, 'N') = 'Y' THEN 'I' ELSE 'A' END AS status
         FROM ms_activity a
         LEFT JOIN ms_activity_group g ON g.company_code = a.company_code AND g.activity_group_code = a.activity_group_code
         LEFT JOIN ms_activity_subgroup s ON s.company_code = a.company_code AND s.activity_subgroup_code = a.activity_subgroup_code
         WHERE a.company_code = '${typedUser.company_code}'
-        ORDER BY a.activity_code
+        ORDER BY a.user_dt DESC NULLS LAST, a.activity_code ASC
       `);
       return {
         tableData: data as Record<string, unknown>[],
         count: data.length,
       };
     },
-    // formTabs removed for single-page layout
-    deleteConfig: disableDelete,
+    customSave: async (form, context) => {
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+      const code = (editMode ? (original?.activity_code ?? form.activity_code) : form.activity_code) as string;
+      const name = (form.activity || form.activity_name) as string;
+      const groupCode = (form.activity_group_code || form.act_group_code) as string;
+      const subGroupCode = (form.activity_subgroup_code || form.act_subgroup_code || "") as string;
+      const chargeCode = (form.charge_code || form.income_code || "") as string;
+      const uom = (form.uom_code || form.uom || "") as string;
+      const expCode = (form.exp_code || form.exp_account_code || "") as string;
+      const isFrozen = form.status === "I" ? "Y" : "N";
+      const cost = Number(form.cost || 0);
+      const bill = Number(form.bill || 0);
+
+      await freightSave({
+        parameter: "freight_activity",
+        loginid: typedUser.loginid,
+        code1: typedUser.company_code,
+        val1s1: code,
+        val1s2: name,
+        val1s3: groupCode,
+        val1s4: subGroupCode,
+        val1s5: uom,
+        val1s6: chargeCode,
+        val1s7: expCode,
+        val1s8: isFrozen,
+        val1n1: cost,
+        val1n2: bill,
+        wval1s1: code,
+      });
+    },
+    customDelete: async (row, user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      await freightDelete({
+        parameter: "freight_activity",
+        loginid: typedUser.loginid,
+        code1: typedUser.company_code,
+        code2: (row.activity_code || row.ACTIVITY_CODE) as string,
+      });
+    },
+    deleteConfig: { mode: "registered", payload: (row) => [row.activity_code] },
   },
 
   activityGroup: {
