@@ -43,6 +43,7 @@ type InvoiceFormState = {
   curr_code: string;
   ex_rate: string;
   inv_status: string;
+  remarks: string;
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -241,6 +242,7 @@ export function FreightInvoicePage() {
         curr_code: text(header.curr_code) || "OMR",
         ex_rate: text(header.ex_rate || header.EX_RATE) || "1",
         inv_status: text(header.inv_status) || "N",
+        remarks: text(header.remarks || header.REMARKS || header.onl_remrks || header.ONL_REMRKS || ""),
       });
       setSelectedRows(jobs);
       setCandidateRows([]);
@@ -436,6 +438,7 @@ export function FreightInvoicePage() {
         curr_code: form.curr_code || "OMR",
         ex_rate: Number(form.ex_rate) || 1,
         inv_status: nextStatus,
+        remarks: form.remarks,
         user_id: loginId,
       }];
 
@@ -700,6 +703,16 @@ export function FreightInvoicePage() {
                 title={form.curr_code !== "OMR" ? `1 ${form.curr_code} = ${form.ex_rate} OMR` : "Base Currency (1.0)"}
               />
             </Field>
+            <div className="md:col-span-8">
+              <Field label="Invoice Remarks">
+                <Input
+                  disabled={readOnly}
+                  value={form.remarks}
+                  onChange={(e) => setFormField("remarks", e.target.value)}
+                  placeholder="Enter remarks or special instructions to print on invoice"
+                />
+              </Field>
+            </div>
           </div>
           </div>
 
@@ -866,6 +879,7 @@ function emptyForm(): InvoiceFormState {
     curr_code: "OMR",
     ex_rate: "1",
     inv_status: "N",
+    remarks: "",
   };
 }
 
