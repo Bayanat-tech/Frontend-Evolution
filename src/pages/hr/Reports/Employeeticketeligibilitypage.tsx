@@ -177,14 +177,28 @@ function useOptions(
   return { options, loading };
 }
 
-// ─── Field wrapper / native select ────────────────────────────────────────────
+// ─── Floating-label field wrapper (label sits on the top border, like Absence) ─
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  hideInnerHint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  /** Hides the "Click to select multiple" helper text rendered by MultiSelectField. */
+  hideInnerHint?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-      {label}
+    <div className={`relative ${hideInnerHint ? "[&_p]:hidden" : ""}`}>
+      <span className="pointer-events-none absolute -top-2 left-3 z-10 bg-background px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide text-muted-foreground">
+        {label}
+        {required && <span className="ml-0.5 text-destructive">*</span>}
+      </span>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -199,7 +213,7 @@ function Select({
 }) {
   return (
     <select
-      className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+      className="h-10 w-full rounded-md border bg-background px-3 text-sm font-medium text-foreground"
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
@@ -290,7 +304,7 @@ export default function EmployeeTicketEligibilityPage() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("Select filters and run the report.");
+  const [message, setMessage] = useState("");
 
   const lastParamsRef = useRef<Params | null>(null);
 
@@ -368,7 +382,7 @@ export default function EmployeeTicketEligibilityPage() {
     setJoinFrom("");
     setJoinTo("");
     setError("");
-    setMessage("Select filters and run the report.");
+    setMessage("");
   };
 
   const handleExcel = async () => {
@@ -451,64 +465,74 @@ export default function EmployeeTicketEligibilityPage() {
 
         <ReportFilterHeader onClear={handleClearAll} />
 
-        {/* ── Row 1: Division / Department / Section ────────────────────── */}
-        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Division"
-            options={divisionLookup.options}
-            loading={divisionLookup.loading}
-            value={divisions}
-            onChange={setDivisions}
-          />
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Department"
-            options={departmentLookup.options}
-            loading={departmentLookup.loading}
-            value={departments}
-            onChange={setDepartments}
-          />
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Section"
-            options={sectionLookup.options}
-            loading={sectionLookup.loading}
-            value={sections}
-            onChange={setSections}
-          />
-        </div>
+        {/* ── Single compact grid: 3 columns x 3 rows (9 fields) ───────── */}
+        <div className="freight-report-fields grid gap-x-3 gap-y-5 px-3 pb-3 pt-5 md:grid-cols-2 xl:grid-cols-3">
+          <Field label="Division" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={divisionLookup.options}
+              loading={divisionLookup.loading}
+              value={divisions}
+              onChange={setDivisions}
+            />
+          </Field>
 
-        {/* ── Row 2: Grade / Designation / Formal Designation ───────────── */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Grade"
-            options={gradeLookup.options}
-            loading={gradeLookup.loading}
-            value={grades}
-            onChange={setGrades}
-          />
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Designation"
-            options={designationLookup.options}
-            loading={designationLookup.loading}
-            value={designations}
-            onChange={setDesignations}
-          />
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Formal Designation"
-            options={formalLookup.options}
-            loading={formalLookup.loading}
-            value={formalDesgs}
-            onChange={setFormalDesgs}
-          />
-        </div>
+          <Field label="Department" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={departmentLookup.options}
+              loading={departmentLookup.loading}
+              value={departments}
+              onChange={setDepartments}
+            />
+          </Field>
 
-        {/* ── Row 3: Join Date From / To / Group Criteria ───────────────── */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
+          <Field label="Section" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={sectionLookup.options}
+              loading={sectionLookup.loading}
+              value={sections}
+              onChange={setSections}
+            />
+          </Field>
+
+          <Field label="Grade" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={gradeLookup.options}
+              loading={gradeLookup.loading}
+              value={grades}
+              onChange={setGrades}
+            />
+          </Field>
+
+          <Field label="Designation" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={designationLookup.options}
+              loading={designationLookup.loading}
+              value={designations}
+              onChange={setDesignations}
+            />
+          </Field>
+
+          <Field label="Formal Designation" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={formalLookup.options}
+              loading={formalLookup.loading}
+              value={formalDesgs}
+              onChange={setFormalDesgs}
+            />
+          </Field>
+
           <Field label="Join Date From">
             <BiscDatePicker
               value={joinFrom}
@@ -542,16 +566,17 @@ export default function EmployeeTicketEligibilityPage() {
           </p>
         )}
 
+        {error && !previewOpen ? (
+          <p className="px-3 pb-2 text-sm text-destructive">{error}</p>
+        ) : null}
+
         {/* ── Actions ───────────────────────────────────────────────────── */}
-        <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2">
+        <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2 border-t px-3 py-3">
           <Button type="button" size="sm" onClick={handleGenerate} disabled={loading || !dateRangeValid}>
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}{" "}
             {loading ? "Generating..." : "Generate Report"}
           </Button>
         </div>
-
-        {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
-        {error && !previewOpen ? <p className="px-3 pb-3 text-sm text-destructive">{error}</p> : null}
       </div>
 
       <NewReportDialog

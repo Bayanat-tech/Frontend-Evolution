@@ -10,8 +10,9 @@ import { formatLookupDisplay, lookupText } from "./OutboundHelpers";
 import {
   loadOutboundPrincipalLookup,
   loadDepartmentLookup,
+  loadDivisionLookup,
   loadWmsMasterLookup,
-  loadPortLookup,
+  loadPortsByCountry,
 } from "./OutboundLookups";
 
 type Props = {
@@ -42,7 +43,11 @@ export function OutboundJobCreateForm({
     setForm((current) => ({ ...current, [name]: fieldValue }));
 
   return (
-    <section className="grid gap-2.5">
+    <form
+      id="outbound-job-form"
+      className="grid gap-2.5"
+      onSubmit={onSubmit}
+    >
       {/* ── Transaction Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -69,25 +74,22 @@ export function OutboundJobCreateForm({
             <X size={14} />
             Cancel
           </Button>
-          <Button type="submit" form="outbound-job-form" size="sm" disabled={saving}>
+          <Button type="submit" size="sm" disabled={saving}>
             <Save size={14} />
             {saving ? "Saving..." : isEditing ? "Update Job" : "Save Job"}
           </Button>
         </div>
       </div>
 
-      <form
-        id="outbound-job-form"
-        className="freight-dense-form freight-ui-standard freight-enquiry-editor grid gap-2.5"
-        onSubmit={onSubmit}
-      >
+      {/* ── Form Body ── */}
+      <div className="freight-dense-form freight-ui-standard freight-enquiry-editor grid gap-2.5">
+        
         {/* ── Section 1: Job Information ── */}
         <SectionPanel icon={Ship} title="Job Information" meta="Outbound Job Creation">
-          {/* Changed from 'enquiry-header-fields' to a specific grid layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2">
             
-            {/* Row 1: Principal, Department, Division, Job Class */}
             <FormLookup
+            required
               label="Principal"
               value={String(form.prin_code || "")}
               displayValue={formatLookupDisplay(form, ["prin_code", "prin_name"])}
@@ -100,19 +102,36 @@ export function OutboundJobCreateForm({
                 { field: "div_code",       header: "Division" },
               ]}
               loadOptions={() => loadOutboundPrincipalLookup(companyCode)}
-              onChange={(selected, selectedRow) =>
+              onChange={(selected, selectedRow) => {
+                if (!selectedRow) {
+                  setForm((current) => ({
+                    ...current,
+                    prin_code: "",
+                    prin_name: "",
+                    prin_dept_code: "",
+                    prin_div_code: "",
+                    dept_code: "",
+                    dept_name: "",
+                    div_code: "",
+                    div_name: "",
+                  }));
+                  return;
+                }
+
                 setForm((current) => ({
                   ...current,
-                  prin_code: selected,
-                  prin_name: selectedRow ? lookupText(selectedRow, "prin_name") : "",
-                  div_code:  selectedRow ? lookupText(selectedRow, "div_code")  || current.div_code  : current.div_code,
-                  div_name:  selectedRow ? lookupText(selectedRow, "div_name")  || current.div_name  : current.div_name,
-                  dept_code: selectedRow ? lookupText(selectedRow, "prin_dept_code") || current.dept_code : current.dept_code,
-                  dept_name: selectedRow ? lookupText(selectedRow, "dept_name") || current.dept_name : current.dept_name,
-                  curr_code: selectedRow ? lookupText(selectedRow, "curr_code") || current.curr_code || "OMR" : current.curr_code || "OMR",
+                  prin_code: selected || "", // 👈 Safeguard
+                  prin_name: lookupText(selectedRow, "prin_name") ?? "",
+                  prin_dept_code: lookupText(selectedRow, "prin_dept_code") ?? "",
+                  prin_div_code:  lookupText(selectedRow, "div_code") ?? "",
+                  dept_code: "",
+                  dept_name: "",
+                  div_code:  "",
+                  div_name:  "",
+                  curr_code: lookupText(selectedRow, "curr_code") || current.curr_code || "OMR",
                   ex_rate:   current.ex_rate || 1,
-                }))
-              }
+                }));
+              }}
             />
 
             <FormLookup
@@ -126,11 +145,12 @@ export function OutboundJobCreateForm({
                 { field: "dept_name", header: "Department Name" },
                 { field: "div_code",  header: "Division" },
               ]}
-              loadOptions={() => loadDepartmentLookup(companyCode, String(form.div_code || ""))}
+              loadOptions={() => loadDepartmentLookup(companyCode, String(form.div_code || ""), "")}
+              required
               onChange={(selected, selectedRow) =>
                 setForm((current) => ({
                   ...current,
-                  dept_code: selected,
+                  dept_code: selected || "", // 👈 Safeguard
                   dept_name: selectedRow ? lookupText(selectedRow, "dept_name") : "",
                   div_code:  selectedRow ? lookupText(selectedRow, "div_code") || current.div_code : current.div_code,
                   div_name:  selectedRow ? lookupText(selectedRow, "div_name") || current.div_name : current.div_name,
@@ -149,11 +169,12 @@ export function OutboundJobCreateForm({
                 { field: "div_name",     header: "Division Name" },
                 { field: "country_code", header: "Country" },
               ]}
-              loadOptions={() => loadWmsMasterLookup("division")}
+              loadOptions={() => loadDivisionLookup(companyCode, "")}
+              required
               onChange={(selected, selectedRow) =>
                 setForm((current) => ({
                   ...current,
-                  div_code: selected,
+                  div_code: selected || "", // 👈 Safeguard
                   div_name: selectedRow ? lookupText(selectedRow, "div_name") : "",
                 }))
               }
@@ -173,7 +194,6 @@ export function OutboundJobCreateForm({
               required
             />
 
-            {/* Row 2: Job Type, Transport Mode, Schedule Date, Doc Ref */}
             <FormSelect
               label="Job Type"
               value={String(form.job_type || "EXP")}
@@ -207,7 +227,6 @@ export function OutboundJobCreateForm({
               onChange={(v) => setValue("doc_ref", v)}
             />
 
-            {/* Row 3: Principal Ref 2 */}
             <FormInput
               label="Principal Ref 2"
               value={String(form.prin_ref2 || "")}
@@ -217,96 +236,108 @@ export function OutboundJobCreateForm({
         </SectionPanel>
 
         {/* ── Section 2: Routing ── */}
-        <SectionPanel
-          icon={MapPin}
-          title="Routing"
-          meta={`${form.country_origin || "Origin"} -> ${form.country_destination || "Destination"}`}
-        >
-          {/* Standardized grid for routing fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2 items-end">
-            <FormLookup
-              label="Country Origin"
-              value={String(form.country_origin || "")}
-              displayValue={formatLookupDisplay(form, ["country_origin", "country_origin_name"])}
-              valueField="country_code"
-              displayFields={["country_code", "country_name"]}
-              columns={[
-                { field: "country_code", header: "Code" },
-                { field: "country_name", header: "Country Name" },
-              ]}
-              loadOptions={() => loadWmsMasterLookup("country")}
-              onChange={(selected, selectedRow) =>
-                setForm((current) => ({
-                  ...current,
-                  country_origin: selected,
-                  country_origin_name: selectedRow ? lookupText(selectedRow, "country_name") : "",
-                }))
-              }
-            />
+{/* ── Section 2: Routing ── */}
+<SectionPanel
+  icon={MapPin}
+  title="Routing"
+  meta={`${form.country_origin || "Origin"} -> ${form.country_destination || "Destination"}`}
+>
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2 items-end">
+    <FormLookup
+      label="Country Origin"
+      value={String(form.country_origin || "")}
+      displayValue={formatLookupDisplay(form, ["country_origin", "country_origin_name"])}
+      valueField="country_code"
+      displayFields={["country_code", "country_name"]}
+      columns={[
+        { field: "country_code", header: "Code" },
+        { field: "country_name", header: "Country Name" },
+      ]}
+      loadOptions={() => loadWmsMasterLookup("country")}
+      onChange={(selected, selectedRow) =>
+        setForm((current) => {
+          const next = selected || "";
+          const changed = next !== String(current.country_origin || "");
+          return {
+            ...current,
+            country_origin: next,
+            country_origin_name: selectedRow ? lookupText(selectedRow, "country_name") : "",
+            ...(changed ? { port_code: "", port_name: "" } : {}),
+          };
+        })
+      }
+    />
 
-            <FormLookup
-              label="Country Destination"
-              value={String(form.country_destination || "")}
-              displayValue={formatLookupDisplay(form, ["country_destination", "country_destination_name"])}
-              valueField="country_code"
-              displayFields={["country_code", "country_name"]}
-              columns={[
-                { field: "country_code", header: "Code" },
-                { field: "country_name", header: "Country Name" },
-              ]}
-              loadOptions={() => loadWmsMasterLookup("country")}
-              onChange={(selected, selectedRow) =>
-                setForm((current) => ({
-                  ...current,
-                  country_destination: selected,
-                  country_destination_name: selectedRow ? lookupText(selectedRow, "country_name") : "",
-                }))
-              }
-            />
+    <FormLookup
+      label="Country Destination"
+      value={String(form.country_destination || "")}
+      displayValue={formatLookupDisplay(form, ["country_destination", "country_destination_name"])}
+      valueField="country_code"
+      displayFields={["country_code", "country_name"]}
+      columns={[
+        { field: "country_code", header: "Code" },
+        { field: "country_name", header: "Country Name" },
+      ]}
+      loadOptions={() => loadWmsMasterLookup("country")}
+      onChange={(selected, selectedRow) =>
+        setForm((current) => {
+          const next = selected || "";
+          const changed = next !== String(current.country_destination || "");
+          return {
+            ...current,
+            country_destination: next,
+            country_destination_name: selectedRow ? lookupText(selectedRow, "country_name") : "",
+            ...(changed ? { destination_port: "", destination_port_name: "" } : {}),
+          };
+        })
+      }
+    />
 
-            <FormLookup
-              label="Port Of Loading"
-              value={String(form.port_code || "")}
-              displayValue={formatLookupDisplay(form, ["port_code", "port_name"])}
-              valueField="port_code"
-              displayFields={["port_code", "port_name"]}
-              columns={[
-                { field: "port_code",    header: "Port Code" },
-                { field: "port_name",    header: "Port Name" },
-                { field: "country_code", header: "Country" },
-              ]}
-              loadOptions={loadPortLookup}
-              onChange={(selected, selectedRow) =>
-                setForm((current) => ({
-                  ...current,
-                  port_code: selected,
-                  port_name: selectedRow ? lookupText(selectedRow, "port_name") : "",
-                }))
-              }
-            />
+    <FormLookup
+      key={`pol-${form.country_origin || "all"}`}
+      label="Port Of Loading"
+      value={String(form.port_code || "")}
+      displayValue={formatLookupDisplay(form, ["port_code", "port_name"])}
+      valueField="port_code"
+      displayFields={["port_code", "port_name"]}
+      columns={[
+        { field: "port_code",    header: "Port Code" },
+        { field: "port_name",    header: "Port Name" },
+        { field: "country_code", header: "Country" },
+      ]}
+      loadOptions={() => loadPortsByCountry(String(form.country_origin || ""))}
+      onChange={(selected, selectedRow) =>
+        setForm((current) => ({
+          ...current,
+          port_code: selected || "",
+          port_name: selectedRow ? lookupText(selectedRow, "port_name") : "",
+        }))
+      }
+    />
 
-            <FormLookup
-              label="Port Of Destination"
-              value={String(form.destination_port || "")}
-              displayValue={formatLookupDisplay(form, ["destination_port", "destination_port_name"])}
-              valueField="port_code"
-              displayFields={["port_code", "port_name"]}
-              columns={[
-                { field: "port_code",    header: "Port Code" },
-                { field: "port_name",    header: "Port Name" },
-                { field: "country_code", header: "Country" },
-              ]}
-              loadOptions={loadPortLookup}
-              onChange={(selected, selectedRow) =>
-                setForm((current) => ({
-                  ...current,
-                  destination_port: selected,
-                  destination_port_name: selectedRow ? lookupText(selectedRow, "port_name") : "",
-                }))
-              }
-            />
-          </div>
-        </SectionPanel>
+    <FormLookup
+      key={`pod-${form.country_destination || "all"}`}
+      label="Port Of Destination"
+      value={String(form.destination_port || "")}
+      displayValue={formatLookupDisplay(form, ["destination_port", "destination_port_name"])}
+      valueField="port_code"
+      displayFields={["port_code", "port_name"]}
+      columns={[
+        { field: "port_code",    header: "Port Code" },
+        { field: "port_name",    header: "Port Name" },
+        { field: "country_code", header: "Country" },
+      ]}
+      loadOptions={() => loadPortsByCountry(String(form.country_destination || ""))}
+      onChange={(selected, selectedRow) =>
+        setForm((current) => ({
+          ...current,
+          destination_port: selected || "",
+          destination_port_name: selectedRow ? lookupText(selectedRow, "port_name") : "",
+        }))
+      }
+    />
+  </div>
+</SectionPanel>
 
         {/* ── Section 3: References ── */}
         <SectionPanel icon={FileText} title="References" meta="Description And Remarks">
@@ -329,8 +360,8 @@ export function OutboundJobCreateForm({
             </div>
           </div>
         </SectionPanel>
-      </form>
-    </section>
+      </div>
+    </form>
   );
 }
 

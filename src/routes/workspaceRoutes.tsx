@@ -43,9 +43,7 @@
   import MyTaskPage from "../pages/pams/MyTaskpage";
   import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
   import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
-  import AppraisalSummaryReportDesign from "../pages/pams/AppraisalSummaryReportDesign";
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
-
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
   import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
@@ -248,6 +246,8 @@ import { useAuth } from "../state/AuthContext";
 import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
 import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listing_Report";
+import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
+import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -622,7 +622,11 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
       match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
       element: () => <EmployeeTransferPage />
     },
-
+    // {
+    //   name: "HR Visa and Labour Card Cancel",
+    //   match: (context) => isHrRoute(context) && isHrVisaLabourCardCancelRoute(context),
+    //   element: () => <VisaLabourCardCancelPage />,
+    // },
     {
       name: "HR Employee Profile",
       match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -689,7 +693,10 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     },
     {
       name: "Finance Assign User Div",
-      match: ({ pathname }) => pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division"),
+      match: ({ pathname }) =>
+        pathname.toLowerCase().includes("/finance/utilities/assign_user_division") ||
+        pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division") ||
+        pathname.toLowerCase().includes("assign_user_division"),
       element: () => <AssignUserDiv />
     },
     {
@@ -700,7 +707,60 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     {
       name: "Finance Account Report",
       match: ({ pathname }) => isAccountReportRoute(pathname),
-      element: () => <LedgerBasics />,
+      element: () => <LedgerBasics initialReportType="ledgerBasic" pageTitle="A/c Ledger Basic" />,
+    },
+    {
+      name: "Sales Register Report",
+      match: ({ pathname }) => isSalesRegisterRoute(pathname),
+      element: () => <LedgerBasics initialReportType="salesRegister" pageTitle="Sales Register / Sales List" />,
+    },
+    {
+      name: "Purchase Register Report",
+      match: ({ pathname }) => isPurchaseRegisterRoute(pathname),
+      element: () => <LedgerBasics initialReportType="purchaseRegister" pageTitle="Purchase Register / Purchase List" />,
+    },
+    {
+      name: "Day Book Report",
+      match: ({ pathname }) => isDayBookRoute(pathname),
+      element: () => <LedgerBasics initialReportType="dayBook" pageTitle="Day Book Report" />,
+    },
+    {
+      name: "Transaction Listing Report",
+      match: ({ pathname }) => isTransactionListingRoute(pathname),
+      element: ({ pathname }: { pathname: string }) => {
+        const norm = pathname.toLowerCase();
+        let docType = "ALL";
+        let title = "Transaction Listing Report";
+        if (norm.includes("cheque_payment")) {
+          docType = "BP";
+          title = "Cheque Payment Listing";
+        } else if (norm.includes("cheque_receipt")) {
+          docType = "BR";
+          title = "Cheque Receipt Listing";
+        } else if (norm.includes("cash_payment")) {
+          docType = "CP";
+          title = "Cash Payment Listing";
+        } else if (norm.includes("cash_receipt")) {
+          docType = "CR";
+          title = "Cash Receipt Listing";
+        } else if (norm.includes("debit_note")) {
+          docType = "DN";
+          title = "Debit Note Listing";
+        } else if (norm.includes("credit_note")) {
+          docType = "CN";
+          title = "Credit Note Listing";
+        } else if (norm.includes("journal")) {
+          docType = "JV";
+          title = "Journal Listing";
+        } else if (norm.includes("lpo") || norm.includes("/gm/po")) {
+          docType = "PO";
+          title = "Purchase Order (LPO) Listing";
+        } else if (norm.includes("transaction_query") || norm.includes("transaction-query")) {
+          docType = "ALL";
+          title = "Transaction Query";
+        }
+        return <LedgerBasics initialReportType="transactionListing" initialDocType={docType} pageTitle={title} />;
+      },
     },
     {
       name: "Finance Tax Report",
@@ -832,7 +892,8 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     {
       name: "Finance Account Wise Budget",
       match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
-      element: () => <AccountWiseBudgetPage />,
+      element: ({ pathname }) => <AccountWiseBudgetPage mode={isAccountGroupBudgetRoute(pathname) ? "group" : "account"} />,
+
     },
     {
       name: "Finance Commercial Documents",
@@ -850,7 +911,12 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
       element: () => <JVDocumentEditor docType={"JV"} />
     },
     {
-      name: "Finance RV Voucher",
+      name: "Finance Provisional Journal Voucher",
+      match: ({ pathname }) => isProvisionalJVRoute(pathname),
+      element: () => <JVDocumentEditor docType={"RJV"} />
+    },
+    {
+      name: "Finance Reverse Journal Voucher",
       match: ({ pathname }) => isRVoucherRoute(pathname),
       element: () => <RJVDocumentEditor docType={"RJV"} />
     },
@@ -964,8 +1030,14 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     },
     {
       name: "Product Master",
-      match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/wms/wms/masters/gm/product"),
-      element: () => <ProductWmsPage />
+      match: ({ pathname }) => {
+        const n = pathname.toLowerCase().replace(/\/+$/, "");
+        return (
+          n.endsWith("/wms/wms/masters/gm/product") ||
+          n.endsWith("/wms/wms/masters/gm/product_master")
+        );
+      },
+      element: () => <ProductWmsPage />,
     },
     {
       name: "WMS Stock Summary Report",
@@ -1200,11 +1272,7 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     {
       name: "PAMS Appraisal Summary Report",
       match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
-      element: () => <AppraisalSummaryReportDesign required_values={{
-        loginid: undefined,
-        company_code: undefined,
-        period_label: undefined,
-      }} />,
+      element: () => <EmployeeListingReport />,
     },
     {
       name: "PAMS Appraisal Division Summary Report",
@@ -1699,11 +1767,18 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
       element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
     },
 
-    // {
-    //   name: "Purchase Sales Product Type",
-    //   match: ({ pathname }) => isProductTypeRoute(pathname),
-    //   element: () => <ProductTypePage />,
-    // },
+    {
+      name: "WMS Product Type",
+      match: ({ pathname }) => {
+        const n = pathname.toLowerCase().replace(/\/+$/, "");
+        return (
+          n.includes("/wms/wms/masters/gm/product_type") ||
+          n.includes("/wms/wms/masters/gm/product-type") ||
+          n.includes("/wms/wms/masters/gm/producttype")
+        );
+      },
+      element: () => <WmsSimpleMasterPage config={wmsSimpleMasterConfigs.productType} />,
+    },
 
     {
       name: "Purchase Sales Product Category",
@@ -2072,6 +2147,14 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     );
   }
 
+  function isAccountGroupBudgetRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/masters/budget_a/c_group") ||
+      normalized.includes("/finance/accounts/masters/budget_ac_group")
+    );
+  }
+
   function isAccountWiseBudgetRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
@@ -2239,7 +2322,57 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
 
   function isAccountReportRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic")
+    return (
+      normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") ||
+      normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic") ||
+      normalized.includes("/finance/accounts_report/detailed_reports/ledger")
+    );
+  }
+
+  function isSalesRegisterRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts_report/detailed_reports/sales_register") ||
+      normalized.includes("sales_register") ||
+      normalized.includes("sales-register") ||
+      normalized.includes("salesregister") ||
+      normalized.includes("sales_list") ||
+      normalized.includes("sales-list") ||
+      normalized.includes("saleslist")
+    );
+  }
+
+  function isPurchaseRegisterRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts_report/detailed_reports/purchase_register") ||
+      normalized.includes("purchase_register") ||
+      normalized.includes("purchase-register") ||
+      normalized.includes("purchaseregister") ||
+      normalized.includes("purchase_list") ||
+      normalized.includes("purchase-list") ||
+      normalized.includes("purchaselist")
+    );
+  }
+
+  function isDayBookRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts_report/detailed_reports/day_book") ||
+      normalized.includes("day_book") ||
+      normalized.includes("day-book") ||
+      normalized.includes("daybook")
+    );
+  }
+
+  function isTransactionListingRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts_report/transaction_reports") ||
+      normalized.includes("/finance/reports/gm/") ||
+      normalized.includes("/finance/masters/gm/journal") ||
+      normalized.includes("/finance/masters/gm/cash_receipt")
+    );
   }
   function isFlowAssignmentRoute(pathname: string) {
     const normalized = decodeRouteText(pathname).toLowerCase();
@@ -2253,7 +2386,13 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
   }
   function isTaxReportRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return normalized.includes("/finance/accounts_report/tax_report") || normalized.includes("/finance/accounts/reports/tax-report");
+    return (
+      normalized.includes("/finance/accounts_report/tax_report") ||
+      normalized.includes("/finance/accounts_report/tax_reports") ||
+      normalized.includes("/finance/accounts/reports/tax-report") ||
+      normalized.includes("/finance/accounts/reports/tax_report") ||
+      normalized.includes("tax_register")
+    );
   }
 
   function isBalanceSheetRoute(pathname: string) {
@@ -2422,11 +2561,12 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     const normalized = pathname.toLowerCase();
     const isReverse = normalized.includes("rjv") || normalized.includes("reverse");
     const isYearEnd = normalized.includes("ejv") || normalized.includes("year_end") || normalized.includes("year-end");
+    const isProvisional = normalized.includes("provisional") || normalized.includes("pjv");
     return (
       !isReverse &&
       !isYearEnd &&
+      !isProvisional &&
       (normalized.includes("/finance/accounts/transactions/jv") ||
-        normalized.includes("/finance/accounts/transactions/provisional") ||
         normalized.includes("/finance/accounts/transactions/journal"))
     );
   }
@@ -2441,13 +2581,30 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     );
   }
 
+  function isProvisionalJVRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/transactions/provisional") ||
+      normalized.includes("/finance/accounts/transactions/provisional_jv") ||
+      normalized.includes("/finance/accounts/transactions/provisional-jv") ||
+      normalized.includes("/finance/accounts/transactions/pjv") ||
+      normalized.includes("provisional_jv") ||
+      normalized.includes("provisional-jv") ||
+      normalized.includes("provisionaljv")
+    );
+  }
+
   function isRVoucherRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
-      normalized.includes("/finance/accounts/transactions/rjv") ||
-      normalized.includes("/finance/accounts/transactions/reverse_jv") ||
-      normalized.includes("/finance/accounts/transactions/reverse-jv") ||
-      normalized.includes("/finance/accounts/transactions/reverse")
+      !isProvisionalJVRoute(pathname) &&
+      (normalized.includes("/finance/accounts/transactions/rjv") ||
+        normalized.includes("/finance/accounts/transactions/reverse_jv") ||
+        normalized.includes("/finance/accounts/transactions/reverse-jv") ||
+        normalized.includes("/finance/accounts/transactions/reverse") ||
+        normalized.includes("reverse_jv") ||
+        normalized.includes("reverse-jv") ||
+        normalized.includes("reversejv"))
     );
   }
 
@@ -3096,10 +3253,16 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
   }
 
   function isPamsAppraisalSummaryRoute(pathname: string) {
-    const normalized = pathname.toLowerCase();
-    return normalized.includes("/appraisal_listing_summary") ||
-      normalized.includes("/appraisal-listing-summary");
-  }
+  const normalized = pathname.toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/employee_listing") ||
+    normalized.includes("/employee-listing") ||
+    normalized.includes("/appraisal_listing_summary") ||
+    normalized.includes("/appraisal-listing-summary") ||
+    compact.includes("appraisallistingsummary")
+  );
+}
 
   function isPamsAppraisalDivisionSummaryRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
@@ -3359,7 +3522,14 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
     const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
     return compact.includes("employeetransfer") || compact.includes("employeetransfers") || compact.includes("hremployeetransfer");
   }
-
+  function isHrVisaLabourCardCancelRoute(context: WorkspaceRouteContext) {
+    const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+    return (
+      compact.includes("visaandlabourcardcancel") ||
+      compact.includes("visalabourcardcancel") ||
+      compact.includes("labourcardcancel")
+    );
+  }
   function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
     const normalized = getHrMatchText(context);
     return (
@@ -3386,15 +3556,13 @@ import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listin
   }
 
 
-  function isProductTypeRoute(pathname: string) {
-    const normalized = pathname.toLowerCase();
-
-    return (
-      normalized.includes("/ims/purchase_sales/masters/product_type") ||
-      normalized.includes("/ims/purchase_sales/masters/product%20type") ||
-      normalized.includes("/ims/purchase_sales/masters/product-type")
-    );
-  }
+function isProductTypeRoute(pathname: string) {
+  const n = pathname.toLowerCase();
+  return (
+    n.includes("/ims/purchase_sales/masters/product_type") ||
+    n.includes("/purchase_sales/masters/product-type")
+  ) && !n.includes("/wms/");
+}
 
   function isProductCategoryRoute(pathname: string) {
     const normalized = pathname.toLowerCase();

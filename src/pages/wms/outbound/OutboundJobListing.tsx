@@ -94,6 +94,7 @@ export function OutboundJobListing() {
   const handleCloseForm = () => {
     setView("list");
     setEditingJobNo("");
+    setNotice(null); // 👈 Clears the error toast when going back to list
   };
 
   const filteredRows = useMemo(
@@ -124,7 +125,7 @@ export function OutboundJobListing() {
           </button>
         ),
       },
-            {
+      {
         accessorKey: "job_class",
         header: "Job Class",
         size: 180,
@@ -155,18 +156,6 @@ export function OutboundJobListing() {
             },
           ]
         : []),
-      // {
-      //   accessorKey: "doc_ref",
-      //   header: "Doc Ref",
-      //   size: 130,
-      //   cell: ({ row }) => <span className="text-[11.5px] text-foreground">{value(row.original, "doc_ref")}</span>,
-      // },
-      // {
-      //   accessorKey: "canceled",
-      //   header: "Canceled",
-      //   size: 105,
-      //   cell: ({ row }) => <span className="text-[11.5px] text-foreground">{flagBadge(value(row.original, "canceled"))}</span>,
-      // },
       {
         accessorKey: "invoiced",
         header: "Invoiced",
@@ -214,7 +203,7 @@ export function OutboundJobListing() {
                 className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                 title="Cancel job"
                 onClick={(e) => {
-                  e.stopPropagation(); // ✅ Fix: Stop row click so modal can open
+                  e.stopPropagation(); 
                   setCancelTarget(row.original);
                 }}
               >
@@ -252,7 +241,16 @@ export function OutboundJobListing() {
         });
         return;
       }
+      
       const payload = buildOutboundJobPayload(form, user?.company_code || "");
+      
+      // 👇 FIX: Sanitize the payload by converting any null/undefined values to empty strings
+      Object.keys(payload).forEach((key) => {
+        if (payload[key] === null || payload[key] === undefined) {
+          payload[key] = "";
+        }
+      });
+
       if (editingJobNo) {
         await putWmsInbound("inboundjob", payload);
       } else {
@@ -374,25 +372,11 @@ export function OutboundJobListing() {
             Outbound Job Listing
           </h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* <Button variant="outline" onClick={() => loadRows()}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
-          <Button
-            onClick={() => {
-              setEditingJobNo("");
-              setForm(makeEmptyJob(user?.company_code));
-              setView("editor");
-            }}
-          >
-            <Plus size={15} /> Add Job
-          </Button> */}
-        </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Tabs with counts - exactly like Freight */}
+      {/* Tabs with counts */}
       <div className="flex flex-wrap items-center gap-1.5 pb-1">
         {listingTabs.map((tab) => {
           const count = getTabCount(tab.value);
@@ -417,7 +401,7 @@ export function OutboundJobListing() {
         })}
       </div>
 
-      {/* Table - exactly like Freight */}
+      {/* Table */}
       <DataTable
         columns={columns}
         data={filteredRows}
@@ -440,7 +424,6 @@ export function OutboundJobListing() {
         searchPlaceholder="Search job, principal, reference..."
         loading={loading}
         height="calc(100vh - 180px)"
-        // minWidth={1420}
         density="grid"
         enablePagination
         pageSize={25}
@@ -448,10 +431,9 @@ export function OutboundJobListing() {
         exportFilename="outbound-jobs-list.csv"
         getRowId={(row, index) => String(value(row, "job_no") || index)}
         rowClassName={(row) => {
-          // Apply row colors based on status, forcing onto cells to override DataTable defaults
-          if (isCanceled(row)) return "[&>td]:bg-red-50/70"; // Cancelled -> Light Red
-          if (hasDate(value(row, "confirm_date"))) return "[&>td]:bg-emerald-50/70"; // Confirmed -> Light Green
-          return "[&>td]:bg-amber-50/70"; // In Progress -> Light Yellow
+          if (isCanceled(row)) return "[&>td]:bg-red-50/70";
+          if (hasDate(value(row, "confirm_date"))) return "[&>td]:bg-emerald-50/70";
+          return "[&>td]:bg-amber-50/70";
         }}
         onRowClick={(row) => navigate(outboundJobDetailPath(row))}
       />

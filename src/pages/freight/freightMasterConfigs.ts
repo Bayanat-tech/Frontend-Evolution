@@ -15,6 +15,13 @@ const transportMode = [
   { label: "Road", value: "R" },
 ];
 
+const vatType = [
+  { label: "Standard VAT", value: "S" },
+  { label: "Zero-rated", value: "Z" },
+  { label: "Exempt", value: "E" },
+  { label: "No VAT", value: "N" },
+];
+
 const partyType = [
   { label: "Customer", value: "C" },
   { label: "Broker", value: "B" },
@@ -149,6 +156,7 @@ function withFreightProcedures(configKey: string, config: FreightMasterConfig): 
   };
 }
 
+const vatDefaultPerc: Record<string, number> = { S: 5, Z: 0, E: 0, N: 0 };
 const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
   customer: {
     title: "Freight Customer Master",
@@ -416,36 +424,109 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
     routeKeys: ["activity", "activities", "freight_activity", "freight-activity", "ms_activity", "ff_activity"],
     keyField: "activity_code",
     fieldsPerRow: 3,
+    // fields: [
+    //   { name: "activity_code", label: "Activity Code", required: true, disabledOnEdit: true, width: 150, maxLength: 5, tab: "basic", section: "Identity" },
+    //   { name: "activity", label: "Activity Name", required: true, width: 280, tab: "basic", section: "Identity" },
+    //   { name: "activity_group_code", label: "Activity Group", dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownValueKey: "activity_group_code", dropdownDisplayFields: ["activity_group_code", "act_group_name"], dropdownDisplaySeparator: " - ", width: 170, tab: "basic", section: "Identity", required: true },
+    //   // { name: "activity_subgroup_code", label: "Activity Subgroup", dropdownParam: "DROP_DOWN_ACTIVITY_SUBGROUP", dropdownValueKey: "activity_subgroup_code", dropdownDisplayFields: ["activity_subgroup_code", "act_subgroup_name"], dropdownDisplaySeparator: " - ", width: 180, tab: "basic", section: "Classification" },
+    //   { name: "charge_code", label: "Income Account (Sales GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 280, tab: "billing", section: "Billing", required: true },
+    //   // { name: "exp_code", label: "Expense Account (Cost GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 190, tab: "billing", section: "Billing", required: true },
+    //   { name: "bill", label: "Bill Rate", type: "number", min: 0, width: 140, tab: "billing", section: "Billing" },
+    //   { name: "cost", label: "Cost Rate", type: "number", min: 0, width: 140, tab: "billing", section: "Billing" },
+    //   // { name: "uom_code", label: "UOM", dropdownParam: "DROP_DOWN_UOM", dropdownValueKey: "uom_code", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", width: 130, tab: "billing", section: "Billing" },
+    //   { name: "status", label: "Status", type: "select", options: activeStatus, width: 120, tab: "billing", section: "Billing" },
+    // ],
+    // defaults: { status: "A" },
+
     fields: [
-      { name: "activity_code", label: "Activity Code", required: true, disabledOnEdit: true, width: 150, tab: "basic", section: "Identity" },
-      { name: "activity", label: "Activity Name", required: true, width: 280, tab: "basic", section: "Identity" },
-      { name: "activity_group_code", label: "Activity Group", dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownValueKey: "activity_group_code", dropdownDisplayFields: ["activity_group_code", "activity_group"], dropdownDisplaySeparator: " - ", width: 170, tab: "basic", section: "Classification" },
-      { name: "activity_subgroup_code", label: "Activity Subgroup", dropdownParam: "DROP_DOWN_ACTIVITY_SUBGROUP", dropdownValueKey: "activity_subgroup_code", dropdownDisplayFields: ["activity_subgroup_code", "activity_subgroup"], dropdownDisplaySeparator: " - ", width: 180, tab: "basic", section: "Classification" },
-      { name: "trp_mode", label: "Transport Mode", type: "select", options: transportMode, width: 150, tab: "basic", section: "Classification" },
-      { name: "charge_code", label: "Charge Code", width: 150, tab: "billing", section: "Billing" },
-      { name: "uom_code", label: "UOM", dropdownParam: "DROP_DOWN_UOM", dropdownValueKey: "uom_code", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", width: 130, tab: "billing", section: "Billing" },
-      { name: "status", label: "Status", type: "select", options: activeStatus, width: 120, tab: "billing", section: "Billing" },
-    ],
-    defaults: { status: "A" },
+  { name: "activity_code", label: "Activity Code", required: true, disabledOnEdit: true, width: 150, maxLength: 5, tab: "basic", section: "Identity" },
+  { name: "activity", label: "Activity Name", required: true, width: 280, tab: "basic", section: "Identity" },
+  { name: "activity_group_code", label: "Activity Group", dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownValueKey: "activity_group_code", dropdownDisplayFields: ["activity_group_code", "act_group_name"], dropdownDisplaySeparator: " - ", width: 270, tab: "basic", section: "Identity", required: true },
+  { name: "mandatory_flag", label: "Mandatory", type: "select", options: yesNo, width: 10, tab: "basic", section: "Identity" },
+  { name: "charge_code", label: "Income Account (Sales GL)", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 250, colSpan: 2, tab: "billing", section: "Billing", required: true },
+  // { name: "wip_code", label: "WIP Code", dropdownParam: "Account_AC_CODE_Serach", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 420, colSpan: 3, tab: "billing", section: "Billing" },
+  { name: "wip_code", label: "WIP Code", width: 150, tab: "billing", section: "Billing" },
+  { name: "cost", label: "Cost Rate", type: "number", min: 0, width: 140, tab: "billing", section: "Billing" },
+  { name: "bill", label: "Bill Rate", type: "number", min: 0, width: 140, tab: "billing", section: "Billing" },
+  // { name: "uom_code", label: "UOM", dropdownParam: "DROP_DOWN_UOM", dropdownValueKey: "uom_code", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", width: 130, tab: "billing", section: "Billing" },
+  { name: "tax_type", label: "VAT", type: "select", options: vatType, width: 160, tab: "billing", section: "Billing",
+    onValueChange: (v) => ({ tax_perc: vatDefaultPerc[String(v)] ?? 0 }) },
+  { name: "tax_perc", label: "VAT %", type: "number", width: 80, tab: "billing", section: "Billing", disabledWhen: (f) => String(f.tax_type || "N") !== "S" },
+  { name: "status", label: "Status", type: "select", options: activeStatus, width: 80, tab: "billing", section: "Billing" },
+],
+defaults: { status: "A", mandatory_flag: "N", tax_type: "N", tax_perc: 0 },
     customLoad: async (user) => {
       const typedUser = user as { loginid: string; company_code: string };
       const data = await executeWmsInboundSql(`
         SELECT a.company_code, a.activity_code, a.activity, a.activity_group_code, g.act_group_name,
                a.activity_subgroup_code, s.act_subgroup_name, a.uom AS uom_code,
-               a.income_code AS charge_code, CASE WHEN NVL(a.freeze_flag, 'N') = 'Y' THEN 'I' ELSE 'A' END AS status
+               a.income_code AS charge_code, a.exp_code, a.wip_code, a.mandatory_flag,
+               a.tx_compnt_1_expmt AS tax_type, NVL(a.tx_compnt_1_perc, 0) AS tax_perc,
+               NVL(a.bill, 0) AS bill, NVL(a.cost, 0) AS cost,
+               CASE WHEN NVL(a.freeze_flag, 'N') = 'Y' THEN 'I' ELSE 'A' END AS status
         FROM ms_activity a
         LEFT JOIN ms_activity_group g ON g.company_code = a.company_code AND g.activity_group_code = a.activity_group_code
         LEFT JOIN ms_activity_subgroup s ON s.company_code = a.company_code AND s.activity_subgroup_code = a.activity_subgroup_code
         WHERE a.company_code = '${typedUser.company_code}'
-        ORDER BY a.activity_code
+        ORDER BY a.user_dt DESC NULLS LAST, a.activity_code ASC
       `);
       return {
         tableData: data as Record<string, unknown>[],
         count: data.length,
       };
     },
-    // formTabs removed for single-page layout
-    deleteConfig: disableDelete,
+    customSave: async (form, context) => {
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+      const code = (editMode ? (original?.activity_code ?? form.activity_code) : form.activity_code) as string;
+      const name = (form.activity || form.activity_name) as string;
+      const groupCode = (form.activity_group_code || form.act_group_code) as string;
+      const subGroupCode = (form.activity_subgroup_code || form.act_subgroup_code || "") as string;
+      const chargeCode = (form.charge_code || form.income_code || "") as string;
+      const uom = (form.uom_code || form.uom || "") as string;
+      const expCode = (form.exp_code || form.exp_account_code || "") as string;
+      const isFrozen = form.status === "I" ? "Y" : "N";
+      const cost = Number(form.cost || 0);
+      const bill = Number(form.bill || 0);
+      if (cost < 0) throw new Error("Default Cost Rate cannot be negative.");
+      if (bill < 0) throw new Error("Default Bill Rate cannot be negative.");
+      if (!chargeCode || !chargeCode.trim()) throw new Error("Income Account (Sales GL) is compulsory. Please select an account.");
+     
+      const taxType = String(form.tax_type || "N");
+      const taxPerc = taxType === "S" ? Number(form.tax_perc || 0) : 0;
+      if (taxPerc < 0 || taxPerc > 100) throw new Error("VAT % must be between 0 and 100.");
+
+      await freightSave({
+        parameter: "freight_activity",
+        loginid: typedUser.loginid,
+        code1: typedUser.company_code,
+        val1s1: code,
+        val1s2: name,
+        val1s3: groupCode,
+        val1s4: subGroupCode,
+        val1s5: uom,
+        val1s6: chargeCode,
+        val1s7: expCode,
+        val1s8: isFrozen,
+        val1s9: String(form.mandatory_flag || "N"),
+        val1s10: String(form.wip_code || ""),
+        val1s11: taxType,
+        val1n1: cost,
+        val1n2: bill,
+        val1n3: taxPerc,
+        wval1s1: code,
+      });
+    },
+    customDelete: async (row, user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      await freightDelete({
+        parameter: "freight_activity",
+        loginid: typedUser.loginid,
+        code1: typedUser.company_code,
+        code2: (row.activity_code || row.ACTIVITY_CODE) as string,
+      });
+    },
+    deleteConfig: { mode: "registered", payload: (row) => [row.activity_code] },
   },
 
   activityGroup: {
@@ -464,7 +545,7 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
       { name: "act_group_type", label: "Group Type", width: 140, maxLength: 2 },
       { name: "account_code", label: "Account Code", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownValueKey: "ac_code", width: 150, required: true },
       { name: "alternate_accode", label: "Alternate Account", width: 160 },
-      { name: "exp_account_code", label: "Expense Account", width: 160 },
+      { name: "exp_account_code", label: "Expense Account", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownValueKey: "ac_code", width: 160, required: true },
       { name: "freight_flag", label: "Freight", type: "select", options: yesNo, width: 110 },
       { name: "sw_flag", label: "SW Flag", type: "select", options: yesNo, width: 110 },
       { name: "rpt_group_name", label: "Report Group", width: 180 },
@@ -531,7 +612,7 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
     routeKeys: ["activitysubgroup", "activity_subgroup", "activity-subgroup", "freight_activity_subgroup", "freight-activity-subgroup", "ms_activity_subgroup"],
     keyField: "activity_subgroup_code",
     fields: [
-      { name: "activity_subgroup_code", label: "Sub Group Code", required: true, disabledOnEdit: true, width: 170 },
+      { name: "activity_subgroup_code", label: "Sub Group Code", required: true, disabledOnEdit: true, width: 170, maxLength: 5 },
       { name: "act_subgroup_name", label: "Sub Group Name", required: true, width: 260 },
       { name: "act_group_code", label: "Activity Group Code", required: true, width: 180, maxLength: 5, dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownDisplayFields: ["activity_group_code", "act_group_name"], dropdownLabelKey: "act_group_name", dropdownValueKey: "activity_group_code" },
     ],

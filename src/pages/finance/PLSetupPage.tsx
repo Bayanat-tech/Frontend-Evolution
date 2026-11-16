@@ -35,6 +35,7 @@ const emptyRow = (companyCode: string): EditableRow => ({
   prv_code: "",
   isNew: true,
   isDirty: true,
+
 });
 
 const thStyle: React.CSSProperties = {
@@ -374,6 +375,7 @@ const PLSetupPage: React.FC = () => {
                             type="text"
                             value={row.pl_name}
                             placeholder="Description"
+                           maxLength={50}
                             onChange={(e) => updateRow(row.rowId, { pl_name: e.target.value })}
                             onFocus={() => setSelectedRowId(row.rowId)}
                             style={cellInputStyle}

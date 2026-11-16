@@ -11,6 +11,7 @@ import {
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
+import { LookupField } from "../../components/ui/LookupField";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
@@ -35,8 +36,8 @@ type EntryView = "list" | "editor";
 
 const EMPTY_ROW: BudgetVersionRow = {
   company_code: "",
-  doc_type: "",
-  budget_year: "",
+  doc_type: "BDA",
+  budget_year: String(new Date().getFullYear()),
   div_code: "",
   version: "",
   user_id: "",
@@ -122,10 +123,25 @@ export function BudgetVersionPage() {
     setError("");
   };
 
-  const openAdd = () => {
+  const openAdd = async () => {
     resetForm();
     setEntryView("editor");
     setNotice(null);
+    try {
+      const divs = await getDynamicLookup({
+        parameter: "Account_division",
+        loginid: user?.loginid || "",
+        code1: user?.company_code || "",
+      });
+      if (divs.length > 0) {
+        const defaultDiv = String(getLookupValue(divs[0], "div_code") || "");
+        if (defaultDiv) {
+          setForm((prev) => (prev.div_code ? prev : { ...prev, div_code: defaultDiv }));
+        }
+      }
+    } catch {
+      // Division remains selectable via LookupField if default fetch fails
+    }
   };
 
   const openEdit = (row: BudgetVersionRow) => {
@@ -371,7 +387,7 @@ export function BudgetVersionPage() {
                   value={form.doc_type}
                   required
                   disabled={readOnly}
-                  placeholder="e.g. BD"
+                  placeholder="e.g. BDA"
                   onChange={(value) => setField("doc_type", value)}
                 />
                 <FormField
@@ -379,15 +395,28 @@ export function BudgetVersionPage() {
                   value={form.budget_year}
                   required
                   disabled={readOnly}
-                  placeholder="e.g. 2025"
+                  placeholder="e.g. 2026"
                   onChange={(value) => setField("budget_year", value)}
                 />
-                <FormField
-                  label="Division Code"
-                  value={form.div_code}
+                <LookupField
+                  label="Division"
                   required
+                  value={form.div_code}
+                  displayValue={form.div_code}
+                  columns={[
+                    { field: "div_code", header: "Code" },
+                    { field: "div_name", header: "Name" },
+                  ]}
+                  valueField="div_code"
+                  displayFields={["div_code", "div_name"]}
                   disabled={readOnly}
-                  placeholder="e.g. 01"
+                  loadOptions={() =>
+                    getDynamicLookup({
+                      parameter: "Account_division",
+                      loginid: user?.loginid || "",
+                      code1: user?.company_code || "",
+                    })
+                  }
                   onChange={(value) => setField("div_code", value)}
                 />
                 <FormField

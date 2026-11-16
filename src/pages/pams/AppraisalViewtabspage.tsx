@@ -380,6 +380,7 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [sentBackReason, setSentBackReason] = useState("");
   const [sentBackLevels, setSentBackLevels] = useState<SentBackLevel[]>([]);
   const [deptHead, setDeptHead] = useState("");
+  const [APPRAISAL_DOC_NO, setAppraisalDocNo] = useState("");
   const [sentBackLoading, setSentBackLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [loading, setLoading] = useState(!prefetchedRow);
@@ -443,6 +444,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           currentFlowLevel = num(flowRes[0].FLOW_LEVEL_RUNNING);
           nextActionBy = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
           setDeptHead(text(flowRes[0].DEPT_HEAD));
+          setAppraisalDocNo(text(flowRes[0].APPRAISAL_DOC_NO));
           setNextActionBy(nextActionBy);
           setFlowLevel(currentFlowLevel);
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
@@ -566,41 +568,49 @@ const AppraisalViewTabsPage: React.FC = () => {
   };
 
   const openSentBackPopup = async () => {
-    setSentBackPopup(true);
-    setSentBackLoading(true);
-    setSentBackLevels([]);
-    setSentBackLevel("");
+  setSentBackPopup(true);
+  setSentBackLoading(true);
+  setSentBackLevels([]);
+  setSentBackLevel("");
 
-    try {
-      const res = await pamsSelect({
-        parameter: "Trn_appraisal",
-        loginid,
-        code1: companyCode,
-        code2: loginid,
-        code3: employeeCode,
-        code4: String(flowLevel),
-        code5: deptHead,
-        code6: "SENTBACK",
-      });
+  
+  const docNoToSend = APPRAISAL_DOC_NO || docNo;
+  if (!docNoToSend) {
+    setNotice({
+      type: "error",
+      message: "Appraisal document number not available. Please refresh and try again.",
+    });
+    setSentBackLoading(false);
+    return;
+  }
 
-      const list = (res as unknown as SentBackLevel[]) ?? [];
-      setSentBackLevels(list);
+  try {
+    const res = await pamsSelect({
+      parameter: "Trn_appraisal",
+      loginid,
+      code1: companyCode,
+      code2: loginid,
+      code3: employeeCode,
+      code4: String(flowLevel),
+      code5: docNoToSend,          
+      code6: "SENTBACK",
+    });
 
-      if (list.length > 0) {
-        setSentBackLevel(String(list[0].LEVEL_NO));
-      }
-    } catch (err: unknown) {
-      setNotice({
-        type: "error",
-        message:
-          err instanceof Error
-            ? err.message
-            : "Unable to load send back levels",
-      });
-    } finally {
-      setSentBackLoading(false);
+    const list = (res as unknown as SentBackLevel[]) ?? [];
+    setSentBackLevels(list);
+
+    if (list.length > 0) {
+      setSentBackLevel(String(list[0].LEVEL_NO));
     }
-  };
+  } catch (err: unknown) {
+    setNotice({
+      type: "error",
+      message: err instanceof Error ? err.message : "Unable to load send back levels",
+    });
+  } finally {
+    setSentBackLoading(false);
+  }
+};
 
   const handleSentBack = async () => {
     if (isReadOnly) return;
@@ -764,6 +774,16 @@ const AppraisalViewTabsPage: React.FC = () => {
                   }}
                 >
                   <Send size={13} /> Submit
+                </button>
+                <button
+                  style={S.actionBtn}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
+                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                  onClick={() => void openSentBackPopup()}
+                >
+                  <Undo2 size={13} /> Send Back
                 </button>
               </>
             )}

@@ -34,6 +34,7 @@ const BTN_BLUE = "rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-m
 // 2019070493 = ESHRAQ, 2010080035 = SHAHAB
 const SUPPLIER_USER_CODES: string[] = ["2019070493", "2010080035"];
 const AMOUNT_CHECK_USER_CODES: string[] = ["2019070493", "2010080035"];
+const LEVEL2_CREATOR_EXCEPTIONS = [{ loginid: "2016090408", flowCode: "003" }];
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;
@@ -264,7 +265,7 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
   } as TPRItem;
 }
 
-function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number, isSupplierUser: boolean, productNameOf?: (code: unknown) => string) {
+function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number, isSupplierUser: boolean, productNameOf?: (code: unknown) => string, requireCapex = false) {
   const errors: string[] = [];
   if (!String(header.DESCRIPTION ?? "").trim()) errors.push("Description / Reason is required");
   if (!String(header.REMARKS ?? "").trim()) errors.push("Remarks is required");
@@ -279,7 +280,7 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
       if (isSupplierUser && !item.SUPPLIER) errors.push(`Item ${index + 1}: Supplier is required`);
       if (userLevel === 1 && computeQuantity(item) <= 0) errors.push(`Item ${index + 1}: Quantity must be greater than 0`);
       if (num(item.ITEM_RATE) <= 0) errors.push(`Item ${index + 1}: Rate must be greater than 0`);
-      if (!item.CAPEX_OPEX_NON_OPEX) errors.push(`Item ${index + 1}: CAPEX is required`);
+      if (requireCapex && !item.CAPEX_OPEX_NON_OPEX) errors.push(`Item ${index + 1}: CAPEX is required`);
     });
   }
 
@@ -322,9 +323,9 @@ const AddPRRequestPage = ({
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: string; action: "SUBMIT" | "APPROVE" | "" }>({
-  open: false, message: "", action: "",
-});
+  const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: string; action: "SUBMIT" | "APPROVE" | "" }>({
+    open: false, message: "", action: "",
+  });
   const [remarkText, setRemarkText] = useState("");
   const [selectedSendBackTo, setSelectedSendBackTo] = useState("");
   const [activeTab, setActiveTab] = useState<"items" | "terms">("items");
@@ -470,7 +471,15 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         });
         if (cancelled) return;
         if (result && result.length > 0) {
-          setUserApprovalLevel(Number(result[0].FLOW_LEVEL) || 0);
+          const rawLevel = Number(result[0].FLOW_LEVEL) || 0;
+          const isOwnDoc =
+            String(header.CREATE_USER || "").trim().toUpperCase() === loginid.toUpperCase();
+          const isException = LEVEL2_CREATOR_EXCEPTIONS.some(
+            (e) => e.loginid === loginid && e.flowCode === String(header.FLOW_CODE || "").trim()
+          );
+          // Own doc in an exception flow => behave like level 1 (creator form).
+          // Docs coming from level 1 => normal level 2 (approver) logic.
+          setUserApprovalLevel(rawLevel === 2 && isException && isOwnDoc ? 1 : rawLevel);
           const ll = Number(result[0].LAST_LEVEL) || 0;
           if (ll > 0) setLastApprovalLevel(ll);
         } else {
@@ -612,7 +621,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         TAX_TYPE: (h as any).TAX_TYPE || prev.TAX_TYPE || "No VAT",
         TX_CAT_NAME: (h as any).TX_CAT_NAME || prev.TX_CAT_NAME || "",
         TX_COMPNTCAT_NAME: (h as any).TX_COMPNTCAT_NAME || prev.TX_COMPNTCAT_NAME || "",
-        
+
       }));
       setLoading(false);
     } else {
@@ -701,7 +710,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
     setItems(renumbered);
     itemsLoadedRef.current = true;
   }, [itemList, itemsFetching, productsFetched, suppliersFetched, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber, userApprovalLevel, header.CURRENCY_RATE]);
-   
+
   useEffect(() => {
     if (!(isEditMode || isViewMode) || !itemsLoadedRef.current || items.length === 0) return;
     if ((hdrList[0] as any)?.TAX_TYPE) return;
@@ -874,6 +883,12 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
   }, [items, lineSearch]);
   const canDeleteLines = !disabled && !userLevelLoading && userApprovalLevel < 2;
 
+  const isCreator =
+    (!isEditMode && !isViewMode) ||
+    (!!header.CREATE_USER &&
+      String(header.CREATE_USER).trim().toUpperCase() === loginid.toUpperCase());
+  const showCapexColumn = !loading && !isCreator;
+
   const colWidths = useMemo(() => {
     const qtyGroup = [60, 50, 60, 65];
     const w: number[] = [30, 240, 55, ...qtyGroup, ...qtyGroup];
@@ -882,10 +897,10 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
     if (showAllColumns) {
       w.push(200, 100, 260, 270, 160, 210);
     }
-    w.push(90); // CAPEX
-    if (canDeleteLines) w.push(70); // ACTION — sirf level 1
+    if (showCapexColumn) w.push(90);
+    if (canDeleteLines) w.push(70);
     return w;
-  }, [showAllColumns, isSupplierUser, canDeleteLines]);
+  }, [showAllColumns, isSupplierUser, canDeleteLines, showCapexColumn]);
 
   const tableMinWidth = colWidths.reduce((a, b) => a + b, 0);
   const itemsColSpan = colWidths.length;
@@ -898,7 +913,8 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
       termsRef.current,
       userApprovalLevel,
       isSupplierUser,
-      productNameOf
+      productNameOf,
+      showCapexColumn
     );
     if (!valid) {
       const onlyTermErrors = errors.every((e) => e.startsWith("Term "));
@@ -983,7 +999,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
       CASH_IND: item.CASH_IND || "", MAIL_ATTATCH: "", ITEM_CANEL: "",
       SUPPLIER: item.SUPPLIER || "", REF_DOC_NO: 0,
       DISCOUNT_AMOUNT: (item as any).DISC_PRICE || 0, DISC_PERC: item.DISC_PERC || 0, FINAL_RATE: item.FINAL_RATE || 0,
-      COST_CODE: item.COST_CODE || "", CAPEX: item.CAPEX_OPEX_NON_OPEX,
+      COST_CODE: item.COST_CODE || "", CAPEX: item.CAPEX_OPEX_NON_OPEX || "",
       BUYER: "", REASON_FOR_PO_MODIFY: "", DOC_TYPE: "PR", DOC_NO: null,
       DOC_DATE: new Date().toISOString(), DIV_CODE: "", SERIAL_NO: 0,
       PROD_CODE: item.ITEM_CODE || "", PROD_NAME: item.ITEM_DESP || productNameOf(item.ITEM_CODE),
@@ -1140,18 +1156,18 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
   };
 
   const handleApprove = async (skipAmountCheck = false) => {
-  if (!requestNumber) { toast.error("No PR to approve", 5000); return; }
-  if (!validateAndShowErrors()) return;
+    if (!requestNumber) { toast.error("No PR to approve", 5000); return; }
+    if (!validateAndShowErrors()) return;
 
-  if (!skipAmountCheck) {
-    setSavingAction("APPROVED");
-    const msg = await checkAmountExceed();
-    setSavingAction(null);
-    if (msg) {
-      setAmountExceed({ open: true, message: msg, action: "APPROVE" });
-      return;
+    if (!skipAmountCheck) {
+      setSavingAction("APPROVED");
+      const msg = await checkAmountExceed();
+      setSavingAction(null);
+      if (msg) {
+        setAmountExceed({ open: true, message: msg, action: "APPROVE" });
+        return;
+      }
     }
-  }
     setSaving(true); setSavingAction("APPROVED"); setNotice(null);
     try {
       const cur = Number(header.FLOW_LEVEL_RUNNING) || 1;
@@ -1321,7 +1337,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         blank.TX_CAT_CODE = header.TX_CAT_CODE || "";
         blank.TX_CAT_NAME = header.TX_CAT_NAME || "";
         blank.TX_COMPNTCAT_CODE_1 = header.TX_COMPNTCAT_CODE_1 || "";
-        blank.TX_COMPNTCAT_NAME = (header as any).TX_COMPNTCAT_NAME || ""; 
+        blank.TX_COMPNTCAT_NAME = (header as any).TX_COMPNTCAT_NAME || "";
         blank.CASH_IND = "N";
         blank.TAX_TYPE = String(header.TAX_TYPE || "No VAT");
         blank.TX_COMPNT_PERC_1 = num((header as any).TX_COMPNT_PERC_1) || taxPercForType(header.TAX_TYPE as string);
@@ -1335,7 +1351,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         blank.ITEM_RATE = r.rate;
         blank.QTY_PUOM = r.qtyPuom;
         blank.QTY_LUOM = r.qtyLuom;
-        blank.CAPEX_OPEX_NON_OPEX = r.capex;
+        blank.CAPEX_OPEX_NON_OPEX = r.capex || "";
         if (sup) {
           blank.SUPPLIER = String(sup.SUPPLIER_CODE);
           (blank as any).SUPPLIER_NAME = String(sup.SUPPLIER_NAME ?? "");
@@ -1414,7 +1430,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         return updated;
       }
 
-        if (field === "TAX_TYPE" && typeof value === "string") {
+      if (field === "TAX_TYPE" && typeof value === "string") {
         item.TAX_TYPE = value;
         item.TX_COMPNT_PERC_1 = taxPercForType(value);
         const exRate = num(item.CURRENCY_RATE) || 1;
@@ -1727,7 +1743,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
                             const v = e.target.value;
                             const perc = v === "Std." ? 5 : 0;
                             setHdr("TAX_TYPE", v);
-                            setHdr("TX_COMPNT_PERC_1", perc); 
+                            setHdr("TX_COMPNT_PERC_1", perc);
                             setItems((prev) => prev.map((item) => {
                               const m: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
                               const ex = num(m.CURRENCY_RATE) || 1;
@@ -1996,7 +2012,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
                             {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX LCURR AMOUNT</th>}
                             {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">LCURR AMOUNT AFTER TAX</th>}
 
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">CAPEX</th>
+                            {showCapexColumn && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">CAPEX</th>}
                             {canDeleteLines && (
                               <th rowSpan={2} className="finance-action-col-head px-0 py-1.5 text-center align-middle">ACTION</th>
                             )}                          </tr>
@@ -2133,7 +2149,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
                                 )}
 
                                 <td className="px-1 py-1">
-                                  <Input type="number" step="0.0001" value={item.ITEM_RATE || ""} onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)} disabled={disabled || userApprovalLevel < 1} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  <Input type="number" step="0.0001" value={item.ITEM_RATE || ""} onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)} disabled={disabled || userLevelLoading} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
                                 </td>
 
                                 <td className={AMOUNT_CELL}>{fmt3(grossAmount)}</td>
@@ -2197,18 +2213,20 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
                                 {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(taxLcurr)}</td>}
                                 {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(lcurrAfterDisc)}</td>}
 
-                                <td className="px-1 py-1">
-                                  <Select
-                                    value={item.CAPEX_OPEX_NON_OPEX || ""}
-                                    onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX", e.target.value)}
-                                    disabled={disabled}
-                                    className="h-7 w-full text-[10px] px-1"
-                                  >
-                                    <option value="" disabled>Select...</option>
-                                    <option value="N">No</option>
-                                    <option value="Y">Yes</option>
-                                  </Select>
-                                </td>
+                                {showCapexColumn && (
+                                  <td className="px-1 py-1">
+                                    <Select
+                                      value={item.CAPEX_OPEX_NON_OPEX || ""}
+                                      onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX", e.target.value)}
+                                      disabled={disabled}
+                                      className="h-7 w-full text-[10px] px-1"
+                                    >
+                                      <option value="" disabled>Select...</option>
+                                      <option value="N">No</option>
+                                      <option value="Y">Yes</option>
+                                    </Select>
+                                  </td>
+                                )}
 
                                 {canDeleteLines && (
                                   <td className="finance-action-col px-1 py-1 text-center">
@@ -2387,33 +2405,33 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
       </Dialog>
 
       <Dialog
-  open={cancelOpen}
-  title="Cancel Request"
-  description="Are you sure you want to cancel this Purchase Request? This action cannot be undone."
-  onClose={() => setCancelOpen(false)}
-  footer={<>
-    <Button type="button" onClick={() => setCancelOpen(false)} className={BTN_BLUE}>No</Button>
-    <Button type="button" disabled={saving} onClick={() => void handleCancelConfirm()} className={BTN_BLUE}>
-      {savingAction === "CANCELED" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-      Yes, Cancel
-    </Button>
-  </>}
->
-  <p className="text-sm text-slate-700">Request No: <strong>{requestNumber}</strong></p>
-</Dialog>
+        open={cancelOpen}
+        title="Cancel Request"
+        description="Are you sure you want to cancel this Purchase Request? This action cannot be undone."
+        onClose={() => setCancelOpen(false)}
+        footer={<>
+          <Button type="button" onClick={() => setCancelOpen(false)} className={BTN_BLUE}>No</Button>
+          <Button type="button" disabled={saving} onClick={() => void handleCancelConfirm()} className={BTN_BLUE}>
+            {savingAction === "CANCELED" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Yes, Cancel
+          </Button>
+        </>}
+      >
+        <p className="text-sm text-slate-700">Request No: <strong>{requestNumber}</strong></p>
+      </Dialog>
 
-<Dialog
-  open={amountExceed.open}
-  title="Amount Exceeded"
-  description="The amount is more than the approved amount."
-  onClose={handleAmountExceedNo}
-  footer={<>
-    <Button type="button" onClick={handleAmountExceedNo} className={BTN_BLUE}>No</Button>
-    <Button type="button" disabled={saving} onClick={() => void handleAmountExceedYes()} className={BTN_BLUE}>Yes</Button>
-  </>}
->
-  <div className="whitespace-pre-line text-sm leading-relaxed text-slate-800">{amountExceed.message}</div>
-</Dialog>
+      <Dialog
+        open={amountExceed.open}
+        title="Amount Exceeded"
+        description="The amount is more than the approved amount."
+        onClose={handleAmountExceedNo}
+        footer={<>
+          <Button type="button" onClick={handleAmountExceedNo} className={BTN_BLUE}>No</Button>
+          <Button type="button" disabled={saving} onClick={() => void handleAmountExceedYes()} className={BTN_BLUE}>Yes</Button>
+        </>}
+      >
+        <div className="whitespace-pre-line text-sm leading-relaxed text-slate-800">{amountExceed.message}</div>
+      </Dialog>
 
       <Dialog
         open={commentsOpen}

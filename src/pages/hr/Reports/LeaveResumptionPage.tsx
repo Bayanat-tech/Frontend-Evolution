@@ -208,27 +208,30 @@ function Field({
   label,
   children,
   onClear,
+  hideInnerHint,
 }: {
   label: string;
   children: React.ReactNode;
   onClear?: () => void;
+  /** Hides the "Click to select multiple" helper text of MultiSelectField. */
+  hideInnerHint?: boolean;
 }) {
   return (
-    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-      <span className="flex items-center justify-between">
+    <div className={`relative ${hideInnerHint ? "[&_p]:hidden" : ""}`}>
+      <span className="pointer-events-none absolute -top-2 left-3 z-10 bg-background px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide text-muted-foreground">
         {label}
-        {onClear ? (
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-[10px] font-medium normal-case text-primary hover:underline"
-          >
-            Clear
-          </button>
-        ) : null}
       </span>
+      {onClear ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="absolute -top-2 right-3 z-10 bg-background px-1 text-[10px] font-medium leading-4 text-primary hover:underline"
+        >
+          Clear
+        </button>
+      ) : null}
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -449,7 +452,7 @@ export default function LeaveResumptionPage() {
 
         {/* One grid, 4 columns: Row 1 = Division / Department / Section / Employee Code,
             Row 2 = Leave From / Leave To / Resume From / Resume To */}
-        <div className="freight-report-fields grid items-start gap-x-3 gap-y-2 p-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="freight-report-fields grid gap-x-3 gap-y-5 px-3 pb-3 pt-5 md:grid-cols-2 xl:grid-cols-4">
           <MultiSelectField
             className="freight-report-multi-select"
             label="Division"
