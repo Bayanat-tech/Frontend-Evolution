@@ -95,7 +95,16 @@ export async function loadPortLookup(): Promise<LookupRow[]> {
   const response = await getWmsMaster("port", { page: 1, limit: 500 });
   return normalizeLookupRows(response.tableData);
 }
-
+export async function loadPortsByCountry(countryCode: string): Promise<LookupRow[]> {
+  const rows = await executeWmsInboundSql(`
+    SELECT PORT_CODE, PORT_NAME, COUNTRY_CODE
+    FROM MS_PORT
+    ${countryCode ? `WHERE COUNTRY_CODE = '${sqlEscape(countryCode)}'` : ""}
+    ORDER BY PORT_NAME
+    FETCH FIRST 500 ROWS ONLY
+  `);
+  return normalizeLookupRows(rows);
+}
 export async function loadOrderEntryOptions(
   companyCode: string,
   prinCode: string,
