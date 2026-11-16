@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Save,
@@ -25,7 +25,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { CardContent, CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsCommonSelect } from "../../api/alms";
-import { executeDynamicMutationColumn90 } from "../../api/lookups";
+import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
@@ -95,11 +95,111 @@ type AddCRRequestPageProps = {
   onClose: (refresh?: boolean, message?: string) => void;
 };
 
+// ─── Field limits (match CREDIT_FORM_REQUEST column sizes) ───────────────
+const FIELD_MAX: Partial<Record<keyof TCRHeader, number>> = {
+  COMPANY_NAME: 50,
+  WAY_NO: 10,
+  BLDG_NO: 10,
+  FLAT_NO: 10,
+  LOCATION: 10,
+  PO_BOX: 10,
+  CITY: 10,
+  OFFICE_TEL_NO: 20,
+  FAX_NO: 20,
+  WEBSITE: 50,
+  EMAIL: 50,
+  FIN_CONTACT_PERSON: 50,
+  FIN_CONTACT_NUMBER: 10,
+  FIN_CONTACT_EMAIL: 50,
+  COMMERCIAL_REG_NO: 20,
+  BUSINESS_SECTOR: 50,
+  REMARKS_CONTACT_PERSON: 50,
+  AUTHORIZED_SIGNATORY: 50,
+  ACCOUNT_NO: 50,
+  DESCRIPTION: 200,
+  COMMENTS: 1000,
+  REMARKS: 1000,
+};
+
+// VARCHAR2(n BYTE) counts bytes, so non-English text can use more than 1 per character
+const clipBytes = (text: string, max: number) => {
+  const enc = new TextEncoder();
+  let out = "";
+  let bytes = 0;
+  for (const ch of text) {
+    const n = enc.encode(ch).length;
+    if (bytes + n > max) break;
+    out += ch;
+    bytes += n;
+  }
+  return out;
+};
+
+// Blocks e, +, - (and "." for whole-number fields) in number inputs
+const blockNumberKeys = (allowDecimal: boolean) => (e: KeyboardEvent<HTMLInputElement>) => {
+  const blocked = ["e", "E", "+", "-"];
+  if (!allowDecimal) blocked.push(".");
+  if (blocked.includes(e.key)) e.preventDefault();
+};
+
+// ─── Validation rules ────────────────────────────────────────────────────
+const MAX_AMOUNT = 999999999.999; // NUMBER(12,3)
+const MAX_PERIOD = 9999; // NUMBER(4)
+const MAX_SANCTIONED_PERIOD = 999999999999999; // NUMBER(20), kept within JS safe range
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_RE = /^[0-9+\-\s()]+$/;
+const WEB_RE = /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/\S*)?$/i;
+
+const DRAFT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
+  REQUEST_DATE: "Request Date",
+  COMPANY_NAME: "Company Name",
+};
+
+const SUBMIT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
+  ...DRAFT_REQUIRED,
+  WAY_NO: "Way No",
+  BLDG_NO: "Bldg No",
+  FLAT_NO: "Flat No",
+  LOCATION: "Location",
+  PO_BOX: "Po Box",
+  POSTAL_CODE: "Postal Code",
+  CITY: "City",
+  OFFICE_TEL_NO: "Tel No",
+  FAX_NO: "Fax No",
+  WEBSITE: "Website",
+  EMAIL: "Email",
+  FIN_CONTACT_PERSON: "Finance Contact Person",
+  FIN_CONTACT_NUMBER: "Finance Tel No",
+  FIN_CONTACT_EMAIL: "Finance Email",
+  COMMERCIAL_REG_NO: "Commercial Reg No",
+  BUSINESS_SECTOR: "Business Sector",
+  REMARKS_CONTACT_PERSON: "Contact Person",
+  AUTHORIZED_SIGNATORY: "Authorized Signatory",
+  CREDIT_FORM_SIGNATURE_DATE: "Credit Form Signature Date",
+  // CREDIT_LIMIT: "Credit Limit",
+  // REQUESTED_CREDIT_PERIOD: "Requested Credit Period",
+  // ACCOUNT_NO: "Account No",
+  DESCRIPTION: "Description",
+  COMMENTS: "Comments",
+  REMARKS: "Remarks",
+};
+
+// Approval levels that must NOT see the Send Back button
+const SEND_BACK_HIDDEN_LEVELS = [1, 5];
+// Approval levels that must NOT see the Reject and Cancel buttons
+const REJECT_CANCEL_HIDDEN_LEVELS = [5];
+// Approval levels allowed to enter the Account No
+const ACCOUNT_NO_EDIT_LEVELS = [5];
+// Approval levels that must NOT edit the Credit Requested / Sanctioned fields
+const CREDIT_FIELDS_LOCKED_LEVELS = [1, 5];
+
+
+const NUM_INPUT_CLS =
+  "text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
 const Required = () => <span className="ml-0.5 text-destructive">*</span>;
 
 const GRID_4 = "grid grid-cols-1 gap-0.5 p-1 md:grid-cols-2 xl:grid-cols-4";
-
 
 const TEXTAREA_CLS =
   "min-h-[56px] w-full resize-y rounded-md border bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60";
@@ -110,7 +210,6 @@ type SectionCardProps = {
   hint?: string;
   children: ReactNode;
 };
-
 
 const SectionCard = ({ icon: Icon, title, hint, children }: SectionCardProps) => (
   <div className="shrink-0 rounded-xl border bg-card shadow-sm">
@@ -139,6 +238,7 @@ const AddCRRequestPage = ({
   const loginid = user?.loginid ?? "";
 
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
   const [dialogError, setDialogError] = useState("");
@@ -149,14 +249,40 @@ const AddCRRequestPage = ({
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
+
+const [sendBackUsers, setSendBackUsers] = useState<
+  { LEVEL_NO: number; EMPLOYEE_CODE_ID: string; RPT_NAME: string }[]
+>([]);
+
+const [sendBackUser, setSendBackUser] = useState("");
+const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+
+
+
+
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [userLevel, setUserLevel] = useState<number | null>(null);
 
   const isCancelled = String(header.LAST_ACTION || "").toUpperCase() === "CANCELED";
   const disabled = isViewMode || saving || isCancelled;
   const canTakeAction = !isViewMode && isPendingTab && !isCancelled;
   const canSendBackOrReject = canTakeAction && isEditMode && !!requestNumber;
+
+  // Send Back is hidden for the levels in SEND_BACK_HIDDEN_LEVELS (and while the level is unknown)
+  const canSendBack =
+    canSendBackOrReject && userLevel !== null && !SEND_BACK_HIDDEN_LEVELS.includes(userLevel);
+  const canEditAccountNo = userLevel !== null && ACCOUNT_NO_EDIT_LEVELS.includes(userLevel);
+    const canEditCredit = userLevel !== null && !CREDIT_FIELDS_LOCKED_LEVELS.includes(userLevel);
   const busy = saving || actionLoading !== null;
+
+
+  const rejectCancelAllowed = userLevel !== null && !REJECT_CANCEL_HIDDEN_LEVELS.includes(userLevel);
+  const canReject = canSendBackOrReject && rejectCancelAllowed;
+  const canCancel = canTakeAction && !!requestNumber && rejectCancelAllowed;
+
+
+
 
   const { data: hdrList = [], isLoading: hdrLoading, isError: hdrError } = useQuery<TCRHeader[]>({
     queryKey: ["cr-header", requestNumber, companyCode],
@@ -175,9 +301,108 @@ const AddCRRequestPage = ({
     if (!(isEditMode || isViewMode) || !hdrLoading) setLoading(false);
   }, [hdrList, hdrLoading, isEditMode, isViewMode]);
 
-  const setHdr = (field: keyof TCRHeader, value: unknown) =>
-    setHeader((prev) => ({ ...prev, [field]: value }));
+  // Logged-in user's approval level (decides who sees "Send Back")
+  useEffect(() => {
+    if (!companyCode) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const rows = await getDynamicLookup({
+          parameter: "PS_CREDITREQUEST_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
+          code1: companyCode,
+          code2: loginid || user?.username || "ADMIN",
+          code3: "credit_request_form",
+        });
+        if (!mounted) return;
+        const first = (rows || [])[0] as Record<string, unknown> | undefined;
+        const level = first
+          ? Number(first.level ?? first.LEVEL ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0])
+          : 0;
+        setUserLevel(Number.isFinite(level) ? level : 0);
+      } catch {
+        // If the level can't be read, hide Send Back instead of showing it to everyone
+        if (mounted) setUserLevel(null);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [companyCode, loginid, user?.username]);
 
+
+
+
+  useEffect(() => {
+  if (!sendBackOpen || !companyCode || !requestNumber || userLevel === null) {
+    return;
+  }
+
+  let mounted = true;
+
+  const fetchSendBackUsers = async () => {
+    try {
+      setSendBackUsersLoading(true);
+      setSendBackUsers([]);
+
+      const rows = await getDynamicLookup({
+        parameter: "PS_CREDITREQUEST_ENTRY_SENDBACK_LEVELS",
+        code1: companyCode,
+        code2: requestNumber,
+        code3: loginid,
+        code4: String(userLevel),
+      });
+
+      if (!mounted) return;
+
+      const users = (rows || []).map((row: any) => ({
+  LEVEL_NO: Number(row.LEVEL_NO ?? row.level_no),
+  EMPLOYEE_CODE_ID: String(
+    row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""
+  ),
+  RPT_NAME:
+    row.RPT_NAME ??
+    row.rpt_name ??
+    row.EMPLOYEE_CODE_ID ??
+    row.employee_code_id ??
+    "",
+}));
+
+setSendBackUsers(
+  users.filter((u) => u.EMPLOYEE_CODE_ID)
+);
+    } catch (error) {
+      if (mounted) {
+        setDialogError("Unable to load Send Back users");
+      }
+    } finally {
+      if (mounted) setSendBackUsersLoading(false);
+    }
+  };
+
+  fetchSendBackUsers();
+
+  return () => {
+    mounted = false;
+  };
+}, [sendBackOpen, companyCode, requestNumber, loginid, userLevel]);
+
+  const setHdr = (field: keyof TCRHeader, value: unknown) =>
+    setHeader((prev) => ({
+      ...prev,
+      [field]:
+        typeof value === "string" && FIELD_MAX[field]
+          ? clipBytes(value, FIELD_MAX[field] as number)
+          : value,
+    }));
+
+  // Number fields: ignores any keystroke that would exceed the column's digits
+  const setNum = (field: keyof TCRHeader, raw: string, intDigits: number, decimals = 0) => {
+    if (raw === "") return setHdr(field, undefined);
+    const [i = "", d = ""] = raw.split(".");
+    if (!/^\d*$/.test(i) || !/^\d*$/.test(d)) return;
+    if (i.length > intDigits || d.length > decimals) return;
+    setHdr(field, Number(raw));
+  };
 
   const envSelected = [
     header.ACCOUNT_ENV_TMS === "Y" && "TMS",
@@ -187,7 +412,7 @@ const AddCRRequestPage = ({
 
   const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     executeDynamicMutationColumn90({
-      parameter: "capex_req_ins_upd",
+      parameter: "credit_req_ins_upd",
       loginid,
       val1s1: requestNumber || "",
       val1s2: companyCode,
@@ -253,12 +478,76 @@ const AddCRRequestPage = ({
       ...extra,
     });
 
-  const validateTel = () => {
-    if (header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10) {
-      setNotice({ type: "error", message: "Tel No must be exactly 10 digits" });
-      return false;
+  const validateForm = (mode: "draft" | "submit") => {
+    const errs: string[] = [];
+    const text = (f: keyof TCRHeader) => String(header[f] ?? "").trim();
+    const num = (f: keyof TCRHeader) => Number(header[f] ?? 0);
+
+    // Required
+    const required = mode === "submit" ? SUBMIT_REQUIRED : DRAFT_REQUIRED;
+    (Object.keys(required) as (keyof TCRHeader)[]).forEach((f) => {
+      const v = header[f];
+      const empty = typeof v === "number" ? v <= 0 : text(f) === "";
+      if (empty) errs.push(`${required[f]} is required`);
+    });
+
+
+    // Account No is entered by the allowed level only
+
+        // Credit Limit / Requested Credit Period are required only from the levels that can edit them
+    if (mode === "submit" && canEditCredit) {
+      if (num("CREDIT_LIMIT") <= 0) errs.push("Credit Limit is required");
+      if (num("REQUESTED_CREDIT_PERIOD") <= 0) errs.push("Requested Credit Period is required");
     }
-    return true;
+
+    if (mode === "submit" && canEditAccountNo && text("ACCOUNT_NO") === "") {
+      errs.push("Account No is required");
+    }
+
+    // Formats
+    if (text("EMAIL") && !EMAIL_RE.test(text("EMAIL"))) errs.push("Email is not valid");
+    if (text("FIN_CONTACT_EMAIL") && !EMAIL_RE.test(text("FIN_CONTACT_EMAIL")))
+      errs.push("Finance Email is not valid");
+    if (text("OFFICE_TEL_NO") && !PHONE_RE.test(text("OFFICE_TEL_NO")))
+      errs.push("Tel No can contain only digits, +, -, spaces and brackets");
+    if (text("FAX_NO") && !PHONE_RE.test(text("FAX_NO")))
+      errs.push("Fax No can contain only digits, +, -, spaces and brackets");
+    if (text("WEBSITE") && !WEB_RE.test(text("WEBSITE")))
+      errs.push("Website is not valid (example: www.company.com)");
+    if (text("FIN_CONTACT_NUMBER") && text("FIN_CONTACT_NUMBER").length !== 10)
+      errs.push("Finance Tel No must be exactly 10 digits");
+
+    // Numbers
+    const postal = num("POSTAL_CODE");
+    if (postal && (!Number.isInteger(postal) || postal < 0 || String(postal).length > 10))
+      errs.push("Postal Code must be a whole number of up to 10 digits");
+
+    const checkAmount = (label: string, n: number) => {
+      if (n < 0) errs.push(`${label} cannot be negative`);
+      else if (n > MAX_AMOUNT) errs.push(`${label} cannot be more than ${MAX_AMOUNT.toLocaleString()}`);
+      else if ((String(n).split(".")[1] ?? "").length > 3)
+        errs.push(`${label} allows a maximum of 3 decimal places`);
+    };
+    checkAmount("Credit Limit", num("CREDIT_LIMIT"));
+    checkAmount("Sanctioned Credit Limit Amt", num("SANCTIONED_CREDIT_LIMIT_AMT"));
+
+    const checkPeriod = (label: string, n: number, max: number) => {
+      if (n < 0 || !Number.isInteger(n)) errs.push(`${label} must be a whole number`);
+      else if (n > max) errs.push(`${label} cannot be more than ${max.toLocaleString()}`);
+    };
+    checkPeriod("Requested Credit Period", num("REQUESTED_CREDIT_PERIOD"), MAX_PERIOD);
+    checkPeriod("Sanctioned Credit Period", num("SANCTIONED_CREDIT_PERIOD"), MAX_SANCTIONED_PERIOD);
+
+    return errs;
+  };
+
+  const runValidation = (mode: "draft" | "submit") => {
+    const list = validateForm(mode);
+    setErrors(list);
+    if (list.length) {
+      document.querySelector(".commercial-editor-body")?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return list.length === 0;
   };
 
   const execute = async (
@@ -294,10 +583,10 @@ const AddCRRequestPage = ({
   };
 
   const handleSaveDraft = () => {
-    if (validateTel()) void execute("draft", "SAVEASDRAFT", "Draft saved successfully!");
+    if (runValidation("draft")) void execute("draft", "SAVEASDRAFT", "Draft saved successfully!");
   };
   const handleSubmit = () => {
-    if (validateTel()) void execute("submit", "SUBMITTED", "CR submitted successfully!");
+    if (runValidation("submit")) void execute("submit", "SUBMITTED", "CR submitted successfully!");
   };
 
   const handleRejectConfirm = () => {
@@ -307,11 +596,29 @@ const AddCRRequestPage = ({
     );
   };
   const handleSendBackConfirm = () => {
-    if (!remarkText.trim()) return setDialogError("Please enter a send back reason");
-    void execute("sendBack", "SENTBACK", "CR sent back successfully!", { val1s46: remarkText.trim() }, () =>
-      setSendBackOpen(false)
-    );
-  };
+  if (!sendBackUser) {
+    return setDialogError("Please select a user to send back");
+  }
+
+  if (!remarkText.trim()) {
+    return setDialogError("Please enter a send back reason");
+  }
+
+  void execute(
+    "sendBack",
+    "SENTBACK",
+    "CR sent back successfully!",
+    {
+      val1s45: sendBackUser,
+      val1s46: remarkText.trim(),
+    },
+    () => {
+      setSendBackOpen(false);
+      setSendBackUser("");
+      setRemarkText("");
+    }
+  );
+};
   const handleCancelConfirm = () => {
     void execute("cancel", "CANCELED", "CR canceled successfully!", {}, () => setCancelOpen(false));
   };
@@ -321,11 +628,13 @@ const AddCRRequestPage = ({
     setDialogError("");
     setRejectOpen(true);
   };
-  const openSendBack = () => {
-    setRemarkText("");
-    setDialogError("");
-    setSendBackOpen(true);
-  };
+ const openSendBack = () => {
+  setRemarkText("");
+  setSendBackUser("");
+  setSendBackUsers([]);
+  setDialogError("");
+  setSendBackOpen(true);
+};
   const closeReject = () => {
     if (actionLoading === "reject") return;
     setRejectOpen(false);
@@ -382,28 +691,29 @@ const AddCRRequestPage = ({
                     {actionLoading === "submit" ? "Submitting..." : "Submit"}
                   </Button>
 
-                  {canSendBackOrReject && (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={openSendBack}
-                        disabled={busy}
-                        className="rounded-full bg-yellow-500 shadow-md hover:bg-yellow-600 disabled:opacity-60"
-                      >
-                        <ChevronLeft size={15} /> {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={openReject}
-                        disabled={busy}
-                        className="rounded-full bg-red-600 shadow-md hover:bg-red-700 disabled:opacity-60"
-                      >
-                        {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-                      </Button>
-                    </>
+                  {canSendBack && (
+                    <Button
+                      type="button"
+                      onClick={openSendBack}
+                      disabled={busy}
+                      className="rounded-full bg-yellow-500 shadow-md hover:bg-yellow-600 disabled:opacity-60"
+                    >
+                      <ChevronLeft size={15} /> {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                    </Button>
                   )}
 
-                  {!!requestNumber && (
+                  {canReject && (
+                    <Button
+                      type="button"
+                      onClick={openReject}
+                      disabled={busy}
+                      className="rounded-full bg-red-600 shadow-md hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </Button>
+                  )}
+
+                  {canCancel && (
                     <Button
                       type="button"
                       onClick={() => setCancelOpen(true)}
@@ -455,6 +765,17 @@ const AddCRRequestPage = ({
             >
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
+              {errors.length > 0 && (
+                <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                  <p className="m-0 mb-1 font-semibold">Please fix the following:</p>
+                  <ul className="m-0 list-disc pl-5">
+                    {errors.map((e) => (
+                      <li key={e}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* ── 1. Request Information ─────────────────────────────────── */}
               <SectionCard icon={ClipboardList} title="Request Information" hint="Credit Request">
                 <div className={GRID_4}>
@@ -489,7 +810,7 @@ const AddCRRequestPage = ({
 
                   {/* Row 2 */}
                   <label className="field"><span>Po Box<Required /></span><Input disabled={disabled} value={header.PO_BOX || ""} onChange={(e) => setHdr("PO_BOX", e.target.value)} /></label>
-                  <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" value={header.POSTAL_CODE ?? ""} onChange={(e) => setHdr("POSTAL_CODE", Number(e.target.value))} /></label>
+                  <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.POSTAL_CODE ?? ""} onChange={(e) => setNum("POSTAL_CODE", e.target.value, 10)} /></label>
                   <label className="field"><span>City<Required /></span><Input disabled={disabled} value={header.CITY || ""} onChange={(e) => setHdr("CITY", e.target.value)} /></label>
                   <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.OFFICE_TEL_NO || ""} onChange={(e) => setHdr("OFFICE_TEL_NO", e.target.value)} /></label>
 
@@ -544,10 +865,10 @@ const AddCRRequestPage = ({
               {/* ── 4. Credit Requested / Sanctioned ───────────────────────── */}
               <SectionCard icon={CreditCard} title="Credit Requested / Sanctioned" hint="Requested And Sanctioned Limits">
                 <div className={GRID_4}>
-                  <label className="field"><span>Credit Limit<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setHdr("CREDIT_LIMIT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Requested Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("REQUESTED_CREDIT_PERIOD", Number(e.target.value))} /></label>
-                  <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
+                  <label className="field"><span>Credit Limit{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} step="0.001" onKeyDown={blockNumberKeys(true)} value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setNum("CREDIT_LIMIT", e.target.value, 9, 3)} /></label>
+                  <label className="field"><span>Requested Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("REQUESTED_CREDIT_PERIOD", e.target.value, 4)} /></label>
+                  <label className="field"><span>Sanctioned Credit Limit Amt{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} step="0.001" onKeyDown={blockNumberKeys(true)} value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_LIMIT_AMT", e.target.value, 9, 3)} /></label>
+                  <label className="field"><span>Sanctioned Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number"  className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_PERIOD", e.target.value, 15)} /></label>
                 </div>
               </SectionCard>
 
@@ -584,8 +905,12 @@ const AddCRRequestPage = ({
                   })}
 
                   <label className="field">
-                    <span>Account No<Required /></span>
-                    <Input disabled={disabled} value={header.ACCOUNT_NO || ""} onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)} />
+                    <span>Account No{canEditAccountNo && <Required />}</span>
+                    <Input
+                      disabled={disabled || !canEditAccountNo}
+                      value={header.ACCOUNT_NO || ""}
+                      onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)}
+                    />
                   </label>
                 </div>
               </SectionCard>
@@ -658,30 +983,111 @@ const AddCRRequestPage = ({
         {dialogError && <p className="mt-1 text-xs text-destructive">{dialogError}</p>}
       </Dialog>
 
-      {/* Send Back */}
-      <Dialog
-        open={sendBackOpen}
-        title="Send Back Request"
-        description="Enter the reason for sending back."
-        onClose={closeSendBack}
-        footer={
-          <>
-            <Button variant="outline" onClick={closeSendBack} disabled={actionLoading === "sendBack"}>Cancel</Button>
-            <Button disabled={busy} onClick={handleSendBackConfirm} variant="default">
-              {actionLoading === "sendBack" ? "Sending Back..." : "Confirm Send Back"}
-            </Button>
-          </>
-        }
+    
+{/* Send Back */}
+<Dialog
+  open={sendBackOpen}
+  title="Send Back Request"
+  description="Select who to send this back to, and enter the reason."
+  onClose={closeSendBack}
+  footer={
+    <>
+      <Button
+        variant="outline"
+        onClick={closeSendBack}
+        disabled={actionLoading === "sendBack"}
       >
-        <textarea
-          rows={3}
-          value={remarkText}
-          onChange={(e) => { setRemarkText(e.target.value); setDialogError(""); }}
-          placeholder="Enter send back reason..."
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-        />
-        {dialogError && <p className="mt-1 text-xs text-destructive">{dialogError}</p>}
-      </Dialog>
+        Cancel
+      </Button>
+
+      <Button
+        disabled={busy || sendBackUsersLoading}
+        onClick={handleSendBackConfirm}
+        variant="default"
+      >
+        {actionLoading === "sendBack" ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Sending Back...
+          </>
+        ) : (
+          <>
+            <ChevronLeft size={15} className="mr-1" />
+            Confirm Send Back
+          </>
+        )}
+      </Button>
+    </>
+  }
+>
+  <div className="space-y-3">
+
+    {/* Send Back To */}
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">
+        Send Back To <span className="text-destructive">*</span>
+      </label>
+
+      <select
+        value={sendBackUser}
+        onChange={(e) => {
+          setSendBackUser(e.target.value);
+          setDialogError("");
+        }}
+        disabled={sendBackUsersLoading || busy}
+        className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+      >
+        <option value="">
+          {sendBackUsersLoading
+            ? "Loading users..."
+            : "Select user"}
+        </option>
+
+        {sendBackUsers.map((user) => (
+          <option
+            key={user.EMPLOYEE_CODE_ID}
+            value={user.EMPLOYEE_CODE_ID}
+          >
+            {user.RPT_NAME}
+          </option>
+        ))}
+      </select>
+
+      {!sendBackUsersLoading && sendBackUsers.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          No eligible users available for Send Back.
+        </p>
+      )}
+    </div>
+
+    {/* Send Back Reason */}
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">
+        Send Back Reason <span className="text-destructive">*</span>
+      </label>
+
+      <textarea
+        rows={4}
+        value={remarkText}
+        onChange={(e) => {
+          setRemarkText(e.target.value);
+          setDialogError("");
+        }}
+        placeholder="Enter send back reason..."
+        disabled={busy}
+        className="min-h-[110px] w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+      />
+    </div>
+
+    {dialogError && (
+      <p className="text-xs text-destructive">
+        {dialogError}
+      </p>
+    )}
+
+  </div>
+</Dialog>
+
 
       {/* Cancel */}
       <Dialog

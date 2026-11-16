@@ -30,7 +30,7 @@ const LOOKUP = {
   grade: "EDUCATION_QUALIFICATION_TICKET_ELIG_GRADE",
   designation: "EDUCATION_QUALIFICATION_TICKET_ELIG_DESIGNATION",
   formalDesignation: "EDUCATION_QUALIFICATION_TICKET_ELIG_FORMAL_DESIGNATION",
-  employee: "EDUCATION_QUALIFICATION_ADDR_EMPLOYEE_LIST", 
+  employee: "EDUCATION_QUALIFICATION_ADDR_EMPLOYEE_LIST",
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -211,14 +211,28 @@ function useOptions(
   return { options, loading };
 }
 
-// ─── Field wrapper / native select ────────────────────────────────────────────
+// ─── Floating-label field wrapper (label sits on the top border, like Absence) ─
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  hideInnerHint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  /** Hides the "Click to select multiple" helper text rendered by MultiSelectField. */
+  hideInnerHint?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-      {label}
+    <div className={`relative ${hideInnerHint ? "[&_p]:hidden" : ""}`}>
+      <span className="pointer-events-none absolute -top-2 left-3 z-10 bg-background px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide text-muted-foreground">
+        {label}
+        {required && <span className="ml-0.5 text-destructive">*</span>}
+      </span>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -233,7 +247,7 @@ function Select({
 }) {
   return (
     <select
-      className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+      className="h-10 w-full rounded-md border bg-background px-3 text-sm font-medium text-foreground"
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
@@ -302,10 +316,10 @@ export default function EmployeeAddressListPage() {
   );
 
   const formalDesignationLookup = useOptions(
-  () => loadMerged(LOOKUP.formalDesignation, loginId, companyCode, divisions, departments, sections),
-  ["labour_desg_code", "desg_code"], ["labour_desg_name", "desg_name"],
-  [loginId, companyCode, divKey, deptKey, sectKey]
-);
+    () => loadMerged(LOOKUP.formalDesignation, loginId, companyCode, divisions, departments, sections),
+    ["labour_desg_code", "desg_code"], ["labour_desg_name", "desg_name"],
+    [loginId, companyCode, divKey, deptKey, sectKey]
+  );
 
   const employeeLookup = useOptions(
     () => loadMerged(LOOKUP.employee, loginId, companyCode, divisions, departments, sections),
@@ -331,7 +345,7 @@ export default function EmployeeAddressListPage() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("Select filters and run the report.");
+  const [message, setMessage] = useState("");
 
   const lastParamsRef = useRef<Params | null>(null);
 
@@ -412,7 +426,7 @@ export default function EmployeeAddressListPage() {
     setJoinFrom("");
     setJoinTo("");
     setError("");
-    setMessage("Select filters and run the report.");
+    setMessage("");
   };
 
   const handleExcel = async () => {
@@ -494,72 +508,88 @@ export default function EmployeeAddressListPage() {
 
         <ReportFilterHeader onClear={handleClearAll} />
 
-        {/* Row 1: Division / Department / Section */}
-        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Division"
-            options={divisionLookup.options}
-            loading={divisionLookup.loading}
-            value={divisions}
-            onChange={setDivisions}
-          />
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Department"
-            options={departmentLookup.options}
-            loading={departmentLookup.loading}
-            value={departments}
-            onChange={setDepartments}
-          />
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Section"
-            options={sectionLookup.options}
-            loading={sectionLookup.loading}
-            value={sections}
-            onChange={setSections}
-          />
-        </div>
+        {/* Single compact grid: 4 columns on desktop (4 + 4 + 2 fields) */}
+        <div className="freight-report-fields grid gap-x-3 gap-y-5 px-3 pb-3 pt-5 md:grid-cols-2 xl:grid-cols-4">
+          <Field label="Division" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={divisionLookup.options}
+              loading={divisionLookup.loading}
+              value={divisions}
+              onChange={setDivisions}
+            />
+          </Field>
 
-        {/* Row 2: Grade / Designation / Formal Designation */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Grade"
-            options={gradeLookup.options}
-            loading={gradeLookup.loading}
-            value={grades}
-            onChange={setGrades}
-          />
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Designation"
-            options={designationLookup.options}
-            loading={designationLookup.loading}
-            value={designations}
-            onChange={setDesignations}
-          />
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Formal Designation"
-            options={formalDesignationLookup.options}
-            loading={formalDesignationLookup.loading}
-            value={formalDesignations}
-            onChange={setFormalDesignations}
-          />
-        </div>
+          <Field label="Department" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={departmentLookup.options}
+              loading={departmentLookup.loading}
+              value={departments}
+              onChange={setDepartments}
+            />
+          </Field>
 
-        {/* Row 3: Employee / Join Date From / To */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
-          <MultiSelectField
-            className="freight-report-multi-select"
-            label="Employee"
-            options={employeeLookup.options}
-            loading={employeeLookup.loading}
-            value={employees}
-            onChange={setEmployees}
-          />
+          <Field label="Section" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={sectionLookup.options}
+              loading={sectionLookup.loading}
+              value={sections}
+              onChange={setSections}
+            />
+          </Field>
+
+          <Field label="Grade" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={gradeLookup.options}
+              loading={gradeLookup.loading}
+              value={grades}
+              onChange={setGrades}
+            />
+          </Field>
+
+          <Field label="Designation" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={designationLookup.options}
+              loading={designationLookup.loading}
+              value={designations}
+              onChange={setDesignations}
+            />
+          </Field>
+
+          <Field label="Formal Designation" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={formalDesignationLookup.options}
+              loading={formalDesignationLookup.loading}
+              value={formalDesignations}
+              onChange={setFormalDesignations}
+            />
+          </Field>
+
+          <Field label="Employee" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={employeeLookup.options}
+              loading={employeeLookup.loading}
+              value={employees}
+              onChange={setEmployees}
+            />
+          </Field>
+
+          <Field label="Status">
+            <Select value={status} onChange={setStatus} options={STATUS_OPTIONS} />
+          </Field>
 
           <Field label="Join Date From">
             <BiscDatePicker
@@ -580,28 +610,22 @@ export default function EmployeeAddressListPage() {
           </Field>
         </div>
 
-        {/* Row 4: Status */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
-          <Field label="Status">
-            <Select value={status} onChange={setStatus} options={STATUS_OPTIONS} />
-          </Field>
-        </div>
-
         {!dateRangeValid && (
           <p className="px-3 pb-2 text-xs text-destructive">
             Join Date From must be on or before Join Date To.
           </p>
         )}
 
-        <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2">
+        {error && !previewOpen ? (
+          <p className="px-3 pb-2 text-sm text-destructive">{error}</p>
+        ) : null}
+
+        <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2 border-t px-3 py-3">
           <Button type="button" size="sm" onClick={handleGenerate} disabled={loading || !dateRangeValid}>
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}{" "}
             {loading ? "Generating..." : "Generate Report"}
           </Button>
         </div>
-
-        {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
-        {error && !previewOpen ? <p className="px-3 pb-3 text-sm text-destructive">{error}</p> : null}
       </div>
 
       <NewReportDialog

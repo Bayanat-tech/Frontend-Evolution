@@ -116,5 +116,7 @@ export interface NewReportDialogProps {
    * Does not affect page measurement or print layout.
    */
   headerSlot?: ReactNode;
+  /** Custom z-index when dialog needs to layer above other modals */
+  zIndex?: number;
 }
 

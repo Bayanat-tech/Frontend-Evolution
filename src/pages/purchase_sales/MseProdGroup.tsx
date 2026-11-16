@@ -406,7 +406,14 @@ const deleteRow = async () => {
                   <Field label="Product Group Name" required>
                     <Input
                       value={form.group_name ?? ""}
-                      onChange={(e) => setField("group_name", e.target.value)}
+                        onChange={(e) => {
+                        let val = e.target.value;
+                        // Manually enforce the 50-character limit
+                        if (val.length > 50) {
+                          val = val.slice(0, 50);
+                        }
+                        setField("group_name", val);
+                      }}
                     />
                   </Field>
                 </div>

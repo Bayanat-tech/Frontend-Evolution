@@ -1784,6 +1784,91 @@ export async function getPrRegisterFormReportExcel(params: Record<string, any>):
 }
 
 
+export async function getCreditRequestReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+     `/api/finance/transactions/reports/CreditRequestReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+export async function getCreditRequestReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CreditRequestReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+ 
+  // JSON body = message from the backend, not an Excel file
+  if (blob.type && blob.type.includes("application/json")) {
+    let message = "Unable to generate Excel";
+    try {
+      const parsed = JSON.parse(await blob.text());
+      if (parsed?.message) message = String(parsed.message);
+    } catch {
+      /* keep default message */
+    }
+    throw new Error(message);
+  }
+ 
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Credit_Request_${params.request_number || "Report"}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+export async function getCRListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+     `/api/finance/transactions/reports/CRListingReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+export async function getCRListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CRListingReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+ 
+  // JSON body = message from the backend, not an Excel file
+  if (blob.type && blob.type.includes("application/json")) {
+    let message = "Unable to generate Excel";
+    try {
+      const parsed = JSON.parse(await blob.text());
+      if (parsed?.message) message = String(parsed.message);
+    } catch {
+      /* keep default message */
+    }
+    throw new Error(message);
+  }
+ 
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Credit_Request_${params.request_number || "Report"}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
+ 
+
+
+
+
 export async function getStockTransactionReportHtml(params: Record<string, any>): Promise<string> {
   const response = await api.post(
     `/api/finance/transactions/reports/PSStockTransaction/html`,

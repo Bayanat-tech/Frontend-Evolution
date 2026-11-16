@@ -592,28 +592,34 @@ function JVDocument({
         searchQuery?.trim() || undefined,
         1,
         100,
-        [{ field: "canceled", values: "N" }, { field: "auto_reverse", values: "N" }]
+        [
+          { field: "canceled", values: "N" },
+          { field: "auto_reverse", values: "Y" },
+          { field: "unreversed_only", values: "Y" },
+        ]
       );
       const tableData = res?.tableData || [];
-      return tableData.map((row: any) => {
-        const rawDocNo = String(row.doc_no || "").trim();
-        const formattedDocNo = rawDocNo.toUpperCase().startsWith("RJV")
-          ? rawDocNo
-          : rawDocNo.toUpperCase().startsWith("JV")
-          ? rawDocNo.replace(/^JV/i, "RJV")
-          : `RJV${rawDocNo}`;
-        const formattedDate = formatDate(row.doc_date);
-        const amt = Number(row.amount ?? row.resolved_amount ?? 0);
-        return {
-          ...row,
-          doc_no: rawDocNo,
-          formatted_doc_no: formattedDocNo,
-          formatted_date: formattedDate,
-          formatted_amount: formatAmount(amt, currencyDecimals),
-          remarks: row.remarks || "Provisional Journal Voucher",
-          curr_code: row.curr_code || form.curr_code || "INR",
-        };
-      });
+      return tableData
+        .filter((row: any) => {
+          // Strictly exclude any document that is already a reversal voucher or has ref_doc_no
+          const rem = String(row.remarks || "").toUpperCase();
+          if (row.ref_doc_no || rem.startsWith("(AUTO REVERSE")) return false;
+          return true;
+        })
+        .map((row: any) => {
+          const rawDocNo = String(row.doc_no || "").trim();
+          const formattedDate = formatDate(row.doc_date);
+          const amt = Number(row.amount ?? row.resolved_amount ?? 0);
+          return {
+            ...row,
+            doc_no: rawDocNo,
+            formatted_doc_no: rawDocNo,
+            formatted_date: formattedDate,
+            formatted_amount: formatAmount(amt, currencyDecimals),
+            remarks: row.remarks || "Provisional Journal Voucher",
+            curr_code: row.curr_code || form.curr_code || "INR",
+          };
+        });
     } catch (err) {
       console.error("Failed to load Provisional JVs for reversal:", err);
       return [];
@@ -1485,15 +1491,7 @@ function JVDocument({
                             disabled={disabled || editMode}
                             placeholder="Select Provisional JV to reverse..."
                             value={sourceJvDocNo || form.ref_no || ""}
-                            displayValue={
-                              sourceJvDocNo || form.ref_no
-                                ? (String(sourceJvDocNo || form.ref_no).toUpperCase().startsWith("RJV")
-                                    ? String(sourceJvDocNo || form.ref_no)
-                                    : String(sourceJvDocNo || form.ref_no).toUpperCase().startsWith("JV")
-                                    ? String(sourceJvDocNo || form.ref_no).replace(/^JV/i, "RJV")
-                                    : `RJV${sourceJvDocNo || form.ref_no}`)
-                                : ""
-                            }
+                            displayValue={sourceJvDocNo || form.ref_no || ""}
                             columns={[
                               { field: "formatted_doc_no", header: "Provisional JV No" },
                               { field: "formatted_date", header: "Date" },
