@@ -6,6 +6,7 @@ import { api } from "../../../api/client";
 import { getDynamicLookup } from "../../../api/lookups";
 import { NewReportPage } from "../../../components/new_report_format";
 import { NewReportDialog } from "../../../components/new_report_format";
+import { VoucherPreviewModal, openTransactionScreen } from "../../../components/finance/VoucherPreviewModal";
 import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
 
 type AnyRow = Record<string, unknown>;
@@ -137,17 +138,41 @@ interface DrillBreadcrumbProps {
 }
 
 function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
+  const canGoBack = stack.length > 0;
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 4,
+        gap: 6,
         flexWrap: "wrap",
         padding: "6px 12px",
         fontSize: 11,
       }}
     >
+      {canGoBack && (
+        <button
+          type="button"
+          onClick={() => onNavigate(stack.length - 2)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            background: "var(--primary, #00378c)",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: 4,
+            padding: "3px 10px",
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: "pointer",
+            marginRight: 4,
+          }}
+          title="Back to previous level"
+        >
+          <ChevronLeft size={13} /> Back
+        </button>
+      )}
       <button
         type="button"
         onClick={() => onNavigate(-1)}
@@ -156,7 +181,7 @@ function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
           alignItems: "center",
           gap: 4,
           color: "var(--primary, #00378c)",
-          fontWeight: 500,
+          fontWeight: 600,
           background: "none",
           border: "none",
           cursor: "pointer",
@@ -164,7 +189,7 @@ function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
           fontSize: 11,
         }}
       >
-        <ChevronLeft size={11} /> Main Report
+        Main Report
       </button>
       {stack.map((entry, i) => (
         <span key={entry.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -173,7 +198,7 @@ function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
             type="button"
             onClick={() => onNavigate(i)}
             style={{
-              fontWeight: 500,
+              fontWeight: i === stack.length - 1 ? 700 : 500,
               fontSize: 11,
               background: "none",
               border: "none",
@@ -231,15 +256,29 @@ function resolveCodes(
   return normalized;
 }
 
+function getInitialReportType(): ReportType {
+  const p = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
+  if (p.includes("second_group") || p.includes("level_2") || p.includes("/l3")) return "l3";
+  if (p.includes("third_group") || p.includes("level_3") || p.includes("/l4")) return "l4";
+  if (p.includes("a/c_wise") || p.includes("ac_wise") || p.includes("/ac") || p.includes("ledger_wise")) return "ac";
+  return "l2";
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function TrialBalancePage() {
   const { user } = useAuth();
 
   // ── Report type ────────────────────────────────────────────────────────────
-  const [reportType, setReportType] = useState<ReportType>("l2");
+  const [reportType, setReportType] = useState<ReportType>(getInitialReportType);
   const config   = REPORT_TYPES[reportType];
   const isAcMode = reportType === "ac";
+
+  // Sync reportType if URL pathname changes
+  useEffect(() => {
+    const detected = getInitialReportType();
+    setReportType(detected);
+  }, []);
 
   // ── Form values (NewReportPage shape) ──────────────────────────────────────
   const [values, setValues] = useState<FormValues>({
@@ -276,10 +315,48 @@ export default function TrialBalancePage() {
   const [drillError, setDrillError]     = useState<string | null>(null);
   const drillIdCounter                  = useRef(0);
 
-  // ── Listen for DRILL_DOWN messages posted by report iframes ───────────────
+  // Voucher preview modal state (Audit-compliant safe inspection mode)
+  const [voucherModal, setVoucherModal] = useState<{
+    open: boolean;
+    docType: string;
+    docNo: string;
+  }>({ open: false, docType: "", docNo: "" });
+
+  // ── Listen for messages posted by report iframes (DRILL_DOWN, DRILL_BACK, OPEN_DOCUMENT, OPEN_DOCUMENT_SCREEN)
   useEffect(() => {
     const handler = async (ev: MessageEvent) => {
-      if (!ev.data || ev.data.type !== "DRILL_DOWN") return;
+      if (!ev.data) return;
+
+      // Handle going back 1 level
+      if (ev.data.type === "DRILL_BACK") {
+        setDrillStack((prev) => (prev.length > 0 ? prev.slice(0, -1) : []));
+        setDrillError(null);
+        return;
+      }
+
+      // Handle opening voucher preview modal (Audit-compliant read-only view with "Open in Screen")
+      if (ev.data.type === "OPEN_DOCUMENT") {
+        const { docType, docNo } = ev.data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          setVoucherModal({
+            open: true,
+            docType: String(docType),
+            docNo: String(docNo),
+          });
+        }
+        return;
+      }
+
+      // Handle opening transaction screen directly in new window (e.g. from ↗ shortcut)
+      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
+        const { docType, docNo } = ev.data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          openTransactionScreen(String(docType), String(docNo));
+        }
+        return;
+      }
+
+      if (ev.data.type !== "DRILL_DOWN") return;
 
       const {
         drillLevel,
@@ -847,6 +924,14 @@ export default function TrialBalancePage() {
             </div>
           ) : undefined
         }
+      />
+
+      {/* Audit-Compliant Read-Only Voucher Preview Dialog with "Open in Screen" button */}
+      <VoucherPreviewModal
+        open={voucherModal.open}
+        onClose={() => setVoucherModal({ open: false, docType: "", docNo: "" })}
+        docType={voucherModal.docType}
+        docNo={voucherModal.docNo}
       />
     </>
   );

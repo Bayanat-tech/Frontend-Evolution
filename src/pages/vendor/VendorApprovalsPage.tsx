@@ -188,6 +188,19 @@ const tabCounts = useMemo(() => ({
     },
   ]);
 
+    if (tab === "inProgress") {
+    const nextActionCol: ColumnDef<VendorTableRow> = {
+      accessorKey: "NEXT_ACTION_GRP",
+      header: "Next Action",
+    };
+    let idx = cols.findIndex(
+      (c) => (c as any).accessorKey === "REMARKS" || (c as any).id === "REMARKS"
+    );
+    if (idx < 0) idx = cols.findIndex((c) => (c as any).id === "actions");
+    if (idx < 0) idx = cols.length;
+    return [...cols.slice(0, idx), nextActionCol, ...cols.slice(idx)];
+  }
+  
   if (tab === "closed") {
     return cols.map((col) =>
       (col as any).accessorKey === "LAST_ACTION"
