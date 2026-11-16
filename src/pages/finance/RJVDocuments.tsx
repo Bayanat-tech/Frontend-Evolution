@@ -709,25 +709,20 @@ function JVDocument({
         };
       });
 
-      const formattedSelected = cleanDocNo.toUpperCase().startsWith("RJV")
-        ? cleanDocNo
-        : cleanDocNo.toUpperCase().startsWith("JV")
-        ? cleanDocNo.replace(/^JV/i, "RJV")
-        : `RJV${cleanDocNo}`;
-      setSourceJvDocNo(formattedSelected);
+      setSourceJvDocNo(cleanDocNo);
 
       setForm((current) => ({
         ...current,
-        ref_no: formattedSelected,
-        ref_doc_no: formattedSelected,
+        ref_no: cleanDocNo,
+        ref_doc_no: cleanDocNo,
         curr_code: text(headerRaw.curr_code ?? current.curr_code),
         curr_name: text(headerRaw.curr_name ?? current.curr_name),
         ex_rate: Number(headerRaw.ex_rate ?? current.ex_rate ?? 1),
-        remarks: `Reversal of Provisional JV ${formattedSelected}${headerRaw.remarks ? " - " + headerRaw.remarks : ""}`,
+        remarks: `(AUTO REVERSE JV ${cleanDocNo} ) ${headerRaw.remarks || ""}`.trim(),
         detail: mappedDetails,
       }));
 
-      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from Provisional JV ${formattedSelected}`);
+      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from Provisional JV ${cleanDocNo}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to load Provisional JV ${cleanDocNo}`);
     } finally {
@@ -2334,6 +2329,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     create_user: loginid,
     edit_user: loginid,
     canceled: originalForm.canceled || "N",
+    auto_reverse: docType === "RJV" ? "Y" : ((originalForm as any).auto_reverse || "N"),
     last_dtl_serial_no: originalForm.detail.length,
     sys_gen: "N",
   };
