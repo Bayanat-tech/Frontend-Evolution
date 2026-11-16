@@ -732,7 +732,10 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     },
     {
       name: "Finance Assign User Div",
-      match: ({ pathname }) => pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division"),
+      match: ({ pathname }) =>
+        pathname.toLowerCase().includes("/finance/utilities/assign_user_division") ||
+        pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division") ||
+        pathname.toLowerCase().includes("assign_user_division"),
       element: () => <AssignUserDiv />
     },
     {
@@ -791,6 +794,9 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
         } else if (norm.includes("lpo") || norm.includes("/gm/po")) {
           docType = "PO";
           title = "Purchase Order (LPO) Listing";
+        } else if (norm.includes("transaction_query") || norm.includes("transaction-query")) {
+          docType = "ALL";
+          title = "Transaction Query";
         }
         return <LedgerBasics initialReportType="transactionListing" initialDocType={docType} pageTitle={title} />;
       },
@@ -2386,7 +2392,13 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   }
   function isTaxReportRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return normalized.includes("/finance/accounts_report/tax_report") || normalized.includes("/finance/accounts/reports/tax-report");
+    return (
+      normalized.includes("/finance/accounts_report/tax_report") ||
+      normalized.includes("/finance/accounts_report/tax_reports") ||
+      normalized.includes("/finance/accounts/reports/tax-report") ||
+      normalized.includes("/finance/accounts/reports/tax_report") ||
+      normalized.includes("tax_register")
+    );
   }
 
   function isBalanceSheetRoute(pathname: string) {
