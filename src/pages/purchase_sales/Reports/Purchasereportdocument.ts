@@ -190,7 +190,12 @@ if (signTable) {
        else if (table.classList.contains("si-top-line")) {
       widths = ["*"];
        }
-    else if (table.classList.contains("pr-items-portrait")) {
+    else if (table.classList.contains("el-listing")) {
+      // PAMS Employee Appraisal Listing:  SL | Period | Employee | (Division) | Department | Designation | Rating
+           widths = table.classList.contains("el-listing-div")
+        ? ["4%", "8%", "29%", "13%", "15%", "26%", "5%"]
+        : ["4%", "8%", "39%", "17%", "27%", "5%"];
+    } else if (table.classList.contains("pr-items-portrait")) {
       widths = ["28%", "8%", "13%", "13%", "13%", "12%", "13%"];
     } else if (table.classList.contains("pr-items-landscape")) {
       widths = ["4%", "15%", "8%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
@@ -269,8 +274,18 @@ if (signTable) {
         ? "kvBox"
         : table.classList.contains("pr-title-tight")
           ? { margin: [0, 2, 0, 0] }
-          : "biscReportTable"
+          : table.classList.contains("el-listing")
+            ? "elListingTable"
+            : "biscReportTable"
     }));
+    if (table.classList.contains("el-listing")) {
+      // keep each name / designation on ONE line (no break at spaces)
+      table.querySelectorAll("tbody td").forEach((cell) => {
+        const walker = doc.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+        let n: Node | null;
+        while ((n = walker.nextNode())) n.nodeValue = (n.nodeValue || "").replace(/ /g, "\u00A0");
+      });
+    }
     table.querySelectorAll("th").forEach((cell) => {
       cell.style.backgroundColor = "#eaf0f8";
       cell.style.color = "#00378c";
@@ -336,6 +351,8 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
   const branded = Boolean(company);
   const pageOrientation = report.orientation || (prepared.maxColumns > 6 ? "landscape" : "portrait");
   const landscape = pageOrientation === "landscape";
+  // PAMS Employee Listing: very compact rows so ~100 employees fit on one A4 page
+  const compact = !!prepared.doc.querySelector("table.el-listing");
   const pageWidth = prepared.maxColumns > 14 ? (landscape ? 1190.55 : 841.89) : (landscape ? 841.89 : 595.28);
   const content = htmlToPdfmake(prepared.html, {
     // html-to-pdfmake supports browsers; its declarations only name JSDOM.
@@ -345,8 +362,8 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
       h2: { fontSize: 10.5, bold: true, color: "#00378c", marginBottom: 3 },
       h3: { fontSize: 9, bold: true, color: "#00378c", marginBottom: 2 },
       p: { margin: [0, 1, 0, 3] },
-      td: { margin: [1, 1.5, 1, 1.5] },
-      th: { bold: true, color: "#00378c", fillColor: "#eaf0f8", margin: [1, 2.5, 1, 2.5] },
+      td: { margin: compact ? [0, 0, 0, 0] : [1, 1.5, 1, 1.5] },
+      th: { bold: true, color: "#00378c", fillColor: "#eaf0f8", margin: compact ? [0, 1, 0, 1] : [1, 2.5, 1, 2.5] },
       table: { margin: [0, 0, 0, 0] },
     },
   }) as Content;
@@ -400,7 +417,7 @@ const signBlock: Content | null = signLabels.length
     pageSize: prepared.maxColumns > 14 ? "A3" : "A4",
     pageOrientation,
    pageMargins: [28, branded ? 92 : 44, 28, 36 + (signBlock ? SIGN_H + 6 : 0)],
-    defaultStyle: { font: "Inter", fontSize: prepared.maxColumns > 12 ? 7 : (prepared.maxColumns > 8 ? 7.5 : 8.5), color: "#1e293b", lineHeight: 1.15 },
+    defaultStyle: { font: "Inter", fontSize: compact ? 6 : (prepared.maxColumns > 12 ? 7 : (prepared.maxColumns > 8 ? 7.5 : 8.5)), color: "#1e293b", lineHeight: compact ? 0.9 : 1.15 },
     styles,
     header: {
       margin: [28, 14, 28, 0],
@@ -481,6 +498,22 @@ export async function createPurchasePdf(report: PurchaseReportDocument, identity
         if (rowIndex < (node.table.headerRows || 1)) return "#eaf0f8";
         return rowIndex % 2 === 1 ? "#ffffff" : "#fcfdfe";
       },
+    },
+    // PAMS Employee Listing – tight rows
+    elListingTable: {
+      hLineWidth: (i: number, node: any) => {
+        if (i === 0) return 0.75;
+        if (i === (node.table.headerRows || 1)) return 1.2;
+        if (i === node.table.body.length) return 0.75;
+        return 0.3;
+      },
+      vLineWidth: () => 0,
+      hLineColor: (i: number, node: any) => (i === (node.table.headerRows || 1) ? "#00378c" : "#e2e8f0"),
+      paddingLeft: () => 3,
+      paddingRight: () => 3,
+      paddingTop: () => 0.4,
+      paddingBottom: () => 0.4,
+      fillColor: (rowIndex: number, node: any) => (rowIndex < (node.table.headerRows || 1) ? "#eaf0f8" : null),
     },
     noBorders: {
       hLineWidth: () => 0,
