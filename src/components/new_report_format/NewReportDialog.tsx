@@ -2072,7 +2072,7 @@ export function NewReportDialog({
             </button>
           )}
 
-          <button
+          {/* <button
             type="button"
             onClick={onClose}
             style={{
@@ -2081,7 +2081,7 @@ export function NewReportDialog({
             }}
           >
             Close
-          </button>
+          </button> */}
         </div>
       </div>
 

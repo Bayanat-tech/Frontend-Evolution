@@ -87,11 +87,6 @@ function getVal(row: AnyRow, ...keys: string[]): string {
   return "";
 }
 
-// ═════════════════════════════════════════════════════════
-// EDI Row-level validation
-//    ✅ FIXED: Min 3 KPI Groups per DESG (Max limit REMOVED)
-//    ✅ Duplicate KPI Group detection
-// ═════════════════════════════════════════════════════════
 function applyEdiValidation(rows: EdiRow[]): EdiRow[] {
   const desgGroups = new Map<
     string,
@@ -136,9 +131,6 @@ function applyEdiValidation(rows: EdiRow[]): EdiRow[] {
     if (!backendError && dg) {
       const distinctGroups = dg.kpiGroups.size;
 
-      // ─────────────────────────────────────────────
-      // Check 1: Duplicate KPI Group (same name, multiple weightages)
-      // ─────────────────────────────────────────────
       let duplicateGroupName: string | null = null;
       dg.kpiGroups.forEach((info, gname) => {
         if (info.weightages.size > 1 && !duplicateGroupName) {
@@ -154,17 +146,12 @@ function applyEdiValidation(rows: EdiRow[]): EdiRow[] {
           computedError = `Duplicate KPI Group "${r.kpi_group}" in DESG ${r.desg_code} — appears with multiple weightages: ${wts}`;
         }
       }
-      // ─────────────────────────────────────────────
-      // Check 2: Min 3 KPI Groups per DESG
-      //          ✅ Max 6 rule REMOVED
-      // ─────────────────────────────────────────────
+ 
       else if (distinctGroups < 3) {
         computedError = `DESG ${r.desg_code} has only ${distinctGroups} KPI Group(s). Min 3 required.`;
       }
 
-      // ─────────────────────────────────────────────
-      // Check 3: Blank KPI group name
-      // ─────────────────────────────────────────────
+  
       if (!computedError && !grp) {
         computedError = "KPI Group name is blank.";
       }
@@ -202,7 +189,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ✅ STEP 1: Dedupe rows on frontend
   const dedupedEdiRows = useMemo<EdiRow[]>(() => {
     const seen = new Set<string>();
     return ediRows.filter((r) => {
@@ -237,9 +223,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     [totalCount]
   );
 
-  // ═════════════════════════════════════════════════════════
-  // HARD CLEAR — 3 attempts + verification
-  // ═════════════════════════════════════════════════════════
+
   const clearStaging = async (): Promise<boolean> => {
     const MAX_ATTEMPTS = 3;
 
@@ -318,9 +302,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     }
   };
 
-  // ═════════════════════════════════════════════════════════
-  // FETCH STAGING
-  // ═════════════════════════════════════════════════════════
+
   const fetchEDIData = async () => {
     try {
       setIsLoading(true);
@@ -373,9 +355,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     }
   };
 
-  // ═════════════════════════════════════════════════════════
-  // FILE UPLOAD
-  // ═════════════════════════════════════════════════════════
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -428,9 +407,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     reader.readAsArrayBuffer(file);
   };
 
-  // ═════════════════════════════════════════════════════════
-  // UPLOAD TO EDI STAGING
-  // ═════════════════════════════════════════════════════════
+
   const CHUNK_SIZE = 100;
 
   const handleUploadToEDI = async () => {
@@ -576,9 +553,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     }
   };
 
-  // ═════════════════════════════════════════════════════════
-  // SAVE VALID ROWS
-  // ═════════════════════════════════════════════════════════
+ 
   const handlePostValid = async () => {
     if (validRows.length === 0) {
       setUploadError("No valid records to post.");
@@ -633,9 +608,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // ═════════════════════════════════════════════════════════
-  // DOWNLOAD TEMPLATE
-  // ═════════════════════════════════════════════════════════
+ 
   const handleDownloadTemplate = async () => {
     try {
       setIsLoading(true);
@@ -697,7 +670,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
                 }
               }
             } catch {
-              // silent
+              
             }
           }
 
@@ -707,7 +680,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
             }
           }
         } catch {
-          // silent
+          
         }
       }
 
@@ -758,9 +731,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     }
   };
 
-  // ═════════════════════════════════════════════════════════
-  // COLUMNS
-  // ═════════════════════════════════════════════════════════
+  
   const columns: ColumnDef<EdiRow>[] = [
     {
       accessorKey: "error_message",
@@ -804,9 +775,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ediUploaded]);
 
-  // ═════════════════════════════════════════════════════════
-  // RENDER
-  // ═════════════════════════════════════════════════════════
+
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-secondary/30 p-3">

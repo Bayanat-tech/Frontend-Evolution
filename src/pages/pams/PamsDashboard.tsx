@@ -25,7 +25,7 @@ import { pamsSelect } from '../../api/pams';
 import { executeWmsInboundSql } from '../../api/wms';
 import { useAuth } from '../../state/AuthContext';
 
-// ── Interfaces ───────────────────────────────────────────────
+
 interface EmployeeData { TOTAL_EMPLOYEES: number; }
 interface EmployeeDivision { DIV_CODE: string; DIV_NAME: string; }
 interface EmployeeDepartment { DEPT_CODE: string; DEPT_NAME: string; }
@@ -77,7 +77,7 @@ function interpolateForFill(points: { x: number; y: number }[]) {
   return pts;
 }
 
-// ── Styles (Finance-dashboard look, scoped to .pams-dashboard) ─
+
 const PAMS_CSS = `
 .pams-dashboard { --pd-blue:#00378C; --pd-border:#dbe3ee; --pd-muted:#64748b; padding:0 14px 20px; min-height:100vh; display:flex; flex-direction:column; gap:10px; font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif; font-size:11px; color:#0f172a; background:#fff; box-sizing:border-box; }
 .pams-dashboard * { box-sizing:border-box; }
@@ -203,7 +203,7 @@ const PAMS_CSS = `
 @keyframes pams-rot { to { transform:rotate(360deg); } }
 `;
 
-// ── UI Components ────────────────────────────────────────────
+
 const FilterSelect = ({ label, value, onChange, options, disabled }: any) => (
   <label>
     <span>{label}</span>
@@ -273,7 +273,7 @@ const RankPanel = ({
   </article>
 );
 
-// ── Main Component ───────────────────────────────────────────
+
 const PamsDashboard = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -284,12 +284,12 @@ const PamsDashboard = () => {
 
   const statusFilterClause = statusMode === 'final' ? `NVL(FINAL_APPROVED,'No') = 'YES'` : `NVL(FINAL_APPROVED,'No') <> 'YES'`;
 
-  // ── Queries ────────────────────────────────────────────────
+ 
   const { data: Total_Employees } = useQuery<EmployeeData[]>({
-    queryKey: ['total_employees', ddivision, ddepartment, dperiod], // 1. Added dperiod
-    enabled: !!ddivision && !!ddepartment && !!dperiod, // 2. Only run when all filters are selected
+    queryKey: ['total_employees', ddivision, ddepartment, dperiod], 
+    enabled: !!ddivision && !!ddepartment && !!dperiod, 
     queryFn: async () => {
-      // 3. Use the exact view and period filter like the other working cards
+    
       const sql = `
 
       
@@ -326,7 +326,7 @@ const PamsDashboard = () => {
   const { data: Department } = useQuery<EmployeeDepartment[]>({
     queryKey: ['department', user?.LOGINID, ddivision],
     queryFn: async () => {
-      // If a specific division is selected, filter by it. Otherwise, show all departments for this employee.
+    
       const divCondition = ddivision && ddivision !== 'All' ? `AND D.DIV_CODE = '${ddivision}'` : '';
       
       const sql = `
@@ -474,7 +474,7 @@ const PamsDashboard = () => {
     URL.revokeObjectURL(url);
   };
 
-  // ── Chart.js Integration ───────────────────────────────────
+  
   useEffect(() => {
     if (!RatingDistribution || !AppraisalStatus || !DeptHistogram) return;
 
@@ -520,7 +520,7 @@ const PamsDashboard = () => {
 
       Chart.defaults.font.family = "'Inter', 'Segoe UI', sans-serif";
 
-      // 1. Bell Chart
+
       new Chart(bellCanvas, {
         type: 'line', plugins: [multiColorFill],
         data: {
@@ -539,7 +539,7 @@ const PamsDashboard = () => {
         },
       });
 
-      // 2. Doughnut (Appraisal Status)
+
       const sRow = (AppraisalStatus as any[])?.[0] ?? {};
       const completed = Number(sRow.COMPLETED ?? 0);
       const inProgress = Number(sRow.IN_PROGRESS ?? 0);
@@ -552,14 +552,14 @@ const PamsDashboard = () => {
         options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', padding: 10, cornerRadius: 8, callbacks: { label: (ctx: any) => { const pct = Math.round((ctx.parsed / total) * 100); return ` ${ctx.label}: ${ctx.parsed} (${pct}%)`; } } } } },
       });
 
-      // 3. Rating Range Breakdown
+
       new Chart(ratingRangeCanvas, {
         type: 'doughnut',
         data: { labels: legendItems.map((r) => `${r.num} - ${r.label}`), datasets: [{ data: legendItems.map((r) => r.count), backgroundColor: legendItems.map((r) => r.color), borderWidth: 3, borderColor: '#fff' }] },
         options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', padding: 10, cornerRadius: 8, callbacks: { label: (ctx: any) => ` ${ctx.label}: ${ctx.parsed} (${legendItems[ctx.dataIndex].pct})` } } } },
       });
 
-      // 4. Department Performance
+
       const deptRows = (DeptHistogram as any[]) ?? [];
       const deptLabels = deptRows.map((r: any) => r.DEPT_NAME ?? '');
       const deptValues = deptRows.map((r: any) => Number(r.AVG_RATING));
@@ -596,12 +596,11 @@ const PamsDashboard = () => {
   const modeLabel = statusMode === 'final' ? 'Final Approved' : 'Running';
   const companyLabel = user?.company_code || '—';
 
-  // ── Render ─────────────────────────────────────────────────
+
   return (
     <div className='pams-dashboard'>
       <style>{PAMS_CSS}</style>
 
-      {/* Breadcrumb */}
       <div className='pams-crumb'>
         <Home size={13} />
         <span>Home</span>
@@ -609,7 +608,7 @@ const PamsDashboard = () => {
         <b>PAMS</b>
       </div>
 
-      {/* Top Header */}
+   
       <header className='pams-header'>
         <div>
           <h1>
@@ -655,7 +654,7 @@ const PamsDashboard = () => {
         </div>
       </header>
 
-      {/* Hero KPIs */}
+
       <section className='pams-hero'>
         <HeroCard title='Total Employees' value={Total_Employees?.[0]?.TOTAL_EMPLOYEES || 0} caption='Active workforce' icon={Users} tone='blue' loading={!Total_Employees} />
         <HeroCard
@@ -674,7 +673,7 @@ const PamsDashboard = () => {
 
       
 
-      {/* Charts Row 1 */}
+
       <div className='pams-chart-grid'>
         <article className='pams-card'>
           <div className='pams-card-head'>
@@ -729,7 +728,7 @@ const PamsDashboard = () => {
         </article>
       </div>
 
-      {/* Charts Row 2 */}
+
       <div className='pams-chart-grid'>
         <article className='pams-card'>
           <div className='pams-card-head'>
@@ -769,7 +768,7 @@ const PamsDashboard = () => {
         </article>
       </div>
 
-      {/* Top / Bottom performers */}
+   
       <div className='pams-panel-grid'>
         <RankPanel
           title='Top 5 Rated Employees'
@@ -789,7 +788,7 @@ const PamsDashboard = () => {
         />
       </div>
 
-      {/* Department table */}
+
       <article className='pams-card'>
         <div className='pams-card-head'>
           <h3><Users size={15} />Department Performance Overview</h3>

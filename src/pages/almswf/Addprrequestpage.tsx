@@ -55,6 +55,9 @@ function fmt3(n: number) {
 }
 function num(v: unknown) { return Number(v) || 0; }
 function newId() { return `${Date.now()}_${Math.random().toString(36).slice(2)}`; }
+function taxPercForType(type: string | undefined, fallback = 0): number {
+  return type === "Std." ? 5 : type ? 0 : fallback;
+}
 
 const INPUT_BG = "!bg-white disabled:!bg-slate-100 disabled:!text-slate-500";
 const AMOUNT_CELL = "px-1 py-1 text-right font-bold text-emerald-600 bg-slate-200 text-[10px]";
@@ -249,8 +252,9 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
     CURRENCY_RATE: hdr.CURRENCY_RATE ?? 0,
     TX_CAT_CODE: hdr.TX_CAT_CODE ?? "", TX_CAT_NAME: hdr.TX_CAT_NAME ?? "",
     TX_COMPNTCAT_CODE_1: hdr.TX_COMPNTCAT_CODE_1 ?? "",
-    TX_COMPNT_PERC_1: 0, TX_COMPNT_AMT_1: 0, TX_COMPNT_LCURAMT_1: 0,
-    TAX_TYPE: "Std.", TX_COMPNTCAT_CODE: "", TX_COMPNTCAT_NAME: "",
+    TX_COMPNT_PERC_1: taxPercForType(hdr.TAX_TYPE as string),
+    TAX_TYPE: "Std.", TX_COMPNTCAT_CODE: "",
+    TX_COMPNTCAT_NAME: (hdr as any).TX_COMPNTCAT_NAME ?? "",
     CAPEX_OPEX_NON_OPEX: "",
     USER_DT: null, USER_ID: "",
     SUPPLIER_CODE: "", SUPPLIER_NAME: "", CASH_IND: "",
@@ -260,7 +264,7 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
   } as TPRItem;
 }
 
-function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number, isSupplierUser: boolean, productNameOf?: (code: unknown) => string) {
+function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number, isSupplierUser: boolean, productNameOf?: (code: unknown) => string, requireCapex = false) {
   const errors: string[] = [];
   if (!String(header.DESCRIPTION ?? "").trim()) errors.push("Description / Reason is required");
   if (!String(header.REMARKS ?? "").trim()) errors.push("Remarks is required");
@@ -275,7 +279,7 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
       if (isSupplierUser && !item.SUPPLIER) errors.push(`Item ${index + 1}: Supplier is required`);
       if (userLevel === 1 && computeQuantity(item) <= 0) errors.push(`Item ${index + 1}: Quantity must be greater than 0`);
       if (num(item.ITEM_RATE) <= 0) errors.push(`Item ${index + 1}: Rate must be greater than 0`);
-      if (!item.CAPEX_OPEX_NON_OPEX) errors.push(`Item ${index + 1}: CAPEX is required`);
+      if (requireCapex && !item.CAPEX_OPEX_NON_OPEX) errors.push(`Item ${index + 1}: CAPEX is required`);
     });
   }
 
@@ -412,6 +416,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
     setHdr("FLOW_CODE", flowCode);
     if (flowDescription) setHdr("FLOW_DESCRIPTION", flowDescription);
   }, [flowCode, flowDescription, isEditMode, isViewMode]);
+
 
   useEffect(() => {
     if (isInitialized.current) return;
@@ -604,8 +609,10 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         FLOW_CODE: (h as any).FLOW_CODE || flowCode || prev.FLOW_CODE || "",
         FLOW_DESCRIPTION: (h as any).FLOW_DESCRIPTION || flowDescription || prev.FLOW_DESCRIPTION || "",
         CURR_NAME: (h as any).CURR_NAME || prev.CURR_NAME || "",
+        TAX_TYPE: (h as any).TAX_TYPE || prev.TAX_TYPE || "No VAT",
         TX_CAT_NAME: (h as any).TX_CAT_NAME || prev.TX_CAT_NAME || "",
         TX_COMPNTCAT_NAME: (h as any).TX_COMPNTCAT_NAME || prev.TX_COMPNTCAT_NAME || "",
+        
       }));
       setLoading(false);
     } else {
@@ -653,6 +660,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         COST_NAME: row.COST_NAME || costCodes.find((c) => c.COST_CODE === row.COST_CODE)?.COST_NAME || "",
         SUPPLIER: supCode,
         SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === supCode)?.SUPPLIER_NAME || "",
+        TAX_TYPE: (row as any).TAX_TYPE || (num(row.TX_COMPNT_PERC_1) > 0 ? "Std." : "No VAT"),
         TX_CAT_NAME: (row as any).TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === row.TX_CAT_CODE)?.TX_CAT_NAME || "",
         TX_COMPNTCAT_NAME: (row as any).TX_COMPNTCAT_NAME || taxComponentList.find((t) => t.TX_COMPNTCAT_CODE === row.TX_COMPNTCAT_CODE_1)?.TX_COMPNTCAT_NAME || "",
         CURR_NAME: (row as any).CURR_NAME || currencyList.find((c) => c.CURR_CODE === row.CURR_CODE)?.CURR_NAME || "",
@@ -693,6 +701,13 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
     setItems(renumbered);
     itemsLoadedRef.current = true;
   }, [itemList, itemsFetching, productsFetched, suppliersFetched, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber, userApprovalLevel, header.CURRENCY_RATE]);
+   
+  useEffect(() => {
+    if (!(isEditMode || isViewMode) || !itemsLoadedRef.current || items.length === 0) return;
+    if ((hdrList[0] as any)?.TAX_TYPE) return;
+    const t = items[0].TAX_TYPE;
+    if (t && t !== header.TAX_TYPE) setHdr("TAX_TYPE", t);
+  }, [items, hdrList, isEditMode, isViewMode, header.TAX_TYPE]);
 
   useEffect(() => {
     if (userApprovalLevel < 2) return;
@@ -859,6 +874,12 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
   }, [items, lineSearch]);
   const canDeleteLines = !disabled && !userLevelLoading && userApprovalLevel < 2;
 
+  const isCreator =
+  (!isEditMode && !isViewMode) ||
+  (!!header.CREATE_USER &&
+    String(header.CREATE_USER).trim().toUpperCase() === loginid.toUpperCase());
+const showCapexColumn = !loading && !isCreator;
+
   const colWidths = useMemo(() => {
     const qtyGroup = [60, 50, 60, 65];
     const w: number[] = [30, 240, 55, ...qtyGroup, ...qtyGroup];
@@ -867,10 +888,10 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
     if (showAllColumns) {
       w.push(200, 100, 260, 270, 160, 210);
     }
-    w.push(90); // CAPEX
-    if (canDeleteLines) w.push(70); // ACTION — sirf level 1
+    if (showCapexColumn) w.push(90); 
+    if (canDeleteLines) w.push(70); 
     return w;
-  }, [showAllColumns, isSupplierUser, canDeleteLines]);
+  }, [showAllColumns, isSupplierUser, canDeleteLines, showCapexColumn]);
 
   const tableMinWidth = colWidths.reduce((a, b) => a + b, 0);
   const itemsColSpan = colWidths.length;
@@ -883,7 +904,8 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
       termsRef.current,
       userApprovalLevel,
       isSupplierUser,
-      productNameOf
+      productNameOf,
+      showCapexColumn
     );
     if (!valid) {
       const onlyTermErrors = errors.every((e) => e.startsWith("Term "));
@@ -927,6 +949,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
       FA_USER: "", HOD_USER: "", MAIL_CC: "", WARRANTY: "", PO_CREATOR: "", REQUEST_HOD_USER: "",
       CANCEL_REMARK: "",
       PDO_TYPE: header.PDO_TYPE || "N", TYPE_OF_CONTRACT: "",
+      TAX_TYPE: header.TAX_TYPE || "No VAT",
       AC_CODE: "", AC_NAME: "", COUNTRY_CODE: "", TERRITORY_CODE: "",
       ADDRESS_1: "", ADDRESS_2: "", ADDRESS_3: "", PHONE: "", FAX: "", E_MAIL: "",
       CONTACT_PERSON: "", MOBILE_NO: "", AC_TYPE: "", AC_ACTIVE: "",
@@ -957,6 +980,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
       USER_ID: isEditMode ? ((header as any).USER_ID || loginid) : loginid,
       TX_CAT_CODE: item.TX_CAT_CODE || "", TX_COMPNTCAT_CODE_1: item.TX_COMPNTCAT_CODE_1 || "",
       TX_COMPNT_PERC_1: item.TX_COMPNT_PERC_1 || 0, TX_COMPNT_AMT_1: item.TX_COMPNT_AMT_1 || 0,
+      TAX_TYPE: item.TAX_TYPE || header.TAX_TYPE || "No VAT",
       TX_COMPNT_LCURAMT_1: item.TX_COMPNT_LCURAMT_1 || 0, TX_COMPNT_1_EXPMT: "",
       CURR_CODE: item.CURR_CODE || "", LCURR_AMT: item.LCURR_AMT || 0,
       LCURR_AFTER_DISCOUNT: (item as any).LCURR_AFTER_DISCOUNT || 0,
@@ -966,7 +990,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
       CASH_IND: item.CASH_IND || "", MAIL_ATTATCH: "", ITEM_CANEL: "",
       SUPPLIER: item.SUPPLIER || "", REF_DOC_NO: 0,
       DISCOUNT_AMOUNT: (item as any).DISC_PRICE || 0, DISC_PERC: item.DISC_PERC || 0, FINAL_RATE: item.FINAL_RATE || 0,
-      COST_CODE: item.COST_CODE || "", CAPEX: item.CAPEX_OPEX_NON_OPEX,
+      COST_CODE: item.COST_CODE || "", CAPEX: item.CAPEX_OPEX_NON_OPEX || "",
       BUYER: "", REASON_FOR_PO_MODIFY: "", DOC_TYPE: "PR", DOC_NO: null,
       DOC_DATE: new Date().toISOString(), DIV_CODE: "", SERIAL_NO: 0,
       PROD_CODE: item.ITEM_CODE || "", PROD_NAME: item.ITEM_DESP || productNameOf(item.ITEM_CODE),
@@ -1272,7 +1296,9 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
     blank.TX_CAT_CODE = header.TX_CAT_CODE || "";
     blank.TX_CAT_NAME = header.TX_CAT_NAME || "";
     blank.TX_COMPNTCAT_CODE_1 = header.TX_COMPNTCAT_CODE_1 || "";
-    blank.TX_COMPNT_PERC_1 = (header as any).TX_COMPNT_PERC_1 || 0;
+    blank.TX_COMPNTCAT_NAME = (header as any).TX_COMPNTCAT_NAME || "";
+    blank.TAX_TYPE = String(header.TAX_TYPE || "No VAT");
+    blank.TX_COMPNT_PERC_1 = num((header as any).TX_COMPNT_PERC_1) || taxPercForType(header.TAX_TYPE as string);
     blank.CASH_IND = "N";
     blank.CAPEX_OPEX_NON_OPEX = "";
     (blank as any).id = newId();
@@ -1302,8 +1328,10 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         blank.TX_CAT_CODE = header.TX_CAT_CODE || "";
         blank.TX_CAT_NAME = header.TX_CAT_NAME || "";
         blank.TX_COMPNTCAT_CODE_1 = header.TX_COMPNTCAT_CODE_1 || "";
-        blank.TX_COMPNT_PERC_1 = (header as any).TX_COMPNT_PERC_1 || 0;
+        blank.TX_COMPNTCAT_NAME = (header as any).TX_COMPNTCAT_NAME || ""; 
         blank.CASH_IND = "N";
+        blank.TAX_TYPE = String(header.TAX_TYPE || "No VAT");
+        blank.TX_COMPNT_PERC_1 = num((header as any).TX_COMPNT_PERC_1) || taxPercForType(header.TAX_TYPE as string);
         (blank as any).id = newId();
 
         blank.ITEM_CODE = String(prod?.PROD_CODE ?? r.prodCode);
@@ -1314,7 +1342,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         blank.ITEM_RATE = r.rate;
         blank.QTY_PUOM = r.qtyPuom;
         blank.QTY_LUOM = r.qtyLuom;
-        blank.CAPEX_OPEX_NON_OPEX = r.capex;
+        blank.CAPEX_OPEX_NON_OPEX = r.capex || "";
         if (sup) {
           blank.SUPPLIER = String(sup.SUPPLIER_CODE);
           (blank as any).SUPPLIER_NAME = String(sup.SUPPLIER_NAME ?? "");
@@ -1389,6 +1417,16 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
         else recalcItem(item, exRate);
         (item as any).DISC_PRICE = newPrice;
         item.DISCOUNT_AMOUNT = newPrice;
+        updated[index] = item;
+        return updated;
+      }
+
+        if (field === "TAX_TYPE" && typeof value === "string") {
+        item.TAX_TYPE = value;
+        item.TX_COMPNT_PERC_1 = taxPercForType(value);
+        const exRate = num(item.CURRENCY_RATE) || 1;
+        if (userApprovalLevel >= 2) recalcItemOnApprovedQty(item, exRate);
+        else recalcItem(item, exRate);
         updated[index] = item;
         return updated;
       }
@@ -1696,6 +1734,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
                             const v = e.target.value;
                             const perc = v === "Std." ? 5 : 0;
                             setHdr("TAX_TYPE", v);
+                            setHdr("TX_COMPNT_PERC_1", perc); 
                             setItems((prev) => prev.map((item) => {
                               const m: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
                               const ex = num(m.CURRENCY_RATE) || 1;
@@ -1964,7 +2003,7 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
                             {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX LCURR AMOUNT</th>}
                             {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">LCURR AMOUNT AFTER TAX</th>}
 
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">CAPEX</th>
+                            {showCapexColumn && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">CAPEX</th>}
                             {canDeleteLines && (
                               <th rowSpan={2} className="finance-action-col-head px-0 py-1.5 text-center align-middle">ACTION</th>
                             )}                          </tr>
@@ -2165,18 +2204,20 @@ const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: strin
                                 {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(taxLcurr)}</td>}
                                 {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(lcurrAfterDisc)}</td>}
 
-                                <td className="px-1 py-1">
-                                  <Select
-                                    value={item.CAPEX_OPEX_NON_OPEX || ""}
-                                    onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX", e.target.value)}
-                                    disabled={disabled}
-                                    className="h-7 w-full text-[10px] px-1"
-                                  >
-                                    <option value="" disabled>Select...</option>
-                                    <option value="N">No</option>
-                                    <option value="Y">Yes</option>
-                                  </Select>
-                                </td>
+                                {showCapexColumn && (
+  <td className="px-1 py-1">
+    <Select
+      value={item.CAPEX_OPEX_NON_OPEX || ""}
+      onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX", e.target.value)}
+      disabled={disabled}
+      className="h-7 w-full text-[10px] px-1"
+    >
+      <option value="" disabled>Select...</option>
+      <option value="N">No</option>
+      <option value="Y">Yes</option>
+    </Select>
+  </td>
+)}
 
                                 {canDeleteLines && (
                                   <td className="finance-action-col px-1 py-1 text-center">

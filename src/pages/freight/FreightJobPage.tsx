@@ -284,6 +284,50 @@ export function FreightJobPage({
     setView(startMode);
   }, [companyCode, direction.code, mode.code, startMode, userId]);
 
+  const [divisionMap, setDivisionMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!companyCode) return;
+    lookup("freight_division", companyCode, "NULL", "NULL", "NULL")
+      .then((rows) => {
+        const map: Record<string, string> = {};
+        rows.forEach((r) => {
+          const code = lookupText(r, "DIV_CODE");
+          const name = lookupText(r, "DIV_NAME");
+          if (code && name) map[code] = name;
+        });
+        setDivisionMap(map);
+      })
+      .catch(() => {});
+  }, [companyCode]);
+
+  useEffect(() => {
+    if (job.div_code && !job.div_name) {
+      if (divisionMap[job.div_code]) {
+        setJob((curr) => ({
+          ...curr,
+          div_name: divisionMap[job.div_code],
+        }));
+      } else {
+        lookup("freight_division", companyCode, "NULL", "NULL", job.div_code)
+          .then((rows) => {
+            const match = rows.find((r) => lookupText(r, "DIV_CODE") === job.div_code);
+            if (match) {
+              const name = lookupText(match, "DIV_NAME");
+              setJob((curr) => ({
+                ...curr,
+                div_name: name || curr.div_name,
+              }));
+              if (name) {
+                setDivisionMap((prev) => ({ ...prev, [job.div_code]: name }));
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [job.div_code, job.div_name, companyCode, divisionMap]);
+
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
     { accessorKey: "job_date", header: "Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
@@ -673,15 +717,22 @@ export function FreightJobPage({
                   displayFields={["PRIN_CODE", "PRIN_NAME"]}
                   columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]}
                   loadOptions={(search) => lookup("freight_principal", companyCode, "NULL", "NULL", search)}
-                  onChange={(value, row) =>
-                    setJob((current) => ({
-                      ...current,
-                      prin_code: value,
-                      prin_name: lookupText(row || undefined, "PRIN_NAME") || current.prin_name,
-                      quotation_ref: current.prin_code !== value ? "" : current.quotation_ref,
-                      div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code,
-                    }))
-                  }
+                  onChange={(value, row) => {
+                    const rowDiv = lookupText(row || undefined, "DIV_CODE");
+                    const rowDivName = lookupText(row || undefined, "DIV_NAME");
+                    setJob((current) => {
+                      const nextDivCode = rowDiv || current.div_code;
+                      const nextDivName = rowDivName || divisionMap[nextDivCode] || (current.div_code === nextDivCode ? current.div_name : "");
+                      return {
+                        ...current,
+                        prin_code: value,
+                        prin_name: lookupText(row || undefined, "PRIN_NAME") || current.prin_name,
+                        quotation_ref: current.prin_code !== value ? "" : current.quotation_ref,
+                        div_code: nextDivCode,
+                        div_name: nextDivName,
+                      };
+                    });
+                  }}
                   required
                 />
 
@@ -693,32 +744,48 @@ export function FreightJobPage({
                   displayFields={["DEPT_CODE", "DEPT_NAME"]}
                   columns={[{ field: "DEPT_CODE", header: "Code" }, { field: "DEPT_NAME", header: "Department" }, { field: "DIV_CODE", header: "Div" }]}
                   loadOptions={(search) => lookup("freight_department", companyCode, "NULL", "NULL", search)}
-                  onChange={(value, row) =>
-                    setJob((current) => ({
-                      ...current,
-                      dept_code: value,
-                      dept_name: lookupText(row || undefined, "DEPT_NAME") || current.dept_name,
-                      div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code,
-                    }))
-                  }
+                  onChange={(value, row) => {
+                    const rowDiv = lookupText(row || undefined, "DIV_CODE");
+                    const rowDivName = lookupText(row || undefined, "DIV_NAME");
+                    setJob((current) => {
+                      const nextDivCode = rowDiv || current.div_code;
+                      const nextDivName = rowDivName || divisionMap[nextDivCode] || (current.div_code === nextDivCode ? current.div_name : "");
+                      return {
+                        ...current,
+                        dept_code: value,
+                        dept_name: lookupText(row || undefined, "DEPT_NAME") || current.dept_name,
+                        div_code: nextDivCode,
+                        div_name: nextDivName,
+                      };
+                    });
+                  }}
                   required
                 />
                 <Lookup
                   label="Division"
                   value={job.div_code}
-                  displayValue={job.div_name}
+                  displayValue={(() => {
+                    const dName = job.div_name || divisionMap[job.div_code];
+                    if (!dName) return undefined;
+                    return dName.includes(job.div_code) ? dName : `${job.div_code} - ${dName}`;
+                  })()}
                   valueField="DIV_CODE"
                   displayFields={["DIV_CODE", "DIV_NAME"]}
                   columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]}
                   loadOptions={(search) => lookup("freight_division", companyCode, "NULL", "NULL", search)}
-                  onChange={(value) =>
+                  onChange={(value, row) => {
+                    const resolvedName = lookupText(row || undefined, "DIV_NAME") || divisionMap[value] || "";
                     setJob((current) => ({
                       ...current,
                       div_code: value,
+                      div_name: resolvedName || current.div_name,
                       tx_cat_code: current.div_code === value ? current.tx_cat_code : "",
                       tx_cat_name: current.div_code === value ? current.tx_cat_name : "",
-                    }))
-                  }
+                    }));
+                    if (resolvedName) {
+                      setDivisionMap((prev) => ({ ...prev, [value]: resolvedName }));
+                    }
+                  }}
                   required
                 />
                 <Lookup
@@ -833,6 +900,7 @@ export function FreightJobPage({
                       ...current,
                       port_code: value,
                       port_code_name: lookupText(row || undefined, "PORT_NAME") || current.port_code_name,
+                      place_receipt: lookupText(row || undefined, "COUNTRY_NAME") || current.place_receipt,
                     }))
                   }
                   required
@@ -851,6 +919,7 @@ export function FreightJobPage({
                       ...current,
                       destination_port: value,
                       destination_port_name: lookupText(row || undefined, "PORT_NAME") || current.destination_port_name,
+                       place_delivery: lookupText(row || undefined, "COUNTRY_NAME") || current.place_delivery,
                     }))
                   }
                   required
@@ -1742,4 +1811,4 @@ function formatDate(value: string) {
   return date.toLocaleDateString("en-GB");
 }
 
-const portColumns = [{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }, { field: "COUNTRY_CODE", header: "Country" }];
+const portColumns = [{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }, { field: "COUNTRY_NAME", header: "Country" }];

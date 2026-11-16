@@ -487,16 +487,20 @@ export default function YearlyLeaveBalancePage() {
             </div>
           </Field>
           {/* Same Field wrapper as From/To so the label looks identical; options are divs (no nested labels) */}
+          <div className="md:col-span-2 xl:col-span-2">
           <Field label="Report Type">
             <div
               className="rounded-md border border-slate-300 bg-blue-50/60 px-2.5 text-[12px] font-medium"
               style={{
                 display: "flex",
                 flexDirection: "row",
+                 flexWrap: "wrap",  
+                  columnGap: 16,  
                 alignItems: "center",
                 gap: 16,
-                height: 32,
-                width: "100%",
+                minHeight: 32,
+               width: "fit-content", 
+                maxWidth: "100%",  
                 boxSizing: "border-box",
               }}
             >
@@ -561,6 +565,7 @@ export default function YearlyLeaveBalancePage() {
               ))}
             </div>
           </Field>
+          </div>
         </div>
 
         {!dateRangeValid && (

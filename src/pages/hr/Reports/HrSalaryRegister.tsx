@@ -692,8 +692,9 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
               className="field-row"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                gap: 10,
+                gridTemplateColumns: "120px 100px 130px 180px 180px",
+                justifyContent: "start",
+                gap: 14,
                 marginTop: 10,
               }}
             >
@@ -716,6 +717,7 @@ export const HrSalaryRegister = forwardRef<HrSalaryRegisterHandle, Props>(
                   type="number"
                   value={payYear}
                   onChange={(e) => setPayYear(e.target.value)}
+                  style={{ fontSize: 12 }}
                 />
               </FloatLabel>
 

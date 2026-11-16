@@ -17,10 +17,11 @@ import { LmsDialog } from "../../../components/ui/LmsDialog";
 import { Input } from "../../../components/ui/Input";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { Select } from "../../../components/ui/Select";
+import { LookupField } from "../../../components/ui/LookupField"; // adjust path if LookupField lives elsewhere
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker"; // adjust path if BiscDatePicker lives elsewhere
 import { useAuth } from "../../../state/AuthContext";
 import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate";
-import { getDynamicLookupaccount } from "../../../api/lookups";
+import { getDynamicLookupaccount, type LookupRow } from "../../../api/lookups";
 import { api } from "../../../api/client";
 import { HrLeaveAttachmentPanel } from "./HrLeaveAttachmentPanel";
 
@@ -103,6 +104,30 @@ const initialForm: LeaveForm = {
   dutyresumedate: "",
   actualresumedate: "",
 };
+
+// ---------------------------------LOOKUP HELPERS-----------------------------------//
+const YES_NO_ROWS: LookupRow[] = [
+  { CODE: "Y", NAME: "Yes" },
+  { CODE: "N", NAME: "No" },
+];
+const YES_NO_COLUMNS = [{ field: "NAME", header: "Option" }];
+
+// LookupField takes an async loader; for lists we already hold in memory we just return them.
+const loadStatic = (rows: LookupRow[]) => async () => rows;
+
+const yesNoText = (value: string) => (value === "Y" ? "Yes" : value === "N" ? "No" : "");
+
+// LookupField renders its own label, so it must not be wrapped in <Field> (nested <label>s misbehave).
+// This wrapper only adds the red border and the error text.
+function LookupWrap({ error, children }: { error?: string; children: ReactNode }) {
+  return (
+    <div className={`flex min-w-0 flex-col gap-1 ${error ? "[&_.lookup-field-trigger]:!border-red-400" : ""}`}>
+      {children}
+      {error && <span className="text-[11px] font-medium text-red-600">{error}</span>}
+    </div>
+  );
+}
+// -----------------------------------------------------------------------------------//
 
 // ---------------------------------SAVE API PROCEDURE-----------------------------------//
 type ApiResponse<T> = {
@@ -247,13 +272,11 @@ export function LeaveRequestDialog({
   const fieldsDisabled = readOnly || !isCreator || workflowLoading || Boolean(workflowError);
 
   // Sick leave (e.g. "002 - SICK LEAVE") needs a supporting attachment before it can be submitted.
+  // For every other leave type the attachment is optional.
   const isSickLeave = form.leaveType === "002" || (form.leaveTypeDesc || "").toUpperCase().includes("SICK");
   const sickLeaveNeedsAttachment = isCreator && isSickLeave && (attachmentCount ?? 0) === 0;
 
-  // The Attachments tab exists only for sick leave; always start on the details tab.
-  useEffect(() => {
-    if (!isSickLeave) setActiveTab("details");
-  }, [isSickLeave]);
+  // Always start on the details tab when the dialog / page opens.
   useEffect(() => {
     if (open) setActiveTab("details");
   }, [open]);
@@ -268,12 +291,9 @@ export function LeaveRequestDialog({
     return count;
   };
 
+  // Attachment count is tracked for every leave type (required for sick leave, optional for the rest).
   useEffect(() => {
     if (!open) return;
-    if (!isSickLeave) {
-      setAttachmentCount(null);
-      return;
-    }
     if (!requestNumber) {
       setAttachmentCount(0);
       return;
@@ -289,7 +309,7 @@ export function LeaveRequestDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, requestNumber, isSickLeave]);
+  }, [open, requestNumber]);
 
   useEffect(() => {
     if (!open) return;
@@ -397,6 +417,34 @@ export function LeaveRequestDialog({
     });
     return Array.from(map.values()).sort((a, b) => getLeaveTypeLabel(a).localeCompare(getLeaveTypeLabel(b)));
   }, [leaveTypes]);
+
+  // ---------- Rows + display text for the LookupFields ----------
+  const employeeRows = useMemo<LookupRow[]>(
+    () =>
+      employees.map((employee) => ({
+        CODE: getEmployeeCode(employee),
+        ALTERNATE_ID: String(employee.ALTERNATE_ID || (employee as any).alternate_id || ""),
+        NAME: getEmployeeName(employee),
+      })),
+    [employees]
+  );
+
+  const leaveTypeRows = useMemo<LookupRow[]>(
+    () =>
+      uniqueLeaveTypes.map((leaveType) => ({
+        CODE: String(leaveType.LEAVE_TYPE || ""),
+        DESC: String(leaveType.LEAVE_TYPE_DESC || ""),
+      })),
+    [uniqueLeaveTypes]
+  );
+
+  const employeeDisplay = selectedEmployee ? getEmployeeName(selectedEmployee) : form.employeeName;
+
+  const leaveTypeDisplay = useMemo(() => {
+    if (!form.leaveType) return "";
+    const match = uniqueLeaveTypes.find((leaveType) => String(leaveType.LEAVE_TYPE || "") === form.leaveType);
+    return match ? getLeaveTypeLabel(match) : form.leaveTypeDesc || form.leaveType;
+  }, [uniqueLeaveTypes, form.leaveType, form.leaveTypeDesc]);
 
   const update = (key: keyof LeaveForm, value: string) => {
     setFieldErrors((prev) => {
@@ -658,6 +706,7 @@ export function LeaveRequestDialog({
     if (flagErrors()) return;
 
     // Sick leave cannot be submitted until at least one attachment is uploaded.
+    // Other leave types may submit with or without attachments.
     if (action === "SUBMITTED" && isCreator && isSickLeave) {
       if (!requestNumber) {
         setNotice({ type: "error", message: "Please attach a supporting document before submitting sick leave." });
@@ -776,6 +825,7 @@ export function LeaveRequestDialog({
             : "Draft saved. Attachments will enable after request number is available.",
         });
         // Sick leave: take the user straight to the Attachments tab after the draft is saved.
+        // Other leave types stay on the details tab (attachments are optional).
         if (isSickLeave && (savedRequestNumber || requestNumber)) setActiveTab("attachments");
         onSaved();
         return savedRequestNumber || requestNumber || undefined;
@@ -924,44 +974,53 @@ export function LeaveRequestDialog({
         </p>
       )}
 
-      {/* Tabs: the Attachments tab exists only for sick leave */}
-      {isSickLeave && (
-        <div className="flex gap-1 border-b border-slate-200">
-          {(
-            [
-              { id: "details", label: "Leave Details" },
-              { id: "attachments", label: "Attachments" },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-1.5 text-xs font-semibold ${
-                activeTab === tab.id
-                  ? "border-[#00378C] text-[#00378C]"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {tab.id === "attachments" && <Paperclip size={13} />}
-              {tab.label}
-              {tab.id === "attachments" && attachmentCount !== null && attachmentCount > 0 && (
-                <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">{attachmentCount}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Tabs: Attachments is required for sick leave and optional for every other leave type */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {(
+          [
+            { id: "details", label: "Leave Details" },
+            { id: "attachments", label: "Attachments" },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-1.5 text-xs font-semibold ${
+              activeTab === tab.id
+                ? "border-[#00378C] text-[#00378C]"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {tab.id === "attachments" && <Paperclip size={13} />}
+            {tab.label}
+            {tab.id === "attachments" && (
+              <span className={`text-[10px] font-medium ${isSickLeave ? "text-red-500" : "text-slate-400"}`}>
+                {isSickLeave ? "(Required)" : ""}
+              </span>
+            )}
+            {tab.id === "attachments" && attachmentCount !== null && attachmentCount > 0 && (
+              <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">{attachmentCount}</span>
+            )}
+          </button>
+        ))}
+      </div>
 
-      {isSickLeave && activeTab === "attachments" && (
-        <HrLeaveAttachmentPanel
-          requestNumber={requestNumber}
-          companyCode={companyCode}
-          loginId={loginId}
-          readOnly={fieldsDisabled}
-          onCountChange={setAttachmentCount}
-        />
-      )}
+      {activeTab === "attachments" &&
+        (requestNumber ? (
+          <HrLeaveAttachmentPanel
+            requestNumber={requestNumber}
+            companyCode={companyCode}
+            loginId={loginId}
+            //readOnly={fieldsDisabled}
+            onCountChange={setAttachmentCount}
+          />
+        ) : (
+          <p className="m-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Save As Draft first, then you can upload attachments here.
+          </p>
+        ))}
+
       {showSendBackRemark && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Sent back with remarks</p>
@@ -976,67 +1035,67 @@ export function LeaveRequestDialog({
       )}
 
       {/* Three columns side-by-side with bordered section cards */}
-      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${isSickLeave && activeTab === "attachments" ? "hidden" : ""}`}>
+      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${activeTab === "attachments" ? "hidden" : ""}`}>
         {/* ---------- Column 1: Leave Details ---------- */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
             <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Details</h3>
           </div>
           <div className="flex flex-col gap-2.5 p-3">
-            <Field label="Employee" error={fieldErrors.employeeCode}>
-              <Select
+            {/* Employee lookup */}
+            <LookupWrap error={fieldErrors.employeeCode}>
+              <LookupField
+                label="Employee"
                 value={form.employeeCode}
-                onChange={(event) => handleEmployeeChange(event.target.value)}
+                displayValue={employeeDisplay}
+                columns={[
+                  { field: "ALTERNATE_ID", header: "Emp ID", width: 110 },
+                  { field: "NAME", header: "Name" },
+                ]}
+                valueField="CODE"
+                displayFields={["NAME"]}
+                loadOptions={loadStatic(employeeRows)}
+                onChange={(code) => handleEmployeeChange(code)}
                 disabled={fieldsDisabled || loadingEmployees}
-              >
-                <option value="">{loadingEmployees ? "Loading employees..." : "Select employee"}</option>
-                {employees.map((employee) => {
-                  const code = getEmployeeCode(employee);
-                  const alternateId = employee.ALTERNATE_ID || employee.alternate_id;
-                  const name = getEmployeeName(employee);
-                  return (
-                    <option key={code} value={code}>
-                      {alternateId ? `${alternateId} - ${name}` : name}
-                    </option>
-                  );
-                })}
-              </Select>
-            </Field>
+                placeholder={loadingEmployees ? "Loading employees" : "Select employee"}
+              />
+            </LookupWrap>
 
-            <Field label="Leave Type *" error={fieldErrors.leaveType}>
-              <Select
+            {/* Leave type lookup */}
+            <LookupWrap error={fieldErrors.leaveType}>
+              <LookupField
+                label="Leave Type *"
                 value={form.leaveType}
-                onChange={(event) => update("leaveType", event.target.value)}
+                displayValue={leaveTypeDisplay}
+                columns={[
+                  { field: "CODE", header: "Code", width: 90 },
+                  { field: "DESC", header: "Description" },
+                ]}
+                valueField="CODE"
+                displayFields={["DESC"]}
+                loadOptions={loadStatic(leaveTypeRows)}
+                onChange={(code) => update("leaveType", code)}
                 disabled={fieldsDisabled || !form.employeeCode || loadingLeaveTypes}
-              >
-                <option value="">{loadingLeaveTypes ? "Loading..." : "Leave Type"}</option>
-                {uniqueLeaveTypes.map((leaveType) => {
-                  const code = String(leaveType.LEAVE_TYPE || "");
-                  return (
-                    <option key={code} value={code}>
-                      {getLeaveTypeLabel(leaveType)}
-                    </option>
-                  );
-                })}
-              </Select>
-            </Field>
+                placeholder={loadingLeaveTypes ? "Loading" : "Select leave type"}
+              />
+            </LookupWrap>
 
             <Field label="Leave Start Date *" error={fieldErrors.leaveStartDate}>
-              <Input
-                type="date"
+              <BiscDatePicker
                 value={form.leaveStartDate}
-                onChange={(event) => update("leaveStartDate", event.target.value)}
+                onChange={(value) => update("leaveStartDate", value)}
                 disabled={fieldsDisabled}
+                error={Boolean(fieldErrors.leaveStartDate)}
               />
             </Field>
             {/* User picks the end date; after the API call it is replaced by start date + leave days */}
             <Field label="Leave End Date *" error={fieldErrors.leaveEndDate}>
-              <Input
-                type="date"
+              <BiscDatePicker
                 value={form.leaveEndDate}
                 min={form.leaveStartDate || undefined}
-                onChange={(event) => update("leaveEndDate", event.target.value)}
+                onChange={(value) => update("leaveEndDate", value)}
                 disabled={fieldsDisabled}
+                error={Boolean(fieldErrors.leaveEndDate)}
               />
             </Field>
 
@@ -1062,10 +1121,9 @@ export function LeaveRequestDialog({
 
             {tenantName === "MHDL" && (
               <Field label="Duty Resume Date *">
-                <Input
-                  type="date"
+                <BiscDatePicker
                   value={form.dutyresumedate}
-                  onChange={(event) => update("dutyresumedate", event.target.value)}
+                  onChange={(value) => update("dutyresumedate", value)}
                   disabled={fieldsDisabled}
                 />
               </Field>
@@ -1090,29 +1148,37 @@ export function LeaveRequestDialog({
             <h3 className="m-0 text-sm font-semibold text-slate-900">Request Notes</h3>
           </div>
           <div className="flex flex-col gap-2.5 p-3">
-            <Field label="Leave Allowance">
-              <Select
+            <LookupWrap>
+              <LookupField
+                label="Leave Allowance"
                 value={form.leaveAllowance}
-                onChange={(event) => update("leaveAllowance", event.target.value as "N" | "Y" | "")}
+                displayValue={yesNoText(form.leaveAllowance)}
+                columns={YES_NO_COLUMNS}
+                valueField="CODE"
+                displayFields={["NAME"]}
+                loadOptions={loadStatic(YES_NO_ROWS)}
+                onChange={(code) => update("leaveAllowance", code as "N" | "Y" | "")}
                 disabled={fieldsDisabled}
-              >
-                <option value="">Leave Allowance</option>
-                <option value="Y">Yes</option>
-                <option value="N">No</option>
-              </Select>
-            </Field>
+                placeholder="Select"
+                popoverWidth={260}
+              />
+            </LookupWrap>
 
-            <Field label="Advance Payment">
-              <Select
+            <LookupWrap>
+              <LookupField
+                label="Advance Payment"
                 value={form.advancePayment}
-                onChange={(event) => update("advancePayment", event.target.value as "N" | "Y" | "")}
+                displayValue={yesNoText(form.advancePayment)}
+                columns={YES_NO_COLUMNS}
+                valueField="CODE"
+                displayFields={["NAME"]}
+                loadOptions={loadStatic(YES_NO_ROWS)}
+                onChange={(code) => update("advancePayment", code as "N" | "Y" | "")}
                 disabled={fieldsDisabled}
-              >
-                <option value="">Advance Payment</option>
-                <option value="Y">Yes</option>
-                <option value="N">No</option>
-              </Select>
-            </Field>
+                placeholder="Select"
+                popoverWidth={260}
+              />
+            </LookupWrap>
 
             <Field label="Cause Type">
               <Input
@@ -1162,33 +1228,35 @@ export function LeaveRequestDialog({
               <Input value={hodName} disabled readOnly />
             </Field>
 
-            <Field label="Air Ticket">
-              <Select
+            <LookupWrap>
+              <LookupField
+                label="Air Ticket"
                 value={form.airTicket}
-                onChange={(event) => update("airTicket", event.target.value as "N" | "Y" | "")}
+                displayValue={yesNoText(form.airTicket)}
+                columns={YES_NO_COLUMNS}
+                valueField="CODE"
+                displayFields={["NAME"]}
+                loadOptions={loadStatic(YES_NO_ROWS)}
+                onChange={(code) => update("airTicket", code as "N" | "Y" | "")}
                 disabled={fieldsDisabled}
-              >
-                <option value="">Air Ticket</option>
-                <option value="Y">Yes</option>
-                <option value="N">No</option>
-              </Select>
-            </Field>
+                placeholder="Select"
+                popoverWidth={260}
+              />
+            </LookupWrap>
 
             <div className="grid grid-cols-2 gap-2">
               <Field label="Travel Start Date">
-                <Input
-                  type="date"
+                <BiscDatePicker
                   value={form.travelDate}
-                  onChange={(event) => update("travelDate", event.target.value)}
+                  onChange={(value) => update("travelDate", value)}
                   disabled={fieldsDisabled}
                 />
               </Field>
               <Field label="Travel End Date">
-                <Input
-                  type="date"
+                <BiscDatePicker
                   value={form.travelEndDate}
                   min={form.travelDate || undefined}
-                  onChange={(event) => update("travelEndDate", event.target.value)}
+                  onChange={(value) => update("travelEndDate", value)}
                   disabled={fieldsDisabled}
                 />
               </Field>
@@ -1205,7 +1273,7 @@ export function LeaveRequestDialog({
         </div>
       </div>
 
-      {hasActualResumeDate(initialRow) && !(isSickLeave && activeTab === "attachments") && (
+      {hasActualResumeDate(initialRow) && activeTab !== "attachments" && (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
             <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
@@ -1224,19 +1292,17 @@ export function LeaveRequestDialog({
               </label>
             </div>
             <Field label="Actual Resume Date">
-              <Input
-                type="date"
+              <BiscDatePicker
                 value={form.actualresumedate}
-                onChange={(event) => update("actualresumedate", event.target.value)}
+                onChange={(value) => update("actualresumedate", value)}
                 disabled={fieldsDisabled}
               />
             </Field>
             {tenantName === "ALMS" && (
               <Field label="Duty Resume Date">
-                <Input
-                  type="date"
+                <BiscDatePicker
                   value={form.dutyresumedate}
-                  onChange={(event) => update("dutyresumedate", event.target.value)}
+                  onChange={(value) => update("dutyresumedate", value)}
                   disabled={fieldsDisabled}
                 />
               </Field>
@@ -1274,27 +1340,31 @@ export function LeaveRequestDialog({
         }
       >
         <div className="flex flex-col gap-3">
-          <Field label="Employee *">
-            <Select
-              value={sentBackParams.LOGIN_ID}
-              onChange={(e) => {
-                const selected = userFlowData.find((u) => u.LOGIN_ID === e.target.value);
-                setSentBackParams((prev) => ({
-                  ...prev,
-                  LOGIN_ID: e.target.value,
-                  USERNAME: selected?.USERNAME || "",
-                }));
-              }}
-              disabled={loadingFlowUsers}
-            >
-              <option value="">{loadingFlowUsers ? "Loading..." : "Select employee"}</option>
-              {userFlowData.map((u) => (
-                <option key={u.LOGIN_ID} value={u.LOGIN_ID}>
-                  {u.LOGIN_ID} - {u.USERNAME}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <LookupField
+            label="Employee *"
+            value={sentBackParams.LOGIN_ID}
+            displayValue={
+              sentBackParams.LOGIN_ID
+                ? `${sentBackParams.LOGIN_ID}${sentBackParams.USERNAME ? ` - ${sentBackParams.USERNAME}` : ""}`
+                : ""
+            }
+            columns={[
+              { field: "LOGIN_ID", header: "Login ID", width: 120 },
+              { field: "USERNAME", header: "Name" },
+            ]}
+            valueField="LOGIN_ID"
+            displayFields={["LOGIN_ID", "USERNAME"]}
+            loadOptions={loadStatic(userFlowData as LookupRow[])}
+            onChange={(id, row) =>
+              setSentBackParams((prev) => ({
+                ...prev,
+                LOGIN_ID: id,
+                USERNAME: row ? String((row as Record<string, unknown>).USERNAME ?? "") : "",
+              }))
+            }
+            disabled={loadingFlowUsers}
+            placeholder={loadingFlowUsers ? "Loading" : "Select employee"}
+          />
 
           <Field label="Remarks *">
             <textarea
@@ -1678,4 +1748,3 @@ function getUuid() {
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
-

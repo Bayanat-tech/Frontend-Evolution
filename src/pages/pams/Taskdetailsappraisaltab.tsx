@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect } from "../../api/pams";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Row = Record<string, unknown>;
 
 interface Props {
@@ -21,7 +21,7 @@ interface RowState {
 
 const ALLOWED_RATINGS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
@@ -54,7 +54,7 @@ function getClosestAllowedRating(value: number): number {
   return closest;
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const S = {
   wrapper: {
     width: "100%", height: "420px", overflowY: "auto" as const,
@@ -109,7 +109,7 @@ const S = {
   },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+
 const TaskDetailsAppraisalTab: React.FC<Props> = ({
   docNo, employeeCode, onRowsChange, onGrandTotalChange,
 }) => {
@@ -151,7 +151,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
       .finally(() => setLoading(false));
   }, [docNo, employeeCode, loginid, companyCode]);
 
-  // ── Notify parent of row changes ───────────────────────────────────────────
+
   useEffect(() => {
     if (!rows.length || !onRowsChange) return;
     const updated = rows.map((row) => {
@@ -164,7 +164,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
     onRowsChange(updated);
   }, [rowStates, rows, onRowsChange]);
 
-  // ── Grand total (Total column) ─────────────────────────────────────────────
+
   const grandTotal = useMemo(() => {
     let t = 0;
     rows.forEach((row) => {
@@ -174,7 +174,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
     return Math.round(t);
   }, [rows, rowStates]);
 
-  // ── Grand total (Standard Weightage column) ────────────────────────────────
+
   const grandWeightage = useMemo(() => {
     let w = 0;
     rows.forEach((row) => {
@@ -193,7 +193,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
     if (onGrandTotalChange) onGrandTotalChange(grandTotal);
   }, [grandTotal, onGrandTotalChange]);
 
-  // ── Rating change ──────────────────────────────────────────────────────────
+
   const handleRatingChange = (row: Row, value: string) => {
     const key = text(row.KPI_CODE);
     if (value === "") {
@@ -213,7 +213,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
     });
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
+ 
   return (
     <div style={S.wrapper}>
       <table style={S.table}>
@@ -314,7 +314,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
           })}
         </tbody>
 
-        {/* ─── Sticky Footer ─────────────────────────────────────────────── */}
+
         <tfoot>
           <tr>
             <td style={S.tdPinned} />

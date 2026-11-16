@@ -19,6 +19,39 @@ function dateInput(value: unknown) {
   const date = new Date(str);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
+function getRowAllocationLimits(r: TransactionChildRow, detailCurrCode?: string) {
+  const detailCurr = String(detailCurrCode || "OMR").trim().toUpperCase();
+  const invCurr = String(r.c_curr_code_origin || (r as any).curr_code_origin || r.curr_code || "OMR").trim().toUpperCase();
+  const isCrossCurrency = invCurr !== "OMR" && detailCurr === "OMR";
+  const invRate = Number(r.c_ex_rate_origin || (r as any).ex_rate_origin || r.ex_rate || 1);
+
+  const rawInvAmt = Number(r.inv_amt || 0);
+  const rawBal = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : rawInvAmt);
+
+  const effectiveInvAmt = isCrossCurrency
+    ? (Number((r as any).lcur_original_amount) || Number((rawInvAmt * invRate).toFixed(3)))
+    : rawInvAmt;
+
+  const effectiveOutstanding = isCrossCurrency
+    ? (Number((r as any).lcur_outstanding) || Number((rawBal * invRate).toFixed(3)))
+    : rawBal;
+
+  const maxAllowed = effectiveInvAmt > 0
+    ? Math.min(effectiveInvAmt, Math.max(0, effectiveOutstanding))
+    : Math.max(0, effectiveOutstanding);
+
+  return {
+    isCrossCurrency,
+    invCurr,
+    invRate,
+    rawInvAmt,
+    rawBal,
+    effectiveInvAmt,
+    effectiveOutstanding,
+    maxAllowed,
+  };
+}
+
 
 interface SmartInlineAllocationTableProps {
   detail: TransactionDetail;
@@ -75,9 +108,7 @@ export function SmartInlineAllocationTable({
 
     let remaining = parentAmount;
     sorted.forEach((r) => {
-      const invAmt = Number(r.inv_amt || 0);
-      const rawOutstanding = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : invAmt);
-      const maxAllowed = invAmt > 0 ? Math.min(invAmt, Math.max(0, rawOutstanding)) : Math.max(0, rawOutstanding);
+      const { maxAllowed } = getRowAllocationLimits(r, detail.curr_code);
 
       if (remaining > 0 && maxAllowed > 0) {
         const toAlloc = Math.min(remaining, maxAllowed);
@@ -93,9 +124,7 @@ export function SmartInlineAllocationTable({
     e?.preventDefault();
     e?.stopPropagation();
     rows.forEach((r) => {
-      const invAmt = Number(r.inv_amt || 0);
-      const rawOutstanding = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : invAmt);
-      const maxAmt = invAmt > 0 ? Math.min(invAmt, Math.max(0, rawOutstanding)) : Math.max(0, rawOutstanding);
+      const { maxAllowed: maxAmt } = getRowAllocationLimits(r, detail.curr_code);
       if (maxAmt > 0) {
         onChange(r.id, { amount: maxAmt });
       }
@@ -110,9 +139,7 @@ export function SmartInlineAllocationTable({
     for (const r of rows) {
       if (remaining <= 0) break;
       const currentAllocated = Number(r.amount) || 0;
-      const invAmt = Number(r.inv_amt || 0);
-      const rawOutstanding = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : invAmt);
-      const maxAllowed = invAmt > 0 ? Math.min(invAmt, Math.max(0, rawOutstanding)) : Math.max(0, rawOutstanding);
+      const { maxAllowed } = getRowAllocationLimits(r, detail.curr_code);
       const canAdd = maxAllowed > currentAllocated ? maxAllowed - currentAllocated : 0;
       const toAdd = Math.min(remaining, canAdd);
       if (toAdd > 0) {
@@ -330,9 +357,7 @@ export function SmartInlineAllocationTable({
             rows.map((row) => {
               const isRowInvalid = Boolean(invalidChildRowIds?.has(row.id));
               const missingList = invalidChildFields?.[row.id] || [];
-              const invAmt = Number(row.inv_amt || 0);
-              const rawOutstanding = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : invAmt);
-              const maxOutstanding = invAmt > 0 ? Math.min(invAmt, Math.max(0, rawOutstanding)) : Math.max(0, rawOutstanding);
+              const { isCrossCurrency, invCurr, rawInvAmt, rawBal, effectiveInvAmt, effectiveOutstanding, maxAllowed: maxOutstanding } = getRowAllocationLimits(row, detail.curr_code);
               const isExceeding = childTable === "invoice" && maxOutstanding > 0 && Number(row.amount || 0) > maxOutstanding + 0.001;
               const isInvNoMissing = isRowInvalid && (missingList.includes("inv_no") || missingList.includes("Invoice No") || !text(row.inv_no).trim());
               const isJobNoMissing = isRowInvalid && (missingList.includes("job_no") || missingList.includes("Job No") || !text(row.job_no).trim());
@@ -396,13 +421,25 @@ export function SmartInlineAllocationTable({
                       </td>
 
                       {/* Invoice Amount */}
-                      <td className="px-2 py-1 text-right font-mono text-xs font-semibold text-slate-700 truncate">
-                        {invAmt > 0 ? formatAmount(invAmt) : "-"}
+                      <td
+                        className="px-2 py-1 text-right font-mono text-xs font-semibold text-slate-700 truncate"
+                        title={isCrossCurrency ? `${formatAmount(rawInvAmt)} ${invCurr} @ ${row.c_ex_rate_origin || 1}` : undefined}
+                      >
+                        {rawInvAmt > 0
+                          ? isCrossCurrency
+                            ? `${formatAmount(rawInvAmt)} ${invCurr} (${formatAmount(effectiveInvAmt)} OMR)`
+                            : `${formatAmount(rawInvAmt)}${invCurr !== "OMR" ? " " + invCurr : ""}`
+                          : "-"}
                       </td>
 
                       {/* Outstanding */}
-                      <td className="px-2 py-1 text-right font-mono text-xs font-bold text-slate-900 truncate">
-                        {maxOutstanding > 0 ? formatAmount(maxOutstanding) : "-"}
+                      <td
+                        className="px-2 py-1 text-right font-mono text-xs font-bold text-slate-900 truncate"
+                        title={isCrossCurrency ? `Original: ${formatAmount(rawBal)} ${invCurr}` : undefined}
+                      >
+                        {maxOutstanding > 0
+                          ? `${formatAmount(maxOutstanding)}${isCrossCurrency ? " OMR" : ""}`
+                          : "-"}
                       </td>
 
                       {/* Allocated Amount with compact Full button */}
@@ -443,7 +480,7 @@ export function SmartInlineAllocationTable({
                                   onChange(row.id, { amount: maxOutstanding });
                                 }}
                                 className="h-[23px] px-1.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
-                                title="Allocate full outstanding amount"
+                                title={isCrossCurrency ? `Allocate full outstanding amount (${formatAmount(maxOutstanding)} OMR)` : "Allocate full outstanding amount"}
                               >
                                 Full
                               </button>

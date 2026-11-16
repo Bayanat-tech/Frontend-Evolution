@@ -307,7 +307,7 @@ export const HrVarianceReport = forwardRef<HrVarianceReportHandle, Props>(
             </div>
 
             {/* Row 2: Pay Months and Year */}
-            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 10 }}>
+            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "180px 180px 100px", justifyContent: "start", gap: 14, marginTop: 10 }}>
               <FloatLabel label="Current Pay Month" required bgColor={BG}>
                 <div className="flex items-center gap-2">
                   <Select value={currentPayMonth} onChange={(e) => setCurrentPayMonth(e.target.value)} style={{ fontSize: 12 }}>
@@ -325,7 +325,7 @@ export const HrVarianceReport = forwardRef<HrVarianceReportHandle, Props>(
                 </div>
               </FloatLabel>
               <FloatLabel label="Pay Year" required bgColor={BG}>
-                <Input type="number" value={payYear} onChange={(e) => setPayYear(e.target.value)} />
+                <Input type="number" value={payYear} onChange={(e) => setPayYear(e.target.value)} style={{ fontSize: 12 }} />
               </FloatLabel>
             </div>
 

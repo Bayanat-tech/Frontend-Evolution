@@ -62,7 +62,6 @@ export function PamsBulkAppraisalPage() {
   ];
 
   const isKpiType = selectedType === "KPI";
-  // ✅ NEW: Weightage is shown/required for KPI and GOAL
   const showWeightage = selectedType === "KPI" || selectedType === "GOAL";
   const colCount = showWeightage ? 5 : 4;
 
@@ -72,7 +71,7 @@ export function PamsBulkAppraisalPage() {
         : selectedType === "CHARACTERISTICS" ? "Characteristic"
           : "KPI";
 
-  // ✅ NEW: All item types now support Edit
+
   const canEditRow = true;
 
   useEffect(() => {
@@ -211,9 +210,7 @@ export function PamsBulkAppraisalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee, selectedPeriod, companyCode, loginid]);
 
-  // ═══════════════════════════════════════════════════════════════
-  // PROCESS (single employee)
-  // ═══════════════════════════════════════════════════════════════
+
   const process = async () => {
     if (!selectedPeriod) { toast.warning("Select a period first"); return; }
     if (!selectedEmployee) { toast.warning("Select an employee first"); return; }
@@ -267,9 +264,7 @@ export function PamsBulkAppraisalPage() {
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  // PROCESS ALL (by designation)
-  // ═══════════════════════════════════════════════════════════════
+
   const openProcessAllPreview = async () => {
     if (!selectedPeriod) {
       toast.warning("Select a period first");
@@ -453,9 +448,7 @@ export function PamsBulkAppraisalPage() {
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  // ADD / EDIT / DELETE KPI
-  // ═══════════════════════════════════════════════════════════════
+
   const openAddKpi = () => {
     if (!selectedEmployee) {
       toast.warning("Select an employee first");
@@ -1122,9 +1115,6 @@ export function PamsBulkAppraisalPage() {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// KPI EDITOR MODAL
-// ═══════════════════════════════════════════════════════════════════
 function KpiEditorModal({
   open, onClose, existingRow, itemType, employeeCode, companyCode, loginid,
   period, totalWeightage, onSave, onRefresh,
@@ -1565,9 +1555,6 @@ function KpiEditorModal({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// PERIOD FORM MODAL
-// ═══════════════════════════════════════════════════════════════════
 function PeriodFormModal({
   open, onClose, existingPeriod, companyCode, loginid, onSave,
 }: {
@@ -1697,9 +1684,6 @@ function PeriodFormModal({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════════
 function assignmentRowKey(row: Row) {
   return [
     row.KPI_CODE,

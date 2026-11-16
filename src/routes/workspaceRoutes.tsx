@@ -688,7 +688,10 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     },
     {
       name: "Finance Assign User Div",
-      match: ({ pathname }) => pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division"),
+      match: ({ pathname }) =>
+        pathname.toLowerCase().includes("/finance/utilities/assign_user_division") ||
+        pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division") ||
+        pathname.toLowerCase().includes("assign_user_division"),
       element: () => <AssignUserDiv />
     },
     {
@@ -699,7 +702,60 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     {
       name: "Finance Account Report",
       match: ({ pathname }) => isAccountReportRoute(pathname),
-      element: () => <LedgerBasics />,
+      element: () => <LedgerBasics initialReportType="ledgerBasic" pageTitle="A/c Ledger Basic" />,
+    },
+    {
+      name: "Sales Register Report",
+      match: ({ pathname }) => isSalesRegisterRoute(pathname),
+      element: () => <LedgerBasics initialReportType="salesRegister" pageTitle="Sales Register / Sales List" />,
+    },
+    {
+      name: "Purchase Register Report",
+      match: ({ pathname }) => isPurchaseRegisterRoute(pathname),
+      element: () => <LedgerBasics initialReportType="purchaseRegister" pageTitle="Purchase Register / Purchase List" />,
+    },
+    {
+      name: "Day Book Report",
+      match: ({ pathname }) => isDayBookRoute(pathname),
+      element: () => <LedgerBasics initialReportType="dayBook" pageTitle="Day Book Report" />,
+    },
+    {
+      name: "Transaction Listing Report",
+      match: ({ pathname }) => isTransactionListingRoute(pathname),
+      element: ({ pathname }: { pathname: string }) => {
+        const norm = pathname.toLowerCase();
+        let docType = "ALL";
+        let title = "Transaction Listing Report";
+        if (norm.includes("cheque_payment")) {
+          docType = "BP";
+          title = "Cheque Payment Listing";
+        } else if (norm.includes("cheque_receipt")) {
+          docType = "BR";
+          title = "Cheque Receipt Listing";
+        } else if (norm.includes("cash_payment")) {
+          docType = "CP";
+          title = "Cash Payment Listing";
+        } else if (norm.includes("cash_receipt")) {
+          docType = "CR";
+          title = "Cash Receipt Listing";
+        } else if (norm.includes("debit_note")) {
+          docType = "DN";
+          title = "Debit Note Listing";
+        } else if (norm.includes("credit_note")) {
+          docType = "CN";
+          title = "Credit Note Listing";
+        } else if (norm.includes("journal")) {
+          docType = "JV";
+          title = "Journal Listing";
+        } else if (norm.includes("lpo") || norm.includes("/gm/po")) {
+          docType = "PO";
+          title = "Purchase Order (LPO) Listing";
+        } else if (norm.includes("transaction_query") || norm.includes("transaction-query")) {
+          docType = "ALL";
+          title = "Transaction Query";
+        }
+        return <LedgerBasics initialReportType="transactionListing" initialDocType={docType} pageTitle={title} />;
+      },
     },
     {
       name: "Finance Tax Report",
@@ -742,7 +798,7 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     },
     {
       name: "Finance Trail Balance L2 Report",
-      match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/first_group"),
+      match: ({ pathname }) => isTrialBalanceRoute(pathname),
       element: () => <TrialBalancePage />,
     },
     {
@@ -831,7 +887,8 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     {
       name: "Finance Account Wise Budget",
       match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
-      element: () => <AccountWiseBudgetPage />,
+      element: ({ pathname }) => <AccountWiseBudgetPage mode={isAccountGroupBudgetRoute(pathname) ? "group" : "account"} />,
+
     },
     {
       name: "Finance Commercial Documents",
@@ -852,6 +909,11 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       name: "Finance RV Voucher",
       match: ({ pathname }) => isRVoucherRoute(pathname),
       element: () => <RJVDocumentEditor docType={"RJV"} />
+    },
+    {
+      name: "Finance Year End JV",
+      match: ({ pathname }) => isYearEndJVRoute(pathname),
+      element: () => <JVDocumentEditor docType={"EJV"} />
     },
     {
       name: "Finance Bank Reconciliation",
@@ -2059,10 +2121,20 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     );
   }
 
+  function isAccountGroupBudgetRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/masters/budget_a/c_group") ||
+      normalized.includes("/finance/accounts/masters/budget_ac_group")
+    );
+  }
+
   function isAccountWiseBudgetRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts/masters/budget_a/c_wise") ||
+      normalized.includes("/finance/accounts/masters/budget_a/c_group") ||
+      normalized.includes("/finance/accounts/masters/budget_ac_group") ||
       normalized.includes("/finance/accounts/masters/budget_ac_wise") ||
       normalized.includes("/finance/accounts/masters/account-wise-budget")
     );
@@ -2212,9 +2284,57 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
     );
   }
 
+    function isTrialBalanceRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes('trial_balance') ||
+      normalized.includes('trial-balance') ||
+      normalized.includes('trail_balance') ||
+      normalized.includes('trail-balance')
+    );
+  }
+
   function isAccountReportRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic")
+    return (
+      normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") ||
+      normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic") ||
+      normalized.includes("/finance/accounts_report/detailed_reports/ledger")
+    );
+  }
+
+  function isSalesRegisterRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts_report/detailed_reports/sales_register") ||
+      normalized.includes("sales_register")
+    );
+  }
+
+  function isPurchaseRegisterRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts_report/detailed_reports/purchase_register") ||
+      normalized.includes("purchase_register")
+    );
+  }
+
+  function isDayBookRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts_report/detailed_reports/day_book") ||
+      normalized.includes("day_book")
+    );
+  }
+
+  function isTransactionListingRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts_report/transaction_reports") ||
+      normalized.includes("/finance/reports/gm/") ||
+      normalized.includes("/finance/masters/gm/journal") ||
+      normalized.includes("/finance/masters/gm/cash_receipt")
+    );
   }
   function isFlowAssignmentRoute(pathname: string) {
     const normalized = decodeRouteText(pathname).toLowerCase();
@@ -2228,7 +2348,13 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   }
   function isTaxReportRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return normalized.includes("/finance/accounts_report/tax_report") || normalized.includes("/finance/accounts/reports/tax-report");
+    return (
+      normalized.includes("/finance/accounts_report/tax_report") ||
+      normalized.includes("/finance/accounts_report/tax_reports") ||
+      normalized.includes("/finance/accounts/reports/tax-report") ||
+      normalized.includes("/finance/accounts/reports/tax_report") ||
+      normalized.includes("tax_register")
+    );
   }
 
   function isBalanceSheetRoute(pathname: string) {
@@ -2396,11 +2522,24 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
   function isJournalVoucherRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     const isReverse = normalized.includes("rjv") || normalized.includes("reverse");
+    const isYearEnd = normalized.includes("ejv") || normalized.includes("year_end") || normalized.includes("year-end");
+    const isProvisional = normalized.includes("provisional") || normalized.includes("pjv");
     return (
       !isReverse &&
+      !isYearEnd &&
+      !isProvisional &&
       (normalized.includes("/finance/accounts/transactions/jv") ||
-        normalized.includes("/finance/accounts/transactions/provisional") ||
         normalized.includes("/finance/accounts/transactions/journal"))
+    );
+  }
+
+  function isYearEndJVRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/transactions/ejv") ||
+      normalized.includes("/finance/accounts/transactions/year_end_jv") ||
+      normalized.includes("/finance/accounts/transactions/year-end-jv") ||
+      normalized.includes("/finance/accounts/transactions/yearend")
     );
   }
 
@@ -2410,7 +2549,10 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
       normalized.includes("/finance/accounts/transactions/rjv") ||
       normalized.includes("/finance/accounts/transactions/reverse_jv") ||
       normalized.includes("/finance/accounts/transactions/reverse-jv") ||
-      normalized.includes("/finance/accounts/transactions/reverse")
+      normalized.includes("/finance/accounts/transactions/reverse") ||
+      normalized.includes("/finance/accounts/transactions/provisional") ||
+      normalized.includes("/finance/accounts/transactions/provisional_jv") ||
+      normalized.includes("/finance/accounts/transactions/provisional-jv")
     );
   }
 

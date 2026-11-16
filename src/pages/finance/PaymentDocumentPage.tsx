@@ -84,7 +84,9 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SI: { title: "Sales Invoice", subtitle: "Sales invoice document", addLabel: "Add Sales" },
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
-  RJV: { title: "Reverse JV", subtitle: "Reverse ledger journal", addLabel: "Add Voucher" },
+  RJV: { title: "Provisional / Reverse JV", subtitle: "Provisional & reverse ledger journal", addLabel: "Add Voucher" },
+  EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
+  PJV: { title: "PDC Journal Voucher", subtitle: "Post dated cheque journal", addLabel: "Add PDC JV" },
 };
 
 // const today = () => new Date().toISOString().slice(0, 10);
@@ -224,6 +226,30 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   useEffect(() => {
     void loadRows();
   }, [fyPeriod, docType, query, pageIndex, pageSize, columnFilters]);
+
+  // Auto-open document if doc_no is passed in query params (e.g. from drilldown report)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const targetDocNo = params.get("doc_no") || params.get("docNo");
+    if (!targetDocNo || editor !== null) return;
+
+    const match = rows.find((r) => String(r.doc_no) === String(targetDocNo));
+    if (match) {
+      setEditor({ mode: "edit", row: match });
+    } else if (!loading) {
+      setEditor({
+        mode: "edit",
+        row: {
+          doc_no: targetDocNo,
+          doc_type: docType,
+          doc_date: "",
+          remarks: "",
+          amount: 0,
+          div_code: "",
+        } as TransactionDocumentRow,
+      });
+    }
+  }, [rows, loading, docType, editor]);
 
 
 
@@ -587,7 +613,11 @@ function PaymentDocumentEditor({
                             inv_no: balance.inv_no || child.inv_no,
                             ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
                             inv_amt: balance.original_amount,
-                            c_bal_amt_org: balance.outstanding_amount,
+                  c_bal_amt_org: balance.outstanding_amount,
+                  c_curr_code_origin: (balance as any).curr_code || (balance as any).c_curr_code_origin || (child as any).c_curr_code_origin,
+                  c_ex_rate_origin: (balance as any).ex_rate || (balance as any).c_ex_rate_origin || (child as any).c_ex_rate_origin,
+                  lcur_original_amount: (balance as any).lcur_original_amount,
+                  lcur_outstanding: (balance as any).lcur_outstanding,
                             paid_amt: balance.paid_amount,
                           } as TransactionChildRow;
                         }
@@ -1743,8 +1773,10 @@ function PaymentDocumentEditor({
                     <div className="finance-payment-header-fields">
                       <div className="col-span-2 max-md:col-span-1">
                         <LookupField
-                          label="Account *"
+                          label="Account"
                           value={form.ac_code}
+                          required
+                          enforceRequired
                           displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                           columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                           valueField="ac_code"
@@ -1799,7 +1831,9 @@ function PaymentDocumentEditor({
                         />
                       </div>
                       <LookupField
-                        label="Currency *"
+                        label="Currency"
+                        required
+                        enforceRequired
                         value={form.curr_code}
                         displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -1827,7 +1861,7 @@ function PaymentDocumentEditor({
                           }));
                         }}
                       />
-                      <Field label="Exchange Rate *">
+                      <Field label="Exchange Rate" required>
                         <ExchangeRateInput
                           disabled={disabled}
                           required
@@ -1924,7 +1958,7 @@ function PaymentDocumentEditor({
                     </tr>
                   </thead>
                   <tbody>
-                    {form.detail.length === 0 ? (
+                    {form.detail.length === 0 ? ( 
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No detail lines yet — click "Add Line" to get started</td></tr>
                     ) : filteredDetail.length === 0 ? (
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
@@ -1945,6 +1979,8 @@ function PaymentDocumentEditor({
                             <div className={`w-full max-w-[460px] truncate ${invalidLineIds.has(detail.id) && !detail.ac_code?.trim() ? "ring-2 ring-rose-400 rounded-md" : ""}`}>
                               <LookupField
                                 label="Detail Account"
+                                required
+                                enforceRequired
                                 compact
                                 placeholder="A/c code"
                                 value={detail.ac_code}

@@ -151,6 +151,7 @@ export function FreightJobActivitiesPage({
   const getBookedPIForLine = useCallback((costType: "Agent Cost" | "Transporter Cost" | "Other Cost", actCode: string, amount: number) => {
     if (!bookedPIList.length || !amount) return null;
     const match = bookedPIList.find((pi: any) => {
+      if (pi.CANCELED === "Y") return false;
       const rem = String(pi.REMARKS || "").toUpperCase();
       const typeMatch =
         costType === "Agent Cost"
@@ -161,7 +162,9 @@ export function FreightJobActivitiesPage({
       if (!typeMatch) return false;
       const actMatch = rem.includes(actCode.toUpperCase());
       if (!actMatch) return false;
-      const amtMatch = Math.abs(Number(pi.AMOUNT) - amount) < 0.001;
+      const piAmt = Number(pi.AMOUNT || 0);
+      const piLcur = Number(pi.LCUR_AMOUNT != null ? pi.LCUR_AMOUNT : piAmt);
+      const amtMatch = Math.abs(piAmt - amount) < 0.001 || Math.abs(piLcur - amount) < 0.001;
       return amtMatch;
     });
     return match ? String(match.DOC_NO) : null;
@@ -763,7 +766,7 @@ export function FreightJobActivitiesPage({
                 const agentCostVal = numberValue(line.partners_price);
                 const transpCostVal = numberValue(line.transport_price);
                 const actualCostVal = numberValue(line.actual_cost);
-                const agentPi = getBookedPIForLine("Agent Cost", line.act_code, agentCostVal);
+                const agentPi = getBookedPIForLine("Agent Cost", line.act_code, agentCostVal) || (line as any).pi_no || "";
                 const transpPi = getBookedPIForLine("Transporter Cost", line.act_code, transpCostVal);
                 const otherPi = getBookedPIForLine("Other Cost", line.act_code, actualCostVal);
 
@@ -1001,6 +1004,14 @@ export function FreightJobActivitiesPage({
                           });
                         }}
                       />
+                      {agentPi && (
+                        // <span className="block mt-0.5 text-[8.5px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-0.5 text-center shadow-2xs truncate" title={`Agent Booked in PI #${agentPi}`}>
+                         <div className="flex justify-center mt-0.5">
+                         <span className="inline-block text-[8px] leading-[11px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-1 truncate max-w-full" title={`Agent Booked in PI #${agentPi}`}>
+                        PI: {agentPi}
+                        </span>
+                        </div>
+                      )}
                     </td>
 
                     {/* Agent Price (OMR) */}
@@ -1028,11 +1039,6 @@ export function FreightJobActivitiesPage({
                           });
                         }}
                       />
-                      {agentPi && (
-                        <span className="block mt-0.5 text-[8.5px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-0.5 text-center shadow-2xs truncate" title={`Agent Booked in PI #${agentPi}`}>
-                          PI: {agentPi}
-                        </span>
-                      )}
                     </td>
 
                     {/* Transporter (Wider column to fully display Transporter names like AAA CHINA LIMITED) */}
@@ -1050,6 +1056,14 @@ export function FreightJobActivitiesPage({
                           });
                         }}
                       />
+                      {transpPi && (
+                        // <span className="block mt-0.5 text-[8.5px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-0.5 text-center shadow-2xs truncate" title={`Transporter Booked in PI #${transpPi}`}>
+                         <div className="flex justify-center mt-0.5">
+                         <span className="inline-block text-[8px] leading-[11px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-1 truncate max-w-full" title={`Agent Booked in PI #${agentPi}`}>
+                           PI: {transpPi}
+                        </span>
+                        </div>
+                      )}
                     </td>
 
                     {/* Transporter Price (OMR) */}
@@ -1077,11 +1091,11 @@ export function FreightJobActivitiesPage({
                           });
                         }}
                       />
-                      {transpPi && (
+                      {/* {transpPi && (
                         <span className="block mt-0.5 text-[8.5px] font-mono font-bold text-sky-800 bg-sky-50 border border-sky-300 rounded px-0.5 text-center shadow-2xs truncate" title={`Transporter Booked in PI #${transpPi}`}>
                           PI: {transpPi}
                         </span>
-                      )}
+                      )} */}
                     </td>
 
                     {/* Tax (VAT) Dedicated Button */}
@@ -1512,7 +1526,7 @@ export function FreightJobActivitiesPage({
             {/* 2. Vendor / Actual Cost Currency */}
             <div className="rounded-lg border border-border p-3 space-y-2.5 bg-card">
               <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
-                <span>2. Vendor / Actual Cost Currency</span>
+                <span>2. Other Cost Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
                   base cost: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].actual_cost)}</strong>
                 </span>

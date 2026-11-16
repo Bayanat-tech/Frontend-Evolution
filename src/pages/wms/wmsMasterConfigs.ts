@@ -647,7 +647,7 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "prin_telno3", label: "Telephone 3", tab: "contact-info", section: "Contact Information" },
       // Basic Info Tab - Organization
       { name: "div_code", label: "Division", required: true, dropdownParam: "DROP_DOWN_DIVISION", dropdownDisplayFields: ["div_code", "div_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "div_code", dropdownCodeMap: { company_code: "code1" }, tab: "organization", section: "Organization and Division" },
-      { name: "prin_dept_code", label: "Department", required: true, dropdownParam: "DROP_DOWN_DEPT_BASED_ON_DIV", dropdownDisplayFields: ["dept_code", "dept_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "dept_code", dropdownCodeMap: { div_code: "code1" }, tab: "organization", section: "Organization and Division" },
+      { name: "prin_dept_code", label: "Department", required: true, dropdownParam: "DROP_DOWN_DEPT_BASED_ON_DIV", dropdownDisplayFields: ["dept_code", "dept_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "dept_code", dropdownCodeMap: { company_code: "code1", div_code: "code2" }, tab: "organization", section: "Organization and Division" },
       { name: "prin_acref", label: "Reference", tab: "organization", section: "Organization and Division" },
       { name: "auto_generate_product_code", label: "Auto Generate Product Code", type: "checkbox", tab: "organization", section: "Organization and Division" },
       // Account Info Tab - Company Registration Information

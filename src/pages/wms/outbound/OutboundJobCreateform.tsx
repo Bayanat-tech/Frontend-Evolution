@@ -10,6 +10,7 @@ import { formatLookupDisplay, lookupText } from "./OutboundHelpers";
 import {
   loadOutboundPrincipalLookup,
   loadDepartmentLookup,
+  loadDivisionLookup,
   loadWmsMasterLookup,
   loadPortLookup,
 } from "./OutboundLookups";
@@ -42,7 +43,11 @@ export function OutboundJobCreateForm({
     setForm((current) => ({ ...current, [name]: fieldValue }));
 
   return (
-    <section className="grid gap-2.5">
+    <form
+      id="outbound-job-form"
+      className="grid gap-2.5"
+      onSubmit={onSubmit}
+    >
       {/* ── Transaction Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -69,24 +74,20 @@ export function OutboundJobCreateForm({
             <X size={14} />
             Cancel
           </Button>
-          <Button type="submit" form="outbound-job-form" size="sm" disabled={saving}>
+          <Button type="submit" size="sm" disabled={saving}>
             <Save size={14} />
             {saving ? "Saving..." : isEditing ? "Update Job" : "Save Job"}
           </Button>
         </div>
       </div>
 
-      <form
-        id="outbound-job-form"
-        className="freight-dense-form freight-ui-standard freight-enquiry-editor grid gap-2.5"
-        onSubmit={onSubmit}
-      >
+      {/* ── Form Body ── */}
+      <div className="freight-dense-form freight-ui-standard freight-enquiry-editor grid gap-2.5">
+        
         {/* ── Section 1: Job Information ── */}
         <SectionPanel icon={Ship} title="Job Information" meta="Outbound Job Creation">
-          {/* Changed from 'enquiry-header-fields' to a specific grid layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2">
             
-            {/* Row 1: Principal, Department, Division, Job Class */}
             <FormLookup
               label="Principal"
               value={String(form.prin_code || "")}
@@ -100,19 +101,36 @@ export function OutboundJobCreateForm({
                 { field: "div_code",       header: "Division" },
               ]}
               loadOptions={() => loadOutboundPrincipalLookup(companyCode)}
-              onChange={(selected, selectedRow) =>
+              onChange={(selected, selectedRow) => {
+                if (!selectedRow) {
+                  setForm((current) => ({
+                    ...current,
+                    prin_code: "",
+                    prin_name: "",
+                    prin_dept_code: "",
+                    prin_div_code: "",
+                    dept_code: "",
+                    dept_name: "",
+                    div_code: "",
+                    div_name: "",
+                  }));
+                  return;
+                }
+
                 setForm((current) => ({
                   ...current,
-                  prin_code: selected,
-                  prin_name: selectedRow ? lookupText(selectedRow, "prin_name") : "",
-                  div_code:  selectedRow ? lookupText(selectedRow, "div_code")  || current.div_code  : current.div_code,
-                  div_name:  selectedRow ? lookupText(selectedRow, "div_name")  || current.div_name  : current.div_name,
-                  dept_code: selectedRow ? lookupText(selectedRow, "prin_dept_code") || current.dept_code : current.dept_code,
-                  dept_name: selectedRow ? lookupText(selectedRow, "dept_name") || current.dept_name : current.dept_name,
-                  curr_code: selectedRow ? lookupText(selectedRow, "curr_code") || current.curr_code || "OMR" : current.curr_code || "OMR",
+                  prin_code: selected || "", // 👈 Safeguard
+                  prin_name: lookupText(selectedRow, "prin_name") ?? "",
+                  prin_dept_code: lookupText(selectedRow, "prin_dept_code") ?? "",
+                  prin_div_code:  lookupText(selectedRow, "div_code") ?? "",
+                  dept_code: "",
+                  dept_name: "",
+                  div_code:  "",
+                  div_name:  "",
+                  curr_code: lookupText(selectedRow, "curr_code") || current.curr_code || "OMR",
                   ex_rate:   current.ex_rate || 1,
-                }))
-              }
+                }));
+              }}
             />
 
             <FormLookup
@@ -126,11 +144,12 @@ export function OutboundJobCreateForm({
                 { field: "dept_name", header: "Department Name" },
                 { field: "div_code",  header: "Division" },
               ]}
-              loadOptions={() => loadDepartmentLookup(companyCode, String(form.div_code || ""))}
+              loadOptions={() => loadDepartmentLookup(companyCode, String(form.div_code || ""), "")}
+              required
               onChange={(selected, selectedRow) =>
                 setForm((current) => ({
                   ...current,
-                  dept_code: selected,
+                  dept_code: selected || "", // 👈 Safeguard
                   dept_name: selectedRow ? lookupText(selectedRow, "dept_name") : "",
                   div_code:  selectedRow ? lookupText(selectedRow, "div_code") || current.div_code : current.div_code,
                   div_name:  selectedRow ? lookupText(selectedRow, "div_name") || current.div_name : current.div_name,
@@ -149,11 +168,12 @@ export function OutboundJobCreateForm({
                 { field: "div_name",     header: "Division Name" },
                 { field: "country_code", header: "Country" },
               ]}
-              loadOptions={() => loadWmsMasterLookup("division")}
+              loadOptions={() => loadDivisionLookup(companyCode, "")}
+              required
               onChange={(selected, selectedRow) =>
                 setForm((current) => ({
                   ...current,
-                  div_code: selected,
+                  div_code: selected || "", // 👈 Safeguard
                   div_name: selectedRow ? lookupText(selectedRow, "div_name") : "",
                 }))
               }
@@ -173,7 +193,6 @@ export function OutboundJobCreateForm({
               required
             />
 
-            {/* Row 2: Job Type, Transport Mode, Schedule Date, Doc Ref */}
             <FormSelect
               label="Job Type"
               value={String(form.job_type || "EXP")}
@@ -207,7 +226,6 @@ export function OutboundJobCreateForm({
               onChange={(v) => setValue("doc_ref", v)}
             />
 
-            {/* Row 3: Principal Ref 2 */}
             <FormInput
               label="Principal Ref 2"
               value={String(form.prin_ref2 || "")}
@@ -222,7 +240,6 @@ export function OutboundJobCreateForm({
           title="Routing"
           meta={`${form.country_origin || "Origin"} -> ${form.country_destination || "Destination"}`}
         >
-          {/* Standardized grid for routing fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2 items-end">
             <FormLookup
               label="Country Origin"
@@ -238,7 +255,7 @@ export function OutboundJobCreateForm({
               onChange={(selected, selectedRow) =>
                 setForm((current) => ({
                   ...current,
-                  country_origin: selected,
+                  country_origin: selected || "", // 👈 FIX APPLIED: Safeguard against null
                   country_origin_name: selectedRow ? lookupText(selectedRow, "country_name") : "",
                 }))
               }
@@ -258,7 +275,7 @@ export function OutboundJobCreateForm({
               onChange={(selected, selectedRow) =>
                 setForm((current) => ({
                   ...current,
-                  country_destination: selected,
+                  country_destination: selected || "", // 👈 FIX APPLIED: Safeguard against null
                   country_destination_name: selectedRow ? lookupText(selectedRow, "country_name") : "",
                 }))
               }
@@ -279,7 +296,7 @@ export function OutboundJobCreateForm({
               onChange={(selected, selectedRow) =>
                 setForm((current) => ({
                   ...current,
-                  port_code: selected,
+                  port_code: selected || "", // 👈 FIX APPLIED: Safeguard against null
                   port_name: selectedRow ? lookupText(selectedRow, "port_name") : "",
                 }))
               }
@@ -300,7 +317,7 @@ export function OutboundJobCreateForm({
               onChange={(selected, selectedRow) =>
                 setForm((current) => ({
                   ...current,
-                  destination_port: selected,
+                  destination_port: selected || "", // 👈 FIX APPLIED: Safeguard against null
                   destination_port_name: selectedRow ? lookupText(selectedRow, "port_name") : "",
                 }))
               }
@@ -329,8 +346,8 @@ export function OutboundJobCreateForm({
             </div>
           </div>
         </SectionPanel>
-      </form>
-    </section>
+      </div>
+    </form>
   );
 }
 

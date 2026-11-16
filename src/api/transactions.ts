@@ -6,7 +6,7 @@ type ApiResponse<T> = {
   message?: string;
 };
 
-export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV" | "RJV";
+export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV" | "RJV" | "EJV" | "PJV";
 
 export type TransactionDocumentRow = {
   company_code?: string;
@@ -1929,6 +1929,156 @@ export async function exportAccountPayeeWiseExcel(params: ReportParams): Promise
   link.click();
   link.remove();
   window.URL.revokeObjectURL(url);
+}
+
+// ── Sales Register Report & Excel ──
+export async function openSalesRegisterReport(params: ReportParams) {
+  return await openReportInTab(
+    `/api/finance/transactions/reports/sales-register/html`,
+    params
+  );
+}
+
+export async function exportSalesRegisterExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/sales-register/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "Sales_Register.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ── Purchase Register Report & Excel ──
+export async function openPurchaseRegisterReport(params: ReportParams) {
+  return await openReportInTab(
+    `/api/finance/transactions/reports/purchase-register/html`,
+    params
+  );
+}
+
+export async function exportPurchaseRegisterExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/purchase-register/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "Purchase_Register.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ── Day Book Report & Excel ──
+export async function openDayBookReport(params: ReportParams) {
+  return await openReportInTab(
+    `/api/finance/transactions/reports/day-book/html`,
+    params
+  );
+}
+
+export async function exportDayBookExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/day-book/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "Day_Book.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ── Transaction Listing Report & Excel ──
+export async function openTransactionListingReport(params: ReportParams) {
+  return await openReportInTab(
+    `/api/finance/transactions/reports/transaction-listing/html`,
+    params
+  );
+}
+
+export async function exportTransactionListingExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/transaction-listing/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "Transaction_Listing.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ── Ledger Basic Report & Excel ──
+export async function openLedgerBasicReport(params: ReportParams) {
+  return await openReportInTab(
+    `/api/finance/transactions/reports/ledger-basic/html`,
+    params
+  );
+}
+
+export async function exportLedgerBasicExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/ledger-basic/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "Ledger_Basic.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ── Summary & Detail Dump Reports ──
+export async function openSummaryDumpReport(params: ReportParams) {
+  return await openReportInTab(
+    `/api/finance/transactions/reports/summary-dump/html`,
+    params
+  );
+}
+
+export async function openDetailDumpReport(params: ReportParams) {
+  return await openReportInTab(
+    `/api/finance/transactions/reports/detail-dump/html`,
+    params
+  );
 }
 
 // export async function openProfitLossReport(params: ReportParams) {
