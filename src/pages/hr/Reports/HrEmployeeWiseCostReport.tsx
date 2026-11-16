@@ -92,7 +92,7 @@ function FloatLabel({ label, required, children, bgColor = "#fff" }: { label: st
 
 function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string; }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2 shadow-sm">
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg bg-white px-3.5 py-2">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
         <Icon size={14} />
       </span>
@@ -242,14 +242,17 @@ export const HrEmployeeWiseCostReport = forwardRef<HrEmployeeWiseCostReportHandl
     };
 
     const labelFor = (v: string | undefined): string => v || "All";
-    const BG = "#EEF5FD";
+    
+    // Changed BG to white to remove the grey/dark container background
+    const BG = "#ffffff";
 
     return (
       <section className="freight-ui-standard freight-report-screen" style={{ width: "100%" }}>
         <div className="freight-report-card" style={{ width: "100%" }}>
           <style>{`
             .action-btn-primary:hover { background: #1e40af !important; }
-            .field-row { background: ${BG}; border-radius: 8px; padding: 10px 12px; }
+            /* Removed the grey background and border-radius here so it matches the white card */
+            .field-row { background: ${BG}; padding: 10px 0px; }
             @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
           `}</style>
 
@@ -260,7 +263,7 @@ export const HrEmployeeWiseCostReport = forwardRef<HrEmployeeWiseCostReportHandl
 
           <ReportFilterHeader onClear={handleReset} label="Report Filters" />
 
-          <div className="freight-report-summary grid grid-cols-5 gap-2 border-b bg-muted/10 p-3">
+          <div className="freight-report-summary grid grid-cols-5 gap-2 bg-white p-3 border-b">
             <SummaryStripItem icon={Users} label="Division" value={labelFor(divDisplay)} />
             <SummaryStripItem icon={Filter} label="Department" value={labelFor(deptDisplay)} />
             <SummaryStripItem icon={Package} label="Section" value={labelFor(sectionDisplay)} />
@@ -293,7 +296,7 @@ export const HrEmployeeWiseCostReport = forwardRef<HrEmployeeWiseCostReportHandl
             </div>
 
             {/* Row 2: Month, Year, Source, Report Type, History */}
-            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "120px 100px 140px 180px auto", justifyContent: "start", gap: 14, marginTop: 10, alignItems: "center" }}>
+            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "120px 100px 140px 180px auto", justifyContent: "start", gap: 14, marginTop: 10, alignItems: "center", paddingTop: 16 }}>
               <FloatLabel label="Pay Month" bgColor={BG}>
                 <Select value={payMonth} onChange={(e) => setPayMonth(e.target.value)} style={{ fontSize: 12 }}>
                   {PAY_MONTHS.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
