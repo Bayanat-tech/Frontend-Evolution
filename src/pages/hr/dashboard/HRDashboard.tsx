@@ -483,12 +483,13 @@ function DepartmentsCard({ slice, loading }: { slice: Slice<any[]>; loading: boo
             {rows.map((r, i) => {
               const count = num(r, "employee_count");
               const code = str(r, "dept_code") || "Unassigned";
+              const name = str(r, "dept_name") || "Unassigned";
               return (
                 <li key={`${code}-${i}`} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md text-[10.5px] font-bold text-white" style={{ background: C.headcount, opacity: 1 - i * 0.14 }}>{i + 1}</span>
-                      <span className="block truncate text-[12.5px] font-semibold leading-tight text-foreground" title={code}>{code}</span>
+                      <span className="block truncate text-[12.5px] font-semibold leading-tight text-foreground" title={code}>{code}-{name}</span>
                     </span>
                     <span className="shrink-0 text-right">
                       <b className="text-[12.5px] font-bold tabular-nums text-foreground">{fmtInt(count)}</b>

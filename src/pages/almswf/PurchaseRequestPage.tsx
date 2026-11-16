@@ -25,6 +25,15 @@ const QUERY_ROOT = "purchase-request-page";
 // Employees who should always see the Add PR button (per sir's instruction).
 const HARDCODED_ADD_PR_EMPLOYEES = ["2019070493"];
 
+// Level-2 users who are also allowed to CREATE PRs for a specific flow.
+const LEVEL2_CREATOR_EXCEPTIONS = [
+  { loginid: "2016090408", flowCode: "003" },
+];
+const isLevel2CreatorFlow = (loginid: string, flowCode: string) =>
+  LEVEL2_CREATOR_EXCEPTIONS.some(
+    (e) => e.loginid === loginid && e.flowCode === String(flowCode).trim()
+  );
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(val: unknown): string {
   const raw = String(val || "");
@@ -270,9 +279,14 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   }, [userFlowsQuery.data]);
 
   const selfFlows = useMemo(
-    () => allUserFlows.filter((f) => f.userLevel === 1),
-    [allUserFlows]
-  );
+  () =>
+    allUserFlows.filter(
+      (f) =>
+        f.userLevel === 1 ||
+        (f.userLevel === 2 && isLevel2CreatorFlow(loginid, f.flowCode))
+    ),
+  [allUserFlows, loginid]
+);
 
   const canCreatePR = isHardcodedAddPrUser || selfFlows.length > 0;
 

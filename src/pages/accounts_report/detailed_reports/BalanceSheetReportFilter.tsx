@@ -7,6 +7,7 @@ import { getBalanceSheetReportHtml, getBalanceSheetReportExcelDownload } from ".
 import { getDynamicLookup } from "../../../api/lookups";
 import { NewReportPage } from "../../../components/new_report_format/NewReportPage";
 import { NewReportDialog } from "../../../components/new_report_format";
+import { VoucherPreviewModal, openTransactionScreen } from "../../../components/finance/VoucherPreviewModal";
 import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,12 +117,35 @@ export default function BalanceSheetPage() {
   const [drillLoading, setDrillLoading] = useState(false);
   const [drillError, setDrillError]     = useState<string | null>(null);
   const drillIdCounter                  = useRef(0);
+  const [voucherModal, setVoucherModal] = useState<{ open: boolean; docType: string; docNo: string }>({
+    open: false,
+    docType: "",
+    docNo: "",
+  });
 
-  // ── Listen for DRILL_DOWN messages posted by report iframes ───────────────
+  // ── Listen for DRILL_DOWN & voucher messages posted by report iframes ───────────────
   // Works with NewReportDialog page iframes (sandbox: allow-scripts allow-same-origin)
   useEffect(() => {
     const handler = async (ev: MessageEvent) => {
-      if (!ev.data || ev.data.type !== "DRILL_DOWN") return;
+      if (!ev.data) return;
+
+      if (ev.data.type === "OPEN_DOCUMENT" || ev.data.type === "OPEN_VOUCHER_PREVIEW") {
+        const { docType, docNo } = ev.data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          setVoucherModal({ open: true, docType: String(docType), docNo: String(docNo) });
+        }
+        return;
+      }
+
+      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
+        const { docType, docNo } = ev.data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          openTransactionScreen(String(docType), String(docNo));
+        }
+        return;
+      }
+
+      if (ev.data.type !== "DRILL_DOWN") return;
 
       const {
         drillLevel,
@@ -424,6 +448,12 @@ export default function BalanceSheetPage() {
             </div>
           ) : undefined
         }
+      />
+      <VoucherPreviewModal
+        open={voucherModal.open}
+        onClose={() => setVoucherModal({ open: false, docType: "", docNo: "" })}
+        docType={voucherModal.docType}
+        docNo={voucherModal.docNo}
       />
     </>
   );
