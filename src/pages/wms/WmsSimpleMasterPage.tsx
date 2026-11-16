@@ -46,6 +46,7 @@ export type WmsMasterField = {
   width?: number;
   colSpan?: number;
   align?: "left" | "center" | "right";
+  min?: number;
   maxLength?: number;
 };
 
