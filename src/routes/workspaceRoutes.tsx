@@ -950,7 +950,12 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
       element: () => <JVDocumentEditor docType={"JV"} />
     },
     {
-      name: "Finance RV Voucher",
+      name: "Finance Provisional Journal Voucher",
+      match: ({ pathname }) => isProvisionalJVRoute(pathname),
+      element: () => <JVDocumentEditor docType={"RJV"} />
+    },
+    {
+      name: "Finance Reverse Journal Voucher",
       match: ({ pathname }) => isRVoucherRoute(pathname),
       element: () => <RJVDocumentEditor docType={"RJV"} />
     },
@@ -2347,7 +2352,12 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts_report/detailed_reports/sales_register") ||
-      normalized.includes("sales_register")
+      normalized.includes("sales_register") ||
+      normalized.includes("sales-register") ||
+      normalized.includes("salesregister") ||
+      normalized.includes("sales_list") ||
+      normalized.includes("sales-list") ||
+      normalized.includes("saleslist")
     );
   }
 
@@ -2355,7 +2365,12 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts_report/detailed_reports/purchase_register") ||
-      normalized.includes("purchase_register")
+      normalized.includes("purchase_register") ||
+      normalized.includes("purchase-register") ||
+      normalized.includes("purchaseregister") ||
+      normalized.includes("purchase_list") ||
+      normalized.includes("purchase-list") ||
+      normalized.includes("purchaselist")
     );
   }
 
@@ -2363,7 +2378,9 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
     const normalized = pathname.toLowerCase();
     return (
       normalized.includes("/finance/accounts_report/detailed_reports/day_book") ||
-      normalized.includes("day_book")
+      normalized.includes("day_book") ||
+      normalized.includes("day-book") ||
+      normalized.includes("daybook")
     );
   }
 
@@ -2583,16 +2600,30 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
     );
   }
 
+  function isProvisionalJVRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/accounts/transactions/provisional") ||
+      normalized.includes("/finance/accounts/transactions/provisional_jv") ||
+      normalized.includes("/finance/accounts/transactions/provisional-jv") ||
+      normalized.includes("/finance/accounts/transactions/pjv") ||
+      normalized.includes("provisional_jv") ||
+      normalized.includes("provisional-jv") ||
+      normalized.includes("provisionaljv")
+    );
+  }
+
   function isRVoucherRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
-      normalized.includes("/finance/accounts/transactions/rjv") ||
-      normalized.includes("/finance/accounts/transactions/reverse_jv") ||
-      normalized.includes("/finance/accounts/transactions/reverse-jv") ||
-      normalized.includes("/finance/accounts/transactions/reverse") ||
-      normalized.includes("/finance/accounts/transactions/provisional") ||
-      normalized.includes("/finance/accounts/transactions/provisional_jv") ||
-      normalized.includes("/finance/accounts/transactions/provisional-jv")
+      !isProvisionalJVRoute(pathname) &&
+      (normalized.includes("/finance/accounts/transactions/rjv") ||
+        normalized.includes("/finance/accounts/transactions/reverse_jv") ||
+        normalized.includes("/finance/accounts/transactions/reverse-jv") ||
+        normalized.includes("/finance/accounts/transactions/reverse") ||
+        normalized.includes("reverse_jv") ||
+        normalized.includes("reverse-jv") ||
+        normalized.includes("reversejv"))
     );
   }
 
