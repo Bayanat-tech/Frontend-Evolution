@@ -44,7 +44,6 @@
   import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
   import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
-
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
   import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
@@ -246,6 +245,7 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 import { useAuth } from "../state/AuthContext";
 import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
+import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
 import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
   type WorkspaceRouteContext = {
     pathname: string;
@@ -621,7 +621,11 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
       match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
       element: () => <EmployeeTransferPage />
     },
-
+    // {
+    //   name: "HR Visa and Labour Card Cancel",
+    //   match: (context) => isHrRoute(context) && isHrVisaLabourCardCancelRoute(context),
+    //   element: () => <VisaLabourCardCancelPage />,
+    // },
     {
       name: "HR Employee Profile",
       match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -1025,8 +1029,14 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
     },
     {
       name: "Product Master",
-      match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/wms/wms/masters/gm/product"),
-      element: () => <ProductWmsPage />
+      match: ({ pathname }) => {
+        const n = pathname.toLowerCase().replace(/\/+$/, "");
+        return (
+          n.endsWith("/wms/wms/masters/gm/product") ||
+          n.endsWith("/wms/wms/masters/gm/product_master")
+        );
+      },
+      element: () => <ProductWmsPage />,
     },
     {
       name: "WMS Stock Summary Report",
@@ -1749,11 +1759,18 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
       element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
     },
 
-    // {
-    //   name: "Purchase Sales Product Type",
-    //   match: ({ pathname }) => isProductTypeRoute(pathname),
-    //   element: () => <ProductTypePage />,
-    // },
+    {
+      name: "WMS Product Type",
+      match: ({ pathname }) => {
+        const n = pathname.toLowerCase().replace(/\/+$/, "");
+        return (
+          n.includes("/wms/wms/masters/gm/product_type") ||
+          n.includes("/wms/wms/masters/gm/product-type") ||
+          n.includes("/wms/wms/masters/gm/producttype")
+        );
+      },
+      element: () => <WmsSimpleMasterPage config={wmsSimpleMasterConfigs.productType} />,
+    },
 
     {
       name: "Purchase Sales Product Category",
@@ -3482,7 +3499,14 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
     const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
     return compact.includes("employeetransfer") || compact.includes("employeetransfers") || compact.includes("hremployeetransfer");
   }
-
+  function isHrVisaLabourCardCancelRoute(context: WorkspaceRouteContext) {
+    const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+    return (
+      compact.includes("visaandlabourcardcancel") ||
+      compact.includes("visalabourcardcancel") ||
+      compact.includes("labourcardcancel")
+    );
+  }
   function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
     const normalized = getHrMatchText(context);
     return (
@@ -3509,15 +3533,13 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
   }
 
 
-  function isProductTypeRoute(pathname: string) {
-    const normalized = pathname.toLowerCase();
-
-    return (
-      normalized.includes("/ims/purchase_sales/masters/product_type") ||
-      normalized.includes("/ims/purchase_sales/masters/product%20type") ||
-      normalized.includes("/ims/purchase_sales/masters/product-type")
-    );
-  }
+function isProductTypeRoute(pathname: string) {
+  const n = pathname.toLowerCase();
+  return (
+    n.includes("/ims/purchase_sales/masters/product_type") ||
+    n.includes("/purchase_sales/masters/product-type")
+  ) && !n.includes("/wms/");
+}
 
   function isProductCategoryRoute(pathname: string) {
     const normalized = pathname.toLowerCase();

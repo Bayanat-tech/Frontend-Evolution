@@ -1,5 +1,5 @@
 import {
-  ArrowLeft, Edit2, FileText, Plus, RefreshCw, Save, Trash2, Upload, X,
+  ArrowLeft, Download, Edit2, FileText, Plus, RefreshCw, Save, Trash2, Upload, X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -11,6 +11,8 @@ import { Button } from "../../../../components/ui/Button";
 import { DataTable } from "../../../../components/ui/DataTable";
 import { Dialog } from "../../../../components/ui/Dialog";
 import AddProductWmsForm, { type ProductFormHandle } from "./ProductWmsForm";
+import ImportProductEdi from "../../edi/ImportProductEdi";
+import * as XLSX from "xlsx";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 
@@ -38,6 +40,51 @@ export function ProductWmsPage() {
 
   // ✅ Ref to the form so the header Save button can trigger it
   const formRef = useRef<ProductFormHandle>(null);
+const [exporting, setExporting] = useState(false);
+
+const handleExportForImport = async () => {
+  setExporting(true);
+  try {
+    const data = (await executeWmsInboundSql(`
+      SELECT * FROM MS_PRODUCT
+      WHERE COMPANY_CODE = '${user?.company_code}'
+      ORDER BY PRIN_CODE, PROD_CODE
+    `)) as Record<string, unknown>[];
+
+    const sheetRows = (data ?? [])
+      .map((item) => toLowerCaseKeys<Record<string, unknown>>(item))
+      .map((r) => ({
+        PRIN_CODE: String(r.prin_code ?? ""),
+        GROUP_CODE: String(r.group_code ?? ""),
+        BRAND_CODE: String(r.brand_code ?? ""),
+        PROD_CODE: String(r.prod_code ?? ""),
+        PROD_NAME: String(r.prod_name ?? ""),
+        P_UOM: String(r.p_uom ?? ""),
+        L_UOM: String(r.l_uom ?? ""),
+        UOM_COUNT: r.uom_count ?? "",
+        UPPP: r.uppp ?? "",
+        UPP: r.upp ?? "",
+        LENGTH: r.length ?? "",
+        BREADTH: r.breadth ?? "",
+        HEIGHT: r.height ?? "",
+        VOLUME: r.volume ?? "",
+        GROSS_WT: r.gross_wt ?? "",
+        NET_WT: r.net_wt ?? "",
+        SITE_IND: String(r.site_ind ?? ""),
+        MODEL_NUMBER: String(r.model_number ?? ""),
+      }));
+
+    const ws = XLSX.utils.json_to_sheet(sheetRows);
+    ws["!cols"] = Object.keys(sheetRows[0] ?? {}).map(() => ({ wch: 16 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products");
+    XLSX.writeFile(wb, "wms-products-import-format.xlsx");
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Unable to export products");
+  } finally {
+    setExporting(false);
+  }
+};
 
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
@@ -165,24 +212,24 @@ export function ProductWmsPage() {
 
   const columns = useMemo<ColumnDef<TProduct>[]>(
     () => [
-      {
-        id: "principal",
-        header: "Principal",
-        cell: ({ row }) => combine(row.original.prin_code, row.original.prin_name),
-        size: 200,
-      },
-      {
-        id: "group",
-        header: "Group",
-        cell: ({ row }) => combine(row.original.group_code, row.original.group_name),
-        size: 180,
-      },
-      {
-        id: "brand",
-        header: "Brand",
-        cell: ({ row }) => combine(row.original.brand_code, row.original.brand_name),
-        size: 180,
-      },
+        {
+          id: "principal",
+          header: "Principal",
+          accessorFn: (row) => combine(row.prin_code, row.prin_name),
+          size: 200,
+        },
+        {
+          id: "group",
+          header: "Group",
+          accessorFn: (row) => combine(row.group_code, row.group_name),
+          size: 180,
+        },
+        {
+          id: "brand",
+          header: "Brand",
+          accessorFn: (row) => combine(row.brand_code, row.brand_name),
+          size: 180,
+        },
       { accessorKey: "prod_code", header: "Product Code", size: 120 },
       { accessorKey: "prod_name", header: "Product Name", size: 220 },
       { accessorKey: "barcode", header: "Barcode", size: 120 },
@@ -308,10 +355,19 @@ export function ProductWmsPage() {
           setPageIndex(0);
         }}
         getRowId={(row) => `${row.prod_code}-${row.prin_code}`}
-        enableExport
-        exportFilename="wms-products-list.csv"
+        enableExport={false}
+        // exportFilename="wms-products-list.csv"
         toolbar={
           <div className="flex items-center gap-2">
+            <button
+            type="button"
+            onClick={handleExportForImport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer disabled:opacity-60"
+          >
+            <Download size={14} />
+            {exporting ? "Exporting..." : "Export"}
+          </button>
             <button
               type="button"
               onClick={() => setImportOpen(true)}
@@ -363,15 +419,15 @@ export function ProductWmsPage() {
           open={importOpen}
           title="Import Products"
           description="Upload products via Excel/EDI"
-          compact
+          // compact
           wide
           onClose={() => setImportOpen(false)}
         >
           <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
-            {/* <ImportProductEdi
+            <ImportProductEdi
               onSuccess={() => { void loadRows(); setImportOpen(false); }}
               onClose={() => setImportOpen(false)}
-            /> */}
+            />
           </div>
         </Dialog>
       )}
