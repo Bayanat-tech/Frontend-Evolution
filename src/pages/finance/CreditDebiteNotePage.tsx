@@ -80,8 +80,9 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SI: { title: "Sales", subtitle: "Sales invoice document", addLabel: "Add Sales" },
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
-  RJV: { title: "Reverse Journal Voucher", subtitle: "Reverse journal entry", addLabel: "Add Reverse Voucher" },
+  RJV: { title: "Provisional / Reverse Journal Voucher", subtitle: "Provisional & reversal journal entry", addLabel: "Add Reverse Voucher" },
   EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
+  PJV: { title: "PDC Journal Voucher", subtitle: "Post dated cheque journal", addLabel: "Add PDC JV" },
 };
 
 const HEADER_LIMITS: Partial<Record<keyof TransactionHeader, { max: number; label: string }>> = {
@@ -204,6 +205,30 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
   useEffect(() => {
     void loadRows();
   }, [fyPeriod, docType, query, pageIndex, pageSize, columnFilters]);
+
+  // Auto-open document if doc_no is passed in query params (e.g. from drilldown report)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const targetDocNo = params.get("doc_no") || params.get("docNo");
+    if (!targetDocNo || editor !== null) return;
+
+    const match = rows.find((r) => String(r.doc_no) === String(targetDocNo));
+    if (match) {
+      setEditor({ mode: "edit", row: match });
+    } else if (!loading) {
+      setEditor({
+        mode: "edit",
+        row: {
+          doc_no: targetDocNo,
+          doc_type: docType,
+          doc_date: "",
+          remarks: "",
+          amount: 0,
+          div_code: "",
+        } as TransactionDocumentRow,
+      });
+    }
+  }, [rows, loading, docType, editor]);
 
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
