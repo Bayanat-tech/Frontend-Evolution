@@ -112,7 +112,7 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
   const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
-    const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
@@ -130,9 +130,9 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   const loadLookups = async () => {
     setDivisionsLoading(true);
     try {
-       const [cInfo] = await Promise.all([getCompanyInfo()]);
-      
-            setCompanyInfo(cInfo);
+      const [cInfo] = await Promise.all([getCompanyInfo()]);
+
+      setCompanyInfo(cInfo);
       const divisionData = await getDivisions();
       setDivisions(divisionData);
     } finally {
@@ -397,12 +397,12 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
     },
   ], [isViewOnlyTab, exportingRowDocNo]);
 
-const openCreateForDivision = (division: Division) => {
-  setDivisionPicker(false);
-  setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
-};
+  const openCreateForDivision = (division: Division) => {
+    setDivisionPicker(false);
+    setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
+  };
 
-// One division → open the editor directly. Otherwise let the user pick.
+  // One division → open the editor directly. Otherwise let the user pick.
   const handleAddClick = () => {
     if (divisionsLoading) return;
     if (divisions.length === 1) {
@@ -456,7 +456,14 @@ const openCreateForDivision = (division: Division) => {
         }
       /> */}
 
-      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+      <div style={{
+        display: "flex", alignItems: "flex-end", gap: "4px",
+        padding: "3px 7px 0 8px", overflowX: "auto",
+        background: "#f1f5f9",
+        border: "1px solid #e2e8f0",
+        borderBottom: "1px solid #cbd5e1",
+        borderRadius: "10px",
+      }}>
         {purchaseOrderTabs
           .filter((item) => {
             if (approvalLevel === 0) {
@@ -480,18 +487,30 @@ const openCreateForDivision = (division: Division) => {
                   setTab(item.value as RequestTab);
                   setPageIndex(0);
                 }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
-                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
-                  : "border border-border bg-card text-foreground hover:bg-secondary"
-                  }`}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "8px",
+                  padding: "10px 16px", fontSize: "12.5px",
+                  fontWeight: active ? 700 : 500,
+                  color: active ? "#082A89" : "#475569",
+                  background: active ? "#e8f0ff" : "transparent",
+                  border: "none",
+                  borderBottom: active ? "2px solid #082A89" : "2px solid transparent",
+                  borderRadius: "10px 10px 0 0",
+                  cursor: "pointer", whiteSpace: "nowrap",
+                  transition: "background 0.15s, color 0.15s",
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#e8eef7"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
               >
                 <span>{item.label}</span>
 
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
-                    ? "bg-white/20 text-white"
-                    : "bg-muted text-muted-foreground"
-                    }`}
+                  style={{
+                    minWidth: "20px", padding: "1px 7px", borderRadius: "999px",
+                    fontSize: "11px", fontWeight: 700, textAlign: "center",
+                    background: active ? "#082A89" : "#cbd5e1",
+                    color: active ? "#fff" : "#334155",
+                  }}
                 >
                   {getTabCount(item.value)}
                 </span>

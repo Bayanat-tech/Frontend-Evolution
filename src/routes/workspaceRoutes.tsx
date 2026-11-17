@@ -2119,7 +2119,7 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
   function isStockReportsRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
-      normalized.includes("/workspace/ims/purchase_sales/reports/stock_report")
+      normalized.includes("/workspace/ims/ims/reports/stock_report")
     );
   }
 

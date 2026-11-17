@@ -241,6 +241,9 @@ const dateCls = (v?: string | null) =>
                 {/* MIDDLE COLUMN — Other Details */}
                 <div className="flex flex-col gap-1.5">
                     <HeaderBlock label="Other Details" icon={<FileText size={11} />} gridCols="grid-cols-6" grow>
+                      <CField label="SO Date" required className="col-span-2">
+                            <Input className={dateCls(form.so_doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(event) => updateField("so_doc_date", event.target.value)} />
+                        </CField>
                         <div className="col-span-2">
                             <LookupField
                                 label="SO No*"
@@ -428,13 +431,13 @@ const dateCls = (v?: string | null) =>
                             <Input className={dateCls(form.so_doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(event) => updateField("so_doc_date", event.target.value)} />
                         </CField>
 
-                        <CField label="SO Amount" required className="col-span-2">
+                        {/* <CField label="SO Amount" required className="col-span-2">
                             <Input className="h-7 text-xs text-right" type="text" disabled={headerAndLineDisabled} required value={form.total_so_amount} onChange={(event) => updateField("total_so_amount", event.target.value)} />
                         </CField>
 
                         <CField label="DN Date" required className="col-span-2">
                             <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
-                        </CField>
+                        </CField> */}
 
                         <CField label="Ref Date" className="col-span-2">
                             <Input className={dateCls(form.ref_date)} type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(event) => updateField("ref_date", event.target.value)} />
