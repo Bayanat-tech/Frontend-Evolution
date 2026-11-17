@@ -272,7 +272,6 @@ export function SmartInlineAllocationTable({
               disabled={disabled || loading}
               title="Reload outstanding invoices from server"
             >
-              <RefreshCw size={10} className={`mr-1 ${loading ? "animate-spin" : ""}`} /> Reload
             </button>
           )}
 
