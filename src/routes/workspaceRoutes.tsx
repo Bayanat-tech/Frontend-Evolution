@@ -925,7 +925,7 @@ import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
     {
       name: "Finance Provisional Journal Voucher",
       match: ({ pathname }) => isProvisionalJVRoute(pathname),
-      element: () => <JVDocumentEditor docType={"RJV"} />
+      element: () => <JVDocumentEditor docType={"PJV"} />
     },
     {
       name: "Finance Reverse Journal Voucher",
@@ -2756,7 +2756,16 @@ import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
 
   function isAllocatedInvoiceRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return normalized.includes("/finance/accounts/transactions/allocated_invoice") || normalized.includes("/finance/accounts/transactions/allocated-invoice");
+    return (
+      normalized.includes("/finance/accounts/transactions/allocated_invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocated-invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocate_and_unallocate_invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocate-and-unallocate-invoice") ||
+      normalized.includes("allocate_and_unallocate_invoice") ||
+      normalized.includes("allocate-and-unallocate-invoice") ||
+      normalized.includes("allocated_invoice") ||
+      normalized.includes("allocated-invoice")
+    );
   }
 
   function isProfitLossRoute(pathname: string) {

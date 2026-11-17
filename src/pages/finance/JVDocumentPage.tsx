@@ -2512,6 +2512,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     create_user: loginid,
     edit_user: loginid,
     canceled: originalForm.canceled || "N",
+    auto_reverse: docType === "RJV" ? "Y" : ((originalForm as any).auto_reverse || "N"),
     last_dtl_serial_no: originalForm.detail.length,
     sys_gen: "N",
   };

@@ -361,9 +361,6 @@ export function HrAccuralAccountSetup() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button size="sm" variant="outline" onClick={handleClearAll} disabled={saving}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
           <Button
             size="sm"
             variant="outline"
