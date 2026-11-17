@@ -2149,7 +2149,7 @@ const AddPRRequestPage = ({
                                 )}
 
                                 <td className="px-1 py-1">
-                                  <Input type="number" step="0.0001" value={item.ITEM_RATE || ""} onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)} disabled={disabled || userLevelLoading} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  <Input type="number" step="0.0001" value={item.ITEM_RATE || ""} onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)} disabled={disabled || userLevelLoading || userApprovalLevel >= 2} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
                                 </td>
 
                                 <td className={AMOUNT_CELL}>{fmt3(grossAmount)}</td>
