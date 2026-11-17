@@ -594,7 +594,6 @@ function JVDocument({
         100,
         [
           { field: "canceled", values: "N" },
-          { field: "auto_reverse", values: "Y" },
           { field: "unreversed_only", values: "Y" },
         ]
       );
