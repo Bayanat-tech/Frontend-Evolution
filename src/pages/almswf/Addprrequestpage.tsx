@@ -2435,7 +2435,7 @@ const AddPRRequestPage = ({
 
       <Dialog
         open={commentsOpen}
-        title="Comments & Activity"
+        title="Comments & History"
         onClose={() => setCommentsOpen(false)}
       >
         <div className="flex flex-col gap-4 w-full" style={{ minWidth: '450px' }}>
