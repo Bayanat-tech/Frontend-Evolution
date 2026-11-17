@@ -297,7 +297,6 @@ export function DocumentSetupPage() {
             actionButton={
             <div className="flex items-center gap-2">
             {dirtyCount > 0 && <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{dirtyCount} unsaved</span>}
-            <Button type="button" variant="outline" size="sm" onClick={() => void loadDocs()}><RefreshCw size={14} /> Refresh</Button>
             <Button size="sm" disabled={!selected || dirtyCount === 0 || saving} type="submit" form="document-setup-form">
               {saving ? <span className="spinner small" /> : <Save size={14} />} Save Changes
             </Button>
