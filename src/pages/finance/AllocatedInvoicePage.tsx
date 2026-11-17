@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getLookupValue, getLookupText, LookupRow } from "../../api/lookups";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
@@ -109,6 +109,33 @@ export function AllocatedInvoicePage() {
   const [confirmUnallocDocNo, setConfirmUnallocDocNo] = useState<string | null>(null);
 
   const totalAllocated = lines.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  // Auto-default division from user's assigned divisions on load
+  useEffect(() => {
+    if (division) return;
+    let mounted = true;
+    void (async () => {
+      try {
+        const divs = await getDynamicLookup({
+          parameter: "Account_division",
+          loginid: loginId,
+          code1: companyCode,
+        });
+        if (!mounted || !divs || !divs.length) return;
+        const divCode = String(getLookupValue(divs[0], "div_code") || "");
+        const divName = getLookupText(divs[0], ["div_name", "DIV_NAME", "division_name"]);
+        if (divCode) {
+          setDivision(divCode);
+          setDivisionName(divName);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [companyCode, loginId]);
 
   // Fetch unallocated receipts/payments and open invoices whenever acCode or division changes
   const fetchOpenBills = async () => {
@@ -508,7 +535,7 @@ export function AllocatedInvoicePage() {
                 displayFields={["div_code", "div_name"]}
                 loadOptions={() =>
                   getDynamicLookup({
-                    parameter: "GLOBAL_DIVISION_SEARCH",
+                    parameter: "Account_division",
                     loginid: loginId,
                     code1: companyCode,
                   })
@@ -535,7 +562,7 @@ export function AllocatedInvoicePage() {
                 displayFields={["ac_code", "ac_name"]}
                 loadOptions={() =>
                   getDynamicLookup({
-                    parameter: "Account_AC_CODE_Serach_HDR",
+                    parameter: "Account_AC_CODE_Serach",
                     loginid: loginId,
                     code1: companyCode,
                   })

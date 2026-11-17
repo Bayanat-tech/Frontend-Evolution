@@ -490,6 +490,8 @@ export default function ProfitLossPage() {
         loading={reportLoading || drillLoading}
         error={drillError ?? (reportError && !reportHtml ? reportError : null)}
         onExportExcel={handleExcel}
+        canGoBack={drillStack.length > 0}
+        onBack={() => handleDrillNavigate(drillStack.length - 2)}
         headerSlot={
           (drillLoading || drillError || drillStack.length > 0) ? (
             <div className="flex flex-col gap-0">
