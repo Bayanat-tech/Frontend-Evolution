@@ -15,6 +15,10 @@ import {
   Layers,
   MessageSquare,
   type LucideIcon,
+  GitBranch,
+  User,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
@@ -27,6 +31,7 @@ import { useAuth } from "../../state/AuthContext";
 import { almsCommonSelect } from "../../api/alms";
 import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
+import { getCreditRequestHistory } from "../../api/transactions";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
 export type TCRHeader = {
@@ -262,7 +267,15 @@ const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
 
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [logRows, setLogRows] = useState<any[]>([]);
+const [logLoading, setLogLoading] = useState(false);
   const [userLevel, setUserLevel] = useState<number | null>(null);
+
+  // ── Approval Flow states ──────────────────────────────────
+// ── Approval Flow states ──────────────────────────────────
+const [approvalFlowOpen, setApprovalFlowOpen] = useState(false);
+const [approvalFlowData, setApprovalFlowData] = useState<any[]>([]); // Merged data
+const [approvalFlowLoading, setApprovalFlowLoading] = useState(false);
 
   const isCancelled = String(header.LAST_ACTION || "").toUpperCase() === "CANCELED";
   const disabled = isViewMode || saving || isCancelled;
@@ -635,6 +648,71 @@ setSendBackUsers(
   setDialogError("");
   setSendBackOpen(true);
 };
+
+
+
+
+const openLog = async () => {
+  if (!requestNumber) return;
+  setLogOpen(true);
+  setLogLoading(true);
+  setLogRows([]);
+  try {
+    const rows = await getCreditRequestHistory({
+      loginid,
+      company_code: companyCode,
+      request_number: requestNumber,
+    });
+
+    setLogRows(rows);
+  } catch (e) {
+    console.error(e);
+    setLogRows([]);
+  } finally {
+    setLogLoading(false);
+  }
+};
+
+// ── Open Approval Flow dialog ─────────────────────────────
+
+const openApprovalFlow = async () => {
+  if (!companyCode || !requestNumber || userLevel === null) return;
+
+  setApprovalFlowOpen(true);
+  setApprovalFlowLoading(true);
+  setApprovalFlowData([]);
+
+  try {
+    const rows = await getDynamicLookup({
+      parameter: "PS_CREDITREQUEST_ENTRY_APPROVAL_FLOW",
+      code1: companyCode,
+      code2: requestNumber,
+      code3: loginid,
+      code4: String(userLevel),
+    });
+
+
+    const formattedData = (rows || []).map((row: any) => ({
+      LEVEL_NO: Number(row.LEVEL_NO ?? row.level_no ?? 0),
+      RPT_NAME: row.RPT_NAME ?? row.rpt_name ?? "Unknown Level",
+      EMPLOYEE_CODE_ID: String(row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""),
+      
+   
+      LIMIT: row.LIMIT || row.limit || "", 
+      STATUS: row.STATUS || row.status || "", 
+      REMARKS: row.REMARKS || row.remarks || "",
+      DATE: row.DATE || row.date || null,
+    }));
+
+    setApprovalFlowData(formattedData);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setApprovalFlowLoading(false);
+  }
+};
+
+
   const closeReject = () => {
     if (actionLoading === "reject") return;
     setRejectOpen(false);
@@ -729,9 +807,24 @@ setSendBackUsers(
               <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}>
-                <FileText size={15} /> Log
-              </Button>
+             <Button
+  type="button"
+  variant="secondary"
+  onClick={openLog}
+  disabled={!requestNumber}
+>
+  <FileText size={15} /> Log
+</Button>
+
+
+<Button
+  type="button"
+  variant="secondary"
+  onClick={openApprovalFlow}
+  disabled={!requestNumber || userLevel === null}
+>
+  <GitBranch size={15} /> Approval Flow
+</Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
                 <X size={16} />
               </Button>
@@ -1088,6 +1181,249 @@ setSendBackUsers(
   </div>
 </Dialog>
 
+
+
+<Dialog
+  open={logOpen}
+  title="Credit Request Flow Log"
+  description={requestNumber ? String(requestNumber) : ""}
+  onClose={() => setLogOpen(false)}
+  footer={
+    <Button type="button" onClick={() => setLogOpen(false)}>
+      OK
+    </Button>
+  }
+>
+  <div className="w-[min(920px,92vw)] max-w-full">
+    {/* ── Important fields ── */}
+    <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border bg-slate-50 p-3 text-sm md:grid-cols-3">
+      <div>
+        <span className="text-muted-foreground">Request No</span>
+        <div className="font-semibold">{requestNumber || "—"}</div>
+      </div>
+      <div>
+        <span className="text-muted-foreground">Status</span>
+        <div className="font-semibold">{header.LAST_ACTION || "—"}</div>
+      </div>
+      <div>
+        <span className="text-muted-foreground">Company</span>
+        <div className="font-semibold">{header.COMPANY_NAME || "—"}</div>
+      </div>
+      <div>
+        <span className="text-muted-foreground">Created By</span>
+        <div className="font-semibold">{header.CREATE_USER || "—"}</div>
+      </div>
+      <div>
+        <span className="text-muted-foreground">Credit Limit</span>
+        <div className="font-semibold">
+          {header.CREDIT_LIMIT != null
+            ? Number(header.CREDIT_LIMIT).toLocaleString()
+            : "—"}
+        </div>
+      </div>
+      <div>
+        <span className="text-muted-foreground">Req. Period</span>
+        <div className="font-semibold">
+          {header.REQUESTED_CREDIT_PERIOD ?? "—"}
+        </div>
+      </div>
+    </div>
+
+    {/* ── Approval History ── */}
+    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#00378C]">
+      Approval History
+    </p>
+
+    {logLoading ? (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading history...
+      </div>
+    ) : logRows.length === 0 ? (
+      <p className="py-6 text-sm text-muted-foreground">
+        No flow history available.
+      </p>
+    ) : (
+      <div className="max-h-[60vh] overflow-auto rounded-md border">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
+          <thead className="sticky top-0 bg-[#eaf0f8] text-[#00378C]">
+            <tr>
+              <th className="border-b px-3 py-2 text-left font-semibold">S.No.</th>
+              <th className="border-b px-3 py-2 text-left font-semibold">Action</th>
+              <th className="border-b px-3 py-2 text-left font-semibold">By</th>
+              <th className="border-b px-3 py-2 text-left font-semibold">Date &amp; Time</th>
+              <th className="border-b px-3 py-2 text-right font-semibold">Level</th>
+              <th className="border-b px-3 py-2 text-left font-semibold">Next By</th>
+              <th className="border-b px-3 py-2 text-left font-semibold">Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logRows.map((r, i) => {
+              const remark =
+                r.reject_reason ||
+                r.sentback_reason ||
+                r.cancel_remark ||
+                "—";
+              const when = r.user_dt
+                ? new Date(r.user_dt).toLocaleString("en-GB", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })
+                : "—";
+              return (
+                <tr key={i} className="odd:bg-white even:bg-slate-50/80">
+                  <td className="border-b px-3 py-1.5">{i + 1}</td>
+                  <td className="border-b px-3 py-1.5 font-medium">
+                    {r.last_action || "—"}
+                  </td>
+                  <td className="border-b px-3 py-1.5">{r.user_id || "—"}</td>
+                  <td className="border-b px-3 py-1.5 whitespace-nowrap">{when}</td>
+                  <td className="border-b px-3 py-1.5 text-right">
+                    {r.flow_level_running ?? "—"}
+                  </td>
+                  <td className="border-b px-3 py-1.5">
+                    {r.next_action_by || "—"}
+                  </td>
+                  <td className="border-b px-3 py-1.5">{remark}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</Dialog>
+
+
+{/* Approval Graph Dialog - Smart UI */}
+<Dialog
+  open={approvalFlowOpen}
+  title="Approval Flow"
+  description={requestNumber ? String(requestNumber) : ""}
+  onClose={() => setApprovalFlowOpen(false)}
+  footer={
+    <Button type="button" onClick={() => setApprovalFlowOpen(false)} className="px-8">
+      OK
+    </Button>
+  }
+>
+  <div className="w-[min(850px,95vw)] max-w-full bg-white pb-4">
+    
+    {/* Table Header */}
+    <div className="mb-4 grid grid-cols-12 gap-2 border-b-2 border-gray-100 pb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
+      <div className="col-span-6 pl-12">Level & Details</div>
+      <div className="col-span-2 text-center">Limit</div>
+      <div className="col-span-4 text-right pr-4">Status / Remarks</div>
+    </div>
+
+    {approvalFlowLoading ? (
+      <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" /> Loading...
+      </div>
+    ) : approvalFlowData.length === 0 ? (
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        No approval flow available.
+      </p>
+    ) : (
+      <div className="relative pl-4 space-y-0">
+        
+        {/* Main Vertical Line (Tree Trunk) */}
+        <div className="absolute left-[26px] top-6 bottom-8 w-0.5 bg-gray-200 z-0" />
+
+        {approvalFlowData.map((item, idx) => {
+          // Smart Status Logic
+          const statusStr = String(item.STATUS).toUpperCase();
+          const isApproved = statusStr.includes("APPROV");
+          const isPending = statusStr.includes("PEND") || statusStr.includes("SUBMIT") || !statusStr;
+          const isSentBack = statusStr.includes("BACK") || statusStr.includes("REJECT");
+
+          return (
+            <div key={idx} className="relative z-10 flex gap-4 pb-6 group">
+              
+              {/* Tree Node Icon */}
+              <div className="relative flex flex-col items-center mt-1">
+                {/* Horizontal connecting line */}
+                <div className="absolute top-4 -left-4 w-4 h-px bg-gray-200" />
+                {/* Node Box */}
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-white shadow-sm
+                  ${isApproved ? 'border-green-500' : isSentBack ? 'border-red-500' : 'border-gray-300'}`}>
+                  {isApproved ? <CheckCircle2 size={16} className="text-green-500" /> : 
+                   isSentBack ? <X size={16} className="text-red-500" /> : 
+                   <span className="text-xs font-bold text-gray-400">{item.LEVEL_NO}</span>}
+                </div>
+              </div>
+
+              {/* Row Content */}
+              <div className="flex-1 pb-4 border-b border-dashed border-gray-100 last:border-0">
+                <div className="grid grid-cols-12 gap-2 items-center">
+                  
+                  {/* Left: Level & Role Name */}
+                  <div className="col-span-6 flex flex-col gap-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-bold text-gray-700 text-xs">LEVEL {item.LEVEL_NO}</span>
+                      <span className="font-semibold text-gray-900 text-sm">{item.RPT_NAME}</span>
+                    </div>
+                    
+                    {/* Employee Code / Name if present */}
+                    {item.EMPLOYEE_CODE_ID && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium pl-1">
+                        <User size={12} className="text-gray-400" /> {item.EMPLOYEE_CODE_ID}
+                      </div>
+                    )}
+                    
+                    {/* Date if present */}
+                    {item.DATE && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400 pl-1">
+                        <Clock size={12} /> 
+                        {new Date(item.DATE).toLocaleString("en-GB", {
+                          day: "2-digit", month: "2-digit", year: "numeric",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Middle: Limit (Shows only if data exists) */}
+                  <div className="col-span-2 text-center text-sm font-medium text-gray-600">
+                    {item.LIMIT ? item.LIMIT : <span className="text-gray-300">-</span>}
+                  </div>
+
+                  {/* Right: Status Badge & Remarks */}
+                  <div className="col-span-4 flex flex-col items-end gap-1.5">
+                    {item.STATUS ? (
+                      <span className={`px-3 py-1 text-[11px] font-bold rounded-md tracking-wide
+                        ${isApproved ? 'bg-green-100 text-green-700 border border-green-200' : 
+                          isSentBack ? 'bg-red-100 text-red-700 border border-red-200' : 
+                          'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+                        {item.STATUS}
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 text-[11px] font-bold rounded-md tracking-wide bg-gray-100 text-gray-500 border border-gray-200">
+                        PENDING
+                      </span>
+                    )}
+                    
+                    {/* Remarks if present */}
+                    {item.REMARKS && (
+                      <span className="text-xs text-gray-500 text-right italic line-clamp-2" title={item.REMARKS}>
+                        "{item.REMARKS}"
+                      </span>
+                    )}
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</Dialog>
 
       {/* Cancel */}
       <Dialog

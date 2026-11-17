@@ -1861,6 +1861,20 @@ export async function getCRListingReportExcel(params: Record<string, any>): Prom
   window.URL.revokeObjectURL(url);
 }
 
+export async function getCreditRequestHistory(
+  params: Record<string, any>
+): Promise<any[]> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CreditRequestHistory`,
+    params
+  );
+  const body = response.data;
+  if (body?.success === false) {
+    throw new Error(body.message || "Unable to load history");
+  }
+  return body?.data ?? [];
+}
+
 
 
 
