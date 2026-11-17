@@ -1,9 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Calculator, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
+import { AlertTriangle, Calculator, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { executeCommonProcedure, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { Dialog } from "../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
@@ -22,8 +24,17 @@ export function AssetDepreciationPage() {
   const [rows, setRows] = useState<DepRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [exceptions, setExceptions] = useState<any[]>([]);
+  const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
 
   const [year, month] = monthYear ? monthYear.split("-") : ["", ""];
+
+  // Helper to calculate exact PowerBuilder Doc No (division 10 uses YYYYMM, others use DIV+YYYYMM)
+  const calculateDocNo = (y: string, m: string, div: string) => {
+    if (!y || !m) return "";
+    const base = `${y}${m}`;
+    return `${y}${m}`;
+  };
 
   // JV button is enabled only when the grid has at least one row
   const hasRows = rows.length > 0;
@@ -36,12 +47,27 @@ export function AssetDepreciationPage() {
     col("quantity", "Quantity", 100),
     col("amount", "pur.Amount", 120),
     col("dprc_percentage", "Dep. %", 90),
-    col("accdprc_amount", "Accu Amount", 120),
+    col("accudprc_amount", "Accu Amount", 120),
     col("dprc_amount", "Dprc Amount", 130),
     col("wd_value", "WD Value", 120),
     col("last_dprc_date", "Last Dep.", 120),
     col("div_code", "Division", 100),
   ], []);
+
+  const checkExceptions = async (div: string) => {
+    try {
+      const resp = await api.get<{ success: boolean; data: any[] }>(
+        `/api/finance/asset-depreciation/exceptions?div_code=${encodeURIComponent(div)}`
+      );
+      if (resp.data?.success && Array.isArray(resp.data.data)) {
+        setExceptions(resp.data.data);
+        return resp.data.data;
+      }
+    } catch {
+      // Non-blocking exception check
+    }
+    return [];
+  };
 
   const retrieve = async () => {
     setLoading(true);
@@ -54,6 +80,9 @@ export function AssetDepreciationPage() {
         code2: division,
       });
       setRows(data.map(normalize));
+      if (division) {
+        await checkExceptions(division);
+      }
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to retrieve depreciation" });
     } finally {
@@ -78,12 +107,20 @@ export function AssetDepreciationPage() {
         val1s4: companyCode,
         val1s5: docType,
       });
-      const nextDocNo = `${year}${month}`;
+      const nextDocNo = calculateDocNo(year, month, division);
       setDocNo(nextDocNo);
-      setNotice({ type: "success", message: "Depreciation document generated successfully" });
+      setNotice({ type: "success", message: `Depreciation document ${nextDocNo} generated successfully` });
       await retrieve();
+      const exc = await checkExceptions(division);
+      if (exc.length > 0) {
+        setNotice({
+          type: "error",
+          message: `Depreciation generated with ${exc.length} exception(s). Please review the Exception Register before posting JV.`,
+        });
+      }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to save depreciation") });
     } finally {
       setLoading(false);
     }
@@ -91,44 +128,41 @@ export function AssetDepreciationPage() {
 
   const postJv = async () => {
     if (!hasRows) return;
-    if (!docNo || !division) {
+    const computedDocNo = calculateDocNo(year, month, division) || docNo;
+    if (!computedDocNo || !division) {
       setNotice({ type: "error", message: "Retrieve or generate a document before posting JV." });
       return;
     }
+
     setLoading(true);
     setNotice(null);
     try {
-      // 1. Exception register check:
-      //    select count(*) from tmp_ac_asset_deprcn_excptn where div_code = :division
-      //    NOTE: "AC_ASSET_DEPRCN_EXCEPTION_COUNT" must be registered in the dynamic lookup
-      //    on the backend and return that count as the first column of the first row.
-      // const exceptionRows = await getDynamicLookup({
-      //   parameter: "AC_ASSET_DEPRCN_EXCEPTION_COUNT",
-      //   loginid: loginId,
-      //   code1: division,
-      // });
-      // const firstRow = (exceptionRows?.[0] ?? null) as Record<string, unknown> | null;
-      // const exceptionCount = firstRow ? Number(Object.values(firstRow)[0]) || 0 : 0;
-
-      // if (exceptionCount > 0) {
-      //   setNotice({ type: "error", message: "Please check the Exception register!" });
-      //   return;
-      // }
+      // Check exceptions before posting JV
+      const exc = await checkExceptions(division);
+      if (exc.length > 0) {
+        setNotice({
+          type: "error",
+          message: `Cannot post JV: ${exc.length} assets have missing Employee/Custodian or Location in the Exception Register.`,
+        });
+        setExceptionDialogOpen(true);
+        return;
+      }
 
       // Call PROC_DEPRECIATION_JVPOST (validates rowcount, checks exception register, and posts JV)
       await executeCommonProcedure({
         parameter: "PROC_DEPRECIATION_JVPOST",
         loginid: loginId,
-        val1s1: companyCode,           // p_company_code
-        val1s2: docType,               // p_doc_type ('ADP')
-        val1s3: String(Number(docNo)), // p_doc_no (numeric string, e.g. '202610')
-        val1s4: division,              // p_div_code
-        val1s5: String(rows.length),   // p_rowcount
-        val1n1: Number(docNo),         // backwards-compatibility
+        val1s1: companyCode,
+        val1s2: docType,
+        val1s3: String(Number(computedDocNo)),
+        val1s4: division,
+        val1s5: String(rows.length),
+        val1n1: Number(computedDocNo),
       });
-      setNotice({ type: "success", message: "Depreciation JV posted successfully to General Ledger" });
+      setNotice({ type: "success", message: `Depreciation JV for document ${computedDocNo} posted successfully to General Ledger` });
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to post JV") });
     } finally {
       setLoading(false);
     }
@@ -149,6 +183,16 @@ export function AssetDepreciationPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {exceptions.length > 0 && (
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setExceptionDialogOpen(true)}
+              className="h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100"
+            >
+              <AlertTriangle size={14} /> Exceptions ({exceptions.length})
+            </Button>
+          )}
           <Button
             variant="outline"
             disabled={loading}
@@ -200,7 +244,7 @@ export function AssetDepreciationPage() {
                 onChange={(event) => {
                   setMonthYear(event.target.value);
                   const [y, m] = event.target.value.split("-");
-                  setDocNo(y && m ? `${y}${m}` : "");
+                  setDocNo(calculateDocNo(y, m, division));
                 }}
               />
             </div>
@@ -227,6 +271,7 @@ export function AssetDepreciationPage() {
                 onChange={(value, row) => {
                   setDivision(value);
                   setDivisionName(String(getLookupValue(row || {}, "div_name") || ""));
+                  setDocNo(calculateDocNo(year, month, value));
                 }}
               />
             </div>
@@ -257,6 +302,47 @@ export function AssetDepreciationPage() {
         density="grid"
         getRowId={(row, index) => `${row.asset_id || "row"}_${index}`}
       />
+      {/* ===================== EXCEPTION REGISTER MODAL ===================== */}
+      <Dialog
+        open={exceptionDialogOpen}
+        onClose={() => setExceptionDialogOpen(false)}
+        title={`Asset Depreciation Exception Register (${exceptions.length} Issues)`}
+      >
+        <div className="p-4 space-y-4">
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            <strong>Action Required:</strong> The following assets cannot have depreciation posted because they are missing a Custodian (Employee ID) or Location (Site) in the Asset Master, or have written-down value discrepancies. Please update these assets in the <strong>Asset Register</strong> page.
+          </div>
+          <div className="max-h-80 overflow-y-auto border rounded-md">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-100 font-semibold text-slate-700 border-b">
+                <tr>
+                  <th className="p-2">Asset ID</th>
+                  <th className="p-2">Asset Name</th>
+                  <th className="p-2">Division</th>
+                  <th className="p-2">WD Value</th>
+                  <th className="p-2">Amount</th>
+                  <th className="p-2">Issue / Missing</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {exceptions.map((exc, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50">
+                    <td className="p-2 font-mono font-medium">{exc.asset_id || exc.ASSET_ID}</td>
+                    <td className="p-2">{exc.asset_name || exc.ASSET_NAME}</td>
+                    <td className="p-2">{exc.div_code || exc.DIV_CODE}</td>
+                    <td className="p-2 font-mono">{String(exc.wd_value ?? exc.WD_VALUE ?? "")}</td>
+                    <td className="p-2 font-mono">{String(exc.amount ?? exc.AMOUNT ?? "")}</td>
+                    <td className="p-2 text-rose-600 font-medium">Missing Custodian / Location</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={() => setExceptionDialogOpen(false)}>Close</Button>
+          </div>
+        </div>
+      </Dialog>
     </section>
   );
 }
@@ -271,4 +357,18 @@ function normalize(row: LookupRow): DepRow {
     output[key.toLowerCase()] = row[key] as string | number;
   });
   return output;
+}
+
+function friendlyError(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (raw.includes("NO DETAILS FOUND"))
+    return "No depreciation has been saved for this month and division. Click Save first, then post the JV.";
+  if (raw.includes("Do Depreciation Calculation"))
+    return "Run the depreciation calculation (Save) before posting the JV.";
+  if (raw.includes("Please check the Exception register"))
+    return "Some assets are in the Exception Register. Fix them before posting the JV.";
+  // Any other ORA-20xxx: show only its message, without the ORA-06512 stack
+  const match = raw.match(/ORA-20\d{3}:\s*([\s\S]*?)(?=\s*ORA-\d{5}|$)/);
+  if (match?.[1]) return match[1].trim();
+  return fallback;
 }

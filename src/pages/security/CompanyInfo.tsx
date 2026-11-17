@@ -229,7 +229,6 @@ export default function CompanyInfo() {
       val1s50: s(form.dn_grn_apprval),
 
       // Extra slots – extend DynamicMutationParams type for these
-      // @ts-expect-error – extend type to val1s51+ if not already done
       val1s51: s(form.footer_note),
       val1s52: s(form.service_booking_nr),
       val1s53: s(form.service_contract_nr),

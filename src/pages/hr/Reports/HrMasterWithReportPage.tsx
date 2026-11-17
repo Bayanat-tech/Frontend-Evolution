@@ -374,15 +374,6 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void loadRows()}
-              title="Refresh"
-              className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-secondary"
-            >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              Refresh
-            </button>
-            <button
-              type="button"
               onClick={() => void handlePrintAll()}
               title={`Print all ${config.title}`}
               className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-secondary"

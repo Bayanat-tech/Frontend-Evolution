@@ -82,8 +82,8 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
   RJV: { title: "Reverse Journal Voucher (RJV)", subtitle: "Reversal of provisional general ledger vouchers", addLabel: "Reverse Provisional JV" },
-   EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
-   PJV: { title: "PDC Journal Voucher", subtitle: "Post dated cheque journal", addLabel: "Add PDC JV" },
+  EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
+  PJV: { title: "Provisional Journal Voucher (PJV)", subtitle: "Provisional accrued general ledger voucher", addLabel: "Add Provisional JV" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -585,35 +585,39 @@ function JVDocument({
   const loadJvOptions = async (searchQuery?: string) => {
     try {
       const activeFy = (form as any).fy_period || fyPeriod || undefined;
-      // Per audit rules: Reverse JV only displays Provisional JVs (doc_type: RJV) that have not been reversed yet
-      const res = await getTransactionDocuments(
-        "RJV",
-        activeFy,
-        searchQuery?.trim() || undefined,
-        1,
-        100,
-        [{ field: "canceled", values: "N" }, { field: "auto_reverse", values: "N" }]
-      );
-      const tableData = res?.tableData || [];
-      return tableData.map((row: any) => {
-        const rawDocNo = String(row.doc_no || "").trim();
-        const formattedDocNo = rawDocNo.toUpperCase().startsWith("RJV")
-          ? rawDocNo
-          : rawDocNo.toUpperCase().startsWith("JV")
-          ? rawDocNo.replace(/^JV/i, "RJV")
-          : `RJV${rawDocNo}`;
-        const formattedDate = formatDate(row.doc_date);
-        const amt = Number(row.amount ?? row.resolved_amount ?? 0);
-        return {
-          ...row,
-          doc_no: rawDocNo,
-          formatted_doc_no: formattedDocNo,
-          formatted_date: formattedDate,
-          formatted_amount: formatAmount(amt, currencyDecimals),
-          remarks: row.remarks || "Provisional Journal Voucher",
-          curr_code: row.curr_code || form.curr_code || "INR",
-        };
-      });
+      // Per audit rules: Reverse JV displays Provisional JVs (doc_type: RJV or PJV) that have not been reversed yet
+      const [resRjv, resPjv] = await Promise.all([
+        getTransactionDocuments("RJV", activeFy, searchQuery?.trim() || undefined, 1, 100, [
+          { field: "canceled", values: "N" },
+          { field: "unreversed_only", values: "Y" },
+        ]),
+        getTransactionDocuments("PJV", activeFy, searchQuery?.trim() || undefined, 1, 100, [
+          { field: "canceled", values: "N" },
+          { field: "unreversed_only", values: "Y" },
+        ]),
+      ]);
+      const tableData = [...(resRjv?.tableData || []), ...(resPjv?.tableData || [])];
+      return tableData
+        .filter((row: any) => {
+          // Strictly exclude any document that is already a reversal voucher or has ref_doc_no
+          const rem = String(row.remarks || "").toUpperCase();
+          if (row.ref_doc_no || rem.startsWith("(AUTO REVERSE")) return false;
+          return true;
+        })
+        .map((row: any) => {
+          const rawDocNo = String(row.doc_no || "").trim();
+          const formattedDate = formatDate(row.doc_date);
+          const amt = Number(row.amount ?? row.resolved_amount ?? 0);
+          return {
+            ...row,
+            doc_no: rawDocNo,
+            formatted_doc_no: rawDocNo,
+            formatted_date: formattedDate,
+            formatted_amount: formatAmount(amt, currencyDecimals),
+            remarks: row.remarks || "Provisional Journal Voucher",
+            curr_code: row.curr_code || form.curr_code || "INR",
+          };
+        });
     } catch (err) {
       console.error("Failed to load Provisional JVs for reversal:", err);
       return [];
@@ -641,28 +645,27 @@ function JVDocument({
         ]);
       } catch (err1) {
         if (numOnly && numOnly !== cleanDocNo) {
-          [headerRaw, detailRaw] = await Promise.all([
-            getTransactionHeader(numOnly, "RJV"),
-            getTransactionDetail(numOnly, form.div_code, "RJV"),
-          ]);
-        } else {
-          throw err1;
+          try {
+            [headerRaw, detailRaw] = await Promise.all([
+              getTransactionHeader(numOnly, "RJV"),
+              getTransactionDetail(numOnly, form.div_code, "RJV"),
+            ]);
+          } catch {}
         }
       }
 
-      if ((!headerRaw || !headerRaw.doc_no) && numOnly && numOnly !== cleanDocNo) {
+      // If not found in RJV, try PJV (Provisional Journal Voucher)
+      if (!headerRaw || !headerRaw.doc_no) {
         try {
-          const [h2, d2] = await Promise.all([
-            getTransactionHeader(numOnly, "RJV"),
-            getTransactionDetail(numOnly, form.div_code, "RJV"),
+          const [hPjv, dPjv] = await Promise.all([
+            getTransactionHeader(cleanDocNo, "PJV"),
+            getTransactionDetail(cleanDocNo, form.div_code, "PJV"),
           ]);
-          if (h2 && (h2.doc_no || (Array.isArray(d2) && d2.length))) {
-            headerRaw = h2;
-            detailRaw = d2;
+          if (hPjv && (hPjv.doc_no || (Array.isArray(dPjv) && dPjv.length))) {
+            headerRaw = hPjv;
+            detailRaw = dPjv;
           }
-        } catch {
-          // ignore fallback error
-        }
+        } catch {}
       }
 
       if (!headerRaw) {
@@ -703,25 +706,20 @@ function JVDocument({
         };
       });
 
-      const formattedSelected = cleanDocNo.toUpperCase().startsWith("RJV")
-        ? cleanDocNo
-        : cleanDocNo.toUpperCase().startsWith("JV")
-        ? cleanDocNo.replace(/^JV/i, "RJV")
-        : `RJV${cleanDocNo}`;
-      setSourceJvDocNo(formattedSelected);
+      setSourceJvDocNo(cleanDocNo);
 
       setForm((current) => ({
         ...current,
-        ref_no: formattedSelected,
-        ref_doc_no: formattedSelected,
+        ref_no: cleanDocNo,
+        ref_doc_no: cleanDocNo,
         curr_code: text(headerRaw.curr_code ?? current.curr_code),
         curr_name: text(headerRaw.curr_name ?? current.curr_name),
         ex_rate: Number(headerRaw.ex_rate ?? current.ex_rate ?? 1),
-        remarks: `Reversal of Provisional JV ${formattedSelected}${headerRaw.remarks ? " - " + headerRaw.remarks : ""}`,
+        remarks: `(AUTO REVERSE JV ${cleanDocNo} ) ${headerRaw.remarks || ""}`.trim(),
         detail: mappedDetails,
       }));
 
-      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from Provisional JV ${formattedSelected}`);
+      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from Provisional JV ${cleanDocNo}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to load Provisional JV ${cleanDocNo}`);
     } finally {
@@ -736,10 +734,11 @@ function JVDocument({
       setError("");
       try {
         if (editMode && editor?.mode === "edit") {
-          const [headerRaw, detailRaw, childrenRaw] = await Promise.all([
-            getTransactionHeader(editor.row.doc_no, docType),
-            getTransactionDetail(editor.row.doc_no, editor.row.div_code, docType),
-            getTransactionChildren(editor.row.doc_no, editor.row.div_code, docType),
+          const headerRaw = await getTransactionHeader(editor.row.doc_no, docType);
+          const effectiveDivCode = String(editor.row.div_code || (headerRaw as any)?.div_code || "");
+          const [detailRaw, childrenRaw] = await Promise.all([
+            getTransactionDetail(editor.row.doc_no, effectiveDivCode, docType),
+            getTransactionChildren(editor.row.doc_no, effectiveDivCode, docType),
           ]);
           if (!mounted) return;
           // map existing document first
@@ -1485,15 +1484,7 @@ function JVDocument({
                             disabled={disabled || editMode}
                             placeholder="Select Provisional JV to reverse..."
                             value={sourceJvDocNo || form.ref_no || ""}
-                            displayValue={
-                              sourceJvDocNo || form.ref_no
-                                ? (String(sourceJvDocNo || form.ref_no).toUpperCase().startsWith("RJV")
-                                    ? String(sourceJvDocNo || form.ref_no)
-                                    : String(sourceJvDocNo || form.ref_no).toUpperCase().startsWith("JV")
-                                    ? String(sourceJvDocNo || form.ref_no).replace(/^JV/i, "RJV")
-                                    : `RJV${sourceJvDocNo || form.ref_no}`)
-                                : ""
-                            }
+                            displayValue={sourceJvDocNo || form.ref_no || ""}
                             columns={[
                               { field: "formatted_doc_no", header: "Provisional JV No" },
                               { field: "formatted_date", header: "Date" },
@@ -2336,6 +2327,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     create_user: loginid,
     edit_user: loginid,
     canceled: originalForm.canceled || "N",
+    auto_reverse: docType === "RJV" ? "Y" : ((originalForm as any).auto_reverse || "N"),
     last_dtl_serial_no: originalForm.detail.length,
     sys_gen: "N",
   };

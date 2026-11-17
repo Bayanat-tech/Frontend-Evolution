@@ -376,9 +376,6 @@ export function InterviewEvalPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-          </Button>
           <Button type="button" size="sm" onClick={() => openEditor("add")}>
             <Plus size={14} /> Add
           </Button>

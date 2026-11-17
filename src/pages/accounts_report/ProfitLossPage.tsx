@@ -185,13 +185,6 @@ export default function ProfitLossPage() {
         return;
       }
 
-      if (data.type === "OPEN_DOCUMENT_SCREEN") {
-        const { docType, docNo } = data as { docType: string; docNo: string };
-        if (docType && docNo) {
-          openTransactionScreen(String(docType), String(docNo));
-        }
-        return;
-      }
 
       if (data.type !== "PNL_DRILL_DOWN") return;
 
@@ -490,6 +483,8 @@ export default function ProfitLossPage() {
         loading={reportLoading || drillLoading}
         error={drillError ?? (reportError && !reportHtml ? reportError : null)}
         onExportExcel={handleExcel}
+        canGoBack={drillStack.length > 0}
+        onBack={() => handleDrillNavigate(drillStack.length - 2)}
         headerSlot={
           (drillLoading || drillError || drillStack.length > 0) ? (
             <div className="flex flex-col gap-0">

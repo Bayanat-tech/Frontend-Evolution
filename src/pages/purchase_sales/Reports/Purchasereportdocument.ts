@@ -219,8 +219,20 @@ if (signTable) {
    else if (table.classList.contains("dn-items")) {
   // S.No | Product / Description | Unit | Qty
   widths = ["8%", "62%", "12%", "18%"];
+}     else if (table.classList.contains("cr-history")) {
+      // S.No | Action | By | Date & Time | Level | Next Action By | Remarks
+      widths = ["6%", "14%", "16%", "16%", "7%", "16%", "25%"];
 }
-    
+
+ else if (table.classList.contains("cr-register")) {
+  // Request No | Date | Description | Created | Status | Updated By
+  widths = ["14%", "10%", "36%", "12%", "14%", "14%"];
+}
+
+
+
+
+
     // else if (!details && table.rows[0]) {
     //   widths = ["4%", "18%", "6%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
     // } else if (!details && table.rows[0]) {
@@ -371,7 +383,7 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
   const hasOwnTopLine = !!prepared.doc.querySelector(".pr-title-line, .si-top-line");
   const topLine = branded && !hasOwnTopLine
     ? [{
-        canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 1.3, lineColor: "#1455a3" }],
+        canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 1.8, lineColor: "#1455a3" }],
         margin: [0, 0, 0, 6] as [number, number, number, number],
       }]
     : [];
@@ -433,7 +445,7 @@ const signBlock: Content | null = signLabels.length
             },
           ]
         },
-        { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.3, lineColor: "#1455a3" }] },
+        { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.8, lineColor: "#1455a3" }] },
         // { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.3, lineColor: "#1455a3" }] },
       ],
     },

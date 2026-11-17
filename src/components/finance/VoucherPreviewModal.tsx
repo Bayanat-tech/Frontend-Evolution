@@ -20,14 +20,36 @@ export const TRANSACTION_DOC_ROUTES: Record<string, string> = {
   PO: "/workspace/finance/finance/accounts/transactions/lpo",
 };
 
+let lastOpenedTime = 0;
+let lastOpenedKey = "";
+
 export function openTransactionScreen(docType: string, docNo: string) {
   if (!docNo) return;
+  const now = Date.now();
   const upper = String(docType || "").toUpperCase();
+  const cleanNo = String(docNo).trim();
+  const key = `${upper}_${cleanNo}`;
+
+  // Prevent duplicate execution when multiple listeners receive the same message event
+  if (key === lastOpenedKey && now - lastOpenedTime < 1000) {
+    return;
+  }
+  lastOpenedKey = key;
+  lastOpenedTime = now;
+
   const targetRoute = TRANSACTION_DOC_ROUTES[upper];
   const url = targetRoute
-    ? `${targetRoute}?doc_no=${encodeURIComponent(docNo)}`
-    : `/api/finance/transactions/report/${encodeURIComponent(upper)}/${encodeURIComponent(docNo)}`;
-  window.open(url, "_blank", "noopener,noreferrer");
+    ? `${targetRoute}?doc_no=${encodeURIComponent(cleanNo)}`
+    : `/api/finance/transactions/report/${encodeURIComponent(upper)}/${encodeURIComponent(cleanNo)}`;
+
+  try {
+    const newTab = window.open(url, "_blank");
+    if (newTab) {
+      newTab.focus();
+    }
+  } catch (err) {
+    console.error("Failed to open voucher window in new tab:", err);
+  }
 }
 
 export interface VoucherPreviewModalProps {
@@ -160,6 +182,7 @@ export function VoucherPreviewModal({
       htmlContent={html}
       loading={loading}
       error={error}
+      zIndex={1150}
       onExportExcel={
         cleanDocType && cleanDocNo
           ? () => {
