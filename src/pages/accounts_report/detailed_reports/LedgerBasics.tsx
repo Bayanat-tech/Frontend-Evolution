@@ -154,13 +154,6 @@ export default function FinanceReportFilter({
         }
         return;
       }
-      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
-        const { docType, docNo } = ev.data as { docType: string; docNo: string };
-        if (docType && docNo) {
-          openTransactionScreen(String(docType), String(docNo));
-        }
-        return;
-      }
     };
 
     window.addEventListener("message", handler);

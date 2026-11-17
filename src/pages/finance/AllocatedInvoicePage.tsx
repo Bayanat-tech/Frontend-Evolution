@@ -120,6 +120,9 @@ export function AllocatedInvoicePage() {
           parameter: "Account_division",
           loginid: loginId,
           code1: companyCode,
+          code2: "", code3: "", code4: "",
+          number1: 0, number2: 0, number3: 0, number4: 0,
+          date1: null, date2: null, date3: null, date4: null,
         });
         if (!mounted || !divs || !divs.length) return;
         const divCode = String(getLookupValue(divs[0], "div_code") || "");
@@ -538,6 +541,9 @@ export function AllocatedInvoicePage() {
                     parameter: "Account_division",
                     loginid: loginId,
                     code1: companyCode,
+                    code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
                   })
                 }
                 onChange={(code, row) => {
@@ -565,6 +571,9 @@ export function AllocatedInvoicePage() {
                     parameter: "Account_AC_CODE_Serach",
                     loginid: loginId,
                     code1: companyCode,
+                    code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
                   })
                 }
                 onChange={(code, row) => {

@@ -1241,8 +1241,8 @@ export function NewReportDialog({
             display: "block",
             background: "#fff",
             transform: `translateY(${-top}px)`,
-            // While busy, disable pointer events so the parent's wait cursor shows over the sheet
-            pointerEvents: live && !busy ? "auto" : "none",
+            // Allow pointer events on the live page as long as data isn't actively fetching
+            pointerEvents: live && !loading ? "auto" : "none",
           }}
         />
       </div>
@@ -1279,7 +1279,7 @@ export function NewReportDialog({
       ref={rootRef}
       role="dialog"
       aria-modal="true"
-      className={busy ? "nr-busy" : undefined}
+      className={loading ? "nr-busy" : undefined}
       style={{
         position: "fixed",
         inset: 0,
