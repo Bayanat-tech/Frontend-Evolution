@@ -23,7 +23,7 @@ export function AssetDepreciationPage() {
   const [docNo, setDocNo] = useState("");
   const [rows, setRows] = useState<DepRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "info" | "warning"; message: string } | null>(null);
   const [exceptions, setExceptions] = useState<any[]>([]);
   const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
 
@@ -78,8 +78,18 @@ export function AssetDepreciationPage() {
         loginid: loginId,
         code1: companyCode,
         code2: division,
+        code3: "", code4: "",
+        number1: 0, number2: 0, number3: 0, number4: 0,
+        date1: null, date2: null, date3: null, date4: null,
       });
-      setRows(data.map(normalize));
+      const norm = data.map(normalize);
+      setRows(norm);
+      if (norm.length === 0) {
+        setNotice({
+          type: "info",
+          message: "No saved depreciation records found for this period. Click 'Save' to calculate and generate depreciation.",
+        });
+      }
       if (division) {
         await checkExceptions(division);
       }
