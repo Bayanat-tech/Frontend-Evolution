@@ -303,10 +303,7 @@ export function EmployeeMasterPage() {
           <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Employee Master</h1>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} /> Refresh
-          </Button>
+        <div className="flex flex-wrap items-center justify-end gap-1.5"> 
           <Button type="button" size="sm" onClick={openAdd}>
             <Plus size={14} /> Add Employee
           </Button>

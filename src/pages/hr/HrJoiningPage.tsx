@@ -432,15 +432,6 @@ export function HrJoiningPage() {
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => void loadRows()}
-            disabled={busy || saving}
-          >
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
             onClick={() => openForm("add")}
             disabled={opening || saving}
           >

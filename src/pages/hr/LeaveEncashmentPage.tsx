@@ -620,21 +620,6 @@ export function LeaveEncashmentPage() {
             type="button"
             size="sm"
             variant="outline"
-            disabled={!employeeSelected || loadingBalance || saving}
-            onClick={() => employeeSelected && void loadBalance(filters.employeeId)}
-            title="Refresh leave balance"
-          >
-            {loadingBalance ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <RefreshCw size={14} />
-            )}{" "}
-            Refresh
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
             disabled={!employeeSelected || loadingDoc || saving}
             onClick={startNewDocument}
             title="Start a new encashment document"
