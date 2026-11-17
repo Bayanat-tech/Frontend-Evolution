@@ -33,7 +33,7 @@ export function AssetDepreciationPage() {
   const calculateDocNo = (y: string, m: string, div: string) => {
     if (!y || !m) return "";
     const base = `${y}${m}`;
-    return div && div !== "10" ? `${div}${base}` : base;
+    return `${y}${m}`;
   };
 
   // JV button is enabled only when the grid has at least one row
@@ -119,7 +119,8 @@ export function AssetDepreciationPage() {
         });
       }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to save depreciation") });
     } finally {
       setLoading(false);
     }
@@ -160,7 +161,8 @@ export function AssetDepreciationPage() {
       });
       setNotice({ type: "success", message: `Depreciation JV for document ${computedDocNo} posted successfully to General Ledger` });
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to post JV") });
     } finally {
       setLoading(false);
     }
@@ -355,4 +357,18 @@ function normalize(row: LookupRow): DepRow {
     output[key.toLowerCase()] = row[key] as string | number;
   });
   return output;
+}
+
+function friendlyError(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (raw.includes("NO DETAILS FOUND"))
+    return "No depreciation has been saved for this month and division. Click Save first, then post the JV.";
+  if (raw.includes("Do Depreciation Calculation"))
+    return "Run the depreciation calculation (Save) before posting the JV.";
+  if (raw.includes("Please check the Exception register"))
+    return "Some assets are in the Exception Register. Fix them before posting the JV.";
+  // Any other ORA-20xxx: show only its message, without the ORA-06512 stack
+  const match = raw.match(/ORA-20\d{3}:\s*([\s\S]*?)(?=\s*ORA-\d{5}|$)/);
+  if (match?.[1]) return match[1].trim();
+  return fallback;
 }
