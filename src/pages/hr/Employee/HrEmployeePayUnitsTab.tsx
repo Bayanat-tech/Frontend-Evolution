@@ -1,0 +1,494 @@
+// Employee Pay Units tab — rendered inside EmployeeWorkspacePage.
+// Employee comes from the workspace route; Add / Retrieve live in the grid toolbar;
+// the header Save calls save() through the ref.
+
+import type { ColumnDef } from "@tanstack/react-table";
+import { Download, Loader2, Plus, Trash2 } from "lucide-react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { getDynamicLookup, type LookupRow } from "../../../api/lookups";
+import { upsertHrEmpComponentsApi, type THrEmpComponentPayload } from "../../../api/wms";
+import { useToast } from "../../../components/ui/AlertToast";
+import { Button } from "../../../components/ui/Button";
+import { DataTable } from "../../../components/ui/DataTable";
+import { Input } from "../../../components/ui/Input";
+import { LookupField } from "../../../components/ui/LookupField";
+import { Select } from "../../../components/ui/Select";
+import { useAuth } from "../../../state/AuthContext";
+import { toApiDateInput } from "../../../hooks/apiDate";
+import type { TabHandle, TabProps } from "./Employee.workspace.shared";
+
+/* ================= TYPES ================= */
+
+type TPayUnitRow = {
+  row_id: string;
+  pay_unit_code: string;
+  curr_code: string;
+  pay_comp_earn_ded: string;
+  pay_unit_name: string;
+  amount: string;
+  pay_unit_status: string;
+  approved_on: string;
+  status: string;
+  remarks: string;
+  dirty: boolean;
+  is_new: boolean;
+};
+
+type Opt = { code: string; label: string };
+
+/* ================= CONSTANTS ================= */
+
+const PAY_UNIT_STATUS_OPTIONS: Opt[] = [
+  { code: "A", label: "Approved" },
+  { code: "R", label: "Rejected" },
+  { code: "P", label: "Pending" },
+];
+const STATUS_OPTIONS: Opt[] = [
+  { code: "A", label: "Active" },
+  { code: "I", label: "Inactive" },
+];
+
+const PAY_UNIT_COLUMNS = [
+  { field: "PAY_COMP_ID", header: "Code" },
+  { field: "PAY_COMP_DESC", header: "Description" },
+];
+const CURRENCY_COLUMNS = [
+  { field: "CURR_CODE", header: "Code" },
+  { field: "CURR_NAME", header: "Description" },
+];
+
+const P_CURRENCY = "HR_DROPDOWN_MS_CURRENCY";
+const P_RETRIEVE = "MST_HR_EMPLOYEE_PAY_UNITS_SELECT";
+const P_PAY_UNIT = "MST_HR_CONSOLIDATE_PAY_UNIT";
+
+const NULLS = {
+  code3: "NULL", code4: "NULL", code5: "NULL", code6: "NULL", code7: "NULL",
+  code8: "NULL", code9: "NULL", code10: "NULL",
+  number1: 0, number2: 0, number3: 0, number4: 0,
+  date1: null, date2: null, date3: null, date4: null,
+};
+
+/* ================= HELPERS ================= */
+
+/** Accepts either a code ("P") or a label ("Pending") from the backend and returns the code. */
+const toCode = (value: unknown, options: Opt[], fallback: string) => {
+  const v = String(value ?? "").trim();
+  return options.find((o) => o.code === v || o.label === v)?.code ?? fallback;
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+function localTimestamp(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  );
+}
+
+const makeNewRow = (): TPayUnitRow => ({
+  row_id: `new-${crypto.randomUUID()}`,
+  pay_unit_code: "",
+  pay_unit_name: "",
+  amount: "0",
+  curr_code: "",
+  pay_comp_earn_ded: "",
+  pay_unit_status: "P",
+  approved_on: today(),
+  status: "A",
+  remarks: "",
+  dirty: true,
+  is_new: true,
+});
+
+/* ================= TAB ================= */
+
+export const HrEmployeePayUnitsTab = forwardRef<TabHandle, TabProps>(function HrEmployeePayUnitsTab(
+  { employeeId },
+  ref,
+) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const loginid = user?.loginid ?? "";
+  const companyCode = user?.company_code ?? "";
+
+  const [rows, setRows] = useState<TPayUnitRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const employeeReady = !!companyCode && !!employeeId;
+
+  const totalAmount = useMemo(
+    () =>
+      rows.reduce((net, r) => {
+        const amt = Number(r.amount) || 0;
+        const kind = String(r.pay_comp_earn_ded ?? "").trim().toUpperCase();
+        if (kind === "E") return net + amt;
+        if (kind === "D") return net - amt;
+        return net;
+      }, 0),
+    [rows],
+  );
+
+  /* ── Lookups ── */
+  const loadLookupRows = useCallback(
+    async (parameter: string, code1: string): Promise<LookupRow[]> => {
+      const response = await getDynamicLookup({ parameter, loginid, code1, code2: "", ...NULLS });
+      return Array.isArray(response) ? (response as LookupRow[]) : [];
+    },
+    [loginid],
+  );
+
+  const loadPayUnitOptions = useCallback(async (): Promise<LookupRow[]> => {
+    const data = await loadLookupRows(P_PAY_UNIT, companyCode);
+    return data.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        ...r,
+        PAY_COMP_ID: String(r.PAY_COMP_ID ?? r.pay_comp_id ?? ""),
+        PAY_COMP_DESC: String(r.PAY_COMP_DESC ?? r.pay_comp_desc ?? ""),
+        PAY_COMP_SHORT_DESC: String(r.PAY_COMP_SHORT_DESC ?? r.pay_comp_short_desc ?? ""),
+        PAY_COMP_EARN_DED: String(r.PAY_COMP_EARN_DED ?? r.pay_comp_earn_ded ?? ""),
+      } as LookupRow;
+    });
+  }, [loadLookupRows, companyCode]);
+
+  const loadCurrencyOptions = useCallback(async (): Promise<LookupRow[]> => {
+    const data = await loadLookupRows(P_CURRENCY, companyCode);
+    return data.map((row) => {
+      const r = row as Record<string, unknown>;
+      return { ...r, CURR_CODE: String(r.CURR_CODE ?? r.curr_code ?? "") } as LookupRow;
+    });
+  }, [loadLookupRows, companyCode]);
+
+  /* ── Retrieve ── */
+  const handleRetrieve = useCallback(async () => {
+    if (!companyCode || !employeeId) return;
+    setLoading(true);
+    try {
+      const response = await getDynamicLookup({
+        parameter: P_RETRIEVE, loginid, code1: companyCode, code2: employeeId, ...NULLS,
+      });
+      const list = (Array.isArray(response) ? response : []) as Record<string, any>[];
+      setRows(
+        list.map((r, idx) => ({
+          row_id: `${r.pay_unit_code ?? "row"}-${idx}`,
+          pay_unit_code: r.pay_unit_code ?? "",
+          pay_unit_name: r.pay_unit_name ?? "",
+          curr_code: r.curr_code ?? "",
+          pay_comp_earn_ded: r.pay_comp_earn_ded ?? "",
+          amount: r.amount != null ? String(r.amount) : "0",
+          pay_unit_status: toCode(r.pay_unit_status, PAY_UNIT_STATUS_OPTIONS, "P"),
+          approved_on: toApiDateInput(r.approved_on),
+          status: toCode(r.status, STATUS_OPTIONS, "A"),
+          remarks: r.remarks ?? "",
+          dirty: false,
+          is_new: false,
+        })),
+      );
+    } catch (error) {
+      setRows([]);
+      toast.error(error instanceof Error ? error.message : "Unable to load pay units");
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loginid, companyCode, employeeId]);
+
+  useEffect(() => {
+    if (employeeReady) void handleRetrieve();
+    else setRows([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyCode, employeeId]);
+
+  /* ── Row handlers ── */
+  const updateRow = useCallback(
+    (row_id: string, patch: Partial<TPayUnitRow>) =>
+      setRows((prev) => prev.map((r) => (r.row_id === row_id ? { ...r, ...patch, dirty: true } : r))),
+    [],
+  );
+  const removeNewRow = useCallback(
+    (row_id: string) => setRows((prev) => prev.filter((r) => r.row_id !== row_id)),
+    [],
+  );
+  const addRow = () => {
+    if (employeeReady) setRows((prev) => [makeNewRow(), ...prev]);
+  };
+
+  /* ── Save (called by the header Save button) ── */
+  const save = async () => {
+    if (!employeeReady) return;
+
+    const dirtyRows = rows.filter((r) => r.dirty);
+    if (dirtyRows.length === 0) {
+      toast.warning("No changes to save.");
+      return;
+    }
+    if (dirtyRows.some((r) => !r.pay_unit_code.trim())) {
+      toast.warning("Pay Unit is required on every row.");
+      return;
+    }
+
+    try {
+      const now = localTimestamp(); // computed per save (was a stale module-level constant)
+      const payloads: THrEmpComponentPayload[] = dirtyRows.map((row) => ({
+        employee_id: employeeId,
+        pay_comp_id: row.pay_unit_code,
+        pay_comp_amt: Number(row.amount) || 0,
+        pay_comp_earn_ded: row.pay_comp_earn_ded,
+        pay_roll_status: row.pay_unit_status,
+        curr_code: row.curr_code,
+        status_flag: "P",
+        remarks: row.remarks,
+        company_code: companyCode,
+        comp_status: row.status,
+        user_id: loginid,
+        user_dt: now,
+        entered_on: now,
+        entered_by: loginid,
+        approved_on: toApiDateInput(row.approved_on) ? new Date(`${row.approved_on}T00:00:00`).toISOString() : now,
+      }));
+      const results = await upsertHrEmpComponentsApi(payloads);
+      const failed = results
+        .map((result, i) => ({ result, row: dirtyRows[i] }))
+        .filter(({ result }) => !result.success);
+
+      if (failed.length === 0) {
+        setRows((prev) => prev.map((r) => (r.dirty ? { ...r, dirty: false, is_new: false } : r)));
+        toast.success("Pay units saved.");
+      } else {
+        console.error("Pay unit save failures:", failed);
+        const first = failed[0].result as any;
+        const reason = "error" in first ? first.error : first.details || first.message;
+        toast.error(
+          failed.length === 1
+            ? `Failed to save "${failed[0].row.pay_unit_code}": ${reason}`
+            : `${failed.length} of ${dirtyRows.length} pay unit(s) failed to save. First error: ${reason}`,
+        );
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save pay units");
+    }
+  };
+
+  useImperativeHandle(ref, () => ({ save }));
+
+  /* ── Columns ── */
+  const columns = useMemo<ColumnDef<TPayUnitRow>[]>(
+    () => [
+      {
+        id: "pay_unit",
+        header: "Pay Unit",
+        size: 240,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <div className="flex items-center gap-1">
+              {r.is_new ? (
+                <div className="min-w-[200px] flex-1">
+                  <LookupField
+                    compact
+                    label="Pay Unit"
+                    value={r.pay_unit_code}
+                    displayValue={r.pay_unit_code ? `${r.pay_unit_code} — ${r.pay_unit_name}` : ""}
+                    columns={PAY_UNIT_COLUMNS}
+                    valueField="PAY_COMP_ID"
+                    displayFields={["PAY_COMP_ID", "PAY_COMP_DESC"]}
+                    loadOptions={loadPayUnitOptions}
+                    onChange={(value, picked) =>
+                      updateRow(r.row_id, {
+                        pay_unit_code: value,
+                        pay_unit_name: String(picked?.PAY_COMP_DESC ?? ""),
+                        pay_comp_earn_ded: String(picked?.PAY_COMP_EARN_DED ?? ""),
+                      })
+                    }
+                    placeholder="Pay unit code or name"
+                  />
+                </div>
+              ) : (
+                <span>
+                  <span className="font-medium">{r.pay_unit_code}</span>
+                  {r.pay_unit_name && r.pay_unit_name !== r.pay_unit_code && (
+                    <span className="ml-1 text-muted-foreground">{r.pay_unit_name}</span>
+                  )}
+                </span>
+              )}
+              {r.dirty && <span className="text-amber-500" title="Unsaved change">●</span>}
+            </div>
+          );
+        },
+      },
+      {
+        id: "amount",
+        header: "Amount",
+        size: 130,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Input
+            type="number"
+            min={0}
+            className="h-7 px-2 text-right font-mono text-sm"
+            value={row.original.amount}
+            onChange={(e) => updateRow(row.original.row_id, { amount: e.target.value })}
+          />
+        ),
+      },
+      {
+        id: "curr_code",
+        header: "Currency",
+        size: 130,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <div className="min-w-[130px] flex-1">
+              <LookupField
+                compact
+                label="Currency"
+                value={r.curr_code}
+                displayValue={r.curr_code ? `${r.curr_code}` : ""}
+                columns={CURRENCY_COLUMNS}
+                valueField="curr_code"
+                displayFields={["curr_code", "curr_name"]}
+                loadOptions={loadCurrencyOptions}
+                onChange={(value) => updateRow(r.row_id, { curr_code: value })}
+                placeholder="Currency code or name"
+              />
+            </div>
+          );
+        },
+      },
+      {
+        id: "pay_unit_status",
+        header: "Pay Unit Status",
+        size: 150,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Select
+            value={row.original.pay_unit_status}
+            onChange={(e) => updateRow(row.original.row_id, { pay_unit_status: e.target.value })}
+          >
+            {PAY_UNIT_STATUS_OPTIONS.map((o) => (
+              <option key={o.code} value={o.code}>{o.label}</option>
+            ))}
+          </Select>
+        ),
+      },
+      {
+        id: "approved_on",
+        header: "Approved On",
+        size: 150,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Input
+            type="date"
+            className="h-7 px-2 text-sm"
+            value={row.original.approved_on}
+            onChange={(e) => updateRow(row.original.row_id, { approved_on: e.target.value })}
+          />
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        size: 120,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Select
+            value={row.original.status}
+            onChange={(e) => updateRow(row.original.row_id, { status: e.target.value })}
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.code} value={o.code}>{o.label}</option>
+            ))}
+          </Select>
+        ),
+      },
+      {
+        id: "remarks",
+        header: "Remarks",
+        size: 220,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Input
+            className="h-7 px-2 text-sm"
+            placeholder="Remarks"
+            value={row.original.remarks}
+            onChange={(e) => updateRow(row.original.row_id, { remarks: e.target.value })}
+          />
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        size: 50,
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) =>
+          row.original.is_new ? (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                onClick={() => removeNewRow(row.original.row_id)}
+                title="Remove unsaved row"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ) : null,
+      },
+    ],
+    [updateRow, removeNewRow, loadPayUnitOptions, loadCurrencyOptions],
+  );
+
+  return (
+    <div className="grid gap-2">
+      <DataTable
+        columns={columns}
+        data={rows}
+        title={loading ? "Loading" : `${rows.length.toLocaleString()} Pay Units`}
+        subtitle="Employee Pay Unit Amounts"
+        loading={loading}
+        emptyText="No pay units found for this employee."
+        height={420}
+        minWidth={1000}
+        density="grid"
+        getRowId={(row) => row.row_id}
+        toolbar={
+          <div className="flex items-center gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={addRow} disabled={!employeeReady}>
+              <Plus size={14} /> Add
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleRetrieve} disabled={!employeeReady || loading}>
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}{" "}
+              {loading ? "Retrieving" : "Retrieve"}
+            </Button>
+          </div>
+        }
+      />
+
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-3 rounded-md border border-[#cbd5e1] bg-slate-50/95 px-4 py-2 shadow-sm">
+          <div className="flex items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3.5 py-1.5 shadow-2xs">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">Rows</span>
+            <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">
+              {rows.length.toLocaleString()}
+            </strong>
+          </div>
+          <div className="flex min-h-9 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">Total Amount</span>
+            <strong className="font-mono text-base font-black tabular-nums text-[#00378c]">
+              {totalAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3,
+              })}
+            </strong>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+export default HrEmployeePayUnitsTab;

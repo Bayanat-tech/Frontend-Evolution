@@ -23,7 +23,7 @@ export function AssetDepreciationPage() {
   const [docNo, setDocNo] = useState("");
   const [rows, setRows] = useState<DepRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "info" | "warning"; message: string } | null>(null);
   const [exceptions, setExceptions] = useState<any[]>([]);
   const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
 
@@ -33,7 +33,7 @@ export function AssetDepreciationPage() {
   const calculateDocNo = (y: string, m: string, div: string) => {
     if (!y || !m) return "";
     const base = `${y}${m}`;
-    return div && div !== "10" ? `${div}${base}` : base;
+    return `${y}${m}`;
   };
 
   // JV button is enabled only when the grid has at least one row
@@ -78,8 +78,18 @@ export function AssetDepreciationPage() {
         loginid: loginId,
         code1: companyCode,
         code2: division,
+        code3: "", code4: "",
+        number1: 0, number2: 0, number3: 0, number4: 0,
+        date1: null, date2: null, date3: null, date4: null,
       });
-      setRows(data.map(normalize));
+      const norm = data.map(normalize);
+      setRows(norm);
+      if (norm.length === 0) {
+        setNotice({
+          type: "info",
+          message: "No saved depreciation records found for this period. Click 'Save' to calculate and generate depreciation.",
+        });
+      }
       if (division) {
         await checkExceptions(division);
       }
@@ -119,7 +129,8 @@ export function AssetDepreciationPage() {
         });
       }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to save depreciation") });
     } finally {
       setLoading(false);
     }
@@ -160,7 +171,8 @@ export function AssetDepreciationPage() {
       });
       setNotice({ type: "success", message: `Depreciation JV for document ${computedDocNo} posted successfully to General Ledger` });
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to post JV") });
     } finally {
       setLoading(false);
     }
@@ -355,4 +367,18 @@ function normalize(row: LookupRow): DepRow {
     output[key.toLowerCase()] = row[key] as string | number;
   });
   return output;
+}
+
+function friendlyError(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (raw.includes("NO DETAILS FOUND"))
+    return "No depreciation has been saved for this month and division. Click Save first, then post the JV.";
+  if (raw.includes("Do Depreciation Calculation"))
+    return "Run the depreciation calculation (Save) before posting the JV.";
+  if (raw.includes("Please check the Exception register"))
+    return "Some assets are in the Exception Register. Fix them before posting the JV.";
+  // Any other ORA-20xxx: show only its message, without the ORA-06512 stack
+  const match = raw.match(/ORA-20\d{3}:\s*([\s\S]*?)(?=\s*ORA-\d{5}|$)/);
+  if (match?.[1]) return match[1].trim();
+  return fallback;
 }
