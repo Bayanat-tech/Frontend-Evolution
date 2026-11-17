@@ -185,13 +185,6 @@ export default function ProfitLossPage() {
         return;
       }
 
-      if (data.type === "OPEN_DOCUMENT_SCREEN") {
-        const { docType, docNo } = data as { docType: string; docNo: string };
-        if (docType && docNo) {
-          openTransactionScreen(String(docType), String(docNo));
-        }
-        return;
-      }
 
       if (data.type !== "PNL_DRILL_DOWN") return;
 
