@@ -345,9 +345,6 @@ export function AccountTreePage() {
           <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">A/C Tree</h1>
         </div>
         <div className="toolbar-actions flex flex-wrap items-center justify-end gap-2">
-          <Button variant="outline" onClick={() => void loadTree()}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
           {selectedNode && selectedNode.level < 5 && (
             <Button onClick={() => setDialog({ mode: "create", level: selectedNode.level + 1, parent: selectedNode })}>
               <Plus size={15} /> Add Child
