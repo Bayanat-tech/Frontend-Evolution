@@ -25,6 +25,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { NewReportDialogProps } from "./types";
+import { openTransactionScreen } from "../finance/VoucherPreviewModal";
 
 type Orientation = "portrait" | "landscape";
 
@@ -238,36 +239,15 @@ export function NewReportDialog({
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // Global listener for drill-down action requests from within sandboxed iframe (e.g. ↗ button)
+  // Global listener for drill-down action requests from within sandboxed iframe (e.g. document link or ↗ button)
   useEffect(() => {
     if (!open) return;
     const handleDrillMessage = (ev: MessageEvent) => {
       if (!ev.data) return;
-      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
+      if (ev.data.type === "OPEN_DOCUMENT" || ev.data.type === "OPEN_DOCUMENT_SCREEN") {
         const { docType, docNo } = ev.data as { docType: string; docNo: string };
         if (docType && docNo) {
-          const upper = String(docType).toUpperCase();
-          const routeMap: Record<string, string> = {
-            BP: "/workspace/finance/finance/accounts/transactions/cheque-payment",
-            BR: "/workspace/finance/finance/accounts/transactions/cheque-receipt",
-            CP: "/workspace/finance/finance/accounts/transactions/petty_cash_payment",
-            CR: "/workspace/finance/finance/accounts/transactions/cash-receipt",
-            JV: "/workspace/finance/finance/accounts/transactions/jv",
-            EJV: "/workspace/finance/finance/accounts/transactions/ejv",
-            RJV: "/workspace/finance/finance/accounts/transactions/reverse_jv",
-            PJV: "/workspace/finance/finance/accounts/transactions/provisional_jv",
-            DN: "/workspace/finance/finance/accounts/transactions/debit-note",
-            CN: "/workspace/finance/finance/accounts/transactions/credit-note",
-            PI: "/workspace/finance/finance/accounts/transactions/purchase",
-            SI: "/workspace/finance/finance/accounts/transactions/sales",
-            SV: "/workspace/finance/finance/accounts/transactions/service_invoice",
-            PO: "/workspace/finance/finance/accounts/transactions/lpo",
-          };
-          const targetRoute = routeMap[upper];
-          const url = targetRoute
-            ? `${targetRoute}?doc_no=${encodeURIComponent(docNo)}`
-            : `/api/finance/transactions/report/${encodeURIComponent(upper)}/${encodeURIComponent(docNo)}`;
-          window.open(url, "_blank", "noopener,noreferrer");
+          openTransactionScreen(String(docType), String(docNo));
         }
       }
     };
@@ -547,11 +527,25 @@ export function NewReportDialog({
           break;
         }
         let end = maxEnd;
-        for (let k = cands.length - 1; k >= 0; k--) {
-          if (cands[k] <= maxEnd + 0.5 && cands[k] > start + 20) {
-            end = cands[k];
-            break;
+        // Fast binary search for candidate row boundary closest to maxEnd
+        let low = 0;
+        let high = cands.length - 1;
+        let bestIdx = -1;
+        while (low <= high) {
+          const mid = (low + high) >> 1;
+          if (cands[mid] <= maxEnd + 0.5) {
+            if (cands[mid] > start + 20) {
+              bestIdx = mid;
+              low = mid + 1;
+            } else {
+              low = mid + 1;
+            }
+          } else {
+            high = mid - 1;
           }
+        }
+        if (bestIdx !== -1) {
+          end = cands[bestIdx];
         }
         pages.push({ start, end, repeat });
         start = end;
