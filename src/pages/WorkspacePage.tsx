@@ -386,7 +386,10 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
                   <Search size={13} className="text-[#00378C] dark:text-sky-400" />
                   <span>Matching Screens</span>
                 </span>
-                <span className="text-[11px] font-medium text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                {/* <span className="text-[11px] font-medium text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  {filteredScreens.length} found
+                </span> */}
+                <span className="text-[11px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                   {filteredScreens.length} found
                 </span>
               </div>

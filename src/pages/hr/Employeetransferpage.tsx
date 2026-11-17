@@ -379,9 +379,6 @@ export function EmployeeTransferPage() {
         exportFilename="hr-employee-transfers.csv"
         toolbar={
           <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
-              <RefreshCw size={14} className={loading ? "animate-spin" : undefined} /> Refresh
-            </Button>
             <Button type="button" size="sm" onClick={() => openEditor("add")}>
               <Plus size={14} /> Add Transfer
             </Button>
