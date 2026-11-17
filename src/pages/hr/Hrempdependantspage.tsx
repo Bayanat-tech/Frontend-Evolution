@@ -1075,40 +1075,6 @@
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              onClick={() => {
-                if (employee) {
-                  void loadDependants();
-                } else {
-                  setResetKey((k) => k + 1);
-                  setDivision(null);
-                  setDepartment(null);
-                  setSection(null);
-                  setEmployee(null);
-                  setRows([]);
-                  void queryClient.invalidateQueries({
-                    queryKey: ["hr-dependants-relation", companyCode],
-                  });
-                  void queryClient.invalidateQueries({
-                    queryKey: ["hr-dependants-eligible", companyCode],
-                  });
-                  void queryClient.invalidateQueries({
-                    queryKey: ["hr-dependants-ticket-type", companyCode],
-                  });
-                  void queryClient.invalidateQueries({
-                    queryKey: ["hr-dependants-blood-group", companyCode],
-                  });
-                  void queryClient.invalidateQueries({
-                    queryKey: ["hr-dependants-status", companyCode],
-                  });
-                }
-              }}
-            >
-              <RefreshCw size={14} /> Refresh
-            </Button>
-            <Button
-              type="button"
-              size="sm"
               disabled={!employee?.employee_id}
               onClick={() => openEditor("add")}
             >

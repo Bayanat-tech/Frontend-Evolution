@@ -727,15 +727,6 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         exportFilename={`hr-${config.master}-list.csv`}
         toolbar={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void loadRows()}
-              title="Refresh"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <RefreshCw size={14} />
-              Refresh
-            </button>
 
             {config.reportEndpoint && (
               <button
