@@ -509,9 +509,6 @@ export function HrEmployeePayUnits() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={handleClearAll} disabled={saving}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
           <Button type="button" size="sm" variant="outline" onClick={addRow} disabled={!employeeReady || saving}>
             <Plus size={14} /> Add
           </Button>

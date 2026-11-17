@@ -1174,7 +1174,15 @@ function AssetEditor({
   // ----- auto amount -----
   useEffect(() => {
     const amount = (num(form.quantity) * num(form.price)).toFixed(3);
-    if (form.amount !== amount) setForm((p) => ({ ...p, amount }));
+    if (form.amount !== amount) {
+      setForm((p) => {
+        const next: TFullAssetForm = { ...p, amount };
+        if (!num(p.wd_value) || num(p.wd_value) === num(p.amount)) {
+          next.wd_value = amount;
+        }
+        return next;
+      });
+    }
   }, [form.quantity, form.price]);
 
   const set = (field: keyof TFullAssetForm, value: string) => {
@@ -1254,7 +1262,7 @@ function AssetEditor({
         val1s32: form.sales_profitloss,
         val1s33: form.ytd_dprcn,
         val1s34: form.accudprc_amount,
-        val1s35: form.wd_value,
+        val1s35: num(form.wd_value) > 0 ? form.wd_value : form.amount,
         val1s36: form.dprc_percentage,
         val1s37: form.doc_no,
         val1s38: form.sales_amount,

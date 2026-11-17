@@ -23,8 +23,10 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  ArrowLeft,
 } from "lucide-react";
 import type { NewReportDialogProps } from "./types";
+import { openTransactionScreen } from "../finance/VoucherPreviewModal";
 
 type Orientation = "portrait" | "landscape";
 
@@ -207,6 +209,8 @@ export function NewReportDialog({
   exportingExcel = false,
   onOpenInNewWindow,
   headerSlot,
+  onBack,
+  canGoBack = false,
   zIndex,
 }: NewReportDialogProps) {
   const bp = useBreakpoint();
@@ -238,7 +242,7 @@ export function NewReportDialog({
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // Global listener for drill-down action requests from within sandboxed iframe (e.g. ↗ button)
+  // Global listener for drill-down action requests from within sandboxed iframe (e.g. document link or ↗ button)
   useEffect(() => {
     if (!open) return;
     const handleDrillMessage = (ev: MessageEvent) => {
@@ -246,28 +250,7 @@ export function NewReportDialog({
       if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
         const { docType, docNo } = ev.data as { docType: string; docNo: string };
         if (docType && docNo) {
-          const upper = String(docType).toUpperCase();
-          const routeMap: Record<string, string> = {
-            BP: "/workspace/finance/finance/accounts/transactions/cheque-payment",
-            BR: "/workspace/finance/finance/accounts/transactions/cheque-receipt",
-            CP: "/workspace/finance/finance/accounts/transactions/petty_cash_payment",
-            CR: "/workspace/finance/finance/accounts/transactions/cash-receipt",
-            JV: "/workspace/finance/finance/accounts/transactions/jv",
-            EJV: "/workspace/finance/finance/accounts/transactions/ejv",
-            RJV: "/workspace/finance/finance/accounts/transactions/reverse_jv",
-            PJV: "/workspace/finance/finance/accounts/transactions/provisional_jv",
-            DN: "/workspace/finance/finance/accounts/transactions/debit-note",
-            CN: "/workspace/finance/finance/accounts/transactions/credit-note",
-            PI: "/workspace/finance/finance/accounts/transactions/purchase",
-            SI: "/workspace/finance/finance/accounts/transactions/sales",
-            SV: "/workspace/finance/finance/accounts/transactions/service_invoice",
-            PO: "/workspace/finance/finance/accounts/transactions/lpo",
-          };
-          const targetRoute = routeMap[upper];
-          const url = targetRoute
-            ? `${targetRoute}?doc_no=${encodeURIComponent(docNo)}`
-            : `/api/finance/transactions/report/${encodeURIComponent(upper)}/${encodeURIComponent(docNo)}`;
-          window.open(url, "_blank", "noopener,noreferrer");
+          openTransactionScreen(String(docType), String(docNo));
         }
       }
     };
@@ -547,11 +530,25 @@ export function NewReportDialog({
           break;
         }
         let end = maxEnd;
-        for (let k = cands.length - 1; k >= 0; k--) {
-          if (cands[k] <= maxEnd + 0.5 && cands[k] > start + 20) {
-            end = cands[k];
-            break;
+        // Fast binary search for candidate row boundary closest to maxEnd
+        let low = 0;
+        let high = cands.length - 1;
+        let bestIdx = -1;
+        while (low <= high) {
+          const mid = (low + high) >> 1;
+          if (cands[mid] <= maxEnd + 0.5) {
+            if (cands[mid] > start + 20) {
+              bestIdx = mid;
+              low = mid + 1;
+            } else {
+              low = mid + 1;
+            }
+          } else {
+            high = mid - 1;
           }
+        }
+        if (bestIdx !== -1) {
+          end = cands[bestIdx];
         }
         pages.push({ start, end, repeat });
         start = end;
@@ -1244,8 +1241,8 @@ export function NewReportDialog({
             display: "block",
             background: "#fff",
             transform: `translateY(${-top}px)`,
-            // While busy, disable pointer events so the parent's wait cursor shows over the sheet
-            pointerEvents: live && !busy ? "auto" : "none",
+            // Allow pointer events on the live page as long as data isn't actively fetching
+            pointerEvents: live && !loading ? "auto" : "none",
           }}
         />
       </div>
@@ -1282,7 +1279,7 @@ export function NewReportDialog({
       ref={rootRef}
       role="dialog"
       aria-modal="true"
-      className={busy ? "nr-busy" : undefined}
+      className={loading ? "nr-busy" : undefined}
       style={{
         position: "fixed",
         inset: 0,
@@ -1338,31 +1335,59 @@ export function NewReportDialog({
               flex: 1,
             }}
           >
-            <div style={{ minWidth: 0, flex: isMobile ? "1 1 100%" : undefined }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  color: "#64748b",
-                  textTransform: "uppercase",
-                  marginBottom: 2,
-                }}
-              >
-                Report Preview
-              </div>
-              <div
-                style={{
-                  fontSize: 16,
-                  fontWeight: 600,
-                  color: "#0f172a",
-                  lineHeight: 1.25,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {title}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: isMobile ? "1 1 100%" : undefined }}>
+              {canGoBack && onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    border: "1px solid #1e3a8a",
+                    background: "#1e3a8a",
+                    color: "#ffffff",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 1px 3px rgba(30,58,138,0.3)",
+                    transition: "all 0.15s ease",
+                    flexShrink: 0,
+                  }}
+                  title="Back to previous report level"
+                >
+                  <ArrowLeft size={15} strokeWidth={2.5} />
+                  <span>Back</span>
+                </button>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    marginBottom: 2,
+                  }}
+                >
+                  Report Preview
+                </div>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    lineHeight: 1.25,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {title}
+                </div>
               </div>
             </div>
 
@@ -1509,6 +1534,27 @@ export function NewReportDialog({
           >
             <Menu size={15} />
           </button>
+          {canGoBack && onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                ...toolIconBtn,
+                background: "#2563eb",
+                color: "#ffffff",
+                padding: "4px 10px",
+                gap: 5,
+                width: "auto",
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+              title="Back to previous report level"
+            >
+              <ArrowLeft size={14} strokeWidth={2.5} />
+              <span>Back</span>
+            </button>
+          )}
           {!isCompact && (
             <span
               style={{

@@ -248,6 +248,8 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
 import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listing_Report";
 import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
 import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
+import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
+import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
 import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
   type WorkspaceRouteContext = {
     pathname: string;
@@ -420,6 +422,16 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       element: () => <LeaveSlapPage />,
     },
 
+    {
+      name: 'Payroll Closing',
+      match: ({pathname}) => pathname.toLowerCase().includes("/hcm/payroll_closing"),
+      element: () => <PayrollClosing />,
+    },
+
+    {  name: 'Payroll Lock',
+      match: ({pathname}) => pathname.toLowerCase().includes("/hcm/payroll_lock"),
+      element: () => <PayrollLock />,
+    },
 
     {
       name : 'Post Date Cheque',
@@ -924,7 +936,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
     {
       name: "Finance Provisional Journal Voucher",
       match: ({ pathname }) => isProvisionalJVRoute(pathname),
-      element: () => <JVDocumentEditor docType={"RJV"} />
+      element: () => <JVDocumentEditor docType={"PJV"} />
     },
     {
       name: "Finance Reverse Journal Voucher",
@@ -2755,7 +2767,16 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
 
   function isAllocatedInvoiceRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return normalized.includes("/finance/accounts/transactions/allocated_invoice") || normalized.includes("/finance/accounts/transactions/allocated-invoice");
+    return (
+      normalized.includes("/finance/accounts/transactions/allocated_invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocated-invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocate_and_unallocate_invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocate-and-unallocate-invoice") ||
+      normalized.includes("allocate_and_unallocate_invoice") ||
+      normalized.includes("allocate-and-unallocate-invoice") ||
+      normalized.includes("allocated_invoice") ||
+      normalized.includes("allocated-invoice")
+    );
   }
 
   function isProfitLossRoute(pathname: string) {
