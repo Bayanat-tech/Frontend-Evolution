@@ -347,14 +347,6 @@ export default function TrialBalancePage() {
         return;
       }
 
-      // Handle opening transaction screen directly in new window (e.g. from ↗ shortcut)
-      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
-        const { docType, docNo } = ev.data as { docType: string; docNo: string };
-        if (docType && docNo) {
-          openTransactionScreen(String(docType), String(docNo));
-        }
-        return;
-      }
 
       if (ev.data.type !== "DRILL_DOWN") return;
 

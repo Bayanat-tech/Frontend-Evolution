@@ -1548,7 +1548,7 @@ function getEmployeeName(employee: HrEmployee) {
 
 function getLeaveTypeLabel(leaveType: HrLeaveEntitlement) {
   const code = String(leaveType.LEAVE_TYPE || "");
-  const desc = String(leaveType.LEAVE_TYPE_DESC || code);
+  const desc = String(leaveType.LEAVE_DESC || leaveType.LEAVE_TYPE_DESC || code);
   return code && desc !== code ? `${code} - ${desc}` : desc;
 }
 

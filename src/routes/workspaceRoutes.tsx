@@ -248,6 +248,8 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
 import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listing_Report";
 import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
 import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
+import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
+import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -414,6 +416,16 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
       element: () => <LeaveSlapPage />,
     },
 
+    {
+      name: 'Payroll Closing',
+      match: ({pathname}) => pathname.toLowerCase().includes("/hcm/payroll_closing"),
+      element: () => <PayrollClosing />,
+    },
+
+    {  name: 'Payroll Lock',
+      match: ({pathname}) => pathname.toLowerCase().includes("/hcm/payroll_lock"),
+      element: () => <PayrollLock />,
+    },
 
     {
       name : 'Post Date Cheque',
