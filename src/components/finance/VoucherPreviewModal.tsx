@@ -160,6 +160,7 @@ export function VoucherPreviewModal({
       htmlContent={html}
       loading={loading}
       error={error}
+      zIndex={1150}
       onExportExcel={
         cleanDocType && cleanDocNo
           ? () => {

@@ -566,6 +566,25 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     }
   };
 
+  /* Report preview dialog — list aur editor dono views mein same dialog use hota hai */
+  const reportDialog = (
+    <NewReportDialog
+      open={previewOpen}
+      onClose={closeReportPreview}
+      title={config.title}
+      htmlContent={reportHtml}
+      loading={reportLoading}
+      error={reportError || null}
+      meta={{
+        companyName: companyCode,
+        user: loginid,
+        period: "All",
+        generatedAt: new Date().toLocaleString(),
+      }}
+      onOpenInNewWindow={openReportInNewWindow}
+    />
+  );
+
   /* ─────────────────────────────────────────────────────────
      EDITOR — Full-page, Freight-style header (with Save button)
      ───────────────────────────────────────────────────────── */
@@ -593,8 +612,19 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
             </div>
           </div>
 
-          {/* Actions: List / Close / Save */}
+          {/* Actions: Print / List / Close / Save */}
           <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {editMode && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => printRecord(form)}
+                disabled={saving}
+              >
+                <Printer size={14} /> Print
+              </Button>
+            )}
             <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
               <ArrowLeft size={14} /> List
             </Button>
@@ -665,6 +695,8 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
           {/* hidden submit so Enter inside a text input saves */}
           <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
         </form>
+
+        {reportDialog}
       </section>
     );
   }
@@ -777,21 +809,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         </p>
       </Dialog>
 
-      <NewReportDialog
-        open={previewOpen}
-        onClose={closeReportPreview}
-        title={config.title}
-        htmlContent={reportHtml}
-        loading={reportLoading}
-        error={reportError || null}
-        meta={{
-          companyName: companyCode,
-          user: loginid,
-          period: "All",
-          generatedAt: new Date().toLocaleString(),
-        }}
-        onOpenInNewWindow={openReportInNewWindow}
-      />
+      {reportDialog}
     </section>
   );
 }

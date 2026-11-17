@@ -299,11 +299,31 @@ export function GradeMasterPage() {
     [companyCode],
   );
 
+  /* Report preview (new report format) — list aur editor dono views mein same dialog use hota hai */
+  const reportDialog = (
+    <NewReportDialog
+      open={previewOpen}
+      onClose={closeReportPreview}
+      title="Grade Master"
+      htmlContent={reportHtml}
+      loading={reportLoading}
+      error={reportError || null}
+      meta={{
+        companyName: companyCode,
+        user: loginid,
+        period: "All",
+        generatedAt: new Date().toLocaleString(),
+      }}
+      onOpenInNewWindow={openReportInNewWindow}
+    />
+  );
+
   /* ─────────────────────────────────────────────────────────
      EDITOR — Full-page, Freight-style header (with Save button)
      ───────────────────────────────────────────────────────── */
   if (view === "editor") {
     const isView = editorMode === "view";
+    const canPrint = editorMode !== "add" && Boolean(activeGrade?.grade_code);
     const title =
       editorMode === "add" ? "New Grade" : editorMode === "edit" ? "Edit Grade" : "View Grade";
     const badge = editorMode === "add" ? "Draft" : editorMode === "edit" ? "Editing" : "View only";
@@ -332,8 +352,21 @@ export function GradeMasterPage() {
             </div>
           </div>
 
-          {/* Actions: List / Close / Save (Save hidden in view mode) */}
+          {/* Actions: Print / List / Close / Save (Print: edit + view, Save hidden in view mode) */}
           <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {canPrint && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  void openGradeReport(activeGrade!.grade_code, activeGrade!.company_code)
+                }
+                disabled={saving}
+              >
+                <Printer size={14} /> Print
+              </Button>
+            )}
             <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor}>
               <ArrowLeft size={14} /> List
             </Button>
@@ -357,6 +390,8 @@ export function GradeMasterPage() {
             shouldRefetch ? handleSaved() : handleCloseEditor()
           }
         />
+
+        {reportDialog}
       </section>
     );
   }
@@ -449,21 +484,7 @@ export function GradeMasterPage() {
       </Dialog>
 
       {/* Report preview (new report format) */}
-      <NewReportDialog
-        open={previewOpen}
-        onClose={closeReportPreview}
-        title="Grade Master"
-        htmlContent={reportHtml}
-        loading={reportLoading}
-        error={reportError || null}
-        meta={{
-          companyName: companyCode,
-          user: loginid,
-          period: "All",
-          generatedAt: new Date().toLocaleString(),
-        }}
-        onOpenInNewWindow={openReportInNewWindow}
-      />
+      {reportDialog}
     </section>
   );
 }

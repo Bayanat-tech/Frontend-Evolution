@@ -19,6 +19,7 @@ import {
   ChevronDown,
   RotateCcw,
   Maximize2,
+  Minimize2,
   Menu,
   ChevronLeft,
   ChevronRight,
@@ -206,10 +207,73 @@ export function NewReportDialog({
   exportingExcel = false,
   onOpenInNewWindow,
   headerSlot,
+  zIndex,
 }: NewReportDialogProps) {
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
   const isCompact = bp !== "desktop";
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    setIsFullscreen((prev) => !prev);
+    try {
+      if (!isFullscreen) {
+        if (rootRef.current && rootRef.current.requestFullscreen) {
+          rootRef.current.requestFullscreen().catch(() => {});
+        }
+      } else {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    const onFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Global listener for drill-down action requests from within sandboxed iframe (e.g. ↗ button)
+  useEffect(() => {
+    if (!open) return;
+    const handleDrillMessage = (ev: MessageEvent) => {
+      if (!ev.data) return;
+      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
+        const { docType, docNo } = ev.data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          const upper = String(docType).toUpperCase();
+          const routeMap: Record<string, string> = {
+            BP: "/workspace/finance/finance/accounts/transactions/cheque-payment",
+            BR: "/workspace/finance/finance/accounts/transactions/cheque-receipt",
+            CP: "/workspace/finance/finance/accounts/transactions/petty_cash_payment",
+            CR: "/workspace/finance/finance/accounts/transactions/cash-receipt",
+            JV: "/workspace/finance/finance/accounts/transactions/jv",
+            EJV: "/workspace/finance/finance/accounts/transactions/ejv",
+            RJV: "/workspace/finance/finance/accounts/transactions/reverse_jv",
+            PJV: "/workspace/finance/finance/accounts/transactions/provisional_jv",
+            DN: "/workspace/finance/finance/accounts/transactions/debit-note",
+            CN: "/workspace/finance/finance/accounts/transactions/credit-note",
+            PI: "/workspace/finance/finance/accounts/transactions/purchase",
+            SI: "/workspace/finance/finance/accounts/transactions/sales",
+            SV: "/workspace/finance/finance/accounts/transactions/service_invoice",
+            PO: "/workspace/finance/finance/accounts/transactions/lpo",
+          };
+          const targetRoute = routeMap[upper];
+          const url = targetRoute
+            ? `${targetRoute}?doc_no=${encodeURIComponent(docNo)}`
+            : `/api/finance/transactions/report/${encodeURIComponent(upper)}/${encodeURIComponent(docNo)}`;
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+      }
+    };
+    window.addEventListener("message", handleDrillMessage);
+    return () => window.removeEventListener("message", handleDrillMessage);
+  }, [open]);
 
   const measureRef = useRef<HTMLIFrameElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -314,7 +378,7 @@ export function NewReportDialog({
     max-width: ${contentW}px !important;
     min-width: ${contentW}px !important;
     box-sizing: border-box !important;
-    overflow-x: hidden !important;
+    overflow-x: auto !important;
     overflow-y: visible !important;
     font-family: Arial, sans-serif !important;
     font-size: ${REPORT_FONT_PX}px !important;
@@ -341,8 +405,13 @@ export function NewReportDialog({
     max-width: 100% !important;
     font-size: ${REPORT_FONT_PX}px !important;
     border-collapse: collapse !important;
+    table-layout: auto !important;
   }
   th, td {
+    white-space: normal;
+    word-break: break-word;
+  }
+  th.num, td.num, th.center, td.center, .doc-link-wrap, a.doc-open-link {
     white-space: nowrap !important;
   }
   thead { display: table-header-group !important; }
@@ -1163,7 +1232,7 @@ export function NewReportDialog({
           onLoad={onFrameLoad}
           srcDoc={preparedHtml ?? undefined}
           tabIndex={-1}
-          sandbox={live ? "allow-same-origin allow-scripts" : "allow-same-origin"}
+          sandbox={live ? "allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" : "allow-same-origin allow-popups"}
           data-nr-part={part}
           data-nr-live={live ? "1" : undefined}
           data-nr-key={live ? loadKey : undefined}
@@ -1217,29 +1286,29 @@ export function NewReportDialog({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 1000,
-        background: "rgba(15, 23, 42, 0.5)",
+        zIndex: zIndex ?? 1000,
+        background: isFullscreen ? "#0f172a" : "rgba(15, 23, 42, 0.5)",
         display: "flex",
         alignItems: "stretch",
         justifyContent: "center",
-        padding: isMobile ? 0 : isCompact ? "12px 16px" : "20px 28px",
+        padding: isFullscreen || isMobile ? 0 : isCompact ? "12px 16px" : "20px 28px",
         fontFamily:
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         boxSizing: "border-box",
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (!isFullscreen && e.target === e.currentTarget) onClose();
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: 1280,
+          maxWidth: isFullscreen ? "100vw" : 1280,
           height: "100%",
-          maxHeight: "100%",
+          maxHeight: isFullscreen ? "100vh" : "100%",
           background: "#ffffff",
-          borderRadius: isMobile ? 0 : 10,
-          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.35)",
+          borderRadius: isFullscreen || isMobile ? 0 : 10,
+          boxShadow: isFullscreen ? "none" : "0 25px 50px -12px rgba(0,0,0,0.35)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -1354,27 +1423,52 @@ export function NewReportDialog({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              border: "1px solid #e2e8f0",
-              background: "#fff",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#64748b",
-              flexShrink: 0,
-              alignSelf: isMobile ? "flex-start" : undefined,
-            }}
-          >
-            <X size={16} strokeWidth={2} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              aria-label={isFullscreen ? "Exit Full Screen" : "Full Screen"}
+              title={isFullscreen ? "Exit Full Screen (Esc)" : "Expand Report to Full Screen"}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                border: "1px solid #cbd5e1",
+                background: isFullscreen ? "#e0e7ff" : "#fff",
+                color: isFullscreen ? "#1d4ed8" : "#475569",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.15s ease",
+                flexShrink: 0,
+              }}
+            >
+              {isFullscreen ? <Minimize2 size={16} strokeWidth={2} /> : <Maximize2 size={16} strokeWidth={2} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                border: "1px solid #e2e8f0",
+                background: "#fff",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#64748b",
+                flexShrink: 0,
+                alignSelf: isMobile ? "flex-start" : undefined,
+              }}
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
+          </div>
         </div>
 
         {/* Optional slot: drill breadcrumbs, loading/error banners — does not affect page measure/print */}
@@ -1557,14 +1651,15 @@ export function NewReportDialog({
           {!isMobile && (
             <button
               type="button"
-              onClick={() => {
-                zoomAnchor.current = null;
-                setZoom(100);
+              onClick={toggleFullscreen}
+              style={{
+                ...toolIconBtn,
+                background: isFullscreen ? "#3b82f6" : "transparent",
+                color: isFullscreen ? "#ffffff" : "#f1f5f9",
               }}
-              style={toolIconBtn}
-              title="100%"
+              title={isFullscreen ? "Exit Full Screen" : "Full Screen"}
             >
-              <Maximize2 size={14} />
+              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
           )}
         </div>
