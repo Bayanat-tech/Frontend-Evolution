@@ -418,6 +418,8 @@ export default function BalanceSheetPage() {
         error={drillError}
         onExportExcel={topDrill ? handleDrillExcel : handleExcel}
         exportingExcel={exportingExcel}
+        canGoBack={drillStack.length > 0}
+        onBack={() => handleDrillNavigate(drillStack.length - 2)}
         headerSlot={
           (drillLoading || drillError || drillStack.length > 0) ? (
             <div className="flex flex-col gap-0">

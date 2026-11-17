@@ -848,6 +848,8 @@ export default function TrialBalancePage() {
         error={drillError ?? (reportError && !reportHtml ? reportError : null)}
         onExportExcel={topDrill ? handleDrillExcel : handleExcel}
         exportingExcel={exportingExcel}
+        canGoBack={drillStack.length > 0}
+        onBack={() => handleDrillNavigate(drillStack.length - 2)}
         headerSlot={
           drillLoading || drillError || drillStack.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
