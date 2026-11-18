@@ -17,7 +17,7 @@ import { PurchaseReportPreview } from "./Purchasereportpreview";
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
 
 // TODO: Purchase Quotation doc type lookup cha parameter naav ithe taak
-const DOC_TYPE_LOOKUP_PARAM = "PQ_DOC_TYPE_LIST";
+// const DOC_TYPE_LOOKUP_PARAM = "PQ_DOC_TYPE_LIST";
 
 interface PqRegisterParams {
     loginid: string;
@@ -360,42 +360,42 @@ export default function PurchaseQuotationListing() {
     const dateRangeValid = !fromDate || !toDate || fromDate <= toDate;
 
     // Doc Type lookup
-    useEffect(() => {
-        let cancelled = false;
+    // useEffect(() => {
+    //     let cancelled = false;
 
-        async function loadDocTypes() {
-            setDocTypeLoading(true);
-            try {
-                const rows = await getDynamicLookup({
-                    parameter: DOC_TYPE_LOOKUP_PARAM,
-                    code1: companyCode,
-                    loginid: loginId,
-                });
-                if (cancelled) return;
+    //     async function loadDocTypes() {
+    //         setDocTypeLoading(true);
+    //         try {
+    //             const rows = await getDynamicLookup({
+    //                 parameter: DOC_TYPE_LOOKUP_PARAM,
+    //                 code1: companyCode,
+    //                 loginid: loginId,
+    //             });
+    //             if (cancelled) return;
 
-                const seen = new Set<string>();
-                const options: DocTypeOption[] = [];
-                (rows || []).forEach((r: any) => {
-                    const value = String(r?.DOC_TYPE ?? r?.doc_type ?? "").trim();
-                    if (!value || seen.has(value)) return;
-                    seen.add(value);
-                    const name = String(r?.DOC_NAME ?? r?.doc_name ?? r?.DESCRIPTION ?? r?.description ?? "").trim();
-                    options.push({ value, label: name ? `${value} - ${name}` : value });
-                });
-                setDocTypeOptions(options);
-            } catch (err) {
-                if (!cancelled) {
-                    console.error("Failed to load doc types:", err);
-                    setDocTypeOptions([]);
-                }
-            } finally {
-                if (!cancelled) setDocTypeLoading(false);
-            }
-        }
+    //             const seen = new Set<string>();
+    //             const options: DocTypeOption[] = [];
+    //             (rows || []).forEach((r: any) => {
+    //                 const value = String(r?.DOC_TYPE ?? r?.doc_type ?? "").trim();
+    //                 if (!value || seen.has(value)) return;
+    //                 seen.add(value);
+    //                 const name = String(r?.DOC_NAME ?? r?.doc_name ?? r?.DESCRIPTION ?? r?.description ?? "").trim();
+    //                 options.push({ value, label: name ? `${value} - ${name}` : value });
+    //             });
+    //             setDocTypeOptions(options);
+    //         } catch (err) {
+    //             if (!cancelled) {
+    //                 console.error("Failed to load doc types:", err);
+    //                 setDocTypeOptions([]);
+    //             }
+    //         } finally {
+    //             if (!cancelled) setDocTypeLoading(false);
+    //         }
+    //     }
 
-        loadDocTypes();
-        return () => { cancelled = true; };
-    }, [companyCode, loginId]);
+    //     loadDocTypes();
+    //     return () => { cancelled = true; };
+    // }, [companyCode, loginId]);
 
     const buildRequestParams = (): PqRegisterParams => ({
         loginid: loginId,
@@ -511,7 +511,7 @@ export default function PurchaseQuotationListing() {
                         />
                     </Field>
 
-                    <Field label="Doc Type">
+                    {/* <Field label="Doc Type">
                         <select
                             className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
                             value={docType}
@@ -525,7 +525,7 @@ export default function PurchaseQuotationListing() {
                                 </option>
                             ))}
                         </select>
-                    </Field>
+                    </Field> */}
 
                     <ProductMultiSelectField
                         label="Product"

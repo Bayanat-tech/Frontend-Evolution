@@ -1384,7 +1384,7 @@ export async function getPurchaseQuotationCompareReportExcel(params: Record<stri
 
 export async function getPurchaseQuotationRegisterReportHtml(params: Record<string, any>): Promise<string> {
   const response = await api.post(
-    `/api/finance/transactions/reports/PurchaseQuotationCompare/html`,
+    `/api/finance/transactions/reports/PurchaseQuotationRegister/html`,
     params,
     { responseType: "text" }
   );
