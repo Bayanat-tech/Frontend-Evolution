@@ -38,6 +38,8 @@ export function AssetDepreciationPage() {
 
   // JV button is enabled only when the grid has at least one row
   const hasRows = rows.length > 0;
+  const hasPostedJv = rows.some((r) => Boolean(r.ref_doc_no));
+  const postedJvNo = rows.find((r) => Boolean(r.ref_doc_no))?.ref_doc_no;
 
   const columns = useMemo<ColumnDef<DepRow>[]>(() => [
     col("asset_id", "Asset ID", 110),
@@ -89,6 +91,19 @@ export function AssetDepreciationPage() {
           type: "info",
           message: "No saved depreciation records found for this period. Click 'Save' to calculate and generate depreciation.",
         });
+      } else {
+        const jvRecord = norm.find((r) => Boolean(r.ref_doc_no));
+        if (jvRecord?.ref_doc_no) {
+          setNotice({
+            type: "success",
+            message: `✓ Depreciation JV already posted to General Ledger (JV Doc #${jvRecord.ref_doc_no}).`,
+          });
+        } else {
+          setNotice({
+            type: "info",
+            message: `✓ Depreciation already calculated for ${monthYear || "this period"} (${norm.length} assets). Click "JV" to post to General Ledger.`,
+          });
+        }
       }
       if (division) {
         await checkExceptions(division);
@@ -175,9 +190,9 @@ export function AssetDepreciationPage() {
         val1s5: String(rows.length),
         val1n1: Number(computedDocNo),
       });
-      setNotice({ type: "success", message: `Depreciation JV for document ${computedDocNo} posted successfully to General Ledger` });
+      setNotice({ type: "success", message: `Depreciation JV for document ${computedDocNo} posted successfully to General Ledger!` });
+      await retrieve();
     } catch (error) {
-      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
       setNotice({ type: "error", message: friendlyError(error, "Unable to post JV") });
     } finally {
       setLoading(false);
@@ -185,7 +200,7 @@ export function AssetDepreciationPage() {
   };
 
   return (
-    <section className="finance-utility-page finance-list-page grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4 p-4 pb-24 overflow-y-auto max-w-full">
       {/* ===================== PAGE HEADER (matches Prepaid Register) ===================== */}
       <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
@@ -231,13 +246,18 @@ export function AssetDepreciationPage() {
             {hasRows ? "Calculated" : "Save"}
           </Button>
           <Button
-            variant="secondary"
-            disabled={loading || !hasRows}
+            variant={hasPostedJv ? "outline" : "secondary"}
+            disabled={loading || !hasRows || hasPostedJv}
             onClick={() => void postJv()}
-            title={hasRows ? "Post depreciation JV" : "No rows to post"}
-            className="h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            title={hasPostedJv ? `JV already posted (Doc #${postedJvNo})` : hasRows ? "Post depreciation JV" : "No rows to post"}
+            className={`h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors ${
+              hasPostedJv
+                ? "border-emerald-500 text-emerald-700 bg-emerald-50 cursor-default"
+                : "disabled:cursor-not-allowed disabled:opacity-50"
+            }`}
           >
-            <FileText size={14} /> JV
+            {hasPostedJv ? <CheckCircle2 size={14} className="text-emerald-600" /> : <FileText size={14} />}
+            {hasPostedJv ? `JV Posted (#${postedJvNo})` : "JV"}
           </Button>
         </div>
       </div>

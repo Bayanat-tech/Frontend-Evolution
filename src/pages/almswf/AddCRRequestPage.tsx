@@ -1251,7 +1251,7 @@ const AddCRRequestPage = ({
             OK
           </Button>
         }
-      >
+       >
         <div className="w-[min(920px,92vw)] max-w-full">
           {/* ── Important fields ── */}
           <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border bg-slate-50 p-3 text-sm md:grid-cols-3">
@@ -1391,7 +1391,7 @@ const AddCRRequestPage = ({
               {/* Main Vertical Line (Tree Trunk) */}
               <div className="absolute left-[26px] top-6 bottom-8 w-0.5 bg-gray-200 z-0" />
               {approvalFlowData.map((item, idx) => {
-                // ✅ नवीन Smart Status Logic
+            
                 const statusStr = String(item.STATUS).toUpperCase();
                 const isApproved = statusStr.includes("APPROV") || statusStr.includes("SUBMIT");
                 const isSentBack = statusStr.includes("BACK") || statusStr.includes("REJECT") || statusStr.includes("CANCEL");
@@ -1430,7 +1430,7 @@ const AddCRRequestPage = ({
                             </div>
                           )}
 
-                          {/* ✅ नवीन: तारीख आणि वेळ दाखवण्यासाठी */}
+                    
                           {item.DATE && (
                             <div className="flex items-center gap-1.5 text-xs text-gray-400 pl-1 mt-0.5">
                               <Clock size={12} />
