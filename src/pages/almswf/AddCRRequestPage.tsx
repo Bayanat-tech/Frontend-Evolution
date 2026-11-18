@@ -255,12 +255,12 @@ const AddCRRequestPage = ({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
 
-const [sendBackUsers, setSendBackUsers] = useState<
-  { LEVEL_NO: number; EMPLOYEE_CODE_ID: string; RPT_NAME: string }[]
->([]);
+  const [sendBackUsers, setSendBackUsers] = useState<
+    { LEVEL_NO: number; EMPLOYEE_CODE_ID: string; RPT_NAME: string }[]
+  >([]);
 
-const [sendBackUser, setSendBackUser] = useState("");
-const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+  const [sendBackUser, setSendBackUser] = useState("");
+  const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
 
 
 
@@ -268,14 +268,14 @@ const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [logRows, setLogRows] = useState<any[]>([]);
-const [logLoading, setLogLoading] = useState(false);
+  const [logLoading, setLogLoading] = useState(false);
   const [userLevel, setUserLevel] = useState<number | null>(null);
 
   // ── Approval Flow states ──────────────────────────────────
-// ── Approval Flow states ──────────────────────────────────
-const [approvalFlowOpen, setApprovalFlowOpen] = useState(false);
-const [approvalFlowData, setApprovalFlowData] = useState<any[]>([]); // Merged data
-const [approvalFlowLoading, setApprovalFlowLoading] = useState(false);
+  // ── Approval Flow states ──────────────────────────────────
+  const [approvalFlowOpen, setApprovalFlowOpen] = useState(false);
+  const [approvalFlowData, setApprovalFlowData] = useState<any[]>([]); // Merged data
+  const [approvalFlowLoading, setApprovalFlowLoading] = useState(false);
 
   const isCancelled = String(header.LAST_ACTION || "").toUpperCase() === "CANCELED";
   const disabled = isViewMode || saving || isCancelled;
@@ -286,7 +286,7 @@ const [approvalFlowLoading, setApprovalFlowLoading] = useState(false);
   const canSendBack =
     canSendBackOrReject && userLevel !== null && !SEND_BACK_HIDDEN_LEVELS.includes(userLevel);
   const canEditAccountNo = userLevel !== null && ACCOUNT_NO_EDIT_LEVELS.includes(userLevel);
-    const canEditCredit = userLevel !== null && !CREDIT_FIELDS_LOCKED_LEVELS.includes(userLevel);
+  const canEditCredit = userLevel !== null && !CREDIT_FIELDS_LOCKED_LEVELS.includes(userLevel);
   const busy = saving || actionLoading !== null;
 
 
@@ -346,58 +346,58 @@ const [approvalFlowLoading, setApprovalFlowLoading] = useState(false);
 
 
   useEffect(() => {
-  if (!sendBackOpen || !companyCode || !requestNumber || userLevel === null) {
-    return;
-  }
-
-  let mounted = true;
-
-  const fetchSendBackUsers = async () => {
-    try {
-      setSendBackUsersLoading(true);
-      setSendBackUsers([]);
-
-      const rows = await getDynamicLookup({
-        parameter: "PS_CREDITREQUEST_ENTRY_SENDBACK_LEVELS",
-        code1: companyCode,
-        code2: requestNumber,
-        code3: loginid,
-        code4: String(userLevel),
-      });
-
-      if (!mounted) return;
-
-      const users = (rows || []).map((row: any) => ({
-  LEVEL_NO: Number(row.LEVEL_NO ?? row.level_no),
-  EMPLOYEE_CODE_ID: String(
-    row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""
-  ),
-  RPT_NAME:
-    row.RPT_NAME ??
-    row.rpt_name ??
-    row.EMPLOYEE_CODE_ID ??
-    row.employee_code_id ??
-    "",
-}));
-
-setSendBackUsers(
-  users.filter((u) => u.EMPLOYEE_CODE_ID)
-);
-    } catch (error) {
-      if (mounted) {
-        setDialogError("Unable to load Send Back users");
-      }
-    } finally {
-      if (mounted) setSendBackUsersLoading(false);
+    if (!sendBackOpen || !companyCode || !requestNumber || userLevel === null) {
+      return;
     }
-  };
 
-  fetchSendBackUsers();
+    let mounted = true;
 
-  return () => {
-    mounted = false;
-  };
-}, [sendBackOpen, companyCode, requestNumber, loginid, userLevel]);
+    const fetchSendBackUsers = async () => {
+      try {
+        setSendBackUsersLoading(true);
+        setSendBackUsers([]);
+
+        const rows = await getDynamicLookup({
+          parameter: "PS_CREDITREQUEST_ENTRY_SENDBACK_LEVELS",
+          code1: companyCode,
+          code2: requestNumber,
+          code3: loginid,
+          code4: String(userLevel),
+        });
+
+        if (!mounted) return;
+
+        const users = (rows || []).map((row: any) => ({
+          LEVEL_NO: Number(row.LEVEL_NO ?? row.level_no),
+          EMPLOYEE_CODE_ID: String(
+            row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""
+          ),
+          RPT_NAME:
+            row.RPT_NAME ??
+            row.rpt_name ??
+            row.EMPLOYEE_CODE_ID ??
+            row.employee_code_id ??
+            "",
+        }));
+
+        setSendBackUsers(
+          users.filter((u) => u.EMPLOYEE_CODE_ID)
+        );
+      } catch (error) {
+        if (mounted) {
+          setDialogError("Unable to load Send Back users");
+        }
+      } finally {
+        if (mounted) setSendBackUsersLoading(false);
+      }
+    };
+
+    fetchSendBackUsers();
+
+    return () => {
+      mounted = false;
+    };
+  }, [sendBackOpen, companyCode, requestNumber, loginid, userLevel]);
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
     setHeader((prev) => ({
@@ -507,7 +507,7 @@ setSendBackUsers(
 
     // Account No is entered by the allowed level only
 
-        // Credit Limit / Requested Credit Period are required only from the levels that can edit them
+    // Credit Limit / Requested Credit Period are required only from the levels that can edit them
     if (mode === "submit" && canEditCredit) {
       if (num("CREDIT_LIMIT") <= 0) errs.push("Credit Limit is required");
       if (num("REQUESTED_CREDIT_PERIOD") <= 0) errs.push("Requested Credit Period is required");
@@ -609,29 +609,29 @@ setSendBackUsers(
     );
   };
   const handleSendBackConfirm = () => {
-  if (!sendBackUser) {
-    return setDialogError("Please select a user to send back");
-  }
-
-  if (!remarkText.trim()) {
-    return setDialogError("Please enter a send back reason");
-  }
-
-  void execute(
-    "sendBack",
-    "SENTBACK",
-    "CR sent back successfully!",
-    {
-      val1s45: sendBackUser,
-      val1s46: remarkText.trim(),
-    },
-    () => {
-      setSendBackOpen(false);
-      setSendBackUser("");
-      setRemarkText("");
+    if (!sendBackUser) {
+      return setDialogError("Please select a user to send back");
     }
-  );
-};
+
+    if (!remarkText.trim()) {
+      return setDialogError("Please enter a send back reason");
+    }
+
+    void execute(
+      "sendBack",
+      "SENTBACK",
+      "CR sent back successfully!",
+      {
+        val1s45: sendBackUser,
+        val1s46: remarkText.trim(),
+      },
+      () => {
+        setSendBackOpen(false);
+        setSendBackUser("");
+        setRemarkText("");
+      }
+    );
+  };
   const handleCancelConfirm = () => {
     void execute("cancel", "CANCELED", "CR canceled successfully!", {}, () => setCancelOpen(false));
   };
@@ -641,77 +641,136 @@ setSendBackUsers(
     setDialogError("");
     setRejectOpen(true);
   };
- const openSendBack = () => {
-  setRemarkText("");
-  setSendBackUser("");
-  setSendBackUsers([]);
-  setDialogError("");
-  setSendBackOpen(true);
-};
+  const openSendBack = () => {
+    setRemarkText("");
+    setSendBackUser("");
+    setSendBackUsers([]);
+    setDialogError("");
+    setSendBackOpen(true);
+  };
 
 
 
 
-const openLog = async () => {
-  if (!requestNumber) return;
-  setLogOpen(true);
-  setLogLoading(true);
-  setLogRows([]);
-  try {
-    const rows = await getCreditRequestHistory({
-      loginid,
-      company_code: companyCode,
-      request_number: requestNumber,
-    });
-
-    setLogRows(rows);
-  } catch (e) {
-    console.error(e);
+  const openLog = async () => {
+    if (!requestNumber) return;
+    setLogOpen(true);
+    setLogLoading(true);
     setLogRows([]);
-  } finally {
-    setLogLoading(false);
-  }
-};
+    try {
+      const rows = await getCreditRequestHistory({
+        loginid,
+        company_code: companyCode,
+        request_number: requestNumber,
+      });
 
-// ── Open Approval Flow dialog ─────────────────────────────
+      setLogRows(rows);
+    } catch (e) {
+      console.error(e);
+      setLogRows([]);
+    } finally {
+      setLogLoading(false);
+    }
+  };
 
-const openApprovalFlow = async () => {
-  if (!companyCode || !requestNumber || userLevel === null) return;
+  // ── Open Approval Flow dialog ─────────────────────────────
 
-  setApprovalFlowOpen(true);
-  setApprovalFlowLoading(true);
-  setApprovalFlowData([]);
+  const openApprovalFlow = async () => {
+    if (!companyCode || !requestNumber || userLevel === null) return;
 
-  try {
-    const rows = await getDynamicLookup({
-      parameter: "PS_CREDITREQUEST_ENTRY_APPROVAL_FLOW",
-      code1: companyCode,
-      code2: requestNumber,
-      code3: loginid,
-      code4: String(userLevel),
-    });
+    setApprovalFlowOpen(true);
+    setApprovalFlowLoading(true);
+    setApprovalFlowData([]);
 
+    try {
+      // 1. History आणि Flow दोन्हीचा डेटा मागवा
+      const historyRows = await getCreditRequestHistory({
+        loginid,
+        company_code: companyCode,
+        request_number: requestNumber,
+      });
 
-    const formattedData = (rows || []).map((row: any) => ({
-      LEVEL_NO: Number(row.LEVEL_NO ?? row.level_no ?? 0),
-      RPT_NAME: row.RPT_NAME ?? row.rpt_name ?? "Unknown Level",
-      EMPLOYEE_CODE_ID: String(row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""),
+      const nextLevels = await getDynamicLookup({
+        parameter: "PS_CREDITREQUEST_ENTRY_APPROVAL_FLOW",
+        code1: companyCode,
+        code2: requestNumber,
+        code3: loginid,
+        code4: String(userLevel),
+      });
+
+      const mergedMap = new Map();
+
+      // 2. प्रथम Flow (सर्व ५ Levels) मॅप मध्ये टाका
+      (nextLevels || []).forEach((row: any) => {
+        const level = Number(row.LEVEL_NO ?? row.level_no);
+        if (!level) return;
+        
+        mergedMap.set(level, {
+          LEVEL_NO: level,
+          RPT_NAME: row.RPT_NAME || row.rpt_name || row.EMPLOYEE_CODE_ID || "Approver",
+          EMPLOYEE_CODE_ID: String(row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""),
+          STATUS: "PENDING", // डिफॉल्ट स्टेटस
+          REMARKS: "",
+          DATE: null,
+        });
+      });
+
+      // ⚡ सध्याचं रनिंग लेव्हल शोधा (उदा. 3)
+        
+      const currentRunningLevel = Number(header.FLOW_LEVEL_RUNNING || 1);
+
+  
+      (historyRows || []).forEach((h: any) => {
+        const level = Number(h.flow_level_running);
+        if (!level) return;
+
+        const existing = mergedMap.get(level);
+        let actualStatus = (h.last_action || "PENDING").toUpperCase();
+        let actualDate = h.user_dt || null;
+
       
-   
-      LIMIT: row.LIMIT || row.limit || "", 
-      STATUS: row.STATUS || row.status || "", 
-      REMARKS: row.REMARKS || row.remarks || "",
-      DATE: row.DATE || row.date || null,
-    }));
+        if (level > currentRunningLevel) {
+          actualStatus = "PENDING";
+          actualDate = null;
+        } 
+        
+        
+        else if (level === currentRunningLevel) {
+          actualStatus = "PENDING";
+          actualDate = null;
+        }
+        
+  
+        else if (level < currentRunningLevel) {
+          actualStatus = "SUBMITTED";
+     
+        }
 
-    setApprovalFlowData(formattedData);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setApprovalFlowLoading(false);
-  }
-};
+        mergedMap.set(level, {
+          LEVEL_NO: level,
+          RPT_NAME: existing?.RPT_NAME || h.next_action_by || h.user_id || "Approver",
+          EMPLOYEE_CODE_ID: existing?.EMPLOYEE_CODE_ID || h.user_id || "",
+          STATUS: actualStatus, 
+          REMARKS: h.reject_reason || h.sentback_reason || h.cancel_remark || "",
+          DATE: actualDate,
+        });
+      });
 
+      const level1Data = mergedMap.get(1);
+      if (level1Data) {
+        level1Data.STATUS = "SUBMITTED"; 
+        level1Data.DATE = header.CREATE_DATE || header.REQUEST_DATE || new Date().toISOString();
+      }
+      
+      const finalData = Array.from(mergedMap.values()).sort((a, b) => a.LEVEL_NO - b.LEVEL_NO);
+      setApprovalFlowData(finalData);
+
+    } catch (err) {
+      console.error("Error loading approval flow:", err);
+    } finally {
+      setApprovalFlowLoading(false);
+    }
+  };
 
   const closeReject = () => {
     if (actionLoading === "reject") return;
@@ -807,24 +866,24 @@ const openApprovalFlow = async () => {
               <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
-             <Button
-  type="button"
-  variant="secondary"
-  onClick={openLog}
-  disabled={!requestNumber}
->
-  <FileText size={15} /> Log
-</Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={openLog}
+                disabled={!requestNumber}
+              >
+                <FileText size={15} /> Log
+              </Button>
 
 
-<Button
-  type="button"
-  variant="secondary"
-  onClick={openApprovalFlow}
-  disabled={!requestNumber || userLevel === null}
->
-  <GitBranch size={15} /> Approval Flow
-</Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={openApprovalFlow}
+                disabled={!requestNumber || userLevel === null}
+              >
+                <GitBranch size={15} /> Approval Flow
+              </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
                 <X size={16} />
               </Button>
@@ -961,7 +1020,7 @@ const openApprovalFlow = async () => {
                   <label className="field"><span>Credit Limit{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} step="0.001" onKeyDown={blockNumberKeys(true)} value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setNum("CREDIT_LIMIT", e.target.value, 9, 3)} /></label>
                   <label className="field"><span>Requested Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("REQUESTED_CREDIT_PERIOD", e.target.value, 4)} /></label>
                   <label className="field"><span>Sanctioned Credit Limit Amt{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} step="0.001" onKeyDown={blockNumberKeys(true)} value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_LIMIT_AMT", e.target.value, 9, 3)} /></label>
-                  <label className="field"><span>Sanctioned Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number"  className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_PERIOD", e.target.value, 15)} /></label>
+                  <label className="field"><span>Sanctioned Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_PERIOD", e.target.value, 15)} /></label>
                 </div>
               </SectionCard>
 
@@ -1076,354 +1135,346 @@ const openApprovalFlow = async () => {
         {dialogError && <p className="mt-1 text-xs text-destructive">{dialogError}</p>}
       </Dialog>
 
-    
-{/* Send Back */}
-<Dialog
-  open={sendBackOpen}
-  title="Send Back Request"
-  description="Select who to send this back to, and enter the reason."
-  onClose={closeSendBack}
-  footer={
-    <>
-      <Button
-        variant="outline"
-        onClick={closeSendBack}
-        disabled={actionLoading === "sendBack"}
-      >
-        Cancel
-      </Button>
 
-      <Button
-        disabled={busy || sendBackUsersLoading}
-        onClick={handleSendBackConfirm}
-        variant="default"
-      >
-        {actionLoading === "sendBack" ? (
+      {/* Send Back */}
+      <Dialog
+        open={sendBackOpen}
+        title="Send Back Request"
+        description="Select who to send this back to, and enter the reason."
+        onClose={closeSendBack}
+        footer={
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Sending Back...
-          </>
-        ) : (
-          <>
-            <ChevronLeft size={15} className="mr-1" />
-            Confirm Send Back
-          </>
-        )}
-      </Button>
-    </>
-  }
->
-  <div className="space-y-3">
+            <Button
+              variant="outline"
+              onClick={closeSendBack}
+              disabled={actionLoading === "sendBack"}
+            >
+              Cancel
+            </Button>
 
-    {/* Send Back To */}
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium">
-        Send Back To <span className="text-destructive">*</span>
-      </label>
-
-      <select
-        value={sendBackUser}
-        onChange={(e) => {
-          setSendBackUser(e.target.value);
-          setDialogError("");
-        }}
-        disabled={sendBackUsersLoading || busy}
-        className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+            <Button
+              disabled={busy || sendBackUsersLoading}
+              onClick={handleSendBackConfirm}
+              variant="default"
+            >
+              {actionLoading === "sendBack" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending Back...
+                </>
+              ) : (
+                <>
+                  <ChevronLeft size={15} className="mr-1" />
+                  Confirm Send Back
+                </>
+              )}
+            </Button>
+          </>
+        }
       >
-        <option value="">
-          {sendBackUsersLoading
-            ? "Loading users..."
-            : "Select user"}
-        </option>
+        <div className="space-y-3">
 
-        {sendBackUsers.map((user) => (
-          <option
-            key={user.EMPLOYEE_CODE_ID}
-            value={user.EMPLOYEE_CODE_ID}
-          >
-            {user.RPT_NAME}
-          </option>
-        ))}
-      </select>
+          {/* Send Back To */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Send Back To <span className="text-destructive">*</span>
+            </label>
 
-      {!sendBackUsersLoading && sendBackUsers.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          No eligible users available for Send Back.
-        </p>
-      )}
-    </div>
+            <select
+              value={sendBackUser}
+              onChange={(e) => {
+                setSendBackUser(e.target.value);
+                setDialogError("");
+              }}
+              disabled={sendBackUsersLoading || busy}
+              className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">
+                {sendBackUsersLoading
+                  ? "Loading users..."
+                  : "Select user"}
+              </option>
 
-    {/* Send Back Reason */}
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium">
-        Send Back Reason <span className="text-destructive">*</span>
-      </label>
+              {sendBackUsers.map((user) => (
+                <option
+                  key={user.EMPLOYEE_CODE_ID}
+                  value={user.EMPLOYEE_CODE_ID}
+                >
+                  {user.RPT_NAME}
+                </option>
+              ))}
+            </select>
 
-      <textarea
-        rows={4}
-        value={remarkText}
-        onChange={(e) => {
-          setRemarkText(e.target.value);
-          setDialogError("");
-        }}
-        placeholder="Enter send back reason..."
-        disabled={busy}
-        className="min-h-[110px] w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-      />
-    </div>
+            {!sendBackUsersLoading && sendBackUsers.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No eligible users available for Send Back.
+              </p>
+            )}
+          </div>
 
-    {dialogError && (
-      <p className="text-xs text-destructive">
-        {dialogError}
-      </p>
-    )}
+          {/* Send Back Reason */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Send Back Reason <span className="text-destructive">*</span>
+            </label>
 
-  </div>
-</Dialog>
+            <textarea
+              rows={4}
+              value={remarkText}
+              onChange={(e) => {
+                setRemarkText(e.target.value);
+                setDialogError("");
+              }}
+              placeholder="Enter send back reason..."
+              disabled={busy}
+              className="min-h-[110px] w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
 
+          {dialogError && (
+            <p className="text-xs text-destructive">
+              {dialogError}
+            </p>
+          )}
 
-
-<Dialog
-  open={logOpen}
-  title="Credit Request Flow Log"
-  description={requestNumber ? String(requestNumber) : ""}
-  onClose={() => setLogOpen(false)}
-  footer={
-    <Button type="button" onClick={() => setLogOpen(false)}>
-      OK
-    </Button>
-  }
->
-  <div className="w-[min(920px,92vw)] max-w-full">
-    {/* ── Important fields ── */}
-    <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border bg-slate-50 p-3 text-sm md:grid-cols-3">
-      <div>
-        <span className="text-muted-foreground">Request No</span>
-        <div className="font-semibold">{requestNumber || "—"}</div>
-      </div>
-      <div>
-        <span className="text-muted-foreground">Status</span>
-        <div className="font-semibold">{header.LAST_ACTION || "—"}</div>
-      </div>
-      <div>
-        <span className="text-muted-foreground">Company</span>
-        <div className="font-semibold">{header.COMPANY_NAME || "—"}</div>
-      </div>
-      <div>
-        <span className="text-muted-foreground">Created By</span>
-        <div className="font-semibold">{header.CREATE_USER || "—"}</div>
-      </div>
-      <div>
-        <span className="text-muted-foreground">Credit Limit</span>
-        <div className="font-semibold">
-          {header.CREDIT_LIMIT != null
-            ? Number(header.CREDIT_LIMIT).toLocaleString()
-            : "—"}
         </div>
-      </div>
-      <div>
-        <span className="text-muted-foreground">Req. Period</span>
-        <div className="font-semibold">
-          {header.REQUESTED_CREDIT_PERIOD ?? "—"}
-        </div>
-      </div>
-    </div>
-
-    {/* ── Approval History ── */}
-    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#00378C]">
-      Approval History
-    </p>
-
-    {logLoading ? (
-      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading history...
-      </div>
-    ) : logRows.length === 0 ? (
-      <p className="py-6 text-sm text-muted-foreground">
-        No flow history available.
-      </p>
-    ) : (
-      <div className="max-h-[60vh] overflow-auto rounded-md border">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
-          <thead className="sticky top-0 bg-[#eaf0f8] text-[#00378C]">
-            <tr>
-              <th className="border-b px-3 py-2 text-left font-semibold">S.No.</th>
-              <th className="border-b px-3 py-2 text-left font-semibold">Action</th>
-              <th className="border-b px-3 py-2 text-left font-semibold">By</th>
-              <th className="border-b px-3 py-2 text-left font-semibold">Date &amp; Time</th>
-              <th className="border-b px-3 py-2 text-right font-semibold">Level</th>
-              <th className="border-b px-3 py-2 text-left font-semibold">Next By</th>
-              <th className="border-b px-3 py-2 text-left font-semibold">Remarks</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logRows.map((r, i) => {
-              const remark =
-                r.reject_reason ||
-                r.sentback_reason ||
-                r.cancel_remark ||
-                "—";
-              const when = r.user_dt
-                ? new Date(r.user_dt).toLocaleString("en-GB", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: true,
-                  })
-                : "—";
-              return (
-                <tr key={i} className="odd:bg-white even:bg-slate-50/80">
-                  <td className="border-b px-3 py-1.5">{i + 1}</td>
-                  <td className="border-b px-3 py-1.5 font-medium">
-                    {r.last_action || "—"}
-                  </td>
-                  <td className="border-b px-3 py-1.5">{r.user_id || "—"}</td>
-                  <td className="border-b px-3 py-1.5 whitespace-nowrap">{when}</td>
-                  <td className="border-b px-3 py-1.5 text-right">
-                    {r.flow_level_running ?? "—"}
-                  </td>
-                  <td className="border-b px-3 py-1.5">
-                    {r.next_action_by || "—"}
-                  </td>
-                  <td className="border-b px-3 py-1.5">{remark}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </div>
-</Dialog>
+      </Dialog>
 
 
-{/* Approval Graph Dialog - Smart UI */}
-<Dialog
-  open={approvalFlowOpen}
-  title="Approval Flow"
-  description={requestNumber ? String(requestNumber) : ""}
-  onClose={() => setApprovalFlowOpen(false)}
-  footer={
-    <Button type="button" onClick={() => setApprovalFlowOpen(false)} className="px-8">
-      OK
-    </Button>
-  }
->
-  <div className="w-[min(850px,95vw)] max-w-full bg-white pb-4">
-    
-    {/* Table Header */}
-    <div className="mb-4 grid grid-cols-12 gap-2 border-b-2 border-gray-100 pb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
-      <div className="col-span-6 pl-12">Level & Details</div>
-      <div className="col-span-2 text-center">Limit</div>
-      <div className="col-span-4 text-right pr-4">Status / Remarks</div>
-    </div>
 
-    {approvalFlowLoading ? (
-      <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading...
-      </div>
-    ) : approvalFlowData.length === 0 ? (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        No approval flow available.
-      </p>
-    ) : (
-      <div className="relative pl-4 space-y-0">
-        
-        {/* Main Vertical Line (Tree Trunk) */}
-        <div className="absolute left-[26px] top-6 bottom-8 w-0.5 bg-gray-200 z-0" />
-
-        {approvalFlowData.map((item, idx) => {
-          // Smart Status Logic
-          const statusStr = String(item.STATUS).toUpperCase();
-          const isApproved = statusStr.includes("APPROV");
-          const isPending = statusStr.includes("PEND") || statusStr.includes("SUBMIT") || !statusStr;
-          const isSentBack = statusStr.includes("BACK") || statusStr.includes("REJECT");
-
-          return (
-            <div key={idx} className="relative z-10 flex gap-4 pb-6 group">
-              
-              {/* Tree Node Icon */}
-              <div className="relative flex flex-col items-center mt-1">
-                {/* Horizontal connecting line */}
-                <div className="absolute top-4 -left-4 w-4 h-px bg-gray-200" />
-                {/* Node Box */}
-                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-white shadow-sm
-                  ${isApproved ? 'border-green-500' : isSentBack ? 'border-red-500' : 'border-gray-300'}`}>
-                  {isApproved ? <CheckCircle2 size={16} className="text-green-500" /> : 
-                   isSentBack ? <X size={16} className="text-red-500" /> : 
-                   <span className="text-xs font-bold text-gray-400">{item.LEVEL_NO}</span>}
-                </div>
-              </div>
-
-              {/* Row Content */}
-              <div className="flex-1 pb-4 border-b border-dashed border-gray-100 last:border-0">
-                <div className="grid grid-cols-12 gap-2 items-center">
-                  
-                  {/* Left: Level & Role Name */}
-                  <div className="col-span-6 flex flex-col gap-1">
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-bold text-gray-700 text-xs">LEVEL {item.LEVEL_NO}</span>
-                      <span className="font-semibold text-gray-900 text-sm">{item.RPT_NAME}</span>
-                    </div>
-                    
-                    {/* Employee Code / Name if present */}
-                    {item.EMPLOYEE_CODE_ID && (
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium pl-1">
-                        <User size={12} className="text-gray-400" /> {item.EMPLOYEE_CODE_ID}
-                      </div>
-                    )}
-                    
-                    {/* Date if present */}
-                    {item.DATE && (
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400 pl-1">
-                        <Clock size={12} /> 
-                        {new Date(item.DATE).toLocaleString("en-GB", {
-                          day: "2-digit", month: "2-digit", year: "numeric",
-                          hour: "2-digit", minute: "2-digit",
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Middle: Limit (Shows only if data exists) */}
-                  <div className="col-span-2 text-center text-sm font-medium text-gray-600">
-                    {item.LIMIT ? item.LIMIT : <span className="text-gray-300">-</span>}
-                  </div>
-
-                  {/* Right: Status Badge & Remarks */}
-                  <div className="col-span-4 flex flex-col items-end gap-1.5">
-                    {item.STATUS ? (
-                      <span className={`px-3 py-1 text-[11px] font-bold rounded-md tracking-wide
-                        ${isApproved ? 'bg-green-100 text-green-700 border border-green-200' : 
-                          isSentBack ? 'bg-red-100 text-red-700 border border-red-200' : 
-                          'bg-blue-50 text-blue-700 border border-blue-200'}`}>
-                        {item.STATUS}
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 text-[11px] font-bold rounded-md tracking-wide bg-gray-100 text-gray-500 border border-gray-200">
-                        PENDING
-                      </span>
-                    )}
-                    
-                    {/* Remarks if present */}
-                    {item.REMARKS && (
-                      <span className="text-xs text-gray-500 text-right italic line-clamp-2" title={item.REMARKS}>
-                        "{item.REMARKS}"
-                      </span>
-                    )}
-                  </div>
-
-                </div>
+      <Dialog
+        open={logOpen}
+        title="Credit Request Flow Log"
+        description={requestNumber ? String(requestNumber) : ""}
+        onClose={() => setLogOpen(false)}
+        footer={
+          <Button type="button" onClick={() => setLogOpen(false)}>
+            OK
+          </Button>
+        }
+      >
+        <div className="w-[min(920px,92vw)] max-w-full">
+          {/* ── Important fields ── */}
+          <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border bg-slate-50 p-3 text-sm md:grid-cols-3">
+            <div>
+              <span className="text-muted-foreground">Request No</span>
+              <div className="font-semibold">{requestNumber || "—"}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Status</span>
+              <div className="font-semibold">{header.LAST_ACTION || "—"}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Company</span>
+              <div className="font-semibold">{header.COMPANY_NAME || "—"}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Created By</span>
+              <div className="font-semibold">{header.CREATE_USER || "—"}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Credit Limit</span>
+              <div className="font-semibold">
+                {header.CREDIT_LIMIT != null
+                  ? Number(header.CREDIT_LIMIT).toLocaleString()
+                  : "—"}
               </div>
             </div>
-          );
-        })}
+            <div>
+              <span className="text-muted-foreground">Req. Period</span>
+              <div className="font-semibold">
+                {header.REQUESTED_CREDIT_PERIOD ?? "—"}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Approval History ── */}
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#00378C]">
+            Approval History
+          </p>
+
+          {logLoading ? (
+            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading history...
+            </div>
+          ) : logRows.length === 0 ? (
+            <p className="py-6 text-sm text-muted-foreground">
+              No flow history available.
+            </p>
+          ) : (
+            <div className="max-h-[60vh] overflow-auto rounded-md border">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
+                <thead className="sticky top-0 bg-[#eaf0f8] text-[#00378C]">
+                  <tr>
+                    <th className="border-b px-3 py-2 text-left font-semibold">S.No.</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">Action</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">By</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">Date &amp; Time</th>
+                    <th className="border-b px-3 py-2 text-right font-semibold">Level</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">Next By</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logRows.map((r, i) => {
+                    const remark =
+                      r.reject_reason ||
+                      r.sentback_reason ||
+                      r.cancel_remark ||
+                      "—";
+                    const when = r.user_dt
+                      ? new Date(r.user_dt).toLocaleString("en-GB", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      })
+                      : "—";
+                    return (
+                      <tr key={i} className="odd:bg-white even:bg-slate-50/80">
+                        <td className="border-b px-3 py-1.5">{i + 1}</td>
+                        <td className="border-b px-3 py-1.5 font-medium">
+                          {r.last_action || "—"}
+                        </td>
+                        <td className="border-b px-3 py-1.5">{r.user_id || "—"}</td>
+                        <td className="border-b px-3 py-1.5 whitespace-nowrap">{when}</td>
+                        <td className="border-b px-3 py-1.5 text-right">
+                          {r.flow_level_running ?? "—"}
+                        </td>
+                        <td className="border-b px-3 py-1.5">
+                          {r.next_action_by || "—"}
+                        </td>
+                        <td className="border-b px-3 py-1.5">{remark}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Dialog>
+
+      {/* Approval Graph Dialog - Separate Status & Remarks */}
+      <Dialog
+        open={approvalFlowOpen}
+        title="Approval Flow"
+        description={requestNumber ? String(requestNumber) : ""}
+        onClose={() => setApprovalFlowOpen(false)}
+        footer={
+          <Button type="button" onClick={() => setApprovalFlowOpen(false)} className="px-8">
+            OK
+          </Button>
+        }
+      >
+        <div className="w-[min(850px,95vw)] max-w-full bg-white pb-4">
+
+          {/* Table Header - 6, 3, 3 Split */}
+          <div className="mb-4 grid grid-cols-12 gap-4 border-b-2 border-gray-100 pb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
+            <div className="col-span-6 pl-12">Level & Details</div>
+            <div className="col-span-3 text-center">Status</div>
+            <div className="col-span-3 text-right pr-4">Remarks</div>
+          </div>
+
+          {approvalFlowLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" /> Loading...
+            </div>
+          ) : approvalFlowData.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No approval flow available.
+            </p>
+          ) : (
+            <div className="relative pl-4 space-y-0">
+
+              {/* Main Vertical Line (Tree Trunk) */}
+              <div className="absolute left-[26px] top-6 bottom-8 w-0.5 bg-gray-200 z-0" />
+{approvalFlowData.map((item, idx) => {
+  // ✅ नवीन Smart Status Logic
+  const statusStr = String(item.STATUS).toUpperCase();
+  const isApproved = statusStr.includes("APPROV") || statusStr.includes("SUBMIT");
+  const isSentBack = statusStr.includes("BACK") || statusStr.includes("REJECT") || statusStr.includes("CANCEL");
+  const isPending = statusStr.includes("PEND") || statusStr === "" || statusStr === "UNKNOWN";
+
+  return (
+    <div key={idx} className="relative z-10 flex gap-4 pb-6 group">
+      
+      {/* Tree Node Icon */}
+      <div className="relative flex flex-col items-center mt-1">
+        <div className="absolute top-4 -left-4 w-4 h-px bg-gray-200" />
+        
+        {/* Node Box */}
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-white shadow-sm
+          ${isApproved ? 'border-green-500' : isSentBack ? 'border-red-500' : 'border-gray-300'}`}>
+          {isApproved ? <CheckCircle2 size={16} className="text-green-500" /> :
+           isSentBack ? <X size={16} className="text-red-500" /> :
+           <span className="text-xs font-bold text-gray-400">{item.LEVEL_NO}</span>}
+        </div>
       </div>
-    )}
-  </div>
-</Dialog>
+
+      {/* Row Content */}
+      <div className="flex-1 pb-4 border-b border-dashed border-gray-100 last:border-0">
+        <div className="grid grid-cols-12 gap-4 items-center">
+          
+          {/* Left: Level & Role Name (col-span-6) */}
+          <div className="col-span-6 flex flex-col gap-1">
+            <div className="flex items-baseline gap-2">
+              <span className="font-bold text-gray-700 text-xs uppercase">LEVEL {item.LEVEL_NO}</span>
+              <span className="font-semibold text-gray-900 text-sm">{item.RPT_NAME}</span>
+            </div>
+            
+            {item.EMPLOYEE_CODE_ID && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium pl-1">
+                <User size={12} className="text-gray-400" /> {item.EMPLOYEE_CODE_ID}
+              </div>
+            )}
+
+            {/* ✅ नवीन: तारीख आणि वेळ दाखवण्यासाठी */}
+            {item.DATE && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 pl-1 mt-0.5">
+                <Clock size={12} /> 
+                {new Date(item.DATE).toLocaleString("en-GB", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Middle: Status Badge (col-span-3) */}
+          <div className="col-span-3 flex justify-center">
+            <span className={`px-3 py-1 text-[11px] font-bold rounded-md tracking-wide text-center min-w-[90px]
+              ${isApproved ? 'bg-green-100 text-green-700 border border-green-200' :
+                isSentBack ? 'bg-red-100 text-red-700 border border-red-200' :
+                'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+              {item.STATUS ? item.STATUS : "PENDING"}
+            </span>
+          </div>
+
+          {/* Right: Remarks (col-span-3) */}
+          <div className="col-span-3 flex justify-end pr-2">
+            {item.REMARKS ? (
+              <span className="text-xs text-gray-600 text-right italic line-clamp-2" title={item.REMARKS}>
+                "{item.REMARKS}"
+              </span>
+            ) : (
+              <span className="text-xs text-gray-400">-</span>
+            )}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+})}
+
+              
+            </div>
+          )}
+        </div>
+      </Dialog>
 
       {/* Cancel */}
       <Dialog
