@@ -8,7 +8,7 @@ import {
 
   TteJmiConsumType,
 } from "../purchase/Purchaseordertypes";
-import { DiscAmountPercentage } from "../purchase/Purchaseorderutils";
+import { DiscAmountPercentage, TotalDiscAmount } from "../purchase/Purchaseorderutils";
 import { PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SODocType } from "./SalesOrdertypes";
 
 export const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -27,8 +27,8 @@ export function numberOrZero(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+export function formatAmount(value: number, decimals: number) {
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
@@ -284,8 +284,10 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
 
     remarks: form.remarks,
 
-    disc_hdr_price: numberOrZero(form.disc_hdr_price),
-    disc_hdr_percent: numberOrZero(form.disc_hdr_price) > 0
+    disc_hdr_price: (form.discount_scoope || "ITEM") === "ITEM"
+      ? TotalDiscAmount(rows || [])
+      : form.disc_hdr_price,
+    disc_hdr_percent: (form.discount_scoope || "ITEM") === "ITEM" || Number(form.disc_hdr_price) > 0
       ? DiscAmountPercentage(form, rows || [])
       : Number(form.disc_hdr_percent || 0),
 
@@ -450,7 +452,7 @@ export function lineNetPOAmount(row: SalesOrderLineRow) {
 }
 
 export function lineTaxAmount(row: SalesOrderLineRow) {
-  return lineNetAmount(row) * ((row.sorder_tx_compnt_perc_1 ?? 0) / 100);
+  return lineNetAmount(row) * ((row.tx_compnt_perc_1 ?? 0) / 100);
 }
 export function lineTaxpoAmount(row: SalesOrderLineRow) {
   return lineNetPOAmount(row) * ((row.sorder_tx_compnt_perc_1 ?? 0) / 100);
@@ -467,7 +469,7 @@ export function lineLcurrPOAmount(row: SalesOrderLineRow, ex_rate?: number) {
 
 
 export function taxLcurrAmount(row: SalesOrderLineRow, ex_rate?: number) {
-  return lineTaxpoAmount(row) * (ex_rate || 1);
+  return lineTaxAmount(row) * (ex_rate || 1);
 
 }
 
@@ -526,7 +528,7 @@ export function buildDetailsPayload(rows: SalesOrderLineRow[], ex_rate?: number)
     lcur_amount_disc: LcurrDisAmount(row),
 
     tx_compnt_amt_1: lineTaxAmount(row),
-    tx_compnt_perc_1: row.tx_compnt_perc_1,
+    tx_compnt_perc_1: numberOrZero(row.tx_compnt_perc_1),
     tx_compnt_1_expmt: row.tx_compnt_1_expmt,
 
     // SO

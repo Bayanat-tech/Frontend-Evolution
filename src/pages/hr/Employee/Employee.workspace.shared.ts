@@ -1,7 +1,12 @@
 // Shared contract between EmployeeWorkspacePage and its tabs.
 // Every tab exposes save() through a ref; the header Save calls the active tab's save().
+//
+// save() may return:
+//   true / undefined → saved (or nothing to save): the workspace moves to the next tab
+//                      (after the last tab it goes back to the Employee Master list)
+//   false            → stay on this tab (validation error, failed save, or the tab wants to stay)
 
-export type TabHandle = { save: () => Promise<void> };
+export type TabHandle = { save: () => Promise<boolean | void> };
 
 export type TabProps = {
   employeeId: string;

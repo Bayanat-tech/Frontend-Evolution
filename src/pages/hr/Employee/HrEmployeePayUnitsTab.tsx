@@ -1,6 +1,7 @@
 // Employee Pay Units tab — rendered inside EmployeeWorkspacePage.
 // Employee comes from the workspace route; Add / Retrieve live in the grid toolbar;
-// the header Save calls save() through the ref.
+// the header Save calls save() through the ref. save() returns true when the workspace should
+// move on (after the last tab that means back to the Employee Master list) and false to stay.
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { Download, Loader2, Plus, Trash2 } from "lucide-react";
@@ -214,18 +215,20 @@ export const HrEmployeePayUnitsTab = forwardRef<TabHandle, TabProps>(function Hr
     if (employeeReady) setRows((prev) => [makeNewRow(), ...prev]);
   };
 
-  /* ── Save (called by the header Save button) ── */
-  const save = async () => {
-    if (!employeeReady) return;
+  /* ── Save (called by the header Save button) ──
+     Returns true  → saved, or nothing to save: the workspace continues (this is the last tab,
+                     so it goes back to the Employee Master list)
+             false → validation / save error: stay on this tab */
+  const save = async (): Promise<boolean> => {
+    if (!employeeReady) return false;
 
     const dirtyRows = rows.filter((r) => r.dirty);
-    if (dirtyRows.length === 0) {
-      toast.warning("No changes to save.");
-      return;
-    }
+    // Nothing changed on this tab: nothing to save, so let the workspace finish
+    if (dirtyRows.length === 0) return true;
+
     if (dirtyRows.some((r) => !r.pay_unit_code.trim())) {
       toast.warning("Pay Unit is required on every row.");
-      return;
+      return false;
     }
 
     try {
@@ -255,18 +258,21 @@ export const HrEmployeePayUnitsTab = forwardRef<TabHandle, TabProps>(function Hr
       if (failed.length === 0) {
         setRows((prev) => prev.map((r) => (r.dirty ? { ...r, dirty: false, is_new: false } : r)));
         toast.success("Pay units saved.");
-      } else {
-        console.error("Pay unit save failures:", failed);
-        const first = failed[0].result as any;
-        const reason = "error" in first ? first.error : first.details || first.message;
-        toast.error(
-          failed.length === 1
-            ? `Failed to save "${failed[0].row.pay_unit_code}": ${reason}`
-            : `${failed.length} of ${dirtyRows.length} pay unit(s) failed to save. First error: ${reason}`,
-        );
+        return true;
       }
+
+      console.error("Pay unit save failures:", failed);
+      const first = failed[0].result as any;
+      const reason = "error" in first ? first.error : first.details || first.message;
+      toast.error(
+        failed.length === 1
+          ? `Failed to save "${failed[0].row.pay_unit_code}": ${reason}`
+          : `${failed.length} of ${dirtyRows.length} pay unit(s) failed to save. First error: ${reason}`,
+      );
+      return false;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save pay units");
+      return false;
     }
   };
 

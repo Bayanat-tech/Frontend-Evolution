@@ -155,7 +155,7 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
   import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
   import ProductPurchaseSales from "../pages/purchase_sales/PS_Productmaster";
 
-  import { ProductTypePage } from "../pages/purchase_sales/PS_ProductTypePage";
+  // import { ProductTypePage } from "../pages/purchase_sales/PS_ProductTypePage";
 
   import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
 
@@ -528,11 +528,11 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
     element: () => <ProductPurchaseSales />
   },
 
-    {
-    name: "Purchase Sales Product Type",
-    match: ({ pathname }) => isProductTypeRoute(pathname),
-    element: () => <ProductTypePage />,
-    },
+    // {
+    // name: "Purchase Sales Product Type",
+    // match: ({ pathname }) => isProductTypeRoute(pathname),
+    // element: () => <ProductTypePage />,
+    // },
 
 
 
@@ -2194,7 +2194,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
   function isStockReportsRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
-      normalized.includes("/workspace/ims/purchase_sales/reports/stock_report")
+      normalized.includes("/workspace/ims/ims/reports/stock_report")
     );
   }
 
