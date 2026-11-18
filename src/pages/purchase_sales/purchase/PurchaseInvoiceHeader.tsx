@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Briefcase, Building2, FileText, Percent, Receipt, Truck } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -62,6 +62,8 @@ export function PurchaseInvoiceHeaderForm({
     setdetails,
     calculateDiscount,
     rows,
+    amountDecimals = 3,
+
 
 }: {
     form: PurchaseOrderForm;
@@ -76,14 +78,37 @@ export function PurchaseInvoiceHeaderForm({
     setdetails?: (details: any[]) => void;
     calculateDiscount: (type: "amount" | "percent", value: number) => void;
     rows?: PurchaseOrderLineRow[];
+    amountDecimals?: number;
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [companyCode, loginIdOrAdmin]);
 
+    // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
     const discountScope = form.discount_scoope || "ITEM";
     const docTypeUpper = String(docType ?? "").trim().toUpperCase();
 
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
+    // light placeholder on empty date inputs (Chrome/Edge/Safari)
+const dateCls = (v?: string | null) =>
+    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
 
     // phone / fax: digits, + ( ) - and space only, max 20 chars
     const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
@@ -95,7 +120,7 @@ export function PurchaseInvoiceHeaderForm({
     const cleanAmount = (v: string) => {
         const cleaned = v.replace(/[^0-9.]/g, "");
         const [int, ...rest] = cleaned.split(".");
-        return rest.length ? `${int}.${rest.join("").slice(0, 3)}` : int;
+        return rest.length ? `${int}.${rest.join("").slice(0, amountDecimals)}` : int;
     };
 
     return (
@@ -114,7 +139,7 @@ export function PurchaseInvoiceHeaderForm({
                                 label="Supplier*"
                                 value={form.ac_code}
                                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
@@ -236,7 +261,7 @@ export function PurchaseInvoiceHeaderForm({
                             <Input className="h-7 text-xs" disabled value={form.pi_doc_no || ""} placeholder={editMode ? "" : "Auto"} />
                         </CField> */}
                         <CField label="Doc Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+                            <Input className={dateCls(form.doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
                         </CField>
 
                         {(docTypeUpper === "PIN" || docTypeUpper === "SIN") && (
@@ -334,6 +359,7 @@ export function PurchaseInvoiceHeaderForm({
                                             inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
                                             pinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "pinvoice_total_amount")),
                                             tx_compnt_1_expmt: text(getLookupValue(row || {}, "tx_compnt_1_expmt")) || current.tx_compnt_1_expmt,
+                                            po_tx_compnt_1_expmt: text(getLookupValue(row || {}, "po_tx_compnt_1_expmt")) || current.po_tx_compnt_1_expmt,
                                             tx_compnt_perc_1: getLookupValue(row || {}, "tx_compnt_perc_1") == null
                                                 ? current.tx_compnt_perc_1
                                                 : numberOrZero(getLookupValue(row || {}, "tx_compnt_perc_1")),
@@ -420,17 +446,17 @@ export function PurchaseInvoiceHeaderForm({
                             <Input className="h-7 text-xs" type="text" maxLength={20} disabled={headerAndLineDisabled} required value={form.inv_no} onChange={(e) => updateField("inv_no", e.target.value)} />
                         </CField>
                         <CField label="INV Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.inv_date} onChange={(e) => updateField("inv_date", e.target.value)} />
+                            <Input className={dateCls(form.inv_date)} type="date" disabled={headerAndLineDisabled} required value={form.inv_date} onChange={(e) => updateField("inv_date", e.target.value)} />
                         </CField>
                         <CField label="GRN Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+                            <Input className={dateCls(form.doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
                         </CField>
 
                         <CField label="PO No" required className="col-span-2">
                             <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} required value={form.po_doc_no} onChange={(e) => updateField("po_doc_no", e.target.value)} />
                         </CField>
                         <CField label="PO Date" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.po_doc_date} onChange={(e) => updateField("po_doc_date", e.target.value)} />
+                            <Input className={dateCls(form.po_doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.po_doc_date} onChange={(e) => updateField("po_doc_date", e.target.value)} />
                         </CField>
                         <CField label="PO Inv Amount" required className="col-span-2">
                             <Input className="h-7 text-xs text-right" type="text" disabled={headerAndLineDisabled} required value={form.pinvoice_total_amount} onChange={(e) => updateField("pinvoice_total_amount", e.target.value)} />
@@ -440,7 +466,7 @@ export function PurchaseInvoiceHeaderForm({
                         </CField>
 
                         <CField label="Ref Date" className="col-span-2">
-                            <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
+                            <Input className={dateCls(form.ref_date)} type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
                         </CField>
 
                         <CField label="WO No" className="col-span-2">
@@ -568,8 +594,8 @@ export function PurchaseInvoiceHeaderForm({
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
                                     value={
                                         discountScope === "ITEM"
-                                            ? TotalDiscAmount(rows || []).toFixed(3)
-                                            : numberOrZero(form.disc_hdr_price).toFixed(3)
+                                            ? TotalDiscAmount(rows || []).toFixed(amountDecimals)
+                                            : numberOrZero(form.disc_hdr_price).toFixed(amountDecimals)
                                     }
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
@@ -586,8 +612,8 @@ export function PurchaseInvoiceHeaderForm({
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
                                     value={
                                         discountScope === "ITEM"
-                                            ? DiscAmountPercentage(form, rows || []).toFixed(2)
-                                            : numberOrZero(form.disc_hdr_percent).toFixed(2)
+                                            ? DiscAmountPercentage(form, rows || []).toFixed(amountDecimals)
+                                            : numberOrZero(form.disc_hdr_percent).toFixed(amountDecimals)
                                     }
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
@@ -599,19 +625,16 @@ export function PurchaseInvoiceHeaderForm({
                         </HeaderBlock>
 
                         <HeaderBlock label="Tax" icon={<Receipt size={11} />} gridCols="grid-cols-2">
-                            <CField label="Tax Type"  >
-                                <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
-                                    const taxType = e.target.value;
-                                    const perc = taxType === "S" ? (Number(form.tx_compnt_perc_1) > 0 ? Number(form.tx_compnt_perc_1) : 5) : 0;
-                                    setForm((current) => ({
-                                        ...current,
-                                        tx_compnt_1_expmt: taxType,
-                                        tx_compnt_perc_1: perc,
-                                    }));
-                                }}>
-                                    <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
-                                </Select>
-                            </CField>
+                             <CField label="Tax Type">
+                                            <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+                                              const taxType = e.target.value;
+                                              // CHANGED: No Tax / Zero / Exempt => 0, Std Tax => % of the selected tax category
+                                              setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: resolveTaxPerc(taxType, current.tx_cat_code) }));
+                                            }}
+                                              disabled={headerAndLineDisabled}>
+                                              <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
+                                            </Select>
+                                          </CField>
 
                             <LookupField
                                 label="Tax Category"
