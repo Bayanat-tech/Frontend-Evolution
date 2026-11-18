@@ -296,6 +296,12 @@ export function FreightJobTrackingTab({
     company_code: string;
     flow_code: string;
     last_level: number;
+    user_team?: string;
+    user_role?: string;
+    user_assigned_stage?: number | null;
+    allowed_workspace_tabs?: string[];
+    read_only_workspace_tabs?: string[];
+    default_workspace_tab?: string;
     activeTabs: NavTabConfig[];
     hiddenTabs: NavTabConfig[];
   } | null>(null);
@@ -390,6 +396,12 @@ export function FreightJobTrackingTab({
           company_code: string;
           flow_code: string;
           last_level: number;
+          user_team?: string;
+          user_role?: string;
+          user_assigned_stage?: number | null;
+          allowed_workspace_tabs?: string[];
+          read_only_workspace_tabs?: string[];
+          default_workspace_tab?: string;
           activeTabs: NavTabConfig[];
           hiddenTabs: NavTabConfig[];
         };
@@ -400,10 +412,14 @@ export function FreightJobTrackingTab({
         loginid: loginId,
       });
 
+      let userAssigned: number | null = null;
       if (navRes.data?.success && navRes.data?.data) {
         const nData = navRes.data.data;
         setNavConfig(nData);
-        if (nData.activeTabs && nData.activeTabs.length > 0) {
+        if (nData.user_assigned_stage) {
+          userAssigned = nData.user_assigned_stage;
+          setActiveLevel(nData.user_assigned_stage);
+        } else if (nData.activeTabs && nData.activeTabs.length > 0) {
           setActiveLevel((prev) => {
             const hasPrev = nData.activeTabs.some((t: any) => t.flow_level === prev);
             return hasPrev ? prev : nData.activeTabs[0].flow_level;
@@ -448,8 +464,8 @@ export function FreightJobTrackingTab({
           setDoValidityDate(normalizeDateValue(hdr.DO_VALIDITY_DATE));
           setDcRemark(hdr.DC_REMARK || "");
 
-          // Default active level to current pending level if available
-          if (hdr.CURRENT_LEVEL) {
+          // Default active level to current pending level if available (only if user doesn't have an explicit assigned stage)
+          if (hdr.CURRENT_LEVEL && !userAssigned) {
             setActiveLevel(hdr.CURRENT_LEVEL);
           }
         }
@@ -1206,7 +1222,7 @@ export function FreightJobTrackingTab({
                 <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
                   <Lock size={14} className="text-slate-400 shrink-0" />
                   <span>
-                    <strong>Viewing Access Only:</strong> Your user role has viewing authorization for this stage. Form inputs and completion actions are locked.
+                    <strong>Viewing Access Only:</strong> This milestone is assigned to <strong>{currentTab.assignedRole || currentTab.title}</strong>. Form inputs, hold controls, and stage advance actions are locked for your account.
                   </span>
                 </div>
               )}
@@ -1557,16 +1573,17 @@ export function FreightJobTrackingTab({
                       Offload Stamp Action (Syncs PowerBuilder TF_CONTAINER_DET)
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                      {containers.map((c) => {
+                      {containers.map((c, cIdx) => {
                         const isOffloaded = c.STATUS === "OFFLOADED" || c.STATUS === "RETURNED";
+                        const cNumber = c.CONTAINER_NO || c.CONTAINER_NUMBER || `Container #${cIdx + 1}`;
                         return (
                           <div
-                            key={c.CONTAINER_NO}
+                            key={c.CONTAINER_NO || c.CONTAINER_NUMBER || String(cIdx)}
                             className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 shadow-2xs"
                           >
                             <div>
                               <p className="text-xs font-bold text-slate-900 m-0 font-mono">
-                                {c.CONTAINER_NO}
+                                {cNumber}
                               </p>
                               <p className="text-[11px] text-slate-500 m-0 mt-0.5">
                                 {isOffloaded
@@ -1842,9 +1859,9 @@ export function FreightJobTrackingTab({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {containers.map((c) => (
-                      <tr key={c.CONTAINER_NO} className="hover:bg-slate-50/50">
-                        <td className="p-2.5 font-bold font-mono text-slate-900">{c.CONTAINER_NO}</td>
+                    {containers.map((c, idx) => (
+                      <tr key={c.CONTAINER_NO || c.CONTAINER_NUMBER || String(idx)} className="hover:bg-slate-50/50">
+                        <td className="p-2.5 font-bold font-mono text-slate-900">{c.CONTAINER_NO || c.CONTAINER_NUMBER || "—"}</td>
                         <td className="p-2.5">{c.CONTN_TYPE || "40HC"}</td>
                         <td className="p-2.5 font-mono">{c.SEAL_NO || "—"}</td>
                         <td className="p-2.5">

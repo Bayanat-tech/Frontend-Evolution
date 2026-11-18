@@ -58,9 +58,6 @@ const tabs: { key: JobTab; label: string; icon: any; ready: boolean }[] = [
   { key: "job", label: "Job / File", icon: ClipboardList, ready: true },
   { key: "packlist", label: "Pack List", icon: PackageCheck, ready: true },
   { key: "documents", label: "Documents", icon: FileText, ready: true },
-  { key: "alerts", label: "Alerts", icon: AlertTriangle, ready: true },
-  { key: "instructions", label: "Instructions", icon: FileCheck, ready: true },
-  { key: "deposits", label: "Deposits", icon: Landmark, ready: true },
   { key: "activities", label: "Service & Activities", icon: ReceiptText, ready: true },
   { key: "tracking", label: "Live Milestones & Tracking", icon: ShieldCheck, ready: true },
 ];
@@ -92,6 +89,46 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [auditOpen, setAuditOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [smartDocOpen, setSmartDocOpen] = useState(false);
+  const [userNav, setUserNav] = useState<{
+    user_team?: string;
+    user_role?: string;
+    user_assigned_stage?: number | null;
+    allowed_workspace_tabs?: string[];
+    read_only_workspace_tabs?: string[];
+    default_workspace_tab?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const fetchUserNav = async () => {
+      try {
+        const res = await api.post<{ success: boolean; data: any }>("/api/freight/tracker/user-nav", {
+          company_code: companyCode,
+          loginid: userRecord.loginid || userRecord.user_id || "admin",
+          flow_code: "NORMAL_IMPORT",
+        });
+        if (active && res.data?.success && res.data?.data) {
+          setUserNav(res.data.data);
+        }
+      } catch (err) {
+        console.warn("Could not load user tracker nav:", err);
+      }
+    };
+    void fetchUserNav();
+    return () => {
+      active = false;
+    };
+  }, [companyCode, userRecord.loginid, userRecord.user_id]);
+
+  const visibleTabs = useMemo(() => {
+    if (!userNav?.allowed_workspace_tabs || userNav.allowed_workspace_tabs.length === 0) {
+      return tabs;
+    }
+    return tabs.filter((t) => userNav.allowed_workspace_tabs!.includes(t.key));
+  }, [userNav]);
+
+  const canCreateJob = !userNav?.allowed_workspace_tabs || userNav.allowed_workspace_tabs.includes("job");
+  const canSeeFinance = !userNav?.allowed_workspace_tabs || userNav.allowed_workspace_tabs.includes("activities");
 
   const openFinancialAudit = (row: LookupRow) => {
     setAuditJob(row);
@@ -148,7 +185,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       header: "Job No",
       size: 130,
       cell: ({ row }) => (
-        <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => openSteps(row.original, "job")}>
+        <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => openSteps(row.original, (userNav?.default_workspace_tab as JobTab) || "job")}>
           {text(row.original, "job_no")}
         </button>
       ),
@@ -263,30 +300,32 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
         return (
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              disabled={!isConfirmed}
-              onClick={() => openFinancialAudit(row.original)}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all shadow-2xs border ${
-                isConfirmed
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer"
-                  : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
-              }`}
-              title={
-                isConfirmed
-                  ? "Open Financial Audit 360°"
-                  : "Job must be Confirmed to view Financial 360°"
-              }
-            >
-              <TrendingUp size={11} className={isConfirmed ? "text-emerald-700" : "text-slate-400"} />
-              <span>Financial 360°</span>
-            </button>
+            {canSeeFinance && (
+              <button
+                type="button"
+                disabled={!isConfirmed}
+                onClick={() => openFinancialAudit(row.original)}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all shadow-2xs border ${
+                  isConfirmed
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                    : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+                }`}
+                title={
+                  isConfirmed
+                    ? "Open Financial Audit 360°"
+                    : "Job must be Confirmed to view Financial 360°"
+                }
+              >
+                <TrendingUp size={11} className={isConfirmed ? "text-emerald-700" : "text-slate-400"} />
+                <span>Financial 360°</span>
+              </button>
+            )}
             <Button
               type="button"
               size="sm"
               variant="ghost"
               className="freight-table-text-action h-6 px-1.5 text-xs text-slate-600 hover:text-slate-900"
-              onClick={() => openSteps(row.original, "job")}
+              onClick={() => openSteps(row.original, (userNav?.default_workspace_tab as JobTab) || "job")}
             >
               Steps <ArrowRight size={13} />
             </Button>
@@ -294,7 +333,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
         );
       },
     },
-  ], [targetMode]);
+  ], [targetMode, canSeeFinance, userNav]);
 
   const health = useMemo(() => buildHealth(rows), [rows]);
   const filteredRows = useMemo(() => rows.filter((row) => filterJobByStatus(row, activeStatus)), [activeStatus, rows]);
@@ -304,11 +343,24 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     setWorkspaceActions(null);
   }, [activeTab]);
 
-  function openSteps(row: LookupRow | null, tab: JobTab) {
+  function openSteps(row: LookupRow | null, tab?: JobTab) {
     setSelectedJob(row ? normalizeLookupRow(row) : null);
-    setActiveTab(tab);
+    const fallbackTab = (userNav?.default_workspace_tab as JobTab) || (userNav?.allowed_workspace_tabs?.[0] as JobTab) || "job";
+    const requestedTab = tab || fallbackTab;
+    const isAllowed = !userNav?.allowed_workspace_tabs || userNav.allowed_workspace_tabs.includes(requestedTab);
+    const targetTab = isAllowed ? requestedTab : fallbackTab;
+    setActiveTab(targetTab);
     setMode("steps");
   }
+
+  useEffect(() => {
+    if (userNav?.allowed_workspace_tabs && userNav.allowed_workspace_tabs.length > 0) {
+      if (!userNav.allowed_workspace_tabs.includes(activeTab)) {
+        const fallback = (userNav.default_workspace_tab as JobTab) || (userNav.allowed_workspace_tabs[0] as JobTab) || "tracking";
+        setActiveTab(fallback);
+      }
+    }
+  }, [userNav, activeTab]);
 
   if (mode === "list") {
     return (
@@ -343,33 +395,41 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           actionButton={
             <div className="flex items-center gap-2">
               <FreightNotificationDrawer />
-              <button
-                type="button"
-                onClick={() => setSmartDocOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 hover:from-blue-100 hover:to-indigo-100 dark:from-blue-950/40 dark:to-indigo-950/40 dark:text-blue-300 dark:border-blue-800 transition-all text-xs font-semibold shadow-xs cursor-pointer"
-                title="Upload shipping document PDF to extract B/L, containers, and create verified job"
-              >
-                <Sparkles size={14} className="text-blue-600 dark:text-blue-400" />
-                <span>Smart PDF Ingestion</span>
-              </button>
+              {canCreateJob && (
+                <button
+                  type="button"
+                  onClick={() => setSmartDocOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 hover:from-blue-100 hover:to-indigo-100 dark:from-blue-950/40 dark:to-indigo-950/40 dark:text-blue-300 dark:border-blue-800 transition-all text-xs font-semibold shadow-xs cursor-pointer"
+                  title="Upload shipping document PDF to extract B/L, containers, and create verified job"
+                >
+                  <Sparkles size={14} className="text-blue-600 dark:text-blue-400" />
+                  <span>Smart PDF Ingestion</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-secondary transition-all text-xs font-medium cursor-pointer text-foreground shadow-xs"
-                title="Configure Company Workflow & Notification Settings"
-              >
-                <Sliders size={14} className="text-blue-600 dark:text-blue-400" />
-                <span>Workflow & Alerts</span>
-              </button>
-              <button
-              type="button"
-              onClick={() => openSteps(null, "job")}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              Add Job
-            </button><FinanceListActionsMenu onExport={() => exportToCsv(filteredRows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]))), columns, `freight-${targetMode}-${targetDirection}-jobs.csv`)} onRefresh={() => void loadRows()} /></div>
+              {(userNav?.user_team === "ADMIN" || !userNav) && (
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-secondary transition-all text-xs font-medium cursor-pointer text-foreground shadow-xs"
+                  title="Configure Company Workflow & Notification Settings"
+                >
+                  <Sliders size={14} className="text-blue-600 dark:text-blue-400" />
+                  <span>Workflow & Alerts</span>
+                </button>
+              )}
+              {canCreateJob && (
+                <button
+                  type="button"
+                  onClick={() => openSteps(null, "job")}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+                >
+                  <Plus size={14} />
+                  Add Job
+                </button>
+              )}
+              <FinanceListActionsMenu onExport={() => exportToCsv(filteredRows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]))), columns, `freight-${targetMode}-${targetDirection}-jobs.csv`)} onRefresh={() => void loadRows()} />
+            </div>
           }
           loading={loading}
           searchValue={query}
@@ -382,7 +442,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           pageSize={25}
           enableExport={false}
           exportFilename={`freight-${targetMode}-${targetDirection}-jobs.csv`}
-          onRowClick={(row) => openSteps(row, "job")}
+          onRowClick={(row) => openSteps(row, (userNav?.default_workspace_tab as JobTab) || "job")}
           rowClassName={(row) =>
             text(row, "canceled") === "Y"
               ? "bg-red-50/70"
@@ -477,7 +537,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
           <div className="freight-workspace-tabs">
-            {tabs.map((tab, idx) => {
+            {visibleTabs.map((tab, idx) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
               return (
@@ -485,14 +545,13 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                   key={tab.key}
                   type="button"
                   className={`freight-workspace-tab ${active ? "active" : ""}`}
-                  disabled={tab.key !== "job" && !text(selectedJob || {}, "job_no")}
-                  title={tab.key !== "job" && !text(selectedJob || {}, "job_no") ? "Save the job first to continue" : tab.label}
+                  disabled={tab.key !== "job" && tab.key !== "tracking" && !text(selectedJob || {}, "job_no")}
+                  title={tab.key !== "job" && tab.key !== "tracking" && !text(selectedJob || {}, "job_no") ? "Save the job first to continue" : tab.label}
                   aria-pressed={active}
                   onClick={() => setActiveTab(tab.key)}
                 >
                   <Icon size={14} className={active ? "text-primary" : "text-muted-foreground"} />
                   <span>{tab.label}</span>
-
                 </button>
               );
             })}
@@ -516,7 +575,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           initialJob={selectedJob}
           startMode="editor"
           screen="packlist"
-          readOnly={selectedJobReadOnly}
+          readOnly={selectedJobReadOnly || Boolean(userNav?.read_only_workspace_tabs?.includes("packlist"))}
           onEmbeddedActionsChange={setWorkspaceActions}
           onEmbeddedList={returnToList}
         />

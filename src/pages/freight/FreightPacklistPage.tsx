@@ -494,6 +494,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
       setContainers(autoContainers);
       if (autoContainers.length > 0) {
         draftPack.container_no = autoContainers.map((r) => r.container_no.trim()).filter(Boolean).join(", ");
+        draftPack.cargo_details = draftPack.cargo_details || draftPack.container_no;
       }
       setPack(draftPack);
       if (mode.code === "A") await loadDimensions(normalized);
@@ -517,6 +518,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
       setContainers(autoContainers);
       if (autoContainers.length > 0) {
         draftPack.container_no = autoContainers.map((r) => r.container_no.trim()).filter(Boolean).join(", ");
+        draftPack.cargo_details = draftPack.cargo_details || draftPack.container_no;
       }
       setPack(draftPack);
       setDimensions([]);
