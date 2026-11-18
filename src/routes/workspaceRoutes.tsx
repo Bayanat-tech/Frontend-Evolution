@@ -982,7 +982,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
     {
       name: "Finance Provisional Journal Voucher",
       match: ({ pathname }) => isProvisionalJVRoute(pathname),
-      element: () => <JVDocumentEditor docType={"PJV"} />
+      element: () => <JVDocumentEditor docType={"RJV"} />
     },
     {
       name: "Finance Reverse Journal Voucher",

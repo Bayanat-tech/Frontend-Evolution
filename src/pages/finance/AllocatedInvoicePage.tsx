@@ -33,11 +33,82 @@ type InvoiceLine = {
   inv_no: string;
   inv_date: string;
   balance_amount: number;
+  balance_amount_origin?: number;
+  curr_code_origin?: string;
+  ex_rate_origin?: number;
   amount: number;
+  amount_origin?: number;
   sign_ind: number;
   org_curr_code: string;
   ex_rate: number;
 };
+
+function AllocatedAmountInput({
+  line,
+  onPatch,
+  onToggle,
+}: {
+  line: InvoiceLine;
+  onPatch: (id: string, patch: Partial<InvoiceLine>) => void;
+  onToggle: (id: string) => void;
+}) {
+  const isCr = Number(line.sign_ind) < 0;
+  const [val, setVal] = useState<string>(line.amount > 0 ? String(line.amount) : "");
+
+  useEffect(() => {
+    setVal(line.amount > 0 ? String(line.amount) : "");
+  }, [line.amount]);
+
+  const commit = (text: string) => {
+    let num = parseFloat(text.replace(/[^0-9.]/g, ""));
+    if (isNaN(num)) num = 0;
+    if (num > line.balance_amount) {
+      num = line.balance_amount;
+    }
+    const ex = line.ex_rate_origin || line.ex_rate || 1;
+    const numOrig = ex !== 0 ? num / ex : num;
+    setVal(num > 0 ? num.toFixed(3) : "");
+    onPatch(line.id, {
+      amount: num,
+      amount_origin: Number(numOrig.toFixed(3)),
+    });
+  };
+
+  return (
+    <div
+      className="relative flex items-center"
+      title="Double click to allocate full balance / toggle off"
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onToggle(line.id);
+      }}
+    >
+      {isCr && (
+        <span className="absolute left-2.5 text-rose-600 font-bold font-mono text-xs pointer-events-none">
+          -
+        </span>
+      )}
+      <input
+        type="text"
+        inputMode="decimal"
+        value={val}
+        placeholder="0.000"
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            commit((e.target as HTMLInputElement).value);
+          }
+        }}
+        className={`h-8 w-full rounded border px-2 text-right font-mono text-xs font-semibold tabular-nums outline-none transition-colors focus:border-blue-500 focus:bg-emerald-50/50 cursor-pointer ${
+          line.amount > 0
+            ? "border-emerald-500 bg-emerald-50/70 text-emerald-900 font-bold shadow-xs"
+            : "border-slate-300 bg-white text-slate-800 hover:border-slate-400"
+        } ${isCr ? "text-rose-700 pl-6" : ""}`}
+      />
+    </div>
+  );
+}
 
 type UnallocatedBill = {
   doc_type: string;
@@ -200,6 +271,9 @@ export function AllocatedInvoicePage() {
         setLines(
           rawInvoices.map((inv, idx) => {
             const rawBal = Number(inv.RAW_BALANCE ?? inv.raw_balance ?? inv.BALANCE_AMOUNT ?? inv.balance_amount ?? 0);
+            const balOrig = Number(inv.BALANCE_AMOUNT_ORIGIN ?? inv.balance_amount_origin ?? Math.abs(rawBal));
+            const currOrig = String(inv.CURR_CODE_ORIGIN || inv.curr_code_origin || inv.ORG_CURR_CODE || inv.org_curr_code || "INR");
+            const exOrig = Number(inv.EX_RATE_ORIGIN || inv.ex_rate_origin || inv.EX_RATE || inv.ex_rate || 1);
             const sign = Number(inv.SIGN_IND ?? inv.sign_ind ?? (rawBal >= 0 ? 1 : -1));
             return {
               id: `line_${idx}_${inv.INV_NO || inv.inv_no}`,
@@ -207,7 +281,11 @@ export function AllocatedInvoicePage() {
               inv_no: String(inv.INV_NO || inv.inv_no || ""),
               inv_date: String(inv.INV_DATE || inv.inv_date || ""),
               balance_amount: Math.abs(rawBal),
+              balance_amount_origin: balOrig,
+              curr_code_origin: currOrig,
+              ex_rate_origin: exOrig,
               amount: 0,
+              amount_origin: 0,
               sign_ind: sign,
               org_curr_code: String(inv.ORG_CURR_CODE || inv.org_curr_code || "INR"),
               ex_rate: Number(inv.EX_RATE ?? inv.ex_rate ?? 1),
@@ -320,6 +398,31 @@ export function AllocatedInvoicePage() {
     setLines((prev) => prev.filter((row) => row.id !== id).map((row, index) => ({ ...row, sr: index + 1 })));
   }, []);
 
+  // Double-click toggle: allocate full balance or toggle off to 0
+  const handleToggleAllocate = useCallback((id: string) => {
+    setLines((prev) =>
+      prev.map((line) => {
+        if (line.id !== id) return line;
+        if (line.amount === 0) {
+          const allocAmt = line.balance_amount;
+          const ex = line.ex_rate_origin || line.ex_rate || 1;
+          const allocAmtOrig = ex !== 0 ? allocAmt / ex : allocAmt;
+          return {
+            ...line,
+            amount: allocAmt,
+            amount_origin: Number(allocAmtOrig.toFixed(3)),
+          };
+        } else {
+          return {
+            ...line,
+            amount: 0,
+            amount_origin: 0,
+          };
+        }
+      })
+    );
+  }, []);
+
   const addCustomLine = () => {
     setLines((prev) => [
       ...prev,
@@ -329,7 +432,11 @@ export function AllocatedInvoicePage() {
         inv_no: "",
         inv_date: docDate,
         balance_amount: 0,
+        balance_amount_origin: 0,
+        curr_code_origin: "INR",
+        ex_rate_origin: 1,
         amount: 0,
+        amount_origin: 0,
         sign_ind: 1,
         org_curr_code: "INR",
         ex_rate: 1,
@@ -342,17 +449,33 @@ export function AllocatedInvoicePage() {
     const unallocItem = unallocatedBills.find((b) => b.inv_no === selectedUnallocBill);
     let remaining = unallocItem ? unallocItem.amount : totalAllocated || 999999999;
     if (!unallocItem && remaining === 999999999) {
-      setLines((prev) => prev.map((line) => ({ ...line, amount: line.balance_amount })));
+      setLines((prev) =>
+        prev.map((line) => {
+          const ex = line.ex_rate_origin || line.ex_rate || 1;
+          const orig = ex !== 0 ? line.balance_amount / ex : line.balance_amount;
+          return {
+            ...line,
+            amount: line.balance_amount,
+            amount_origin: Number(orig.toFixed(3)),
+          };
+        })
+      );
       setNotice({ type: "success", message: "All open invoice balances auto-allocated" });
       return;
     }
 
     setLines((prev) =>
       prev.map((line) => {
-        if (remaining <= 0) return { ...line, amount: 0 };
+        if (remaining <= 0) return { ...line, amount: 0, amount_origin: 0 };
         const toAlloc = Math.min(remaining, line.balance_amount);
         remaining -= toAlloc;
-        return { ...line, amount: toAlloc };
+        const ex = line.ex_rate_origin || line.ex_rate || 1;
+        const allocOrig = ex !== 0 ? toAlloc / ex : toAlloc;
+        return {
+          ...line,
+          amount: toAlloc,
+          amount_origin: Number(allocOrig.toFixed(3)),
+        };
       })
     );
     setNotice({
@@ -437,13 +560,20 @@ export function AllocatedInvoicePage() {
 
   const columns = useMemo<ColumnDef<InvoiceLine>[]>(
     () => [
-      { accessorKey: "sr", header: "Sr.", size: 45 },
+      { accessorKey: "sr", header: "Sr.", size: 40 },
       {
         accessorKey: "inv_no",
         header: "Invoice No",
-        size: 160,
+        size: 150,
         cell: ({ row }) => (
-          <span className="font-mono text-xs font-semibold text-slate-800">
+          <span
+            className="font-mono text-xs font-semibold text-slate-800 cursor-pointer select-none"
+            title="Double-click to allocate full balance"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              handleToggleAllocate(row.original.id);
+            }}
+          >
             {row.original.inv_no}
           </span>
         ),
@@ -451,7 +581,7 @@ export function AllocatedInvoicePage() {
       {
         accessorKey: "inv_date",
         header: "Invoice Date",
-        size: 110,
+        size: 100,
         cell: ({ row }) => (
           <span className="font-mono text-xs text-slate-600">
             {colDate(row.original.inv_date)}
@@ -461,7 +591,7 @@ export function AllocatedInvoicePage() {
       {
         accessorKey: "sign_ind",
         header: "Type",
-        size: 105,
+        size: 95,
         cell: ({ row }) => {
           const currentSign = Number(row.original.sign_ind) >= 0 ? 1 : -1;
           return (
@@ -485,8 +615,8 @@ export function AllocatedInvoicePage() {
       },
       {
         accessorKey: "balance_amount",
-        header: "Open Balance",
-        size: 145,
+        header: "Open Balance (Local)",
+        size: 140,
         cell: ({ row }) => {
           const isDr = Number(row.original.sign_ind) >= 0;
           const rawAmt = Number(row.original.balance_amount || 0);
@@ -495,7 +625,14 @@ export function AllocatedInvoicePage() {
             maximumFractionDigits: 3,
           });
           return (
-            <div className="flex items-center justify-end gap-1.5 font-mono text-xs font-semibold">
+            <div
+              className="flex items-center justify-end gap-1.5 font-mono text-xs font-semibold cursor-pointer select-none"
+              title="Double-click to allocate full balance"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                handleToggleAllocate(row.original.id);
+              }}
+            >
               <span className={isDr ? "text-slate-800" : "text-rose-700 font-bold"}>
                 {isDr ? formatted : `-${formatted}`}
               </span>
@@ -513,49 +650,59 @@ export function AllocatedInvoicePage() {
         },
       },
       {
+        accessorKey: "balance_amount_origin",
+        header: "Balance (Origin)",
+        size: 130,
+        cell: ({ row }) => {
+          const isDr = Number(row.original.sign_ind) >= 0;
+          const rawAmt = Number(row.original.balance_amount_origin ?? row.original.balance_amount ?? 0);
+          const formatted = rawAmt.toLocaleString("en-US", {
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 3,
+          });
+          const curr = row.original.curr_code_origin || row.original.org_curr_code || "INR";
+          return (
+            <div
+              className="flex items-center justify-end gap-1.5 font-mono text-xs text-slate-600 cursor-pointer select-none"
+              title="Double-click to allocate full balance"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                handleToggleAllocate(row.original.id);
+              }}
+            >
+              <span className={isDr ? "text-slate-700 font-medium" : "text-rose-600 font-medium"}>
+                {isDr ? formatted : `-${formatted}`}
+              </span>
+              <span className="text-[10px] font-mono text-slate-500 font-bold">{curr}</span>
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "amount",
         header: "Allocated Amount",
         size: 150,
+        cell: ({ row }) => (
+          <AllocatedAmountInput
+            line={row.original}
+            onPatch={patchLine}
+            onToggle={handleToggleAllocate}
+          />
+        ),
+      },
+      {
+        accessorKey: "amount_origin",
+        header: "Allocated (Origin)",
+        size: 120,
         cell: ({ row }) => {
-          const isCr = Number(row.original.sign_ind) < 0;
+          const amt = Number(row.original.amount_origin ?? 0);
+          const curr = row.original.curr_code_origin || row.original.org_curr_code || "INR";
           return (
-            <div className="relative flex items-center">
-              {isCr && (
-                <span className="absolute left-2.5 text-rose-600 font-bold font-mono text-xs pointer-events-none">
-                  -
-                </span>
-              )}
-              <input
-                type="text"
-                inputMode="decimal"
-                defaultValue={row.original.amount > 0 ? String(row.original.amount) : ""}
-                key={`amt_${row.original.id}`}
-                placeholder="0.000"
-                onChange={(e) => {
-                  const text = e.target.value.replace(/[^0-9.]/g, "");
-                  let num = parseFloat(text);
-                  if (isNaN(num)) num = 0;
-                  if (num > row.original.balance_amount) {
-                    num = row.original.balance_amount;
-                    e.target.value = num.toFixed(3);
-                  }
-                  patchLine(row.original.id, { amount: num });
-                }}
-                onBlur={(e) => {
-                  let num = parseFloat(e.target.value.replace(/[^0-9.]/g, ""));
-                  if (!isNaN(num) && num > 0) {
-                    if (num > row.original.balance_amount) num = row.original.balance_amount;
-                    e.target.value = num.toFixed(3);
-                    patchLine(row.original.id, { amount: num });
-                  } else {
-                    e.target.value = "";
-                    patchLine(row.original.id, { amount: 0 });
-                  }
-                }}
-                className={`h-8 w-full rounded border border-slate-300 px-2 text-right font-mono text-xs font-semibold tabular-nums outline-none transition-colors focus:border-blue-500 focus:bg-emerald-50/50 ${
-                  isCr ? "text-rose-700 pl-6" : "text-slate-800"
-                }`}
-              />
+            <div className="flex items-center justify-end gap-1 font-mono text-xs">
+              <span className={amt > 0 ? "font-bold text-emerald-700" : "text-slate-400"}>
+                {amt.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+              </span>
+              <span className="text-[10px] text-slate-400">{curr}</span>
             </div>
           );
         },
@@ -563,7 +710,7 @@ export function AllocatedInvoicePage() {
       {
         accessorKey: "org_curr_code",
         header: "Currency",
-        size: 85,
+        size: 75,
         cell: ({ row }) => (
           <span className="text-xs font-mono px-2 text-slate-500">{row.original.org_curr_code || "INR"}</span>
         ),
@@ -579,7 +726,7 @@ export function AllocatedInvoicePage() {
         ),
       },
     ],
-    [patchLine, removeLine]
+    [patchLine, removeLine, handleToggleAllocate]
   );
 
   return (
@@ -727,80 +874,59 @@ export function AllocatedInvoicePage() {
       {/* ===================== TAB 1: ALLOCATE INVOICES ===================== */}
       {activeTab === "allocate" && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border-slate-200 shadow-xs bg-white md:col-span-2">
-              <CardHeader className="py-3 px-4 border-b border-slate-100 flex flex-row items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                  <Layers size={14} className="text-indigo-600" />
-                  Unallocated Reference Bills / Payments
-                </span>
-                <span className="text-xs font-medium text-slate-500">
-                  {unallocatedBills.length} unallocated document(s) available
-                </span>
-              </CardHeader>
-              <CardContent className="p-4">
-                {unallocatedBills.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {unallocatedBills.map((b) => (
-                      <div
-                        key={b.inv_no}
-                        onClick={() => setSelectedUnallocBill(b.inv_no === selectedUnallocBill ? "" : b.inv_no)}
-                        className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                          selectedUnallocBill === b.inv_no
-                            ? "border-indigo-600 bg-indigo-50/50 shadow-xs"
-                            : "border-slate-200 hover:border-slate-300 bg-white"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-bold text-indigo-900">{b.inv_no}</span>
-                          <span className="font-mono text-xs font-bold text-emerald-700">
-                            {b.amount.toLocaleString("en-US", { minimumFractionDigits: 3 })} INR
-                          </span>
-                        </div>
-                        <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
-                          <span>Doc: {b.doc_type} #{b.doc_no}</span>
-                          <span>{b.doc_date ? b.doc_date.slice(0, 10) : ""}</span>
-                        </div>
+          {/* COMPACT ALLOCATION CONTROL RIBBON */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-3">
+            {unallocatedBills.length > 0 && (
+              <div className="mb-3 pb-3 border-b border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers size={13} className="text-indigo-600" />
+                    Unallocated Reference Bills / Payments ({unallocatedBills.length})
+                  </span>
+                  <span className="text-[11px] text-slate-400">Select an unallocated payment/receipt to allocate against invoices</span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1 max-h-24">
+                  {unallocatedBills.map((b) => (
+                    <div
+                      key={b.inv_no}
+                      onClick={() => setSelectedUnallocBill(b.inv_no === selectedUnallocBill ? "" : b.inv_no)}
+                      className={`px-3 py-1.5 rounded-lg border cursor-pointer transition-all flex items-center gap-3 shrink-0 ${
+                        selectedUnallocBill === b.inv_no
+                          ? "border-indigo-600 bg-indigo-50/70 shadow-xs"
+                          : "border-slate-200 hover:border-slate-300 bg-slate-50/50"
+                      }`}
+                    >
+                      <div>
+                        <span className="font-mono text-xs font-bold text-indigo-900 block">{b.inv_no}</span>
+                        <span className="text-[10px] text-slate-500">Doc: {b.doc_type} #{b.doc_no}</span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-slate-400 text-xs">
-                    {acCode
-                      ? "No unallocated advance payments/receipts found for this account. You can still allocate open invoices against each other."
-                      : "Please select an account code above to view open unallocated vouchers."}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      <span className="font-mono text-xs font-bold text-emerald-700">
+                        {b.amount.toLocaleString("en-US", { minimumFractionDigits: 3 })} INR
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            <Card className="border-slate-200 shadow-xs bg-white">
-              <CardHeader className="py-3 px-4 border-b border-slate-100">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Allocation Summary</span>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500">Total Allocated:</span>
-                  <span className="font-mono font-bold text-base text-emerald-700">
-                    {totalAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })} INR
+            {/* SLIM HORIZONTAL SUMMARY BAR */}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              {/* Left metrics */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 text-[11px] font-medium">Total Dr:</span>
+                  <span className="font-mono font-bold text-blue-700">
+                    +{totalDrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-slate-500 text-[11px] font-medium">Total Cr:</span>
+                  <span className="font-mono font-bold text-rose-700">
+                    -{totalCrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                  <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Total Dr Allocated:</span>
-                    <span className="font-mono font-bold text-blue-700">
-                      +{totalDrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Total Cr Allocated:</span>
-                    <span className="font-mono font-bold text-rose-700">
-                      -{totalCrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500">Net Status:</span>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500 text-[11px] font-medium">Net Diff:</span>
                   <span
                     className={`font-mono text-xs font-bold px-2 py-0.5 rounded ${
                       isBalanced
@@ -811,48 +937,59 @@ export function AllocatedInvoicePage() {
                     {isBalanced ? "✓ Balanced (0.000)" : `Diff: ${Math.abs(totalDrAllocated - totalCrAllocated).toFixed(3)}`}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-500">Selected Unalloc Bill:</span>
-                  <span className="font-mono font-semibold text-slate-700">{selectedUnallocBill || "None (Invoice-to-Invoice)"}</span>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Remarks</label>
-                  <Input
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    placeholder="e.g. Settlement of invoices"
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div className="pt-2 flex flex-col gap-2">
-                  <Button
-                    variant="outline"
-                    type="button"
-                    onClick={handleAutoAllocate}
-                    disabled={lines.length === 0}
-                    className="h-8 gap-1.5 text-xs font-semibold rounded-lg text-indigo-700 border-indigo-300 bg-indigo-50 hover:bg-indigo-100"
-                  >
-                    <Wand2 size={14} /> Auto-Allocate (FIFO)
-                  </Button>
-                  <Button
-                    disabled={submitting || totalAllocated <= 0}
-                    onClick={() => void handleSubmit()}
-                    className="h-9 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-4 rounded-lg cursor-pointer transition-colors disabled:opacity-50"
-                  >
-                    <Send size={14} />
-                    {submitting ? "Posting UJV..." : "Submit Allocation (UJV)"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+
+                {selectedUnallocBill && (
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    <span className="text-slate-500">Unalloc Bill:</span>
+                    <span className="font-mono font-bold text-indigo-700">{selectedUnallocBill}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Center / Right: Remarks & Action Buttons */}
+              <div className="flex items-center gap-2 flex-1 max-w-lg justify-end">
+                <Input
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Settlement remarks..."
+                  className="h-8 text-xs max-w-xs"
+                />
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={handleAutoAllocate}
+                  disabled={lines.length === 0}
+                  className="h-8 gap-1 text-xs font-semibold rounded-lg text-indigo-700 border-indigo-300 bg-indigo-50 hover:bg-indigo-100 shrink-0"
+                  title="Auto-allocate FIFO"
+                >
+                  <Wand2 size={13} /> Auto-Allocate
+                </Button>
+                <Button
+                  disabled={submitting || totalAllocated <= 0}
+                  onClick={() => void handleSubmit()}
+                  className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3 rounded-lg cursor-pointer transition-colors disabled:opacity-50 shrink-0"
+                >
+                  <Send size={13} />
+                  {submitting ? "Posting..." : "Submit (UJV)"}
+                </Button>
+              </div>
+            </div>
           </div>
 
-          {/* Open Invoices Table */}
-          <Card className="border-slate-200 shadow-xs bg-white">
-            <CardHeader className="py-3 px-4 border-b border-slate-100 flex flex-row items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Open Unpaid Invoices ({lines.length})
-              </span>
+          {/* Open Invoices Table with Maximum Height & Dedicated Scrolling */}
+          <Card className="border-slate-200 shadow-xs bg-white flex-1 min-h-0">
+            <CardHeader className="py-2.5 px-4 border-b border-slate-100 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                  Open Unpaid Invoices
+                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                    {lines.length} {lines.length === 1 ? "invoice" : "invoices"}
+                  </span>
+                </span>
+                <span className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md hidden sm:inline-block">
+                  💡 Double-click any row or amount to allocate full balance
+                </span>
+              </div>
               <Button size="sm" variant="ghost" onClick={addCustomLine} className="h-7 text-xs gap-1">
                 <Plus size={12} /> Add Row
               </Button>
@@ -862,7 +999,10 @@ export function AllocatedInvoicePage() {
                 columns={columns}
                 data={lines}
                 loading={loading}
-                height={460}
+                height={580}
+                pageSize={100}
+                density="compact"
+                onRowDoubleClick={(row) => handleToggleAllocate(row.id)}
               />
             </CardContent>
           </Card>
