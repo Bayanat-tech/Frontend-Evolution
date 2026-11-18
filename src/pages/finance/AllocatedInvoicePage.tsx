@@ -461,37 +461,51 @@ export function AllocatedInvoicePage() {
       {
         accessorKey: "sign_ind",
         header: "Type",
-        size: 80,
+        size: 105,
         cell: ({ row }) => {
-          const isDr = Number(row.original.sign_ind) >= 0;
+          const currentSign = Number(row.original.sign_ind) >= 0 ? 1 : -1;
           return (
-            <span
-              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${
-                isDr
-                  ? "bg-blue-50 text-blue-700 border border-blue-200"
-                  : "bg-purple-50 text-purple-700 border border-purple-200"
+            <select
+              value={currentSign}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                patchLine(row.original.id, { sign_ind: val });
+              }}
+              className={`h-7 w-20 rounded border px-2 py-0.5 text-xs font-bold font-mono outline-none cursor-pointer transition-colors ${
+                currentSign === 1
+                  ? "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
+                  : "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100"
               }`}
             >
-              {isDr ? "Dr (+)" : "Cr (-)"}
-            </span>
+              <option value={1} className="text-blue-700 font-bold bg-white">Dr (+)</option>
+              <option value={-1} className="text-purple-700 font-bold bg-white">Cr (-)</option>
+            </select>
           );
         },
       },
       {
         accessorKey: "balance_amount",
         header: "Open Balance",
-        size: 135,
+        size: 145,
         cell: ({ row }) => {
           const isDr = Number(row.original.sign_ind) >= 0;
+          const rawAmt = Number(row.original.balance_amount || 0);
+          const formatted = rawAmt.toLocaleString("en-US", {
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 3,
+          });
           return (
-            <div className="flex items-center justify-end gap-1 font-mono text-xs font-semibold">
-              <span className={isDr ? "text-slate-800" : "text-purple-700"}>
-                {Number(row.original.balance_amount || 0).toLocaleString("en-US", {
-                  minimumFractionDigits: 3,
-                  maximumFractionDigits: 3,
-                })}
+            <div className="flex items-center justify-end gap-1.5 font-mono text-xs font-semibold">
+              <span className={isDr ? "text-slate-800" : "text-rose-700 font-bold"}>
+                {isDr ? formatted : `-${formatted}`}
               </span>
-              <span className={`text-[10px] font-bold ${isDr ? "text-blue-600" : "text-purple-600"}`}>
+              <span
+                className={`text-[10px] font-bold px-1 py-0.5 rounded ${
+                  isDr
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-purple-100 text-purple-800"
+                }`}
+              >
                 {isDr ? "Dr" : "Cr"}
               </span>
             </div>
@@ -501,38 +515,50 @@ export function AllocatedInvoicePage() {
       {
         accessorKey: "amount",
         header: "Allocated Amount",
-        size: 140,
-        cell: ({ row }) => (
-          <input
-            type="text"
-            inputMode="decimal"
-            defaultValue={row.original.amount > 0 ? String(row.original.amount) : ""}
-            key={`amt_${row.original.id}`}
-            placeholder="0.000"
-            onChange={(e) => {
-              const text = e.target.value.replace(/[^0-9.]/g, "");
-              let num = parseFloat(text);
-              if (isNaN(num)) num = 0;
-              if (num > row.original.balance_amount) {
-                num = row.original.balance_amount;
-                e.target.value = num.toFixed(3);
-              }
-              patchLine(row.original.id, { amount: num });
-            }}
-            onBlur={(e) => {
-              let num = parseFloat(e.target.value);
-              if (!isNaN(num) && num > 0) {
-                if (num > row.original.balance_amount) num = row.original.balance_amount;
-                e.target.value = num.toFixed(3);
-                patchLine(row.original.id, { amount: num });
-              } else {
-                e.target.value = "";
-                patchLine(row.original.id, { amount: 0 });
-              }
-            }}
-            className="h-8 w-full rounded border border-slate-300 px-2 text-right font-mono text-xs font-semibold tabular-nums text-slate-800 outline-none transition-colors focus:border-blue-500 focus:bg-emerald-50/50"
-          />
-        ),
+        size: 150,
+        cell: ({ row }) => {
+          const isCr = Number(row.original.sign_ind) < 0;
+          return (
+            <div className="relative flex items-center">
+              {isCr && (
+                <span className="absolute left-2.5 text-rose-600 font-bold font-mono text-xs pointer-events-none">
+                  -
+                </span>
+              )}
+              <input
+                type="text"
+                inputMode="decimal"
+                defaultValue={row.original.amount > 0 ? String(row.original.amount) : ""}
+                key={`amt_${row.original.id}`}
+                placeholder="0.000"
+                onChange={(e) => {
+                  const text = e.target.value.replace(/[^0-9.]/g, "");
+                  let num = parseFloat(text);
+                  if (isNaN(num)) num = 0;
+                  if (num > row.original.balance_amount) {
+                    num = row.original.balance_amount;
+                    e.target.value = num.toFixed(3);
+                  }
+                  patchLine(row.original.id, { amount: num });
+                }}
+                onBlur={(e) => {
+                  let num = parseFloat(e.target.value.replace(/[^0-9.]/g, ""));
+                  if (!isNaN(num) && num > 0) {
+                    if (num > row.original.balance_amount) num = row.original.balance_amount;
+                    e.target.value = num.toFixed(3);
+                    patchLine(row.original.id, { amount: num });
+                  } else {
+                    e.target.value = "";
+                    patchLine(row.original.id, { amount: 0 });
+                  }
+                }}
+                className={`h-8 w-full rounded border border-slate-300 px-2 text-right font-mono text-xs font-semibold tabular-nums outline-none transition-colors focus:border-blue-500 focus:bg-emerald-50/50 ${
+                  isCr ? "text-rose-700 pl-6" : "text-slate-800"
+                }`}
+              />
+            </div>
+          );
+        },
       },
       {
         accessorKey: "org_curr_code",
@@ -557,7 +583,7 @@ export function AllocatedInvoicePage() {
   );
 
   return (
-    <section className="finance-utility-page finance-list-page grid gap-4 p-4">
+    <section className="finance-utility-page finance-list-page grid gap-4 p-4 pb-28 max-w-full overflow-y-auto">
       {/* ===================== PAGE HEADER ===================== */}
       <div className="tariff-page-header flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex min-w-0 items-center gap-3">
@@ -759,17 +785,17 @@ export function AllocatedInvoicePage() {
                     {totalAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })} INR
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                   <div>
-                    <span className="text-slate-500 block text-[11px]">Total Dr:</span>
-                    <span className="font-mono font-semibold text-blue-700">
-                      {totalDrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
+                    <span className="text-slate-500 block text-[11px] font-medium">Total Dr Allocated:</span>
+                    <span className="font-mono font-bold text-blue-700">
+                      +{totalDrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[11px]">Total Cr:</span>
-                    <span className="font-mono font-semibold text-purple-700">
-                      {totalCrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
+                    <span className="text-slate-500 block text-[11px] font-medium">Total Cr Allocated:</span>
+                    <span className="font-mono font-bold text-rose-700">
+                      -{totalCrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
                     </span>
                   </div>
                 </div>
@@ -836,6 +862,7 @@ export function AllocatedInvoicePage() {
                 columns={columns}
                 data={lines}
                 loading={loading}
+                height={460}
               />
             </CardContent>
           </Card>
