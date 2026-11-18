@@ -228,7 +228,7 @@ export function ExpenseTypePage() {
   };
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="eyebrow">Finance Master</p>
@@ -236,7 +236,6 @@ export function ExpenseTypePage() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {dirtyCount > 0 && <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{dirtyCount} unsaved</span>}
-          <Button variant="outline" onClick={() => void loadExpenseTypes()}><RefreshCw size={15} /> Refresh</Button>
           <Button disabled={!selected || dirtyCount === 0 || saving} onClick={() => void saveChanges()}>{saving ? <span className="spinner small" /> : <Save size={15} />} Save Changes</Button>
         </div>
       </div>

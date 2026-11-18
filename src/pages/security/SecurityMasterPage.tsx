@@ -1,15 +1,19 @@
-import { Check, ChevronDown, Edit2, Eye, EyeOff, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { CompanyLogoField } from "./CompanyLogoField";
+import { LookupField } from "../../components/ui/LookupField";
+import { loadInboundCountryLookup } from "../../utils/lookupLoaders";
+import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, Edit2, Eye, EyeOff, FileText, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { deleteSecurityMaster, getSecurityMaster, saveSecurityMaster } from "../../api/security";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Input } from "../../components/ui/Input";
-import { NoticeToast } from "../../components/ui/NoticeToast";
-import { Select } from "../../components/ui/Select";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
+import { DynamicMutationParams, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
+
 
 type SecurityField = {
   name: string;
@@ -18,7 +22,7 @@ type SecurityField = {
   requiredOnCreate?: boolean;
   disabledOnAdd?: boolean;
   disabledOnEdit?: boolean;
-  type?: "text" | "number" | "email" | "password" | "select";
+  type?: "text" | "number" | "email" | "password" | "select" | "date" | "year" | "textarea";
   options?: { label: string; value: string }[];
   optionsFromMaster?: string;
   optionValue?: string;
@@ -28,7 +32,24 @@ type SecurityField = {
   editPlaceholder?: string;
   table?: boolean;
   width?: number;
+  maxLength?: number;
+  // ---- optional additions (other masters ignore these) ----
+  section?: string; // groups fields under a heading in the editor
+  fullWidth?: boolean; // spans the whole grid row
+  nullable?: boolean; // number field: empty stays empty (NULL) instead of 0
+  clearOnEdit?: boolean; // blank this field when opening edit (e.g. passwords)
+  param?: string; // procedure slot, e.g. "val1s2" / "val1n1" (Column90 saves)
 };
+
+export type SecurityMutationContext = {
+  fields: SecurityField[];
+  loginId: string;
+  companyCode: string;
+  editMode: boolean;
+};
+export type SecurityMutation = (form: Record<string, unknown>, ctx: SecurityMutationContext) => Promise<unknown>;
+export type SecurityListParams = { page: number; limit: number; search: string; loginId?: string };
+export type SecurityListFn = (params: SecurityListParams) => Promise<{ tableData: Record<string, unknown>[]; count?: number }>;
 
 export type SecurityMasterConfig = {
   title: string;
@@ -44,7 +65,77 @@ export type SecurityMasterConfig = {
   updateEndpoint?: string;
   createMethod?: "post" | "put" | "patch";
   updateMethod?: "post" | "put" | "patch";
+  // ---- optional custom APIs: omit them and the legacy getSecurityMaster/saveSecurityMaster path is used ----
+  getApi?: SecurityListFn;
+  saveApi?: SecurityMutation; // create (also used for update when updateApi is not set)
+  updateApi?: SecurityMutation;
 };
+
+/* ------------------------------------------------------------------ */
+/*  Config helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+const YN = [
+  { label: "Yes", value: "Y" },
+  { label: "No", value: "N" },
+];
+
+const CALC_TYPE = [
+  { label: "Monthly", value: "M" },
+  { label: "Weekly", value: "W" },
+];
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+].map((label, index) => ({ label, value: String(index + 1) })); // shows name, sends month number
+
+const withSection = (section: string, fields: SecurityField[]): SecurityField[] =>
+  fields.map((field) => ({ ...field, section }));
+
+/** Maps form fields -> procedure slots (field.param) for executeDynamicMutationColumn90. */
+function buildColumn90Params(
+  parameter: string,
+  loginid: string,
+  fields: SecurityField[],
+  form: Record<string, unknown>,
+): DynamicMutationParams {
+  const payload: Record<string, unknown> = { parameter, loginid };
+  fields.forEach((field) => {
+    if (!field.param) return;
+    const raw = form[field.name];
+    if (raw === undefined || raw === null || String(raw).trim() === "") return; // omitted -> NULL in proc
+    if (field.param.startsWith("val1n")) payload[field.param] = Number(raw);
+    else if (field.type === "date") payload[field.param] = String(raw).slice(0, 10);
+    else payload[field.param] = String(raw);
+  });
+  return payload as DynamicMutationParams;
+}
+
+const saveCompanyViaProc: SecurityMutation = (form, ctx) =>
+  executeDynamicMutationColumn90(buildColumn90Params("ms_company_ins_upd", ctx.loginId, ctx.fields, form));
+
+/** Company list: calls the dynamic lookup procedure SECURITY_MASTER_COMPANY and returns every column on each row. */
+const getCompanyViaProc: SecurityListFn = async ({ page, limit, search, loginId }) => {
+  const data = (await getDynamicLookup({
+    parameter: "SECURITY_MASTER_COMPANY",
+    loginid: loginId,
+  })) as Record<string, unknown>[];
+
+  // the procedure returns all rows, so search and paging are done here
+  const needle = search.trim().toLowerCase();
+  const filtered = needle
+    ? data.filter((row) => Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(needle)))
+    : data;
+
+  const start = (page - 1) * limit;
+  return { tableData: filtered.slice(start, start + limit), count: filtered.length };
+};
+
+function getLoginId(user: unknown) {
+  const u = (user ?? {}) as Record<string, unknown>;
+  return String(u.loginid ?? u.login_id ?? u.loginId ?? u.username ?? ""); // <- match your AuthContext user shape
+}
 
 export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
   flowMaster: {
@@ -133,19 +224,116 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
   },
   company: {
     title: "Company Master",
-    subtitle: "Maintain tenant company identity and address information.",
+    subtitle: "Maintain tenant company identity, address and HR/payroll settings.",
     master: "sec_company",
     gmEndpoint: "seccompany",
     routeKeys: ["sec_company", "seccompany", "company", "company_master", "company-master", "companymaster", "company master"],
     keyField: "company_code",
+    getApi: getCompanyViaProc, // list: dynamic lookup SECURITY_MASTER_COMPANY
+    saveApi: saveCompanyViaProc, // create
+    updateApi: saveCompanyViaProc, // update (procedure upserts on COMPANY_CODE)
+    defaults: {
+      cola_threshold_val: 500,
+      cola_low_val: 25,
+      cola_high_val: 35,
+      emp_prefix: "0",
+      default_div: "10",
+      payroll_lock: "N",
+      sal_reg_fmt: "V1",
+      jv_pass_mandatory: "N",
+      lve_resume_validate: "Y",
+      multi_currency: "N",
+      lve_days_calc: "Y",
+      ot_format: "V2",
+      current_payroll_run: "N",
+    },
     fields: [
-      { name: "company_code", label: "Company Code", required: true, disabledOnEdit: true, table: true, width: 130 },
-      { name: "company_name", label: "Company Name", table: true, width: 260 },
-      { name: "address1", label: "Address 1", table: true, width: 220 },
-      { name: "address2", label: "Address 2", table: true, width: 220 },
-      { name: "address3", label: "Address 3", table: true, width: 220 },
-      { name: "city", label: "City", table: true, width: 140 },
-      { name: "country", label: "Country", table: true, width: 140 },
+      ...withSection("Company Details", [
+        // the original 7 list columns stay first and keep table: true
+        { name: "company_code", param: "val1s1", maxLength: 7, label: "Company Code", required: true, disabledOnEdit: true, table: true, width: 130 },
+        { name: "company_name", param: "val1s2", maxLength: 30, label: "Company Name", table: true, width: 260 },
+        { name: "address1", param: "val1s3", maxLength: 50, label: "Address 1", table: true, width: 220 },
+        { name: "address2", param: "val1s4", maxLength: 20, label: "Address 2", table: true, width: 220 },
+        { name: "address3", param: "val1s5", maxLength: 20, label: "Address 3", table: true, width: 220 },
+        { name: "city", param: "val1s6", maxLength: 20, label: "City", table: true, width: 140 },
+        { name: "country", param: "val1s7", maxLength: 5, label: "Country", table: true, width: 140 },
+        { name: "comp_short_name", param: "val1s20", maxLength: 10, label: "Short Name", table: false },
+        { name: "contact_number", param: "val1s19", maxLength: 30, label: "Contact Number", table: false },
+        { name: "phone", param: "val1s21", maxLength: 25, label: "Phone", table: false },
+        { name: "fax", param: "val1s22", maxLength: 25, label: "Fax", table: false },
+        { name: "email", param: "val1s23", maxLength: 50, type: "email", label: "Email", table: false },
+        { name: "curr_code", param: "val1s24", maxLength: 3, label: "Currency Code", table: false },
+        { name: "enterprice_code", param: "val1s31", maxLength: 5, label: "Enterprise Code", table: false },
+        { name: "default_div", param: "val1s44", maxLength: 3, label: "Default Division", table: false },
+        { name: "emp_prefix", param: "val1s43", maxLength: 1, label: "Employee Prefix", table: false },
+        { name: "status", param: "val1s30", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }], label: "Status", table: false },
+        { name: "remarks", param: "val1s29", maxLength: 100, label: "Remarks", table: false },
+        { name: "company_logo", param: "val1s17", label: "Company Logo", maxLength: 225, table: false }, // rendered by CompanyLogoField
+        { name: "company_logo_awsurl", param: "val1s18", maxLength: 500, label: "Company Logo AWS URL", table: false },
+      ]),
+      ...withSection("Billing, Licence & Paths", [
+        { name: "bl_section_1", param: "val1s8", type: "textarea", fullWidth: true, maxLength: 4000, label: "BL Section 1", table: false },
+        { name: "bl_section_2", param: "val1s9", type: "textarea", fullWidth: true, maxLength: 4000, label: "BL Section 2", table: false },
+        { name: "stmt_of_accounts", param: "val1s10", type: "textarea", fullWidth: true, maxLength: 500, label: "Statement of Accounts", table: false },
+        { name: "picking_path", param: "val1s12", type: "textarea", fullWidth: true, maxLength: 4000, label: "Picking Path", table: false },
+        { name: "app_license_001", param: "val1s11", maxLength: 30, label: "App Licence", table: false },
+        { name: "wips_file_path", param: "val1s47", maxLength: 500, label: "WIPS File Path", table: false },
+        { name: "emp_document_path", param: "val1s39", maxLength: 200, label: "Employee Document Path", table: false },
+      ]),
+      ...withSection("Mail Settings", [
+        { name: "mail_server", param: "val1s13", maxLength: 250, label: "Mail Server", table: false },
+        { name: "mail_email", param: "val1s14", maxLength: 250, label: "Mail Email", table: false },
+        { name: "mail_pwd", param: "val1s15", maxLength: 50, type: "password", clearOnEdit: true, placeholder: "Enter password", editPlaceholder: "Leave blank to keep current password", label: "Mail Password", table: false },
+        { name: "bill_auth_pwd", param: "val1s16", maxLength: 20, type: "password", clearOnEdit: true, placeholder: "Enter password", editPlaceholder: "Leave blank to keep current password", label: "Bill Auth Password", table: false },
+      ]),
+      ...withSection("Payroll", [
+        { name: "payroll_date", param: "val1s25", type: "date", label: "Payroll Date", table: false },
+        { name: "pay_month", param: "val1n1", type: "select", options: MONTHS, label: "Pay Month", table: false },
+        { name: "pay_year", param: "val1n2", type: "year", label: "Pay Year", table: false },
+        { name: "payroll_status", param: "val1s26", type: "select", options: YN, label: "Payroll Status", table: false },
+        { name: "payroll_calc_type", param: "val1s34", type: "select", options: CALC_TYPE, label: "Payroll Calc Type", table: false },
+        { name: "month_payroll_calc", param: "val1s50", type: "select", options: CALC_TYPE, label: "Month Payroll Calc", table: false },
+        { name: "payroll_day", param: "val1n6", type: "number", nullable: true, label: "Payroll Day", table: false },
+        { name: "payroll_cutoff_date", param: "val1s42", type: "date", label: "Payroll Cutoff Date", table: false },
+        { name: "prev_payroll_month", param: "val1n7", type: "select", options: MONTHS, label: "Prev Payroll Month", table: false },
+        { name: "prev_payroll_year", param: "val1n8", type: "year", label: "Prev Payroll Year", table: false },
+        { name: "prev_payroll_day", param: "val1s63", type: "number", nullable: true, label: "Prev Payroll Day", table: false },
+        { name: "tax_included", param: "val1s27", type: "select", options: YN, label: "Tax Included", table: false },
+        { name: "midmonth_payroll", param: "val1s28", type: "select", options: YN, label: "Mid-month Payroll", table: false },
+        { name: "payroll_lock", param: "val1s48", type: "select", options: YN, label: "Payroll Lock", table: false },
+        { name: "current_payroll_run", param: "val1s61", type: "select", options: YN, label: "Current Payroll Run", table: false },
+        { name: "jv_pass_mandatory", param: "val1s51", type: "select", options: YN, label: "JV Pass Mandatory", table: false },
+        { name: "multi_currency", param: "val1s58", type: "select", options: YN, label: "Multi Currency", table: false },
+        { name: "sal_reg_fmt", param: "val1s49", maxLength: 2, label: "Salary Register Format", table: false },
+        { name: "ot_format", param: "val1s60", maxLength: 2, label: "OT Format", table: false },
+        { name: "employer_cr_no", param: "val1s45", maxLength: 20, label: "Employer CR No", table: false },
+        { name: "pay_cr_no", param: "val1s46", maxLength: 20, label: "Pay CR No", table: false },
+        { name: "cola_threshold_val", param: "val1n9", type: "number", nullable: true, label: "COLA Threshold", table: false },
+        { name: "cola_low_val", param: "val1n10", type: "number", nullable: true, label: "COLA Low", table: false },
+        { name: "cola_high_val", param: "val1s62", type: "number", nullable: true, label: "COLA High", table: false },
+      ]),
+      ...withSection("Working Time, Leave & Financial Year", [
+        { name: "normal_working_hrs", param: "val1n4", type: "number", nullable: true, label: "Normal Working Hours", table: false },
+        { name: "probation_period", param: "val1n3", type: "number", nullable: true, label: "Probation Period", table: false },
+        { name: "lieu_days_extra_hours", param: "val1n5", type: "number", nullable: true, label: "Lieu Days Extra Hours", table: false },
+        { name: "day_off1", param: "val1s32", maxLength: 1, label: "Day Off 1", table: false },
+        { name: "day_off2", param: "val1s33", maxLength: 1, label: "Day Off 2", table: false },
+        { name: "day_off1_half_day", param: "val1s35", type: "select", options: YN, label: "Day Off 1 Half Day", table: false },
+        { name: "day_off2_half_day", param: "val1s36", type: "select", options: YN, label: "Day Off 2 Half Day", table: false },
+        { name: "lve_resume_validate", param: "val1s52", type: "select", options: YN, label: "Leave Resume Validate", table: false },
+        { name: "lve_days_calc", param: "val1s59", type: "select", options: YN, label: "Leave Days Calc", table: false },
+        { name: "fin_year_start", param: "val1s37", type: "date", label: "Financial Year Start", table: false },
+        { name: "fin_year_end", param: "val1s38", type: "date", label: "Financial Year End", table: false },
+        { name: "annvy_leave_dt", param: "val1s41", type: "date", label: "Anniversary Leave Date", table: false },
+      ]),
+      ...withSection("HR Payroll E-mail", [
+        { name: "hr_payroll_email", param: "val1s40", maxLength: 50, label: "HR Payroll Email", table: false },
+        { name: "hr_payroll_email_pwd", param: "val1s53", maxLength: 15, type: "password", clearOnEdit: true, placeholder: "Enter password", editPlaceholder: "Leave blank to keep current password", label: "HR Payroll Email Password", table: false },
+        { name: "hr_payroll_email_subject", param: "val1s54", maxLength: 50, label: "Email Subject", table: false },
+        { name: "hr_payroll_email_mesg", param: "val1s55", maxLength: 50, label: "Email Message", table: false },
+        { name: "hr_payroll_email_filepath", param: "val1s56", maxLength: 250, label: "Email File Path", table: false },
+        { name: "hr_payroll_email_cc", param: "val1s57", maxLength: 155, label: "Email CC", table: false },
+      ]),
     ],
     deleteEnabled: true,
   },
@@ -278,6 +466,15 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
   },
 };
 
+const inputClass =
+  "h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500";
+
+const textareaClass = inputClass.replace("h-7", "min-h-[72px] py-1");
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
 export function SecurityMasterPage({ config }: { config: SecurityMasterConfig }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
@@ -287,6 +484,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
@@ -297,6 +495,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [activeSection, setActiveSection] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const tableFields = config.fields.filter((field) => field.table !== false);
@@ -307,7 +506,12 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     : null;
 
   const makeEmpty = () => ({
-    ...Object.fromEntries(config.fields.map((field) => [field.name, field.disabledOnAdd ? "" : field.type === "number" ? 0 : ""])),
+    ...Object.fromEntries(
+      config.fields.map((field) => [
+        field.name,
+        field.disabledOnAdd ? "" : field.type === "number" ? (field.nullable ? "" : 0) : "",
+      ]),
+    ),
     ...config.defaults,
     company_code: user?.company_code || "",
   });
@@ -316,10 +520,13 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const response = await getSecurityMaster(config.master, {
+      // optional custom GET; otherwise the legacy getSecurityMaster call
+      const fetchRows: SecurityListFn = config.getApi ?? ((params) => getSecurityMaster(config.master, params));
+      const response = await fetchRows({
         page: hasSearch ? 1 : nextPageIndex + 1,
         limit: hasSearch ? 100000 : nextPageSize,
         search: query.trim(),
+        loginId: getLoginId(user),
       });
       setRows(response.tableData.map(normalizeRow));
       setTotalRows(response.count || response.tableData.length);
@@ -385,23 +592,49 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
-      ...tableFields.map((field) => ({
+      ...tableFields.map((field, index) => ({
         accessorKey: field.name,
         header: field.label,
         size: field.width || 160,
-        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
+        cell: ({ row }: { row: { original: Record<string, unknown> } }) =>
+          index === 0 ? (
+            <button
+              type="button"
+              onClick={() => openEdit(row.original)}
+              className="font-semibold text-[#00378C] hover:underline cursor-pointer text-left bg-transparent border-none p-0"
+              title="Click to edit"
+            >
+              {formatValue(row.original[field.name])}
+            </button>
+          ) : (
+            formatValue(row.original[field.name])
+          ),
       })),
       {
         id: "actions",
-        header: "Actions",
+        header: () => <div className="text-center">Actions</div>,
         size: 90,
+        enableSorting: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title={`Edit ${config.title}`}>
-              <Edit2 size={14} />
+          <div className="flex items-center justify-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
+              onClick={() => openEdit(row.original)}
+              title="Edit"
+            >
+              <Edit2 size={15} />
             </Button>
-            <Button size="icon" variant="ghost" disabled={!config.deleteEnabled} onClick={() => setDeleteTarget(row.original)} title={`Delete ${config.title}`}>
-              <Trash2 size={14} />
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
+              disabled={!config.deleteEnabled}
+              onClick={() => setDeleteTarget(row.original)}
+              title="Delete"
+            >
+              <Trash2 size={15} />
             </Button>
           </div>
         ),
@@ -412,6 +645,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
 
   const openAdd = () => {
     setEditMode(false);
+    setActiveSection(0);
     setShowPassword(false);
     setOpenOptionField(null);
     setSelectSearch({});
@@ -422,18 +656,29 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
 
   const openEdit = (row: Record<string, unknown>) => {
     setEditMode(true);
+    setActiveSection(0);
     setShowPassword(false);
     setOpenOptionField(null);
     setSelectSearch({});
-    setForm({ ...makeEmpty(), ...normalizeRow(row), ...(config.gmEndpoint === "secmaster" ? { userpass: "" } : {}) });
+    setForm({
+      ...makeEmpty(),
+      ...normalizeRow(row),
+      ...(config.gmEndpoint === "secmaster" ? { userpass: "" } : {}),
+      // only fields that opt in (e.g. company passwords) are blanked on edit
+      ...Object.fromEntries(config.fields.filter((field) => field.clearOnEdit).map((field) => [field.name, ""])),
+    });
     setFormOpen(true);
     setNotice(null);
   };
 
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
+    if (logoUploading) return;
     const missing = config.fields.find((field) => isRequiredField(field, editMode) && !String(form[field.name] ?? "").trim());
     if (missing) {
+      const sectionTitles = Array.from(new Set(config.fields.filter((f) => f.name !== "company_logo").map((f) => f.section)));
+      const tabIndex = sectionTitles.indexOf(missing.section);
+      if (tabIndex >= 0) setActiveSection(tabIndex);
       setNotice({ type: "error", message: `${missing.label} is required` });
       return;
     }
@@ -448,9 +693,21 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     setSaving(true);
     setNotice(null);
     try {
-      const endpoint = editMode ? config.updateEndpoint || config.gmEndpoint : config.createEndpoint || config.gmEndpoint;
-      const method = editMode ? config.updateMethod || "put" : config.createMethod || "post";
-      await saveSecurityMaster(endpoint, buildSecurityPayload(config, form, user?.company_code), method as "post" | "put");
+      const ctx: SecurityMutationContext = {
+        fields: config.fields,
+        loginId: getLoginId(user),
+        companyCode: user?.company_code || "",
+        editMode,
+      };
+      // optional custom save/update; otherwise the legacy saveSecurityMaster call
+      const customSave = editMode ? config.updateApi ?? config.saveApi : config.saveApi;
+      if (customSave) {
+        await customSave(form, ctx);
+      } else {
+        const endpoint = editMode ? config.updateEndpoint || config.gmEndpoint : config.createEndpoint || config.gmEndpoint;
+        const method = editMode ? config.updateMethod || "put" : config.createMethod || "post";
+        await saveSecurityMaster(endpoint, buildSecurityPayload(config, form, user?.company_code), method as "post" | "put");
+      }
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
       await loadRows(pageIndex, pageSize, false);
@@ -505,139 +762,337 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     }
   };
 
+  const pageTitle = formOpen ? (editMode ? `Edit ${config.title}` : `New ${config.title}`) : config.title;
+
+  // ---- editor layout: group fields by optional `section` (no sections => one untitled group, as before) ----
+  const formFields = config.fields.filter((field) => field.name !== "company_logo");
+  const formSections = formFields.reduce<{ title?: string; fields: SecurityField[] }[]>((groups, field) => {
+    const last = groups[groups.length - 1];
+    if (last && last.title === field.section) last.fields.push(field);
+    else groups.push({ title: field.section, fields: [field] });
+    return groups;
+  }, []);
+  const hasTabs = formSections.length > 1 && formSections.every((section) => Boolean(section.title));
+  const currentSection = Math.min(activeSection, Math.max(formSections.length - 1, 0));
+  const gridClass =
+    config.master === "sec_company"
+      ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3"
+      : "grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2.5";
+
+  const renderField = (field: SecurityField) => (
+    <Field
+      label={field.label}
+      required={isRequiredField(field, editMode)}
+      key={field.name}
+      className={field.fullWidth ? "col-span-full" : undefined}
+    >
+      {config.master === "sec_company" && field.name === "country" ? (
+        <LookupField
+          compact
+          value={String(form.country || "")}
+          valueField="country_code"
+          displayFields={["country_code", "country_name"]}
+          columns={[{ field: "country_code", header: "Code" }, { field: "country_name", header: "Country" }]}
+          loadOptions={loadInboundCountryLookup}
+          onChange={(value) => updateFormField(field, value)}
+          disabled={saving || logoUploading}
+        />
+      ) : (
+        renderInput(
+          field,
+          form[field.name],
+          Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (isModuleData && field.name === "url_path")),
+          editMode,
+          showPassword,
+          getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
+          getSelectOptions(field, masterOptionRows, form[field.name]),
+          selectSearch[field.name] || "",
+          openOptionField === field.name,
+          (open) => {
+            setOpenOptionField(open ? field.name : null);
+            if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
+          },
+          (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
+          () => setShowPassword((current) => !current),
+          (value) => updateFormField(field, value),
+        )
+      )}
+    </Field>
+  );
+
   return (
-    <section className="security-page grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">{config.title}</h1>
+    <section className="grid gap-2 p-1">
+      {/* ---------- Top Header (compact) ---------- */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
+            <FileText size={14} />
+          </div>
+          <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">
+            {pageTitle}
+          </h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={`Add ${config.title}`} onClick={openAdd}>
-            <Plus size={15} /> Add
-          </Button>
-        </div>
+
+        {formOpen && (
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="submit"
+              form="security-master-form"
+              disabled={saving || logoUploading}
+              className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
+            >
+              <Save size={13} /> {saving ? "Saving..." : "Save"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setFormOpen(false)}
+              disabled={saving || logoUploading}
+              aria-label="Close"
+              title="Close"
+              className="h-7 w-7 rounded-md"
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        )}
       </div>
 
-      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
-        subtitle={`${config.title} List`}
-        searchValue={query}
-        onSearchChange={(value) => {
-          setQuery(value);
-          setPageIndex(0);
-        }}
-        searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
-        loading={loading}
-        emptyText={`No ${config.title.toLowerCase()} records found`}
-        height={620}
-        minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
-        density="grid"
-        enablePagination
-        manualPagination={!hasSearch}
-        manualFiltering={false}
-        pageIndex={pageIndex}
-        pageSize={pageSize}
-        totalRows={totalRows}
-        columnFilters={columnFilters}
-        onColumnFiltersChange={(filters) => {
-          setColumnFilters(filters);
-          setPageIndex(0);
-        }}
-        onPageChange={setPageIndex}
-        onPageSizeChange={(nextPageSize) => {
-          setPageSize(nextPageSize);
-          setPageIndex(0);
-        }}
-        getRowId={(row, index) => `${String(row[config.keyField] ?? row[config.keyField.toLowerCase()] ?? config.master)}_${index}`}
-      />
-
-      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} wide onClose={() => setFormOpen(false)}>
-        <form className="grid gap-4" onSubmit={saveRecord}>
-          <Card>
-            <CardHeader className="border-b bg-muted/30">
-              <div>
-                <p className="eyebrow">Details</p>
-                <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
+      {/* ---------- EDITOR ---------- */}
+      {formOpen && (
+        <form id="security-master-form" className="flex flex-col gap-2" onSubmit={saveRecord}>
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            {/* Section Header – very compact */}
+            <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 rounded-t-lg">
+              <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
+                <FileText size={12} />
               </div>
-            </CardHeader>
-            <CardContent className="grid gap-3 pt-4 md:grid-cols-2 xl:grid-cols-3">
-              {config.fields.map((field) => (
-                <Field label={field.label} required={isRequiredField(field, editMode)} key={field.name}>
-                  {renderInput(
-                    field,
-                    form[field.name],
-                    Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (isModuleData && field.name === "url_path")),
-                    editMode,
-                    showPassword,
-                    getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
-                    getSelectOptions(field, masterOptionRows, form[field.name]),
-                    selectSearch[field.name] || "",
-                    openOptionField === field.name,
-                    (open) => {
-                      setOpenOptionField(open ? field.name : null);
-                      if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
-                    },
-                    (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
-                    () => setShowPassword((current) => !current),
-                    (value) => updateFormField(field, value),
+              <h3 className="m-0 text-xs font-semibold text-slate-800">{config.title} Details</h3>
+            </div>
+
+            <div className="p-3">
+              {hasTabs && (
+                <div className="mb-3 flex flex-wrap gap-1 border-b border-slate-200" role="tablist">
+                  {formSections.map((section, index) => (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={index === currentSection}
+                      key={section.title ?? index}
+                      onClick={() => setActiveSection(index)}
+                      className={`-mb-px rounded-t-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        index === currentSection
+                          ? "border-slate-200 border-b-white bg-white text-[#00378C]"
+                          : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                      }`}
+                    >
+                      {section.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(hasTabs ? [formSections[currentSection]] : formSections).map((section, index) => (
+                <div key={section.title ?? index}>
+                  <div className={gridClass}>{section.fields.map(renderField)}</div>
+                  {config.master === "sec_company" && currentSection === 0 && (
+                    <CompanyLogoField value={String(form.company_logo || "")} disabled={saving} busy={logoUploading} onBusy={setLogoUploading} onChange={(url) => setForm((current) => ({ ...current, company_logo: url }))} onError={(message) => setNotice({ type: "error", message })} />
                   )}
-                </Field>
+                </div>
               ))}
               {positionImpact ? (
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground md:col-span-2 xl:col-span-3">
-                  <strong className="text-foreground">Position preview:</strong>{" "}
+                <div className="mt-2.5 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 py-1.5 text-xs text-slate-600 text-left">
+                  <strong className="text-slate-900">Position preview:</strong>{" "}
                   {positionImpact.summary}
                 </div>
               ) : null}
-            </CardContent>
-          </Card>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-              <X size={15} /> Cancel
-            </Button>
-            <Button disabled={saving} type="submit">
-              <Save size={15} /> {saving ? "Saving..." : "Save"}
-            </Button>
+            </div>
           </div>
         </form>
-      </Dialog>
+      )}
 
+      {/* ---------- LIST ---------- */}
+      {!formOpen && (
+        <DataTable
+          columns={columns}
+          data={rows}
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
+          searchValue={query}
+          onSearchChange={(value) => {
+            setQuery(value);
+            setPageIndex(0);
+          }}
+          searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
+          loading={loading}
+          emptyText={`No ${config.title.toLowerCase()} records found`}
+          height="calc(100dvh - 150px)"
+          minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
+          density="grid"
+          enablePagination
+          enableExport={false}
+          manualPagination={!hasSearch}
+          manualFiltering={false}
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters) => {
+            setColumnFilters(filters);
+            setPageIndex(0);
+          }}
+          onPageChange={setPageIndex}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPageIndex(0);
+          }}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={openAdd}
+                disabled={saving || logoUploading}
+                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
+              >
+                <Plus size={14} strokeWidth={2.5} /> Add
+              </Button>
+              <FinanceListActionsMenu
+                fyPeriod=""
+                fyPeriods={[]}
+                onFyPeriodChange={() => {}}
+                onExport={() =>
+                  exportToCsv(
+                    rows,
+                    columns,
+                    `${config.master}-${new Date().toISOString().slice(0, 10)}.csv`,
+                  )
+                }
+                onRefresh={() => void loadRows()}
+              />
+            </div>
+          }
+          getRowId={(row, index) => `${String(row[config.keyField] ?? row[config.keyField.toLowerCase()] ?? config.master)}_${index}`}
+        />
+      )}
+
+      {/* ---------- DELETE CONFIRM ---------- */}
       <Dialog
         open={Boolean(deleteTarget)}
         title={`Delete ${config.title}`}
-        description={deleteTarget ? `Delete ${formatValue(deleteTarget[config.keyField])}?` : undefined}
+        description="This action cannot be undone."
         compact
         tone="danger"
         onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button disabled={saving} variant="destructive" onClick={confirmDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Close</Button>
+            <Button disabled={saving || logoUploading} variant="destructive" onClick={confirmDelete}>Delete</Button>
           </>
         }
       >
-        <p className="m-0 text-sm text-muted-foreground">This action uses the existing Bayanat Security backend endpoint.</p>
+        <p className="m-0 text-sm text-muted-foreground">
+          Delete <strong>{deleteTarget ? formatValue(deleteTarget[config.keyField]) : ""}</strong>?
+        </p>
       </Dialog>
     </section>
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+/* ------------------------------------------------------------------ */
+/*  Form Field – ultra compact                                         */
+/* ------------------------------------------------------------------ */
+
+function Field({ label, required, children, className }: { label: string; required?: boolean; children: ReactNode; className?: string }) {
   return (
-    <label className="field">
-      <span>
+    <div className={`flex flex-col ${className ?? ""}`}>
+      <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
         {label}
-        {required && <strong className="text-destructive"> *</strong>}
-      </span>
+        {required && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
       {children}
-    </label>
+    </div>
+  );
+}
+
+/** Year-only picker: date-style input that opens a year grid (12 years per page, no fixed range). */
+function YearPicker({ value, disabled, placeholder, onChange }: { value: unknown; disabled: boolean; placeholder?: string; onChange: (value: unknown) => void }) {
+  const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selected = Number(String(value ?? "").match(/\d{4}/)?.[0]) || undefined;
+  const base = selected ?? new Date().getFullYear();
+  const start = base - (base % 12) + page * 12;
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <input
+        readOnly
+        disabled={disabled}
+        value={selected ? String(selected) : ""}
+        placeholder={placeholder || "Select year"}
+        className={`${inputClass} cursor-pointer pr-8`}
+        onClick={() => {
+          setPage(0);
+          setOpen((current) => !current);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+        }}
+      />
+      <Calendar size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
+      {open && !disabled && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-[140] w-56 rounded-lg border border-slate-200 bg-white p-2 text-sm shadow-xl">
+          <div className="mb-1.5 flex items-center justify-between">
+            <button type="button" className="grid h-6 w-6 place-items-center rounded hover:bg-slate-100" onClick={() => setPage((current) => current - 1)} aria-label="Previous years">
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-semibold text-slate-700">{start} - {start + 11}</span>
+            <button type="button" className="grid h-6 w-6 place-items-center rounded hover:bg-slate-100" onClick={() => setPage((current) => current + 1)} aria-label="Next years">
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {Array.from({ length: 12 }, (_, index) => start + index).map((year) => (
+              <button
+                type="button"
+                key={year}
+                className={`h-7 rounded-md text-xs font-medium ${
+                  year === selected ? "bg-[#00378C] text-white" : "text-slate-800 hover:bg-[#eff6ff] hover:text-[#00378C]"
+                }`}
+                onClick={() => {
+                  onChange(String(year));
+                  setOpen(false);
+                }}
+              >
+                {year}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1.5 flex justify-end border-t border-slate-100 pt-1.5">
+            <button
+              type="button"
+              className="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -667,12 +1122,13 @@ function renderInput(
       .slice(0, 12);
     return (
       <div className="relative">
-        <Input
+        <input
           disabled={disabled}
+          maxLength={field.maxLength}
           type={field.type === "number" ? "number" : "text"}
           value={disabled && !value ? "" : String(value ?? "")}
           placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}
-          className="pr-9"
+          className={`${inputClass} pr-8`}
           onFocus={() => onOptionsOpenChange(true)}
           onChange={(event) => {
             onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value);
@@ -685,15 +1141,15 @@ function renderInput(
         <button
           type="button"
           disabled={disabled}
-          className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none"
+          className="absolute right-1 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none"
           onClick={() => onOptionsOpenChange(!optionsOpen)}
           aria-label={`Show ${field.label} options`}
         >
-          <span className="text-[10px]">▼</span>
+          <span className="text-[9px]">▼</span>
         </button>
         {optionsOpen && !disabled && (
           <div
-            className="absolute left-0 right-0 top-[calc(100%+6px)] z-[90] overflow-hidden rounded-md border bg-popover text-sm shadow-xl"
+            className="absolute left-0 right-0 top-[calc(100%+4px)] z-[90] overflow-hidden rounded-md border border-slate-200 bg-white text-sm shadow-xl"
             onMouseDown={(event) => event.preventDefault()}
           >
             <div className="max-h-56 overflow-auto p-1">
@@ -701,7 +1157,7 @@ function renderInput(
                 visibleOptions.map((option) => (
                   <button
                     type="button"
-                    className="flex w-full items-center rounded px-3 py-2 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                    className="flex w-full items-center rounded px-2.5 py-1.5 text-left text-sm font-medium hover:bg-[#eff6ff] hover:text-[#00378C]"
                     onClick={() => {
                       onChange(field.type === "number" ? Number(option || 0) : option);
                       onOptionsOpenChange(false);
@@ -712,13 +1168,16 @@ function renderInput(
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-3 text-xs text-muted-foreground">No matching options</div>
+                <div className="px-3 py-2 text-xs text-slate-500">No matching options</div>
               )}
             </div>
           </div>
         )}
       </div>
     );
+  }
+  if (field.type === "year") {
+    return <YearPicker value={value} disabled={disabled} placeholder={field.placeholder} onChange={onChange} />;
   }
   if (field.type === "select") {
     const options = selectOptions.length ? selectOptions : field.options || [];
@@ -738,7 +1197,7 @@ function renderInput(
           <button
             type="button"
             disabled={disabled}
-            className="ui-select flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1 text-left text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-7 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-900 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
             onClick={() => onOptionsOpenChange(!optionsOpen)}
             onKeyDown={(event) => {
               if (event.key === "Escape") onOptionsOpenChange(false);
@@ -746,21 +1205,21 @@ function renderInput(
             aria-haspopup="listbox"
             aria-expanded={optionsOpen}
           >
-            <span className={selectedOption ? "min-w-0 truncate" : "min-w-0 truncate text-muted-foreground"}>
+            <span className={selectedOption ? "min-w-0 truncate" : "min-w-0 truncate text-slate-400"}>
               {selectedOption?.label || `Select ${field.label}`}
             </span>
-            <ChevronDown size={15} className="shrink-0 text-muted-foreground" />
+            <ChevronDown size={14} className="shrink-0 text-slate-500" />
           </button>
           {optionsOpen && !disabled && (
             <div
-              className="absolute left-0 top-[calc(100%+6px)] z-[140] w-full min-w-[260px] overflow-hidden rounded-lg border border-border bg-popover text-sm shadow-xl"
+              className="absolute left-0 top-[calc(100%+4px)] z-[140] w-full min-w-[260px] overflow-hidden rounded-lg border border-slate-200 bg-white text-sm shadow-xl"
               onMouseDown={(event) => event.preventDefault()}
             >
-              <div className="border-b bg-background p-2">
+              <div className="border-b border-slate-100 bg-white p-1.5">
                 <div className="relative">
-                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
-                    className="h-8 w-full rounded-md border border-input bg-background py-1 pl-8 pr-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    className="h-7 w-full rounded-md border border-slate-200 bg-white py-1 pl-7 pr-2 text-sm outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/30"
                     placeholder={`Search ${field.label.toLowerCase()}...`}
                     value={selectSearch}
                     autoFocus
@@ -778,7 +1237,7 @@ function renderInput(
                     return (
                       <button
                         type="button"
-                        className="flex h-8 w-full items-center justify-between gap-2 rounded-md px-3 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                        className="flex h-7 w-full items-center justify-between gap-2 rounded-md px-2.5 text-left text-sm font-medium hover:bg-[#eff6ff] hover:text-[#00378C]"
                         onClick={() => {
                           onChange(option.value);
                           onSelectSearchChange("");
@@ -789,12 +1248,12 @@ function renderInput(
                         aria-selected={selected}
                       >
                         <span className="min-w-0 truncate">{option.label}</span>
-                        {selected && <Check size={14} className="shrink-0 text-primary" />}
+                        {selected && <Check size={14} className="shrink-0 text-[#00378C]" />}
                       </button>
                     );
                   })
                 ) : (
-                  <div className="px-3 py-3 text-xs text-muted-foreground">No matching options</div>
+                  <div className="px-3 py-2 text-xs text-slate-500">No matching options</div>
                 )}
               </div>
             </div>
@@ -802,48 +1261,84 @@ function renderInput(
         </div>
       );
     }
+    const rawValue = String(value ?? "").trim();
+    const matched = options.find((option) => option.value.toLowerCase() === rawValue.toLowerCase());
+    const selectValue = matched ? matched.value : rawValue;
+    // a stored code that is not in the list is still shown (never silently lost)
+    const finalOptions = rawValue && !matched ? [...options, { label: rawValue, value: rawValue }] : options;
     return (
-      <Select disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}>
+      <select
+        disabled={disabled}
+        value={selectValue}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputClass}
+      >
         <option value="">Select {field.label}</option>
-        {options.map((option) => (
+        {finalOptions.map((option) => (
           <option value={option.value} key={option.value}>{option.label}</option>
         ))}
-      </Select>
+      </select>
     );
   }
   if (field.type === "password") {
     return (
       <div className="relative">
-        <Input
+        <input
           disabled={disabled}
+          maxLength={field.maxLength}
           type={showPassword ? "text" : "password"}
           value={String(value ?? "")}
           placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}
-          className="pr-10"
+          className={`${inputClass} pr-9`}
           onChange={(event) => onChange(event.target.value)}
         />
         <button
           type="button"
-          className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="absolute right-1 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900"
           onClick={onTogglePassword}
           aria-label={showPassword ? "Hide password" : "Show password"}
           title={showPassword ? "Hide password" : "Show password"}
         >
-          {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+          {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
       </div>
     );
   }
+  if (field.type === "textarea") {
+    return (
+      <textarea
+        disabled={disabled}
+        rows={3}
+        maxLength={field.maxLength}
+        value={String(value ?? "")}
+        placeholder={field.placeholder}
+        className={textareaClass}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  }
   return (
-    <Input
+    <input
       disabled={disabled}
-      type={field.type === "number" ? "number" : field.type === "email" ? "email" : "text"}
-      value={disabled && !value ? "" : String(value ?? "")}
+      maxLength={field.maxLength}
+      type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "date" ? "date" : "text"}
+      value={field.type === "date" ? String(value ?? "").slice(0, 10) : disabled && !value ? "" : String(value ?? "")}
       placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}
-      onChange={(event) => onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value)}
+      className={inputClass}
+      onChange={(event) =>
+        onChange(
+          field.type === "number"
+            ? field.nullable && event.target.value === "" ? "" : Number(event.target.value || 0)
+            : event.target.value,
+        )
+      }
     />
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Helpers (unchanged)                                                */
+/* ------------------------------------------------------------------ */
 
 function getFieldOptions(fieldName: string, form: Record<string, unknown>, rows: Record<string, unknown>[], isModuleData: boolean) {
   if (!isModuleData) return [];

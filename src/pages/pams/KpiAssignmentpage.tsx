@@ -9,13 +9,10 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import type { LookupRow } from "../../api/lookups";
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
 
 type Row = Record<string, unknown>;
-
 type ItemType = "KPI" | "CHARACTERISTICS" | "SKILL" | "GOAL";
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function text(value: unknown): string {
   if (value === null || value === undefined) return "";

@@ -1,16 +1,14 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Edit2, Eye, FileText, Plus, Save, Trash2, X, ArrowLeft, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookupaccount } from "../../api/lookups";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { useAuth } from "../../state/AuthContext";
 import { AddProductCategoryForm } from "./PS_AddProductCategory";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-// Field set matches the OLD dw_erp_prodcat DataWindow exactly — no invented
-// columns, since the old grid only ever exposed code + name.
 type ProductCategoryRow = {
   prodcat_code: string;
   prodcat_name: string;
@@ -23,10 +21,8 @@ type PopupState = {
   data: Partial<ProductCategoryRow>;
 };
 
-// ─── Lookup / delete params — VERIFY against the actual DB proc names ──────
-// Placeholder parameter names below — swap for the real
-// PROC_BUILD_DYNAMIC_LOOKUP / PROC_BUILD_DYNAMIC_DELETE entries for
-// MSE_PRODCAT if these differ.
+type Notice = { type: "success" | "error"; message: string } | null;
+
 const baseParams = (loginid: string, companyCode: string) => ({
   parameter: "PURCHASE_SALE_MSE_PRODCATEGORY",
   loginid,
@@ -44,13 +40,7 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
-// ─── Normalizer ─────────────────────────────────────────────────────────────
-// The API actually returns { category_code, category_name } (confirmed via
-// Network tab response), NOT prodcat_code / prodcat_name / PRODCAT_CODE /
-// PRODCAT_NAME. Every consumer downstream (columns, form, delete, getRowId)
-// expects prodcat_code / prodcat_name, so we map field names once here at the
-// fetch boundary instead of touching every consumer. This is the fix for the
-// grid rendering fully blank while the network response clearly has data.
+// API returns category_code / category_name; map once here.
 const normalizeRow = (r: any): ProductCategoryRow => ({
   ...r,
   prodcat_code: r.prodcat_code ?? r.PRODCAT_CODE ?? r.category_code ?? r.CATEGORY_CODE ?? "",
@@ -63,45 +53,56 @@ export function ProductCategoryPage() {
   const companyCode = user?.company_code ?? "";
 
   const [rows, setRows] = useState<ProductCategoryRow[]>([]);
+  const [query, setQuery] = useState("");
+  
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(
-    null,
-  );
+  const [notice, setNotice] = useState<Notice>(null);
   const [popup, setPopup] = useState<PopupState>({ open: false, mode: "add", data: {} });
   const [deleteTarget, setDeleteTarget] = useState<ProductCategoryRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [formSaving, setFormSaving] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
 
-  // ─── FETCH: Main grid data ──────────────────────────────────────────────
-  const loadRows = useCallback(async () => {
-    if (!companyCode) return;
-    setLoading(true);
-    setNotice(null);
-    try {
-      const data = await getDynamicLookupaccount(baseParams(loginid, companyCode));
-      const list = Array.isArray(data) ? data : [];
-      setRows(list.map(normalizeRow));
-    } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load product category records",
-      });
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [loginid, companyCode]);
+  const loadRows = useCallback(
+    async (clearNotice = true) => {
+      if (!companyCode) return;
+      setLoading(true);
+      if (clearNotice) setNotice(null);
+      try {
+        const data = await getDynamicLookupaccount(baseParams(loginid, companyCode));
+        const list = Array.isArray(data) ? data : [];
+        setRows(list.map(normalizeRow));
+      } catch (error) {
+        setNotice({
+          type: "error",
+          message: error instanceof Error ? error.message : "Unable to load product category records",
+        });
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loginid, companyCode],
+  );
 
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
-  // ─── DELETE ─────────────────────────────────────────────────────────────
+  // Local filtering logic based on search query
+  const filteredRows = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) =>
+      Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term))
+    );
+  }, [query, rows]);
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const prodcatCode = deleteTarget.prodcat_code ?? (deleteTarget as any).PRODCAT_CODE ?? "";
+    const prodcatCode = deleteTarget.prodcat_code ?? "";
 
     if (!prodcatCode) {
-      console.error("Missing prodcat_code for delete:", deleteTarget);
       setDeleteTarget(null);
       return;
     }
@@ -117,7 +118,7 @@ export function ProductCategoryPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: `Product category ${prodcatCode} deleted successfully.` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({
         type: "error",
@@ -128,41 +129,44 @@ export function ProductCategoryPage() {
     }
   };
 
-  // ─── COLUMNS — same columns as the old page (Prod Category Code, Prod Category Name) ──
   const columns = useMemo<ColumnDef<ProductCategoryRow>[]>(
     () => [
       { accessorKey: "prodcat_code", header: "Prod Category Code", size: 160 },
       { accessorKey: "prodcat_name", header: "Prod Category Name", size: 260 },
       {
         id: "actions",
-        header: "Actions",
+        header: () => <div className="text-center">Actions</div>,
         size: 120,
         enableColumnFilter: false,
+        enableSorting: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-center gap-1">
             <Button
               size="icon"
               variant="ghost"
               title="Edit"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
               onClick={() => setPopup({ open: true, mode: "edit", data: row.original })}
             >
-              <Edit2 size={14} />
+              <Edit2 size={15} />
             </Button>
             <Button
               size="icon"
               variant="ghost"
               title="View"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
               onClick={() => setPopup({ open: true, mode: "view", data: row.original })}
             >
-              <Eye size={14} />
+              <Eye size={15} />
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              title="Delete"
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              title="Delete" 
+              className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
               onClick={() => setDeleteTarget(row.original)}
             >
-              <Trash2 size={14} />
+              <Trash2 size={15} />
             </Button>
           </div>
         ),
@@ -171,72 +175,144 @@ export function ProductCategoryPage() {
     [],
   );
 
-  return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Product Category</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Manage product category master records.
-          </p>
+  const formOpen = popup.open;
+  const readonly = popup.mode === "view";
+  const closeForm = () => setPopup((p) => ({ ...p, open: false }));
+
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Full-page, Freight-style header (with Save button)
+     ───────────────────────────────────────────────────────── */
+  if (formOpen) {
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* WMS-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                  {popup.mode === "add" ? "New Product Category" : popup.mode === "edit" ? "Edit Product Category" : "View Product Category"}
+                </h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {popup.mode === "view" ? "Viewing" : popup.mode === "edit" ? "Editing" : "Draft"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-[#00378C]">
+                  Product Category Code:
+                  <strong className="font-semibold">
+                    {popup.mode === "add" ? "Auto-generated" : String(popup.data.prodcat_code ?? "")}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* WMS-style actions */}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {!readonly && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setResetKey((k) => k + 1)}
+                disabled={formSaving}
+                title="Reset form"
+              >
+                <RotateCcw size={14} /> Reset
+              </Button>
+            )}
+            <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={formSaving}>
+              <ArrowLeft size={14} /> List
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={formSaving}>
+              <X size={14} /> Close
+            </Button>
+            {!readonly && (
+              <Button type="submit" form="product-category-form" size="sm" disabled={formSaving}>
+                <Save size={14} /> {formSaving ? "Saving" : popup.mode === "edit" ? "Update" : "Save"}
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
-          <Button onClick={() => setPopup({ open: true, mode: "add", data: {} })}>
-            <Plus size={15} /> Create Product Category
-          </Button>
+
+        {/* Form content wrapped in Freight tabs shell */}
+        <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
+          <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
+            <div className="p-3 grid gap-3">
+              <AddProductCategoryForm
+                key={`${popup.mode}-${popup.data.prodcat_code ?? "new"}-${resetKey}`}
+                mode={popup.mode}
+                existingData={popup.data}
+                onSavingChange={setFormSaving}
+                onClose={(shouldRefetch?: boolean) => {
+                  const wasEdit = popup.mode === "edit";
+                  closeForm();
+                  if (shouldRefetch) {
+                    setNotice({ type: "success", message: wasEdit ? "Successfully updated" : "Successfully created" });
+                    void loadRows(false);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — Freight style (buttons inside DataTable toolbar)
+     ───────────────────────────────────────────────────────── */
+  return (
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Page title only — buttons live inside the DataTable toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Product Category
+          </h2>
         </div>
       </div>
 
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
-      )}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <DataTable
         columns={columns}
-        data={rows}
+        data={filteredRows}
         title={`${rows.length.toLocaleString()} Records`}
         subtitle="Product Category List"
+        searchValue={query}
+        onSearchChange={(value) => setQuery(value)}
         searchPlaceholder="Search code, name..."
         loading={loading}
-        height={560}
+        height="calc(100dvh - 150px)"
         minWidth={700}
         density="grid"
         enablePagination
         pageSize={100}
-        getRowId={(row) => {
-          const prodcatCode = row.prodcat_code ?? (row as any).PRODCAT_CODE ?? "";
-          return String(prodcatCode);
-        }}
+        getRowId={(row) => String(row.prodcat_code ?? "")}
+        enableExport
+        exportFilename="product-categories.csv"
+        toolbar={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPopup({ open: true, mode: "add", data: {} })}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Product Category
+            </button>
+          </div>
+        }
       />
 
-      {popup.open && (
-        <Dialog
-          open
-          title={
-            popup.mode === "add"
-              ? "Add Product Category"
-              : popup.mode === "edit"
-                ? "Edit Product Category"
-                : "View Product Category"
-          }
-          onClose={() => setPopup((p) => ({ ...p, open: false }))}
-        >
-          <AddProductCategoryForm
-            mode={popup.mode}
-            existingData={popup.data}
-            onClose={(shouldRefetch?: boolean) => {
-              setPopup((p) => ({ ...p, open: false }));
-              if (shouldRefetch) void loadRows();
-            }}
-          />
-        </Dialog>
-      )}
-
+      {/* Delete confirmation dialog */}
       <Dialog
         open={Boolean(deleteTarget)}
         title="Delete Product Category"
@@ -255,7 +331,7 @@ export function ProductCategoryPage() {
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground m-0">
           Confirm delete for product category <strong>{deleteTarget?.prodcat_code}</strong>?
         </p>
       </Dialog>

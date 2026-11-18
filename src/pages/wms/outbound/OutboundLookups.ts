@@ -57,9 +57,11 @@ export async function loadOutboundPrincipalLookup(
   return normalizeLookupRows(rows);
 }
 
+// 👇 Added prinDeptCode parameter
 export async function loadDepartmentLookup(
   companyCode: string,
-  divCode: string
+  divCode: string,
+  prinDeptCode = ""
 ): Promise<LookupRow[]> {
   const rows = await executeWmsInboundSql(`
     SELECT d.DEPT_CODE, d.DEPT_NAME, d.DIV_CODE, v.DIV_NAME
@@ -69,7 +71,22 @@ export async function loadDepartmentLookup(
      AND v.DIV_CODE = d.DIV_CODE
     WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
       ${divCode ? `AND d.DIV_CODE = '${sqlEscape(divCode)}'` : ""}
+      ${prinDeptCode ? `AND d.DEPT_CODE = '${sqlEscape(prinDeptCode)}'` : ""}
     ORDER BY d.DEPT_CODE
+  `);
+  return normalizeLookupRows(rows);
+}
+
+// 👇 New dedicated Division lookup with filter
+export async function loadDivisionLookup(
+  companyCode: string,
+  prinDivCode = ""
+): Promise<LookupRow[]> {
+  const rows = await executeWmsInboundSql(`
+    SELECT DIV_CODE, DIV_NAME FROM MS_HR_DIVISION
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ${prinDivCode ? `AND DIV_CODE = '${sqlEscape(prinDivCode)}'` : ""}
+    ORDER BY DIV_CODE
   `);
   return normalizeLookupRows(rows);
 }
@@ -78,7 +95,16 @@ export async function loadPortLookup(): Promise<LookupRow[]> {
   const response = await getWmsMaster("port", { page: 1, limit: 500 });
   return normalizeLookupRows(response.tableData);
 }
-
+export async function loadPortsByCountry(countryCode: string): Promise<LookupRow[]> {
+  const rows = await executeWmsInboundSql(`
+    SELECT PORT_CODE, PORT_NAME, COUNTRY_CODE
+    FROM MS_PORT
+    ${countryCode ? `WHERE COUNTRY_CODE = '${sqlEscape(countryCode)}'` : ""}
+    ORDER BY PORT_NAME
+    FETCH FIRST 500 ROWS ONLY
+  `);
+  return normalizeLookupRows(rows);
+}
 export async function loadOrderEntryOptions(
   companyCode: string,
   prinCode: string,

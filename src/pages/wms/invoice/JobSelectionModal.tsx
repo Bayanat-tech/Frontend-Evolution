@@ -11,11 +11,20 @@ type JobSelectionModalProps = {
   fromDate?: string | Date | null;
   toDate?: string | Date | null;
   existingKeys?: string[]; // "job_no||act_code" of jobs already added to the invoice
+  loadJobs?: (params: {
+    company_code: string;
+    prin_code: string;
+    invoice_no?: string;
+    from_date?: string;
+    to_date?: string;
+  }) => Promise<any[]>;
+  useFreightCost?: boolean;
   onClose: () => void;
   onSelect: (selectedJobs: any[]) => void;
 };
 
 const normalizeRow = (row: any) => ({
+  company_code: row.company_code ?? row.COMPANY_CODE ?? "",
   job_no: row.job_no ?? row.JOB_NO ?? "",
   invoice_no: row.invoice_no ?? row.INVOICE_NO ?? "",
   // Original SRNO of this row on its own source job invoice (TN_INVOICE_DET).
@@ -30,6 +39,14 @@ const normalizeRow = (row: any) => ({
   activity_group_code: row.activity_group_code ?? row.ACTIVITY_GROUP_CODE ?? "",
   bill: Number(row.bill ?? row.BILL ?? 0),
   actual_cost: Number(row.actual_cost ?? row.ACTUAL_COST ?? 0),
+  partners_price: Number(row.partners_price ?? row.PARTNERS_PRICE ?? 0),
+  transport_price: Number(row.transport_price ?? row.TRANSPORT_PRICE ?? 0),
+  total_cost: Number(
+    row.total_cost ?? row.TOTAL_COST ??
+    (Number(row.actual_cost ?? row.ACTUAL_COST ?? 0)
+      + Number(row.partners_price ?? row.PARTNERS_PRICE ?? 0)
+      + Number(row.transport_price ?? row.TRANSPORT_PRICE ?? 0)),
+  ),
   bill_rate: Number(row.bill_rate ?? row.BILL_RATE ?? 0),
   cost_rate: Number(row.cost_rate ?? row.COST_RATE ?? 0),
   job_date: row.job_date ?? row.JOB_DATE ?? null,
@@ -46,7 +63,14 @@ const toDDMMYYYY = (d?: string | Date | null) => {
 };
 
 function rowKeyOf(row: ReturnType<typeof normalizeRow>) {
-  return `${row.job_no}||${row.act_code}`;
+  return [
+    row.company_code,
+    row.invoice_no,
+    row.prin_code,
+    row.job_no,
+    row.srno ?? "",
+    row.act_code,
+  ].map((value) => String(value ?? "").trim()).join("||");
 }
 
 const ALL_GROUPS = "__all__";
@@ -58,6 +82,8 @@ export function JobSelectionModal({
   fromDate,
   toDate,
   existingKeys = [],
+  loadJobs,
+  useFreightCost = false,
   onClose,
   onSelect,
 }: JobSelectionModalProps) {
@@ -80,14 +106,16 @@ export function JobSelectionModal({
     setLoading(true);
     (async () => {
       try {
-        const response = await getInvoiceJobSelection({
-          loginid: user.loginid ?? "",
+        const request = {
           company_code: user.company_code ?? "",
           prin_code: prinCode,
-          invoice_no: invoiceNo,
+          invoice_no: invoiceNo || undefined,
           from_date: toDDMMYYYY(fromDate),
           to_date: toDDMMYYYY(toDate),
-        });
+        };
+        const response = loadJobs
+          ? await loadJobs(request)
+          : await getInvoiceJobSelection({ loginid: user.loginid ?? "", ...request });
         const normalized = Array.isArray(response)
           ? response
               .map(normalizeRow)
@@ -107,7 +135,7 @@ export function JobSelectionModal({
         setLoading(false);
       }
     })();
-  }, [prinCode, invoiceNo, user?.loginid, user?.company_code, excludeSet]);
+  }, [prinCode, invoiceNo, user?.loginid, user?.company_code, excludeSet, loadJobs]);
 
   // Distinct activity groups present in the fetched jobs — keyed by activity_group_code
   // (the reliable match key), displayed using act_group_name as the label.
@@ -237,7 +265,7 @@ export function JobSelectionModal({
               <TableHead>Activity Group</TableHead>
               <TableHead className="text-right">Qty</TableHead>
               <TableHead className="text-right">Bill</TableHead>
-              <TableHead className="text-right">Actual Cost</TableHead>
+              <TableHead className="text-right">{useFreightCost ? "Total Cost" : "Actual Cost"}</TableHead>
               <TableHead className="text-right">Bill Rate</TableHead>
               <TableHead className="text-right">Cost Rate</TableHead>
               <TableHead>Job Date</TableHead>
@@ -275,7 +303,7 @@ export function JobSelectionModal({
                     </TableCell>
                     <TableCell className="text-right">{row.quantity}</TableCell>
                     <TableCell className="text-right">{row.bill}</TableCell>
-                    <TableCell className="text-right">{row.actual_cost}</TableCell>
+                    <TableCell className="text-right">{useFreightCost ? row.total_cost : row.actual_cost}</TableCell>
                     <TableCell className="text-right">{row.bill_rate}</TableCell>
                     <TableCell className="text-right">{row.cost_rate}</TableCell>
                     <TableCell>{row.job_date ? new Date(row.job_date).toLocaleDateString() : ""}</TableCell>

@@ -5,8 +5,7 @@ import { useAuth } from "../../state/AuthContext";
 import { Plus, Eye } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
-import { Dialog } from "../../components/ui/Dialog";
-import { NoticeToast } from "../../components/ui/NoticeToast";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { TPurchaseSummaryTxn } from "./PurchaseSummary-types";
 import AddCPRequestPage from "./AddCPRequestPage";
@@ -23,6 +22,19 @@ const STATUS_MATCH: Record<(typeof TAB_STATUS)[number], string[]> = {
   "SENT BACK": ["SENT BACK"],
   APPROVED: ["APPROVED", "A/C POSTED"],
   "PO GENERATED": ["PO GENERATED"],
+};
+
+// Tab values madhe space aahe ("IN PROGRESS", "SENT BACK"), mhanun donhi forms ithe
+const STATUS_STYLES: Record<string, string> = {
+  APPROVED: "bg-blue-50 text-blue-800 border-blue-200",
+  "A/C POSTED": "bg-blue-50 text-blue-800 border-blue-200",
+  PENDING: "bg-amber-50 text-amber-800 border-amber-200",
+  "IN PROGRESS": "bg-blue-100 text-blue-800 border-blue-300",
+  INPROGRESS: "bg-blue-100 text-blue-800 border-blue-300",
+  REJECTED: "bg-red-50 text-red-800 border-red-200",
+  "SENT BACK": "bg-purple-50 text-purple-800 border-purple-200",
+  SENTBACK: "bg-purple-50 text-purple-800 border-purple-200",
+  "PO GENERATED": "bg-emerald-100 text-emerald-800 border-emerald-300",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,8 +64,10 @@ const Capex_Request_page = ({ initialTab = 0 }: CapexRequestPageProps) => {
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(initialTab);
-  const statusFilter = TAB_STATUS[activeTab];
+  const statusFilter = TAB_STATUS[activeTab] ?? TAB_STATUS[0];
   const [query, setQuery] = useState("");
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   // ── Popup state (Add / View) ────────────────────────────────────────────────
   const [taskPopup, setTaskPopup] = useState({
@@ -81,6 +95,16 @@ const Capex_Request_page = ({ initialTab = 0 }: CapexRequestPageProps) => {
 
   const rows = useMemo(() => data ?? [], [data]);
 
+  // ── Tab counts (saglach data already fetch aahe, mhanun client-side) ──────
+  const tabCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    TAB_STATUS.forEach((t) => {
+      const allowed = STATUS_MATCH[t];
+      counts[t] = rows.filter((row) => allowed.includes(statusOf(row))).length;
+    });
+    return counts;
+  }, [rows]);
+
   // ── Client-side status filter ──────────────────────────────────────────────
   const statusFilteredRows = useMemo(() => {
     const allowed = STATUS_MATCH[statusFilter];
@@ -97,6 +121,23 @@ const Capex_Request_page = ({ initialTab = 0 }: CapexRequestPageProps) => {
     );
   }, [statusFilteredRows, query]);
 
+  // ── Notice (error ani success ek-ch jagi) ───────────────────────────────────
+  const notice = useMemo(() => {
+    if (successNotice) return { type: "success" as const, message: successNotice };
+    if (isError && !errorDismissed) {
+      return {
+        type: "error" as const,
+        message: error instanceof Error ? error.message : "Failed to load capex requests",
+      };
+    }
+    return null;
+  }, [successNotice, isError, errorDismissed, error]);
+
+  const closeNotice = () => {
+    setSuccessNotice(null);
+    setErrorDismissed(true);
+  };
+
   // ── Popup handlers ──────────────────────────────────────────────────────────
   const openAddPopup = () => {
     setTaskPopup({
@@ -106,211 +147,167 @@ const Capex_Request_page = ({ initialTab = 0 }: CapexRequestPageProps) => {
     });
   };
 
-  const handleActions = (actionType: "view", row: TPurchaseSummaryTxn) => {
+  const openView = (row: TPurchaseSummaryTxn) => {
     setTaskPopup({
       open: true,
       title: `View CP - ${row.REQUEST_NUMBER}`,
-      data: {
-        existingData: row,
-        isEditMode: false,
-        isViewMode: actionType === "view",
-      },
+      data: { existingData: row, isEditMode: false, isViewMode: true },
     });
   };
 
-  const closePopup = (refresh?: boolean) => {
+  const closePopup = (refresh?: boolean, message?: string) => {
     setTaskPopup((prev) => ({ ...prev, open: false }));
     if (refresh) {
-      queryClient.invalidateQueries({ queryKey: ["capex-request-page", loginid, companyCode] });
+      setErrorDismissed(false);
+      void queryClient.invalidateQueries({ queryKey: ["capex-request-page", loginid, companyCode] });
+      if (message) setSuccessNotice(message);
     }
   };
 
   // ── Columns ──────────────────────────────────────────────────────────────────
+  // Data keys UPPERCASE aahet, mhanun accessorKey pan UPPERCASE (sort / filter sathi)
   const columns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
     () => [
       {
-        accessorKey: "request_number",
+        accessorKey: "REQUEST_NUMBER",
         header: "Request No",
         size: 150,
-        cell: ({ row }) => (
-          <span style={{ color: "#082A89", fontWeight: 600, fontSize: "0.82rem" }}>
-            {row.original.REQUEST_NUMBER}
-          </span>
-        ),
+        cell: ({ row }) => <span className="text-xs font-semibold text-[#082A89]">{row.original.REQUEST_NUMBER}</span>,
       },
-      {
-        accessorKey: "request_date",
-        header: "Request Date",
-        size: 150,
-        cell: ({ row }) => fmtDate((row.original as any).REQUEST_DATE),
-      },
-      {
-        accessorKey: "DESCRIPTION",
-        header: "Description",
-        size: 600,
-        cell: ({ row }) => (row.original as any).DESCRIPTION || "—",
-      },
+      { accessorKey: "REQUEST_DATE", header: "Request Date", size: 120, cell: ({ getValue }) => fmtDate(getValue()) },
+      { accessorKey: "DESCRIPTION", header: "Description", size: 400, cell: ({ getValue }) => String(getValue() || "—") },
       {
         accessorKey: "AMOUNT",
-        header: "Amount",
+        header: () => <div className="text-right">Amount</div>,
         size: 120,
-        cell: ({ row }) => {
-          const amt = (row.original as any).AMOUNT || 0;
-          return <span style={{ fontWeight: 600 }}>{Number(amt).toLocaleString()}</span>;
-        },
+        cell: ({ getValue }) => <div className="text-right font-semibold">{Number(getValue() || 0).toLocaleString()}</div>,
       },
+      { accessorKey: "CREATE_USER", header: "Create User", size: 120 },
+      { accessorKey: "CREATE_DATE", header: "Create Date", size: 120, cell: ({ getValue }) => fmtDate(getValue()) },
       {
-        accessorKey: "CREATE_USER",
-        header: "Create User",
-        size: 120,
-      },
-      {
-        accessorKey: "create_date",
-        header: "Create Date",
-        size: 120,
-        cell: ({ row }) => fmtDate((row.original as any).CREATE_DATE),
-      },
-      {
-        accessorKey: "purch_status",
-        header: "Status",
-        size: 130,
+        id: "PURCH_STATUS",
+        accessorFn: (row) => statusOf(row),
+        header: () => <div className="text-center">Status</div>,
+        size: 140,
         cell: ({ row }) => {
           const val = statusOf(row.original);
-          let bg = "#f4f4f5", color = "#52525b", border = "#d4d4d8";
-          if (val === "APPROVED" || val === "A/C POSTED") { bg = "#e8f0fe"; color = "#1a4fa0"; border = "#b3caf5"; }
-          else if (val === "PENDING") { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
-          else if (val === "INPROGRESS") { bg = "#dbeafe"; color = "#1e40af"; border = "#93c5fd"; }
-          else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
-          else if (val === "SENTBACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
-          else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
+          const style = STATUS_STYLES[val] ?? "bg-zinc-100 text-zinc-600 border-zinc-300";
           return (
-            <span
-              style={{
-                display: "inline-block", padding: "2px 10px", borderRadius: "999px",
-                fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
-                background: bg, color, border: `1px solid ${border}`,
-              }}
-            >
-              {(row.original as any).PURCH_STATUS || (row.original as any).purch_status || "—"}
-            </span>
+            <div className="flex justify-center">
+              <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${style}`}>
+                {(row.original as any).PURCH_STATUS || (row.original as any).purch_status || "—"}
+              </span>
+            </div>
           );
         },
       },
-      {
-        accessorKey: "next_action_by",
-        header: "Next Action By",
-        size: 160,
-        cell: ({ row }) => (row.original as any).NEXT_ACTION_BY || "—",
-      },
+      { accessorKey: "NEXT_ACTION_BY", header: "Next Action By", size: 160, cell: ({ getValue }) => String(getValue() || "—") },
       {
         id: "actions",
         header: "Actions",
-        size: 100,
+        size: 80,
+        enableSorting: false,
         cell: ({ row }) => (
-          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <Button
-              size="sm" variant="ghost" title="View"
-              onClick={() => handleActions("view", row.original)}
-              style={{ padding: "4px", height: "28px", width: "28px" }}
-            >
-              <Eye size={14} />
+          <div className="flex items-center gap-1">
+            <Button size="icon" variant="ghost" onClick={() => openView(row.original)} title="View">
+              <Eye size={15} />
             </Button>
           </div>
         ),
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
-      {/* Breadcrumb */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
-        <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <a href="/alms" style={{ color: "#6b7280", textDecoration: "none" }}>ALMS</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <span style={{ color: "#111827", fontWeight: 500 }}>Capex Request</span>
-      </div>
-
-      {/* Notice */}
-      {isError && (
-        <NoticeToast
-          notice={{ type: "error", message: error instanceof Error ? error.message : "Failed to load tasks" }}
-          onClose={() => { }}
-        />
-      )}
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-        <div className="flex flex-wrap gap-2 rounded-md">
-          {TAB_LABELS.map((label, index) => (
-            <Button
-              key={index}
-              size="default"
-              variant={activeTab === index ? "default" : "outline"}
-              onClick={() => setActiveTab(index)}
-              className="px-6 py-2.5 min-w-[120px]"
-              style={{
-                fontSize: "15px",
-                fontWeight: activeTab === index ? 600 : 500,
-                transition: "all 0.2s ease",
-                ...(activeTab === index && {
-                  boxShadow: "0 2px 8px rgba(8, 42, 137, 0.2)",
-                })
-              }}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <Button onClick={openAddPopup} style={{ background: "#6b21a8" }}>
-            <Plus size={15} /> Add CP
-          </Button>
-        </div>
-      </div>
-
-      {/* Data Table */}
-      <DataTable
-        columns={columns}
-        data={filteredRows}
-        title={`${filteredRows.length.toLocaleString()} Records`}
-        subtitle={`${TAB_LABELS[activeTab]} Requests`}
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search request..."
-        loading={isLoading}
-        height={500}
-        density="compact"
-        enablePagination
-        pageSize={50}
-        enableColumnFilters
-        getRowId={(row, index) => row.REQUEST_NUMBER || `temp-${index}`}
+  // ═══════════════════════════════════════════════════════════════════════
+  // Full-page editor — sidebar visible rahato (Dialog wrapper kadhla)
+  // ═══════════════════════════════════════════════════════════════════════
+  if (taskPopup.open) {
+    return (
+      <AddCPRequestPage
+        isEditMode={taskPopup.data.isEditMode}
+        isViewMode={taskPopup.data.isViewMode}
+        existingData={
+          taskPopup.data.existingData
+            ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+            : undefined
+        }
+        onClose={closePopup}
       />
+    );
+  }
 
-      {/* Add / View Dialog */}
-      <Dialog
-        open={taskPopup.open}
-        wide
-        title={taskPopup.title}
-        onClose={() => closePopup()}
-      >
-        {taskPopup.open && (
-          <AddCPRequestPage
-            isEditMode={taskPopup.data.isEditMode}
-            isViewMode={taskPopup.data.isViewMode}
-            existingData={
-              taskPopup.data.existingData
-                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-                : undefined
-            }
-            onClose={closePopup}
-          />
-        )}
-      </Dialog>
-    </div>
+  // ── Render (List page) ─────────────────────────────────────────────────────
+  return (
+    <section className="finance-list-page grid gap-4">
+      <div className="finance-list-title">
+        <h6 className="m-0 text-xl font-semibold tracking-tight">Capex Request</h6>
+      </div>
+
+      <AutoDismissAlert notice={notice} onClose={closeNotice} />
+
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {TAB_STATUS.map((value, index) => {
+          const active = activeTab === index;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setActiveTab(index)}
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
+                active
+                  ? "bg-[#00378C] font-semibold text-white shadow-sm"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
+              }`}
+            >
+              <span>{TAB_LABELS[index]}</span>
+              <span
+                className={`rounded-full px-1.5 text-[10px] font-bold ${
+                  active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {tabCounts[value] ?? 0}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="min-h-[650px]">
+        <DataTable
+          columns={columns}
+          data={filteredRows}
+          toolbar={
+            statusFilter === "PENDING" && (
+              <button
+                title="Add CP"
+                onClick={openAddPopup}
+                className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
+              >
+                <Plus size={14} />
+                Add CP
+              </button>
+            )
+          }
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search request no, description, user..."
+          loading={isLoading}
+          emptyText="No capex requests found"
+          height={620}
+          minWidth={1100}
+          density="grid"
+          enablePagination
+          pageSize={50}
+          enableColumnFilters
+          enableExport
+          exportFilename="capex-requests.csv"
+          initialSorting={[{ id: "REQUEST_DATE", desc: true }]}
+          getRowId={(row, index) => `${row.REQUEST_NUMBER}_${index}`}
+        />
+      </div>
+    </section>
   );
 };
 

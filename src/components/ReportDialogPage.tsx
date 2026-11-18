@@ -1,6 +1,5 @@
-import React, { useRef, useCallback } from "react";
-import { X, Printer, FileSpreadsheet } from "lucide-react";
-import { Button } from "./ui/Button";
+import React, { useRef, useCallback, useState, useEffect } from "react";
+import { NewReportDialog } from "./new_report_format";
 
 export interface ReportDialogPageProps {
   Report: React.ComponentType<{ required_values: any }>;
@@ -9,8 +8,19 @@ export interface ReportDialogPageProps {
   title?: string;
   excel?: () => void;
   headerSlot?: React.ReactNode;
+  /** Optional: pass through if available from caller */
+  onOpenInNewWindow?: () => void;
+  onDownloadPdf?: () => void;
+  exportingExcel?: boolean;
+  loading?: boolean;
+  error?: string | null;
 }
 
+/**
+ * Thin adapter: keeps the existing ReportDialogPage API, captures HTML from the
+ * Report component's internal iframe, and renders NewReportDialog for preview /
+ * print / zoom / page nav. Existing call sites stay unchanged.
+ */
 const ReportDialogPage = ({
   Report,
   required_values,
@@ -18,76 +28,136 @@ const ReportDialogPage = ({
   title,
   excel,
   headerSlot,
+  onOpenInNewWindow,
+  onDownloadPdf,
+  exportingExcel = false,
+  loading: externalLoading = false,
+  error: externalError = null,
 }: ReportDialogPageProps) => {
-  // We keep a ref to the iframe element so we can reach its contentWindow for printing.
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const captureHostRef = useRef<HTMLDivElement | null>(null);
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState(true);
+  const [captureError, setCaptureError] = useState<string | null>(null);
 
-  const fileName = `${title || "Report"}-${new Date().toISOString().slice(0, 10)}`;
+  const resolvedTitle =
+    title ?? `Report - ${required_values?.doc_no ?? ""}`;
 
-  const handlePrint = useCallback(() => {
-    const dialogEl = document.querySelector('[data-report-dialog]');
-    const iframe   = dialogEl?.querySelector('iframe[title="report"], iframe') as HTMLIFrameElement | null;
+  /**
+   * After Report mounts and paints its iframe, read documentElement.outerHTML
+   * (or body) so NewReportDialog can measure pages / print the same content.
+   */
+  const captureHtmlFromReport = useCallback(() => {
+    const host = captureHostRef.current;
+    if (!host) return;
 
-    if (!iframe?.contentWindow) {
-      console.warn("ReportDialogPage: could not find report iframe");
-      return;
+    const iframe =
+      (host.querySelector('iframe[title="report"]') as HTMLIFrameElement | null) ||
+      (host.querySelector("iframe") as HTMLIFrameElement | null);
+
+    if (!iframe) {
+      // Report may still be loading its iframe — retry shortly
+      return false;
     }
 
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!doc || !doc.body) return false;
+
+      // Prefer full document so <head> styles / scripts stay intact
+      const html =
+        doc.documentElement?.outerHTML ||
+        `<!DOCTYPE html><html><head></head><body>${doc.body.innerHTML}</body></html>`;
+
+      if (!html || html.length < 20) return false;
+
+      setHtmlContent(html);
+      setCapturing(false);
+      setCaptureError(null);
+      return true;
+    } catch (err) {
+      // Cross-origin or not ready
+      console.warn("ReportDialogPage: could not capture report HTML", err);
+      setCaptureError("Could not read report content for preview.");
+      setCapturing(false);
+      return false;
+    }
   }, []);
 
+  // Poll briefly until the Report iframe is ready and HTML can be read
+  useEffect(() => {
+    setCapturing(true);
+    setHtmlContent(null);
+    setCaptureError(null);
+
+    let attempts = 0;
+    const maxAttempts = 40; // ~8s at 200ms
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      const ok = captureHtmlFromReport();
+      if (ok || attempts >= maxAttempts) {
+        window.clearInterval(timer);
+        if (!ok && attempts >= maxAttempts) {
+          setCapturing(false);
+          setCaptureError(
+            (prev) => prev || "Report did not finish loading in time."
+          );
+        }
+      }
+    }, 200);
+
+    // Also try on next frames in case content is already there
+    requestAnimationFrame(() => {
+      captureHtmlFromReport();
+    });
+
+    return () => window.clearInterval(timer);
+  }, [Report, required_values, captureHtmlFromReport]);
+
+  const handleClose = useCallback(() => {
+    onClose?.();
+  }, [onClose]);
+
+  const isLoading = externalLoading || capturing;
+  const error = externalError || captureError;
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      data-report-dialog
-    >
-      <div className="relative flex h-[90vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-xl">
-
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute right-3 top-3 z-10 rounded p-1 text-gray-500 transition hover:bg-gray-100 hover:text-black"
-        >
-          <X size={20} />
-        </button>
-
-        {/* Header */}
-        <div className="border-b px-6 py-4 text-lg font-semibold pr-12 truncate">
-          {title ?? `Report - ${required_values?.doc_no ?? ""}`}
-        </div>
-
-        {/* Optional slot (breadcrumbs, alerts, drill indicators, etc.) */}
-        {headerSlot}
-
-        {/* Content — the Report component renders its own iframe internally */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex-1 bg-slate-100 p-4">
-            <Report required_values={required_values} />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-2 border-t p-4">
-          {excel && (
-            <Button
-              onClick={excel}
-              className="flex items-center gap-1.5 rounded bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700"
-            >
-              <FileSpreadsheet size={15} />
-              Excel
-            </Button>
-          )}
-          <Button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-          >
-            <Printer size={15} />
-            Print
-          </Button>
-        </div>
+    <>
+      {/*
+        Off-screen host: Report still mounts and runs its scripts / iframe
+        so we can extract HTML. Not visible; does not affect layout.
+      */}
+      <div
+        ref={captureHostRef}
+        aria-hidden
+        style={{
+          position: "fixed",
+          left: -99999,
+          top: 0,
+          width: 800,
+          height: 600,
+          overflow: "hidden",
+          opacity: 0,
+          pointerEvents: "none",
+          zIndex: -1,
+        }}
+      >
+        <Report required_values={required_values} />
       </div>
-    </div>
+
+      <NewReportDialog
+        open={true}
+        onClose={handleClose}
+        title={resolvedTitle}
+        htmlContent={htmlContent}
+        loading={isLoading}
+        error={error}
+        onExportExcel={excel}
+        exportingExcel={exportingExcel}
+        onOpenInNewWindow={onOpenInNewWindow}
+        onDownloadPdf={onDownloadPdf}
+        headerSlot={headerSlot}
+      />
+    </>
   );
 };
 

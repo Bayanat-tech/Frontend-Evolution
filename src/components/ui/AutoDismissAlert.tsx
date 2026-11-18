@@ -26,8 +26,11 @@ export function AutoDismissAlert({
     lastNoticeKey.current = key;
 
     toast[notice.type](notice.message, notice.type === "error" ? undefined : duration);
-    const id = window.setTimeout(onClose, 50);
-    return () => window.clearTimeout(id);
+    const id = window.setTimeout(onClose, 0);
+    return () => {
+      window.clearTimeout(id);
+      onClose();
+    };
   }, [duration, notice, onClose, toast]);
 
   return null;

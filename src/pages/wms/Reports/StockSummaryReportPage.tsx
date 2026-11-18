@@ -1,15 +1,19 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-    Printer,
-    RotateCcw,
     BarChart2,
-    Download,
-    Eye,
+    CalendarDays,
+    Filter,
+    Package,
+    UserRound,
+    Warehouse,
 } from "lucide-react";
 import { api } from "../../../api/client";
 import { executeWmsInboundSql } from "../../../api/wms";
+import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
 import { MultiSelectField } from "../../../components/ui/MultiSelectField";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,13 +49,6 @@ const getField = (row: LookupRow, ...keys: string[]): string => {
 };
 
 // Rows with a code + name pair → { value: "code::name", label: "code - name" }
-// The option value is a unique composite of code+name (not just the code),
-// because the same code can legitimately appear on multiple distinct rows
-// with different names (e.g. same PROD_CODE reused across different
-// products in the source data). If two options shared the same `value`,
-// the multi-select would visually tick both when only one was clicked.
-// Use codeFromOptionValue/codesFromSelection below to recover the actual
-// code(s) whenever building a SQL filter or the API payload.
 const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] => {
     const seen = new Set<string>();
     const options: Option[] = [];
@@ -60,7 +57,7 @@ const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string)
         const name = getField(r, nameKey);
         if (!code) return;
         const value = `${code}::${name}`;
-        if (seen.has(value)) return; // skip exact duplicate rows only
+        if (seen.has(value)) return;
         seen.add(value);
         options.push({ value, label: name ? `${code} - ${name}` : code });
     });
@@ -70,9 +67,7 @@ const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string)
 // Recovers the underlying code from a composite "code::name" option value.
 const codeFromOptionValue = (v: string): string => v.split("::")[0];
 
-// Converts a selection array (which may hold composite option values, or
-// the special "All" sentinel) into a deduped list of real codes for use in
-// SQL IN-clauses and API payloads.
+// Converts a selection array into a deduped list of real codes.
 const codesFromSelection = (values: string[]): string[] => {
     if (!values.length || values.includes("All")) return ["All"];
     const codes = new Set<string>();
@@ -139,6 +134,24 @@ function FloatLabel({ label, required, children, bgColor = "#fff" }: {
     );
 }
 
+// ─── Summary strip item (mirrors Freight's SummaryStripItem) ──────────────────
+
+function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+    return (
+        <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2.5 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+                <Icon size={16} />
+            </span>
+            <div className="min-w-0 leading-tight">
+                <div className="text-[9.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
+                <div className="truncate text-[13px] font-semibold text-slate-800" title={value}>
+                    {value}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── SelectField ──────────────────────────────────────────────────────────────
 
 const SelectField: React.FC<{
@@ -172,12 +185,13 @@ const SelectField: React.FC<{
 export default function StockSummaryReport() {
     // ── State
     const [loading, setLoading] = useState(false);
-    const [exporting, setExporting] = useState(false);
     const [error, setError] = useState<string>("");
-    const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
-    const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
+    const [exportingExcel, setExportingExcel] = useState(false);
 
-    const reportWindowRef = useRef<Window | null>(null);
+    // ── Report preview dialog state
+    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+    const [reportHtml, setReportHtml] = useState<string | null>(null);
+    const [reportPreviewError, setReportPreviewError] = useState("");
 
     // ── Parameter options
     const [prinOptions, setPrinOptions] = useState<Option[]>([]);
@@ -187,7 +201,7 @@ export default function StockSummaryReport() {
     const [optLoading, setOptLoading] = useState(false);
     const [optError, setOptError] = useState<string>("");
 
-    // ── Parameter values (no job_no — summary does not filter by job)
+    // ── Parameter values
     const [params, setParams] = useState<Params>({
         prin_code: ["All"],
         prod_code: ["All"],
@@ -198,7 +212,7 @@ export default function StockSummaryReport() {
 
     const optionsRequestRef = useRef(0);
 
-    // ── Cross-filtered option loader ─────────────────────────────────────────
+    // ── Cross-filtered option loader
     const loadCascadedOptions = useCallback(async (p: Params) => {
         const requestId = ++optionsRequestRef.current;
         setOptLoading(true);
@@ -260,7 +274,6 @@ export default function StockSummaryReport() {
                 let nextLocationCode = reset(prev.location_code, nextLocation);
 
                 if (siteIsSpecific && nextLocation.length > 0 && nextLocationCode.includes("All")) {
-                    // Auto-fill the location code once a specific site is selected
                     nextLocationCode = [nextLocation[0].value];
                 } else if (!siteIsSpecific) {
                     nextLocationCode = ["All"];
@@ -299,95 +312,125 @@ export default function StockSummaryReport() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cascadeKey]);
 
-    // ── Fetch the report HTML from the API and open it in a new browser tab
+    const buildPayload = (p: Params) => ({
+        prin_code: codesFromSelection(p.prin_code),
+        prod_code: codesFromSelection(p.prod_code),
+        site_code: p.site_code.includes("All") ? ["All"] : p.site_code,
+        location_code: p.location_code.includes("All") ? ["All"] : p.location_code,
+        group_by: p.group_by || null,
+    });
+
+    // ── Fetch the report HTML
     const fetchReport = useCallback(async (p: Params) => {
+        setReportHtml(null);
+        setReportPreviewError("");
+        setReportPreviewOpen(true);
+
         setLoading(true);
         setError("");
-
-        const newTab = window.open("", "_blank");
-        if (!newTab) {
-            setLoading(false);
-            setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
-            return;
-        }
-        newTab.document.write(
-            "<title>Stock Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>"
-        );
-
         try {
             const res = await api.post(
                 "/api/wms/reports/stocksummary/html",
-                {
-                    prin_code: codesFromSelection(p.prin_code),
-                    prod_code: codesFromSelection(p.prod_code),
-                    site_code: p.site_code.includes("All") ? ["All"] : p.site_code,
-                    location_code: p.location_code.includes("All") ? ["All"] : p.location_code,
-                    group_by: p.group_by || null,
-                },
+                buildPayload(p),
                 { responseType: "text" },
             );
-
-            newTab.document.open();
-            newTab.document.write(res.data);
-            newTab.document.close();
-
-            reportWindowRef.current = newTab;
-            setHasGeneratedReport(true);
-            setLastGeneratedAt(new Date());
+            setReportHtml(res.data);
         } catch (e: any) {
-            newTab.document.open();
-            newTab.document.write(
-                "<title>Stock Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>"
-            );
-            newTab.document.close();
-            setError(e?.response?.data?.message ?? "Failed to load report. Please try again.");
+            const message = e?.response?.data?.message ?? "Failed to load report. Please try again.";
+            setReportPreviewError(message);
+            setError(message);
         } finally {
             setLoading(false);
         }
     }, []);
 
-    // ── Print (targets the most recently opened report tab)
-    const handlePrint = () => {
-        if (reportWindowRef.current && !reportWindowRef.current.closed) {
-            reportWindowRef.current.focus();
-            reportWindowRef.current.print();
-        } else {
-            setError("No open report tab to print. Generate the report again.");
-        }
+    const closeReportPreview = () => {
+        setReportPreviewOpen(false);
+        setReportHtml(null);
+        setReportPreviewError("");
     };
 
     // ── Excel export
-    const handleExcel = async () => {
-        setExporting(true);
+    const handleExportExcel = useCallback(async () => {
+        setExportingExcel(true);
+        setError("");
         try {
             const res = await api.post(
                 "/api/wms/reports/stocksummary/excel",
-                {
-                    prin_code: codesFromSelection(params.prin_code),
-                    prod_code: codesFromSelection(params.prod_code),
-                    site_code: params.site_code.includes("All") ? ["All"] : params.site_code,
-                    location_code: params.location_code.includes("All") ? ["All"] : params.location_code,
-                    group_by: params.group_by || null,
-                },
+                buildPayload(params),
                 { responseType: "blob" },
             );
-            const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `stock_summary_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
-            a.click();
-            URL.revokeObjectURL(url);
+            const blob = new Blob([res.data], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `stock_summary_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
         } catch (e: any) {
-            alert("Excel export failed. Please try again.");
+            setError(e?.response?.data?.message ?? "Failed to export Excel. Please try again.");
         } finally {
-            setExporting(false);
+            setExportingExcel(false);
+        }
+    }, [params]);
+
+    // Open report HTML in a new tab
+    const handleOpenReportInNewWindow = () => {
+        if (!reportHtml) return;
+        const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+        const url = window.URL.createObjectURL(blob);
+        const win = window.open(url, "_blank");
+        if (win) {
+            setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+        } else {
+            window.URL.revokeObjectURL(url);
+        }
+    };
+
+    // Print dialog (Save as PDF)
+    const handleDownloadReportPdf = () => {
+        if (!reportHtml) return;
+        const PRINT_IFRAME_ID = "stock-summary-print-iframe";
+        let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+        if (!iframe) {
+            iframe = document.createElement("iframe");
+            iframe.id = PRINT_IFRAME_ID;
+            iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+            iframe.style.cssText =
+                "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+            document.body.appendChild(iframe);
+        }
+
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!doc) return;
+
+        doc.open();
+        doc.write(reportHtml);
+        doc.close();
+
+        const doPrint = () => {
+            try {
+                iframe?.contentWindow?.focus();
+                iframe?.contentWindow?.print();
+            } catch {
+                /* ignore */
+            }
+        };
+
+        if (iframe.contentDocument?.readyState === "complete") {
+            setTimeout(doPrint, 300);
+        } else {
+            iframe.onload = () => setTimeout(doPrint, 300);
+            setTimeout(doPrint, 700);
         }
     };
 
     // ── Generate report
-    // NOTE: Principal is now a multi-select with an "All" default (same as
-    // Product/Site), so it's always populated and no longer needs a
-    // "must pick one" guard before generating.
     const handleGenerateReport = () => {
         fetchReport(params);
     };
@@ -403,9 +446,7 @@ export default function StockSummaryReport() {
             location_code: ["All"],
             group_by: "",
         });
-        setHasGeneratedReport(false);
         setError("");
-        setLastGeneratedAt(null);
     };
 
     const groupByOptions: Option[] = [
@@ -418,300 +459,210 @@ export default function StockSummaryReport() {
     const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
     const BG = "#EEF5FD";
 
+    // ── Display helpers for summary strip
+    const principalDisplay = params.prin_code.includes("All")
+        ? "All principals"
+        : params.prin_code
+            .map((v) => codeFromOptionValue(v))
+            .join(", ");
+
+    const productDisplay = params.prod_code.includes("All")
+        ? "All products"
+        : params.prod_code
+            .map((v) => codeFromOptionValue(v))
+            .join(", ");
+
+    const siteDisplay = params.site_code.includes("All")
+        ? "All sites"
+        : params.site_code.join(", ");
+
+    const locationDisplay = params.location_code.includes("All")
+        ? "All locations"
+        : params.location_code.join(", ");
+
+    const groupByDisplay =
+        groupByOptions.find((o) => o.value === params.group_by)?.label || "No grouping";
+
     return (
-        <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
-            <style>{`
-                .action-btn-primary:hover { background: #1e40af !important; }
-                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            `}</style>
+        <section className="freight-ui-standard freight-report-screen">
+            <div className="freight-report-card">
+                <style>{`
+                    .action-btn-primary:hover { background: #1e40af !important; }
+                    .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
+                    .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
+                    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                `}</style>
 
-            <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "8px 12px" }}>
-
-                    {/* Header */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                        <BarChart2 size={17} color="#185FA5" />
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>Stock Summary Report</span>
-                        {hasGeneratedReport && (
-                            <span style={{
-                                fontSize: 10,
-                                background: "#d1fae5",
-                                color: "#065f46",
-                                padding: "2px 10px",
-                                borderRadius: 12,
-                                fontWeight: 500,
-                            }}>
-                                Report Generated
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Error display */}
-                    {error && (
-                        <div style={{
-                            marginBottom: 10,
-                            padding: "8px 14px",
-                            background: "#fef2f2",
-                            border: "1px solid #fecaca",
-                            borderRadius: 6,
-                            color: "#dc2626",
-                            fontSize: 12,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                        }}>
-                            <span>⚠️</span>
-                            {error}
-                            <button
-                                onClick={() => setError("")}
-                                style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#dc2626" }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    )}
-
-                    {optError && (
-                        <div style={{
-                            marginBottom: 10,
-                            padding: "8px 14px",
-                            background: "#fef2f2",
-                            border: "1px solid #fecaca",
-                            borderRadius: 6,
-                            color: "#dc2626",
-                            fontSize: 12,
-                        }}>
-                            {optError}
-                        </div>
-                    )}
-
-                    {/* Main layout */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, alignItems: "start" }}>
-
-                        {/* ── Left: form fields ── */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-
-                            {/* Principal + Product */}
-                            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
-                                <FloatLabel label="Principal" bgColor={BG}>
-                                    <MultiSelectField
-                                        label=""
-                                        options={prinOptions}
-                                        value={params.prin_code}
-                                        onChange={(v: string[]) => setParam("prin_code", v)}
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
-                                <FloatLabel label="Product" bgColor={BG}>
-                                    <MultiSelectField
-                                        label=""
-                                        options={prodOptions}
-                                        value={params.prod_code}
-                                        onChange={(v) => setParam("prod_code", v)}
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
-                            </div>
-
-                            {/* Site + Location Code (side by side; location auto-fills once a site is chosen) */}
-                            <div className="field-row" style={row2}>
-                                <FloatLabel label="Site" bgColor={BG}>
-                                    <MultiSelectField
-                                        label=""
-                                        options={siteOptions}
-                                        value={params.site_code}
-                                        onChange={(v) => setParam("site_code", v)}
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
-                                <FloatLabel label="Location Code" bgColor={BG}>
-                                    <MultiSelectField
-                                        label=""
-                                        options={locationOptions}
-                                        value={params.location_code}
-                                        onChange={(v: string[]) => setParam("location_code", v)}
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
-                            </div>
-
-                            {/* Group By */}
-                            <div className="field-row" style={row2}>
-                                <div>
-                                    <FloatLabel label="Group By" bgColor={BG}>
-                                        <SelectField
-                                            label=""
-                                            options={[{ value: "", label: "No grouping" }, ...groupByOptions]}
-                                            value={params.group_by}
-                                            onChange={(v) => setParam("group_by", v)}
-                                            placeholder="Select grouping"
-                                            loading={optLoading}
-                                        />
-                                    </FloatLabel>
-                                </div>
-                                <div />
-                            </div>
+                {/* ── Title bar ── */}
+                <div className="freight-report-titlebar">
+                    <h1>Stock Summary Report</h1>
+                    <span className="freight-report-title-dot" aria-hidden="true" />
+                    <div className="freight-report-title-actions flex flex-wrap items-center gap-2">
+                        <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-foreground">
+                            <div className="text-[9px] font-semibold uppercase text-muted-foreground">Filters</div>
+                            <div className="text-sm font-semibold">{optLoading ? "Loading…" : "Ready"}</div>
                         </div>
                     </div>
+                </div>
 
-                    {/* Status bar when report is generated */}
-                    {hasGeneratedReport && (
-                        <div style={{
-                            marginTop: 10,
-                            padding: "8px 14px",
-                            background: "#f0fdf4",
-                            border: "1px solid #bbf7d0",
-                            borderRadius: 6,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 12,
-                        }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>✅</span>
-                                <span style={{ fontSize: 12, color: "#065f46" }}>
-                                    Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (reportWindowRef.current && !reportWindowRef.current.closed) {
-                                        reportWindowRef.current.focus();
-                                    } else {
-                                        setError("Report tab is closed. Please generate again.");
-                                    }
-                                }}
-                                style={{
-                                    padding: "4px 12px",
-                                    background: "#185FA5",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: 4,
-                                    fontSize: 11,
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                }}
-                            >
-                                <Eye size={12} /> Open Report
-                            </button>
+                {/* ── Filter header with Clear All ── */}
+                <ReportFilterHeader onClear={handleReset} label="Report Filters" />
+
+                {/* ── Summary strip ── */}
+                <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
+                    <SummaryStripItem icon={UserRound} label="Principal" value={principalDisplay} />
+                    <SummaryStripItem icon={Package} label="Product" value={productDisplay} />
+                    <SummaryStripItem icon={Warehouse} label="Site" value={siteDisplay} />
+                    <SummaryStripItem icon={Filter} label="Group By" value={groupByDisplay} />
+                </div>
+
+                {/* ── Errors ── */}
+                {error && (
+                    <div style={{
+                        margin: "10px 12px",
+                        padding: "8px 14px",
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        borderRadius: 6,
+                        color: "#dc2626",
+                        fontSize: 12,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                    }}>
+                        <span>⚠️</span>
+                        {error}
+                        <button
+                            onClick={() => setError("")}
+                            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#dc2626" }}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
+
+                {optError && (
+                    <div style={{
+                        margin: "0 12px 10px",
+                        padding: "8px 14px",
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        borderRadius: 6,
+                        color: "#dc2626",
+                        fontSize: 12,
+                    }}>
+                        {optError}
+                    </div>
+                )}
+
+                {/* ── Field rows ── */}
+                <div style={{ padding: "0 12px" }}>
+                    {/* Principal + Product */}
+                    <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
+                        <FloatLabel label="Principal" bgColor={BG}>
+                            <MultiSelectField
+                                label=""
+                                options={prinOptions}
+                                value={params.prin_code}
+                                onChange={(v: string[]) => setParam("prin_code", v)}
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
+                        <FloatLabel label="Product" bgColor={BG}>
+                            <MultiSelectField
+                                label=""
+                                options={prodOptions}
+                                value={params.prod_code}
+                                onChange={(v) => setParam("prod_code", v)}
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
+                    </div>
+
+                    {/* Site + Location */}
+                    <div className="field-row" style={{ ...row2, marginTop: 10 }}>
+                        <FloatLabel label="Site" bgColor={BG}>
+                            <MultiSelectField
+                                label=""
+                                options={siteOptions}
+                                value={params.site_code}
+                                onChange={(v) => setParam("site_code", v)}
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
+                        <FloatLabel label="Location Code" bgColor={BG}>
+                            <MultiSelectField
+                                label=""
+                                options={locationOptions}
+                                value={params.location_code}
+                                onChange={(v: string[]) => setParam("location_code", v)}
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
+                    </div>
+
+                    {/* Group By */}
+                    <div className="field-row" style={{ ...row2, marginTop: 10 }}>
+                        <div>
+                            <FloatLabel label="Group By" bgColor={BG}>
+                                <SelectField
+                                    label=""
+                                    options={[{ value: "", label: "No grouping" }, ...groupByOptions]}
+                                    value={params.group_by}
+                                    onChange={(v) => setParam("group_by", v)}
+                                    placeholder="Select grouping"
+                                    loading={optLoading}
+                                />
+                            </FloatLabel>
                         </div>
-                    )}
+                        <div />
+                    </div>
+                </div>
 
-                    {/* Action bar */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
-                        <button
-                            className="action-btn-excel"
-                            onClick={handleReset}
-                            disabled={loading}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #d1d5db",
-                                background: "#fff",
-                                cursor: loading ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#374151",
-                                opacity: loading ? 0.6 : 1,
-                            }}
-                        >
-                            <RotateCcw size={13} /> Reset
-                        </button>
-
-                        <button
-                            className="action-btn-excel"
-                            onClick={handlePrint}
-                            disabled={!hasGeneratedReport || loading}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #d1d5db",
-                                background: "#fff",
-                                cursor: (!hasGeneratedReport || loading) ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#374151",
-                                opacity: (!hasGeneratedReport || loading) ? 0.5 : 1,
-                            }}
-                        >
-                            <Printer size={13} /> Print
-                        </button>
-
-                        <button
-                            className="action-btn-excel"
-                            onClick={handleExcel}
-                            disabled={!hasGeneratedReport || loading || exporting}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #d1d5db",
-                                background: "#fff",
-                                cursor: (!hasGeneratedReport || loading || exporting) ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#374151",
-                                opacity: (!hasGeneratedReport || loading || exporting) ? 0.5 : 1,
-                            }}
-                        >
-                            <Download size={13} /> {exporting ? "Exporting..." : "Export Excel"}
-                        </button>
-
-                        <button
-                            className="action-btn-primary"
-                            onClick={handleGenerateReport}
-                            disabled={loading}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #185FA5",
-                                background: loading ? "#94a3b8" : "#185FA5",
-                                cursor: loading ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#fff",
-                                transition: "background 0.2s",
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!loading) e.currentTarget.style.background = "#1e40af";
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!loading) e.currentTarget.style.background = "#185FA5";
-                            }}
-                        >
-                            {loading ? (
-                                <>
-                                    <span style={{
+                {/* ── Actions bar ── */}
+                <div className="freight-report-actions">
+                    <Button
+                        className="action-btn-primary"
+                        size="sm"
+                        onClick={handleGenerateReport}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <>
+                                <span
+                                    style={{
+                                        display: "inline-block",
                                         width: 12,
                                         height: 12,
-                                        border: "2px solid rgba(255,255,255,0.3)",
-                                        borderTop: "2px solid #fff",
+                                        border: "2px solid #ffffff",
+                                        borderTopColor: "transparent",
                                         borderRadius: "50%",
                                         animation: "spin 0.8s linear infinite",
-                                    }} />
-                                    Generating...
-                                </>
-                            ) : (
-                                <>
-                                    <Printer size={13} /> Generate Report
-                                </>
-                            )}
-                        </button>
-                    </div>
-
+                                        marginRight: 6,
+                                    }}
+                                />
+                                Generating…
+                            </>
+                        ) : (
+                            "Generate Report"
+                        )}
+                    </Button>
                 </div>
             </div>
-        </div>
+
+            {/* ── Report preview dialog ── */}
+            <NewReportDialog
+                open={reportPreviewOpen}
+                onClose={closeReportPreview}
+                title="Stock Summary Report"
+                htmlContent={reportHtml}
+                loading={loading}
+                error={reportPreviewError || null}
+                onExportExcel={handleExportExcel}
+                exportingExcel={exportingExcel}
+                onOpenInNewWindow={handleOpenReportInNewWindow}
+                onDownloadPdf={handleDownloadReportPdf}
+            />
+        </section>
     );
 }

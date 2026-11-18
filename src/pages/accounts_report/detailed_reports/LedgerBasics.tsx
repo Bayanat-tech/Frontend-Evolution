@@ -1,752 +1,641 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-    RotateCcw,
-    Printer,
-    Loader2,
-    Download,
-} from "lucide-react";
-
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { LookupField } from "../../../components/ui/LookupField";
 import {
-    Division,
-    // openChequeMonitoringReport,
-    openChequeDateWiseReport,
-    // openDetailDumpReport,
-    // openLedgerWithDetailsReport,
-    // openLedgerOppositeEntryReport,
-    // openSummaryDumpReport,
-    openAccountPayeeWiseReport,
-    exportAccountPayeeWiseExcel,
-    exportChequeDateWiseExcel,
-    openLedgerWithDetailsReport,
-    openLedgerOppositeEntryReport,
-    exportLedgerWithDetailsExcel,
-
+  openChequeDateWiseReport,
+  openAccountPayeeWiseReport,
+  exportAccountPayeeWiseExcel,
+  exportChequeDateWiseExcel,
+  openLedgerWithDetailsReport,
+  openLedgerOppositeEntryReport,
+  exportLedgerWithDetailsExcel,
+  openSalesRegisterReport,
+  exportSalesRegisterExcel,
+  openPurchaseRegisterReport,
+  exportPurchaseRegisterExcel,
+  openDayBookReport,
+  exportDayBookExcel,
+  openTransactionListingReport,
+  exportTransactionListingExcel,
+  openLedgerBasicReport,
+  exportLedgerBasicExcel,
+  openSummaryDumpReport,
+  openDetailDumpReport,
 } from "../../../api/transactions";
-import { FloatLabelInput } from "../../../lib/InputStyle";
+import { NewReportDialog, NewReportPage, ReportFieldConfig, ReportOption } from "../../../components/new_report_format";
+import { VoucherPreviewModal, openTransactionScreen } from "../../../components/finance/VoucherPreviewModal";
 
-export default function FinanceReportFilter() {
-    const { user } = useAuth();
+export type ReportOptionKey =
+  | "ledgerBasic"
+  | "ledgerWithDetails"
+  | "ledgerWithOppositeEntry"
+  | "chequeDateWise"
+  | "acPayeeWise"
+  | "salesRegister"
+  | "purchaseRegister"
+  | "dayBook"
+  | "transactionListing"
+  | "summaryDump"
+  | "detailDump";
 
-    const [group, setGroup] = useState<any[]>([]);
-    const [accounts, setAccounts] = useState<any[]>([]);
-    const [division, setDivision] = useState<Division[]>([]);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [dateFrom, setDateFrom] = useState("2026-05-01");
-    const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0]); // default to today
-    const [amountFrom, setAmountFrom] = useState("");
-    const [amountTo, setAmountTo] = useState("");
-    const [remarks, setRemarks] = useState("");
-    const [filterLedger, setFilterLedger] = useState(false);
-    const [acPayee, setAcPayee] = useState("");
-    const [activeTab, setActiveTab] = useState("group");
+const REPORT_OPTIONS: { key: ReportOptionKey; label: string }[] = [
+  { key: "ledgerBasic", label: "A/c Ledger Basic" },
+  { key: "ledgerWithDetails", label: "Ledger With Details" },
+  { key: "ledgerWithOppositeEntry", label: "Ledger With Opposite Entry" },
+  { key: "chequeDateWise", label: "Cheque Date Wise" },
+  { key: "acPayeeWise", label: "A/c Payee Wise" },
+  { key: "salesRegister", label: "Sales Register / Sales List" },
+  { key: "purchaseRegister", label: "Purchase Register / Purchase List" },
+  { key: "dayBook", label: "Day Book Report" },
+  { key: "transactionListing", label: "Transaction Listing (Payments / Receipts / Vouchers)" },
+  { key: "summaryDump", label: "Summary Dump" },
+  { key: "detailDump", label: "Detail Dump" },
+];
 
-    // ── loading / error state ──────────────────────────────────────────────
-    const [generating, setGenerating] = useState(false);
-    const [reportError, setReportError] = useState<string | null>(null);
+const DOC_TYPE_OPTIONS: ReportOption[] = [
+  { value: "ALL", label: "All Document Types" },
+  { value: "BP", label: "BP - Bank / Cheque Payment" },
+  { value: "BR", label: "BR - Bank / Cheque Receipt" },
+  { value: "CP", label: "CP - Cash Payment" },
+  { value: "CR", label: "CR - Cash Receipt" },
+  { value: "JV", label: "JV - Journal Voucher" },
+  { value: "DN", label: "DN - Debit Note" },
+  { value: "CN", label: "CN - Credit Note" },
+  { value: "SI", label: "SI - Sales Invoice" },
+  { value: "PI", label: "PI - Purchase Invoice" },
+  { value: "PO", label: "PO - Purchase Order (LPO)" },
+];
 
-    const [groupLeftItems, setGroupLeftItems] = useState<any[]>([]);
-    const [groupRightItems, setGroupRightItems] = useState<any[]>([]);
-    const [groupLeftSelected, setGroupLeftSelected] = useState(new Set<string>());
-    const [groupRightSelected, setGroupRightSelected] = useState(new Set<string>());
+const formatDate = (date: string) => {
+  if (!date) return "";
+  const d = new Date(date);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+};
 
-    const [accountLeftItems, setAccountLeftItems] = useState<any[]>([]);
-    const [accountRightItems, setAccountRightItems] = useState<any[]>([]);
-    const [accountLeftSelected, setAccountLeftSelected] = useState(new Set<string>());
-    const [accountRightSelected, setAccountRightSelected] = useState(new Set<string>());
+export interface FinanceReportFilterProps {
+  initialReportType?: ReportOptionKey;
+  initialDocType?: string;
+  pageTitle?: string;
+}
 
-    const [groupSearchLeft, setGroupSearchLeft] = useState("");
-    const [groupSearchRight, setGroupSearchRight] = useState("");
+export default function FinanceReportFilter({
+  initialReportType = "ledgerBasic",
+  initialDocType = "ALL",
+  pageTitle,
+}: FinanceReportFilterProps) {
+  const { user } = useAuth();
 
-    const [accountSearchLeft, setAccountSearchLeft] = useState("");
-    const [accountSearchRight, setAccountSearchRight] = useState("");
-    const [generatingExcel, setGeneratingExcel] = useState(false);
+  // ── Filter values ──
+  const [values, setValues] = useState<Record<string, any>>({
+    division: "",
+    dateFrom: "2026-05-01",
+    dateTo: new Date().toISOString().split("T")[0],
+    amountFrom: "",
+    amountTo: "",
+    acPayee: ["All"],
+    remarks: "",
+    reportType: initialReportType,
+    docType: initialDocType,
+    docnoFrom: "",
+    docnoTo: "",
+    acCodes: ["All"],
+    l4Codes: ["All"],
+  });
 
-    const formatDate = (date: string) => {
-        if (!date) return null;
-        const d = new Date(date);
-        const day = String(d.getDate()).padStart(2, "0");
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const year = d.getFullYear();
-        return `${day}-${month}-${year}`;
+  // Sync if initialReportType changes via route navigation
+  useEffect(() => {
+    if (initialReportType) {
+      setValues((prev) => ({
+        ...prev,
+        reportType: initialReportType,
+        docType: initialDocType || prev.docType,
+      }));
+    }
+  }, [initialReportType, initialDocType]);
+
+  // ── Lookup data ──
+  const [divisionList, setDivisionList] = useState<any[]>([]);
+  const [accountItems, setAccountItems] = useState<any[]>([]);
+  const [groupItems, setGroupItems] = useState<any[]>([]);
+  const [acPayeeItems, setAcPayeeItems] = useState<any[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+
+  // ── Dialog / report state ──
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generatingExcel, setGeneratingExcel] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  // ── Voucher preview modal state (Audit-compliant safe inspection mode) ──
+  const [voucherModal, setVoucherModal] = useState<{
+    open: boolean;
+    docType: string;
+    docNo: string;
+  }>({ open: false, docType: "", docNo: "" });
+
+  // ── Listen for messages from report iframes (OPEN_DOCUMENT, OPEN_DOCUMENT_SCREEN) ──
+  useEffect(() => {
+    const handler = (ev: MessageEvent) => {
+      if (!ev.data) return;
+      if (ev.data.type === "OPEN_DOCUMENT") {
+        const { docType, docNo } = ev.data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          setVoucherModal({
+            open: true,
+            docType: String(docType),
+            docNo: String(docNo),
+          });
+        }
+        return;
+      }
     };
 
-    const [options, setOptions] = useState({
-        // default to cheque date wise selected
-        chequeDateWise: false,
-        // chequeBookMonitoring: true,
-        ledgerWithDetails: false,
-        ledgerWithOppositeEntry: false,
-        // summaryDump: false,
-        // detailDump: false,
-        acPayeeWise: false,
-    });
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
-    useEffect(() => {
-        if (division[0]?.div_code) {
-            fetchGroups();
-            fetchAccounts();
-        }
-    }, [division]);
+  const division = values.division as string;
+  const reportType = (values.reportType || "ledgerBasic") as ReportOptionKey;
 
-    const fetchGroups = async () => {
-        try {
-            const response = await getDynamicLookupaccount({
-                parameter: "Account_Report_Group",
-                code1: user?.company_code || "",
-                code2: division[0]?.div_code || "",
-            });
-            setGroup(response || []);
-            setGroupLeftItems(response || []);
-            setGroupRightItems([]);
-            setGroupLeftSelected(new Set());
-            setGroupRightSelected(new Set());
-        } catch (error) {
-            console.error("Group fetch error:", error);
-        }
-    };
-
-    const fetchAccounts = async () => {
-        try {
-            const response = await getDynamicLookupaccount({
-                parameter: "Account_Report_AC",
-                code1: user?.company_code || "",
-                code2: division[0]?.div_code || "",
-            });
-            const uniqueData = Array.from(
-                new Map(response.map((item: any) => [item.ac_code, item])).values()
-            );
-            setAccounts(uniqueData);
-            setAccountLeftItems(uniqueData);
-        } catch (error) {
-            console.error("Accounts fetch error:", error);
-        }
-    };
-
-    const toggleOption = (key: keyof typeof options) => {
-        setOptions((prev) => {
-            const next: Record<string, boolean> = {};
-            Object.keys(prev).forEach((k) => {
-                next[k] = k === key ? !prev[key] : false;
-            });
-            return next as typeof prev;
+  // ── Fetch divisions on mount ──
+  useEffect(() => {
+    const fetchDivisions = async () => {
+      try {
+        const response = await getDynamicLookup({
+          parameter: "Account_division",
+          code1: user?.company_code || "",
+          loginid: user?.loginid || user?.username || "ADMIN",
         });
-        setReportError(null);
+        setDivisionList(response || []);
+      } catch (error) {
+        console.error("Division fetch error:", error);
+      }
     };
+    fetchDivisions();
+  }, [user?.company_code, user?.loginid, user?.username]);
 
-    const getItemKey = (item: any) => item.l4_code || item.ac_code || "";
+  // ── When division changes: load groups + accounts ──
+  useEffect(() => {
+    if (!division) {
+      setAccountItems([]);
+      setGroupItems([]);
+      setValues((prev) => ({
+        ...prev,
+        acCodes: ["All"],
+        l4Codes: ["All"],
+      }));
+      return;
+    }
+    fetchGroups(division);
+    fetchAccounts(division);
+  }, [division]);
 
-    const toggleSelection = (
-        code: string,
-        setSelected: React.Dispatch<React.SetStateAction<Set<string>>>
-    ) => {
-        setSelected((prev) => {
-            const next = new Set(prev);
-            next.has(code) ? next.delete(code) : next.add(code);
-            return next;
+  // ── Load A/c payee list once ──
+  useEffect(() => {
+    const fetchPayees = async () => {
+      try {
+        const response = await getDynamicLookupaccount({
+          parameter: "Account_Report_AC_PAYEE",
+          code1: user?.company_code || "",
+          loginid: user?.loginid || user?.username || "ADMIN",
         });
+        setAcPayeeItems(response || []);
+      } catch (error) {
+        console.error("A/c payee fetch error:", error);
+      }
     };
+    fetchPayees();
+  }, [user?.company_code, user?.loginid, user?.username]);
 
-    const toggleAllSelection = (
-        items: any[],
-        selected: Set<string>,
-        setSelected: React.Dispatch<React.SetStateAction<Set<string>>>,
-        keyField: string
-    ) => {
-        const itemKeys = new Set(items.map((item) => item[keyField]));
-        const allSelected = items.length > 0 && items.every((item) => selected.has(item[keyField]));
-        setSelected(allSelected ? new Set() : itemKeys);
-    };
-
-
-
-    const filteredGroupLeft = groupLeftItems.filter(
-        (item) =>
-            item.l4_code?.toLowerCase().includes(groupSearchLeft.toLowerCase()) ||
-            item.description?.toLowerCase().includes(groupSearchLeft.toLowerCase())
-    );
-
-    const filteredAccountLeft = accountLeftItems.filter(
-        (item) =>
-            item.ac_code?.toLowerCase().includes(accountSearchLeft.toLowerCase()) ||
-            item.ac_name?.toLowerCase().includes(accountSearchLeft.toLowerCase())
-    );
-
-
-    const handleReset = () => {
-        setGroupLeftItems([...groupLeftItems, ...groupRightItems]);
-        setGroupRightItems([]);
-        setGroupLeftSelected(new Set());
-        setGroupRightSelected(new Set());
-        setAccountLeftItems([...accountLeftItems, ...accountRightItems]);
-        setAccountRightItems([]);
-        setAccountLeftSelected(new Set());
-        setAccountRightSelected(new Set());
-        setReportError(null);
-    };
-
-    // ── build shared params ────────────────────────────────────────────────
-    const buildParams = () => ({
-        loginid: user?.loginid || user?.username || "ADMIN",
+  const fetchGroups = async (div: string) => {
+    try {
+      setOptionsLoading(true);
+      const response = await getDynamicLookupaccount({
+        parameter: "Account_Report_Group",
         code1: user?.company_code || "",
-        code2: division[0]?.div_code || "",
-        code3: Array.from(accountLeftSelected).join(",") || "All",
-        code4: Array.from(groupLeftSelected).join(",") || "All",
-        code5: String(formatDate(dateFrom)),
-        code6: String(formatDate(dateTo)),
-        code7: amountFrom || "",
-        code8: amountTo || "",
-        // remarks / filterLedger / acPayee can be passed as extra codes if your backend supports them
-        code9: acPayee || "",
-        code10: String(formatDate(dateFrom)),
-        code20: "RAWSQL", // used for report-specific flags like "RAWSQL" or "DATE_WISE"
-        parameter: "Account_Report_Transaction", // overridden per report
-    });
+        code2: div,
+      });
+      setGroupItems(response || []);
+      setValues((prev) => ({ ...prev, l4Codes: ["All"] }));
+    } catch (error) {
+      console.error("Group fetch error:", error);
+    } finally {
+      setOptionsLoading(false);
+    }
+  };
 
-    // ── generate report(s) — opens each checked option in its own tab ──────
-    const handleGenerate = async () => {
-        if (!division[0]?.div_code) {
-            setReportError("Please select a Division before generating.");
-            return;
-        }
+  const fetchAccounts = async (div: string) => {
+    try {
+      setOptionsLoading(true);
+      const response = await getDynamicLookupaccount({
+        parameter: "Account_Report_AC",
+        code1: user?.company_code || "",
+        code2: div,
+      });
+      const uniqueData = Array.from(
+        new Map((response || []).map((item: any) => [item.ac_code, item])).values()
+      );
+      setAccountItems(uniqueData as any[]);
+      setValues((prev) => ({ ...prev, acCodes: ["All"] }));
+    } catch (error) {
+      console.error("Accounts fetch error:", error);
+    } finally {
+      setOptionsLoading(false);
+    }
+  };
 
-        setReportError(null);
-        setGenerating(true);
+  // ── Options memoization ──
+  const divisionOptions: ReportOption[] = useMemo(
+    () =>
+      divisionList.map((d: any) => ({
+        value: String(d.div_code),
+        label: `${d.div_code} - ${d.div_name}`,
+        code: String(d.div_code),
+      })),
+    [divisionList]
+  );
 
-        const params = buildParams();
+  const accountOptions: ReportOption[] = useMemo(
+    () =>
+      accountItems.map((a: any) => ({
+        value: String(a.ac_code),
+        label: `${a.ac_code} - ${a.ac_name}`,
+        code: String(a.ac_code),
+      })),
+    [accountItems]
+  );
 
-        const anyChecked = Object.values(options).some(Boolean);
+  const groupOptions: ReportOption[] = useMemo(
+    () =>
+      groupItems.map((g: any) => ({
+        value: String(g.l4_code),
+        label: `${g.l4_code} - ${g.description}`,
+        code: String(g.l4_code),
+      })),
+    [groupItems]
+  );
 
-        const reportMap: { key: keyof typeof options; fn: (p: any) => Promise<void>; label: string }[] = [
-            { key: "chequeDateWise", fn: openChequeDateWiseReport, label: "Cheque Date Wise" },
-            { key: "ledgerWithDetails", fn: openLedgerWithDetailsReport, label: "Ledger With Details" },
-            { key: "ledgerWithOppositeEntry", fn: openLedgerOppositeEntryReport, label: "Ledger Opposite Entry" },
-            { key: "acPayeeWise", fn: openAccountPayeeWiseReport, label: "Account Payee Wise" },
-        ];
+  const acPayeeOptions: ReportOption[] = useMemo(
+    () =>
+      acPayeeItems.map((p: any) => ({
+        value: String(p.ac_payee ?? p.ac_ref ?? ""),
+        label: `${p.ac_payee ?? ""}${p.ac_ref ? ` - ${p.ac_ref}` : ""}`,
+        code: String(p.ac_payee ?? ""),
+      })),
+    [acPayeeItems]
+  );
 
-        const errors: string[] = [];
+  const reportTypeOptions: ReportOption[] = useMemo(
+    () => REPORT_OPTIONS.map((o) => ({ value: o.key, label: o.label })),
+    []
+  );
 
-        if (!anyChecked) {
-            // default: cheque date wise
-            try {
-                await openChequeDateWiseReport({ ...params, code20: "DATE_WISE" });
-            } catch (err: any) {
-                errors.push("Cheque Date Wise");
-            }
-        } else {
-            for (const { key, fn, label } of reportMap) {
-                if (!options[key]) continue;
-                try {
-                    await fn(key === "ledgerWithDetails" ? { ...params, code20: "DATE_WISE" } : params);
-                } catch (err: any) {
-                    console.error(`${label} error:`, err);
-                    errors.push(label);
-                }
-            }
-        }
+  // ── Field config ──
+  const fields: ReportFieldConfig[] = useMemo(() => {
+    const list: ReportFieldConfig[] = [
+      {
+        key: "division",
+        label: "Division",
+        type: "select",
+        options: divisionOptions,
+        required: true,
+        placeholder: "Select division",
+        colSpan: 3,
+      },
+      {
+        key: "dateFrom",
+        label: "From Date",
+        type: "date",
+        required: true,
+        colSpan: 3,
+      },
+      {
+        key: "dateTo",
+        label: "To Date",
+        type: "date",
+        required: true,
+        colSpan: 3,
+      },
+      {
+        key: "reportType",
+        label: "Report Type",
+        type: "select",
+        options: reportTypeOptions,
+        required: true,
+        colSpan: 3,
+      },
+    ];
 
-        setGenerating(false);
+    if (reportType === "transactionListing") {
+      list.push({
+        key: "docType",
+        label: "Document Type",
+        type: "select",
+        options: DOC_TYPE_OPTIONS,
+        colSpan: 3,
+      });
+      list.push({
+        key: "docnoFrom",
+        label: "Doc No From",
+        type: "text",
+        placeholder: "Optional",
+        colSpan: 3,
+      });
+      list.push({
+        key: "docnoTo",
+        label: "Doc No To",
+        type: "text",
+        placeholder: "Optional",
+        colSpan: 3,
+      });
+    }
 
-        if (errors.length > 0) {
-            setReportError(`Failed to open: ${errors.join(", ")}. Check console for details.`);
-        }
-    };
-    const handleExportExcel = async () => {
-        setReportError(null);
-        setGeneratingExcel(true);
+    if (reportType === "salesRegister" || reportType === "purchaseRegister") {
+      list.push({
+        key: "docnoFrom",
+        label: "Voucher From",
+        type: "text",
+        placeholder: "Optional",
+        colSpan: 3,
+      });
+      list.push({
+        key: "docnoTo",
+        label: "Voucher To",
+        type: "text",
+        placeholder: "Optional",
+        colSpan: 3,
+      });
+    }
 
-        try {
-            if (options.chequeDateWise) {
-                await exportChequeDateWiseExcel(
-                    buildParams()
-                );
-            } else if (options.ledgerWithDetails) {
-                await exportLedgerWithDetailsExcel(
-                    buildParams()
-                );
-            }else if (options.ledgerWithOppositeEntry) {
-                await exportLedgerWithDetailsExcel(
-                    buildParams()
-                );
-            }
-            else if (options.acPayeeWise) {
-                await exportAccountPayeeWiseExcel(
-                    buildParams()
-                );
-            }
-
-
-        } catch (err: any) {
-            console.error(err);
-            setReportError(err.message || "Failed to generate report.");
-        } finally {
-            setGeneratingExcel(false);
-        }
-    };
-    // ── shared table styles ────────────────────────────────────────────────
-    const thStyle: React.CSSProperties = {
-        padding: "7px 10px",
-        textAlign: "left",
-        fontWeight: 500,
-        fontSize: 11,
-        background: "#185FA5",
-        color: "#fff",
-        position: "sticky",
-        top: 0,
-        zIndex: 1,
-    };
-
-    const tdStyle: React.CSSProperties = {
-        padding: "6px 10px",
-        fontSize: 11,
-        borderBottom: "0.5px solid #e9e5eb",
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        maxWidth: 0,
-    };
-
-    const rowStyle = (selected: boolean): React.CSSProperties => ({
-        cursor: "pointer",
-        background: selected ? "#E6F1FB" : "transparent",
-        color: selected ? "#0C447C" : "inherit",
-    });
-
-    const transferBtnStyle: React.CSSProperties = {
-        width: 32,
-        height: 32,
-        border: "0.5px solid #d1d5db",
-        background: "#fff",
-        borderRadius: 6,
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#6b7280",
-    };
-
-    const badgeStyle: React.CSSProperties = {
-        background: "#E6F1FB",
-        color: "#0C447C",
-        fontSize: 10,
-        fontWeight: 500,
-        padding: "2px 8px",
-        borderRadius: 20,
-    };
-
-    const fieldLabelStyle: React.CSSProperties = {
-        fontSize: 11,
-        fontWeight: 500,
-        color: "#6b7280",
-        marginBottom: 5,
-        textTransform: "uppercase",
-        letterSpacing: "0.05em",
-    };
-
-    const inputStyle: React.CSSProperties = {
-        width: "100%",
-        fontSize: 12,
-        padding: "6px 9px",
-        border: "0.5px solid #d1d5db",
-        borderRadius: 6,
-        background: "#fff",
-        color: "#111827",
-    };
-
-    const checkRowStyle: React.CSSProperties = {
-        display: "flex",
-        alignItems: "center",
-        gap: 7,
-        marginBottom: 7,
-        fontSize: 12,
-        cursor: "pointer",
-    };
-
-    // count how many reports are selected
-    const selectedCount = Object.values(options).filter(Boolean).length;
-
-    return (
-        <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif" }}>
-            <style>{`
-                .tf-btn:hover { background: #f0f7ff !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-                .tab-btn-r { padding: 7px 18px; border: none; background: none; cursor: pointer; font-size: 12px; font-weight: 500; color: #9ca3af; border-bottom: 2px solid transparent; margin-bottom: -0.5px; }
-                .tab-btn-r.active { color: #185FA5; border-bottom-color: #185FA5; }
-                .action-btn:hover { background: #f9fafb !important; }
-                .action-btn-primary:hover { background: #0C447C !important; border-color: #0C447C !important; }
-                .action-btn-primary:disabled { background: #93c5fd !important; border-color: #93c5fd !important; cursor: not-allowed !important; }
-                table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-                tbody tr:last-child td { border-bottom: none !important; }
-                tbody tr:hover td { background: #f9fafb; }
-            `}</style>
-
-            <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-                <div style={{
-                    background: "#fff",
-                    border: "0.5px solid #e5e7eb",
-                    borderRadius: 12,
-                    padding: "20px 24px",
-                }}>
-                    {/* ── top filters ── */}
-                    {/* ── top filters ── */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-
-                        {/* Row 1: Parameters + Filters side by side */}
-                        <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
-
-                            {/* Left column — Parameters stacked above Report options */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-                                {/* Group 1 — Parameters */}
-                                <div style={{
-                                    display: "grid",
-                                    gridTemplateColumns: "180px 130px 130px",
-                                    gap: 10,
-                                    alignItems: "center",
-                                    padding: "10px 14px",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: 8,
-                                    background: "#f9fafb",
-                                    position: "relative",
-                                }}>
-                                    <span style={{
-                                        position: "absolute", top: -9, left: 12, fontSize: 10,
-                                        color: "#185FA5", background: "#f9fafb", padding: "0 5px",
-                                        fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
-                                    }}>Parameters</span>
-
-                                    <div style={{ position: "relative" }}>
-                                        <span style={{
-                                            position: "absolute", top: -8, left: 10, fontSize: 11,
-                                            color: "#6b7280", background: "#f9fafb", padding: "0 4px", zIndex: 1,
-                                        }}>Division</span>
-                                        <div style={{ borderRadius: 6, padding: "1px 0" }}>
-                                            <LookupField
-                                                label=""
-                                                value={division[0]?.div_code || ""}
-                                                displayValue={division[0]?.div_name || ""}
-                                                columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                                                valueField="div_code"
-                                                displayFields={["div_code", "div_name"]}
-                                                loadOptions={() => getDynamicLookup({
-                                                    parameter: "Account_division",
-                                                    code1: user?.company_code,
-                                                    loginid: user?.loginid || user?.username || "ADMIN",
-                                                })}
-                                                onChange={(val) => setDivision([{ div_code: val, div_name: "" }])}
-                                            />
-                                        </div>
-                                    </div>
-                                    <FloatLabelInput label="From" value={dateFrom} type="date" onChange={(e) => setDateFrom(e.target.value)} />
-                                    <FloatLabelInput label="To" value={dateTo} type="date" onChange={(e) => setDateTo(e.target.value)} />
-                                </div>
-
-                                {/* Group 3 — Report options (sits below Parameters, same width) */}
-                                <div style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 20,
-                                    padding: "8px 14px",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: 8,
-                                    background: "#f9fafb",
-                                    position: "relative",
-                                }}>
-                                    <span style={{
-                                        position: "absolute", top: -9, left: 12, fontSize: 10,
-                                        color: "#185FA5", background: "#f9fafb", padding: "0 5px",
-                                        fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
-                                    }}>Report options</span>
-                                    {([
-                                        ["ledgerWithDetails", "Ledger With Details"],
-                                        ["ledgerWithOppositeEntry", "Ledger With Opposite Entry"],
-                                        ["acPayeeWise", "A/c payee wise"],
-                                    ] as [keyof typeof options, string][]).map(([key, label]) => (
-                                        <label key={key} style={{ ...checkRowStyle, marginBottom: 0 }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={options[key]}
-                                                onChange={() => toggleOption(key)}
-                                                style={{ accentColor: "#185FA5" }}
-                                            />
-                                            <span style={{ fontSize: 12 }}>{label}</span>
-                                        </label>
-                                    ))}
-                                    {selectedCount > 0 && <span style={{ ...badgeStyle, marginLeft: "auto" }}>{selectedCount} selected</span>}
-                                </div>
-
-                            </div>
-
-                            {/* Group 2 — Filters */}
-                            <div style={{
-                                display: "grid",
-                                gridTemplateColumns: "120px 120px 1fr",
-                                gridTemplateRows: "auto auto",
-                                gap: 10,
-                                alignItems: "center",
-                                padding: "10px 14px",
-                                border: "1px solid #d1d5db",
-                                borderRadius: 8,
-                                background: "#f9fafb",
-                                flex: 1,
-                                position: "relative",
-                            }}>
-                                <span style={{
-                                    position: "absolute", top: -9, left: 12, fontSize: 10,
-                                    color: "#185FA5", background: "#f9fafb", padding: "0 5px",
-                                    fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
-                                }}>Filters</span>
-
-                                <FloatLabelInput label="Amount from" value={amountFrom} onChange={(e) => setAmountFrom(e.target.value)} />
-                                <FloatLabelInput label="Amount to" value={amountTo} onChange={(e) => setAmountTo(e.target.value)} />
-                                <div style={{ position: "relative" }}>
-                                    <span style={{
-                                        position: "absolute", top: -8, left: 10, fontSize: 11,
-                                        color: "#6b7280", background: "#f9fafb", padding: "0 4px", zIndex: 1,
-                                    }}>A/c payee</span>
-                                    <div style={{ borderRadius: 6, padding: "1px 0" }}>
-                                        <LookupField
-                                            label=""
-                                            value={acPayee}
-                                            columns={[{ field: "ac_payee", header: "Payee" }, { field: "ac_ref", header: "Reference" }]}
-                                            valueField="ac_payee"
-                                            displayFields={["ac_payee", "ac_ref"]}
-                                            loadOptions={() =>
-                                                getDynamicLookupaccount({
-                                                    parameter: "Account_Report_AC_PAYEE",
-                                                    code1: user?.company_code,
-                                                    loginid: user?.loginid || user?.username || "ADMIN",
-                                                })
-                                            }
-                                            onChange={(val) => setAcPayee(val)}
-                                            multiSelect
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Remarks — full width */}
-                                <div style={{ gridColumn: "1 / -1" }}>
-                                    <FloatLabelInput label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-
-                    {/* ── divider ── */}
-                    <div style={{ height: "0.5px", background: "#e5e7eb", margin: "4px 0 14px" }} />
-
-                    {/* ── tabs ── */}
-                    <div style={{ display: "flex", borderBottom: "0.5px solid #e5e7eb", marginBottom: 14 }}>
-                        {["acCode", "group"].map((tab) => (
-                            <button
-                                key={tab}
-                                className={`tab-btn-r ${activeTab === tab ? "active" : ""}`}
-                                onClick={() => setActiveTab(tab)}
-                            >
-                                {tab === "acCode" ? "A/c code" : "Group"}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* ── account tab ── */}
-                    {activeTab === "acCode" && (
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                    Accounts
-                                </span>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    {accountLeftSelected.size > 0 && (
-                                        <span style={badgeStyle}>{accountLeftSelected.size} selected</span>
-                                    )}
-                                    <span style={badgeStyle}>{accountLeftItems.length} total</span>
-                                </div>
-                            </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <input
-                                    type="text"
-                                    placeholder="Search accounts..."
-                                    value={accountSearchLeft}
-                                    onChange={(e) => setAccountSearchLeft(e.target.value)}
-                                    style={{ ...inputStyle, fontSize: 12 }}
-                                />
-                            </div>
-                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 200, overflowY: "auto" }}>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th style={{ ...thStyle, width: 36 }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={accountLeftItems.length > 0 && accountLeftItems.every(i => accountLeftSelected.has(i.ac_code))}
-                                                    onChange={() => toggleAllSelection(accountLeftItems, accountLeftSelected, setAccountLeftSelected, "ac_code")}
-                                                    style={{ accentColor: "#fff", cursor: "pointer" }}
-                                                />
-                                            </th>
-                                            <th style={{ ...thStyle, width: 100 }}>A/c code</th>
-                                            <th style={thStyle}>Description</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredAccountLeft.map((row) => (
-                                            <tr
-                                                key={row.ac_code}
-                                                style={rowStyle(accountLeftSelected.has(row.ac_code))}
-                                                onClick={() => toggleSelection(row.ac_code, setAccountLeftSelected)}
-                                            >
-                                                <td style={{ ...tdStyle, width: 36 }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={accountLeftSelected.has(row.ac_code)}
-                                                        onChange={() => toggleSelection(row.ac_code, setAccountLeftSelected)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                                                    />
-                                                </td>
-                                                <td style={tdStyle}>{row.ac_code}</td>
-                                                <td style={tdStyle}>{row.ac_name}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── group tab ── */}
-                    {activeTab === "group" && (
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                    Groups
-                                </span>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    {groupLeftSelected.size > 0 && (
-                                        <span style={badgeStyle}>{groupLeftSelected.size} selected</span>
-                                    )}
-                                    <span style={badgeStyle}>{groupLeftItems.length} total</span>
-                                </div>
-                            </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <input
-                                    type="text"
-                                    placeholder="Search groups..."
-                                    value={groupSearchLeft}
-                                    onChange={(e) => setGroupSearchLeft(e.target.value)}
-                                    style={{ ...inputStyle, fontSize: 12 }}
-                                />
-                            </div>
-                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 200, overflowY: "auto" }}>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th style={{ ...thStyle, width: 36 }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={groupLeftItems.length > 0 && groupLeftItems.every(i => groupLeftSelected.has(i.l4_code))}
-                                                    onChange={() => toggleAllSelection(groupLeftItems, groupLeftSelected, setGroupLeftSelected, "l4_code")}
-                                                    style={{ accentColor: "#fff", cursor: "pointer" }}
-                                                />
-                                            </th>
-                                            <th style={{ ...thStyle, width: 100 }}>L4 code</th>
-                                            <th style={thStyle}>Description</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredGroupLeft.map((row) => (
-                                            <tr
-                                                key={row.l4_code}
-                                                style={rowStyle(groupLeftSelected.has(row.l4_code))}
-                                                onClick={() => toggleSelection(row.l4_code, setGroupLeftSelected)}
-                                            >
-                                                <td style={{ ...tdStyle, width: 36 }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={groupLeftSelected.has(row.l4_code)}
-                                                        onChange={() => toggleSelection(row.l4_code, setGroupLeftSelected)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                                                    />
-                                                </td>
-                                                <td style={tdStyle}>{row.l4_code}</td>
-                                                <td style={tdStyle}>{row.description}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── error banner ── */}
-                    {reportError && (
-                        <div style={{
-                            marginTop: 12,
-                            padding: "8px 14px",
-                            background: "#fef2f2",
-                            border: "0.5px solid #fca5a5",
-                            borderRadius: 6,
-                            fontSize: 12,
-                            color: "#b91c1c",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                        }}>
-                            <span>⚠</span> {reportError}
-                        </div>
-                    )}
-
-                    {/* ── action bar ── */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16, paddingTop: 14, borderTop: "0.5px solid #e5e7eb" }}>
-                        <button className="action-btn" onClick={handleReset}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}>
-                            <RotateCcw size={13} /> Reset
-                        </button>
-                        <button className="act-btn" onClick={handleExportExcel}
-                            style={{ padding: "7px 16px", border: "0.5px solid #abcae9", background: "#d2dfee", cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#3a3636", opacity: generating ? 0.75 : 1 }}>
-
-                            {generatingExcel && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
-                            {!generatingExcel && (
-                                <Download size={13} />
-
-                            )}
-                            Export Excel
-                        </button>
-                        <div style={{ width: "0.5px", background: "#e5e7eb", alignSelf: "stretch" }} />
-                        <button
-                            className="action-btn-primary"
-                            disabled={generating}
-                            onClick={handleGenerate}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #185FA5",
-                                background: "#185FA5",
-                                cursor: generating ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#fff",
-                                opacity: generating ? 0.75 : 1,
-                            }}
-                        >
-                            {generating
-                                ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
-                                : <><Printer size={13} /> Generate report {selectedCount > 1 ? `(${selectedCount})` : ""}</>
-                            }
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <style>{`
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            `}</style>
-        </div>
+    list.push(
+      {
+        key: "amountFrom",
+        label: "Amount From",
+        type: "text",
+        placeholder: "0",
+        colSpan: 3,
+      },
+      {
+        key: "amountTo",
+        label: "Amount To",
+        type: "text",
+        placeholder: "0",
+        colSpan: 3,
+      },
+      {
+        key: "acPayee",
+        label: "A/c Payee",
+        type: "multiselect",
+        options: acPayeeOptions,
+        placeholder: "All",
+        colSpan: 3,
+      },
+      {
+        key: "remarks",
+        label: "Remarks",
+        type: "text",
+        placeholder: "Optional remarks",
+        colSpan: 3,
+      },
+      {
+        key: "acCodes",
+        label: "A/c Code",
+        type: "multiselect",
+        options: accountOptions,
+        loading: optionsLoading,
+        placeholder: "All",
+        colSpan: 6,
+        disabled: !division,
+      },
+      {
+        key: "l4Codes",
+        label: "Group",
+        type: "multiselect",
+        options: groupOptions,
+        loading: optionsLoading,
+        placeholder: "All",
+        colSpan: 6,
+        disabled: !division,
+      }
     );
+
+    return list;
+  }, [
+    divisionOptions,
+    reportTypeOptions,
+    reportType,
+    acPayeeOptions,
+    accountOptions,
+    groupOptions,
+    division,
+    optionsLoading,
+  ]);
+
+  // ── Handlers ──
+  const handleChange = useCallback((key: string, value: any) => {
+    setValues((prev) => ({ ...prev, [key]: value }));
+    setReportError(null);
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    setValues({
+      division: "",
+      dateFrom: "2026-05-01",
+      dateTo: new Date().toISOString().split("T")[0],
+      amountFrom: "",
+      amountTo: "",
+      acPayee: ["All"],
+      remarks: "",
+      reportType: initialReportType,
+      docType: initialDocType,
+      docnoFrom: "",
+      docnoTo: "",
+      acCodes: ["All"],
+      l4Codes: ["All"],
+    });
+    setReportError(null);
+  }, [initialReportType, initialDocType]);
+
+  const buildParams = useCallback(() => {
+    const ac = (values.acCodes as string[]) || [];
+    const groups = (values.l4Codes as string[]) || [];
+    const payees = (values.acPayee as string[]) || [];
+
+    return {
+      loginid: user?.loginid || user?.username || "ADMIN",
+      code1: user?.company_code || "",
+      code2: division || "",
+      code3: ac.length && !ac.includes("All") ? ac.join(",") : "All",
+      code4: groups.length && !groups.includes("All") ? groups.join(",") : "All",
+      code5: String(formatDate(values.dateFrom)),
+      code6: String(formatDate(values.dateTo)),
+      code7: values.amountFrom || "",
+      code8: values.amountTo || "",
+      code9: payees.length && !payees.includes("All") ? payees.join(",") : "",
+      code10: String(formatDate(values.dateFrom)),
+      doc_type: values.docType || "ALL",
+      docno_from: values.docnoFrom || null,
+      docno_to: values.docnoTo || null,
+      code20: reportType === "ledgerWithDetails" || reportType === "chequeDateWise" ? "DATE_WISE" : "RAWSQL",
+      parameter: "Account_Report_Transaction",
+    };
+  }, [values, division, reportType, user]);
+
+  const reportTitle = useMemo(() => {
+    if (pageTitle) return pageTitle;
+    const found = REPORT_OPTIONS.find((o) => o.key === reportType);
+    return found ? found.label : "Finance Report";
+  }, [reportType, pageTitle]);
+
+  const handleGenerate = async () => {
+    if (!division) {
+      setReportError("Please select a Division before generating.");
+      return;
+    }
+
+    setReportError(null);
+    setGenerating(true);
+    setReportHtml(null);
+    setReportOpen(true);
+
+    try {
+      const params = buildParams();
+      let html: string;
+
+      switch (reportType) {
+        case "salesRegister":
+          html = await openSalesRegisterReport(params);
+          break;
+        case "purchaseRegister":
+          html = await openPurchaseRegisterReport(params);
+          break;
+        case "dayBook":
+          html = await openDayBookReport(params);
+          break;
+        case "transactionListing":
+          html = await openTransactionListingReport(params);
+          break;
+        case "ledgerBasic":
+          html = await openLedgerBasicReport(params);
+          break;
+        case "summaryDump":
+          html = await openSummaryDumpReport(params);
+          break;
+        case "detailDump":
+          html = await openDetailDumpReport(params);
+          break;
+        case "ledgerWithDetails":
+          html = await openLedgerWithDetailsReport({ ...params, code20: "DATE_WISE" });
+          break;
+        case "ledgerWithOppositeEntry":
+          html = await openLedgerOppositeEntryReport(params);
+          break;
+        case "acPayeeWise":
+          html = await openAccountPayeeWiseReport(params);
+          break;
+        case "chequeDateWise":
+        default:
+          html = await openChequeDateWiseReport({ ...params, code20: "DATE_WISE" });
+          break;
+      }
+
+      setReportHtml(typeof html === "string" ? html : String(html ?? ""));
+    } catch (err: any) {
+      console.error(err);
+      setReportError(err?.message || "Failed to generate report. Check console.");
+      setReportOpen(false);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    if (!division) {
+      setReportError("Please select a Division before exporting.");
+      return;
+    }
+    setReportError(null);
+    setGeneratingExcel(true);
+    try {
+      const params = buildParams();
+      switch (reportType) {
+        case "salesRegister":
+          await exportSalesRegisterExcel(params);
+          break;
+        case "purchaseRegister":
+          await exportPurchaseRegisterExcel(params);
+          break;
+        case "dayBook":
+          await exportDayBookExcel(params);
+          break;
+        case "transactionListing":
+          await exportTransactionListingExcel(params);
+          break;
+        case "ledgerBasic":
+          await exportLedgerBasicExcel(params);
+          break;
+        case "ledgerWithDetails":
+        case "ledgerWithOppositeEntry":
+          await exportLedgerWithDetailsExcel(params);
+          break;
+        case "acPayeeWise":
+          await exportAccountPayeeWiseExcel(params);
+          break;
+        case "chequeDateWise":
+        default:
+          await exportChequeDateWiseExcel(params);
+          break;
+      }
+    } catch (err: any) {
+      console.error(err);
+      setReportError(err?.message || "Failed to export Excel.");
+    } finally {
+      setGeneratingExcel(false);
+    }
+  };
+
+  return (
+    <>
+      <NewReportPage
+        title={pageTitle || "Finance Report"}
+        fields={fields}
+        values={values}
+        onChange={handleChange}
+        onClearAll={handleClearAll}
+        onGenerate={handleGenerate}
+        loading={generating}
+        optionsLoading={optionsLoading}
+        error={reportError}
+        onClearError={() => setReportError(null)}
+        defaultColSpan={3}
+      />
+
+      <NewReportDialog
+        open={reportOpen}
+        onClose={() => {
+          setReportOpen(false);
+          setReportHtml(null);
+        }}
+        title={reportTitle}
+        htmlContent={reportHtml}
+        loading={generating}
+        error={reportError}
+        onExportExcel={handleExportExcel}
+      />
+
+      {/* Audit-Compliant Read-Only Voucher Preview Dialog with "Open in Screen" button */}
+      <VoucherPreviewModal
+        open={voucherModal.open}
+        onClose={() => setVoucherModal({ open: false, docType: "", docNo: "" })}
+        docType={voucherModal.docType}
+        docNo={voucherModal.docNo}
+      />
+    </>
+  );
 }

@@ -213,3 +213,19 @@ export async function executeVendorInvoicePrint(companyCode: string, docNo: stri
   assertSuccess(data, "Unable to execute vendor invoice print");
   return data;
 }
+
+export async function bulkVendorApproval(p: {
+  company_code: string;
+  loginid: string;
+  docNos: string;
+  action: "APPROVED" | "REJECTED";
+}) {
+  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/bulkApprovalHandler", {
+    company_code: p.company_code,
+    loginid: p.loginid,
+    doc_nos: p.docNos,
+    action: p.action,
+  });
+  assertSuccess(data, "Unable to process bulk action");
+  return data;
+}

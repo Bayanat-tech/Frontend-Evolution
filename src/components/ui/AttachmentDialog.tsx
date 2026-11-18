@@ -1,11 +1,14 @@
-import { Download, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
+import { Download, Eye, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteAccountFile,
+  deleteFreightAccountFile,
   getAccountFiles,
+  getFreightAccountFiles,
   makeFileRow,
   NormalizedFile,
   renameAccountFile,
+  renameFreightAccountFile,
   saveAccountFileRows,
   uploadAccountFile,
 } from "../../api/files";
@@ -69,7 +72,8 @@ export function AttachmentDialog({
     setLoading(true);
     setNotice(null);
     try {
-      const groups = await Promise.all(allRequestNumbers.map((item) => getAccountFiles(item)));
+      const loadAccountFiles = module.toUpperCase() === "FREIGHT" ? getFreightAccountFiles : getAccountFiles;
+      const groups = await Promise.all(allRequestNumbers.map((item) => loadAccountFiles(item)));
       setFiles(groups.flat());
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load attachments" });
@@ -125,9 +129,25 @@ export function AttachmentDialog({
   };
 
   const saveRename = async (file: NormalizedFile) => {
-    if (!requestNumber || !file.aws_file_locn || !editName.trim()) return;
+    if (!requestNumber) return;
+    if (!editName.trim()) {
+      setNotice({ type: "error", message: "Display name cannot be empty." });
+      return;
+    }
     try {
-      await renameAccountFile(requestNumber, file.aws_file_locn, editName.trim());
+      if (module.toUpperCase() === "FREIGHT") {
+        if (file.sr_no === undefined || !Number.isFinite(file.sr_no)) {
+          setNotice({ type: "error", message: "This freight attachment has no saved record ID." });
+          return;
+        }
+        await renameFreightAccountFile(requestNumber, file.sr_no, editName.trim());
+      } else {
+        if (!file.aws_file_locn) {
+          setNotice({ type: "error", message: "This attachment has no storage location." });
+          return;
+        }
+        await renameAccountFile(requestNumber, file.aws_file_locn, editName.trim());
+      }
       setFiles((current) => current.map((item) => fileKey(item) === fileKey(file) ? { ...item, user_file_name: editName.trim() } : item));
       setEditingKey("");
       setEditName("");
@@ -138,9 +158,24 @@ export function AttachmentDialog({
   };
 
   const removeFile = async (file: NormalizedFile) => {
-    if (!requestNumber || !file.sr_no || !file.aws_file_locn) return;
+    if (!requestNumber) return;
+    const isFreight = module.toUpperCase() === "FREIGHT";
+    if (!isFreight && !file.aws_file_locn) {
+      setNotice({ type: "error", message: "This attachment has no storage location." });
+      return;
+    }
+    if (!window.confirm(`Delete ${file.user_file_name || file.org_file_name || "this attachment"}? This also removes it from OCI Object Storage.`)) return;
     try {
-      await deleteAccountFile(requestNumber, file.sr_no, file.aws_file_locn);
+      if (isFreight) {
+        if (file.sr_no === undefined || !Number.isFinite(file.sr_no)) {
+          setNotice({ type: "error", message: "This freight attachment has no saved record ID." });
+          return;
+        }
+        await deleteFreightAccountFile(requestNumber, file.sr_no);
+      } else {
+        if (!file.aws_file_locn) return;
+        await deleteAccountFile(requestNumber, file.sr_no, file.aws_file_locn);
+      }
       setFiles((current) => current.filter((item) => fileKey(item) !== fileKey(file)));
       setNotice({ type: "success", message: "Attachment deleted." });
     } catch (error) {
@@ -151,11 +186,11 @@ export function AttachmentDialog({
   return (
     <Dialog
       open={open}
-      wide
+      contentClassName="w-[min(96vw,1100px)] max-h-[86vh] attachment-dialog"
       title={title}
       description={requestNumber ? `Linked to ${requestNumber}${relatedRequestNumbers.length ? " with source files shown" : ""}` : "Save the record first, then attach files."}
       onClose={onClose}
-      footer={<Button variant="outline" onClick={onClose}>Close</Button>}
+      // footer={<Button variant="outline" onClick={onClose}>Close</Button>}
     >
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-secondary/30 p-3">
@@ -231,14 +266,19 @@ export function AttachmentDialog({
                       <td className="px-3 py-2">
                         <div className="flex justify-end gap-1">
                           {file.aws_file_locn && (
-                            <Button asChild size="icon" variant="ghost" title="Open file">
-                              <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Download size={14} /></a>
+                            <Button asChild size="icon" variant="ghost" title="View file">
+                              <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Eye size={14} /></a>
+                            </Button>
+                          )}
+                          {file.aws_file_locn && (
+                            <Button asChild size="icon" variant="ghost" title="Download file">
+                              <a href={file.aws_file_locn} download={file.user_file_name || file.org_file_name}><Download size={14} /></a>
                             </Button>
                           )}
                           {!readOnly && primary && editing ? (
                             <>
                               <Button size="sm" type="button" onClick={() => void saveRename(file)}>Save</Button>
-                              <Button size="icon" type="button" variant="ghost" onClick={() => setEditingKey("")}><X size={14} /></Button>
+                              <Button size="icon" type="button" variant="ghost" onClick={() => setEditingKey("")} title="Cancel rename"><X size={14} /></Button>
                             </>
                           ) : !readOnly && primary ? (
                             <>

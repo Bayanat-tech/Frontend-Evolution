@@ -1,15 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Save, Send, X, ChevronLeft, FileText, Paperclip } from "lucide-react";
+import {
+  Save,
+  Send,
+  X,
+  ChevronLeft,
+  FileText,
+  Paperclip,
+  Loader2,
+  ClipboardList,
+  MapPin,
+  Landmark,
+  CreditCard,
+  Layers,
+  MessageSquare,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Dialog } from "../../components/ui/Dialog";
+import { Badge } from "../../components/ui/Badge";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
-import { CardHeader } from "../../components/ui/Card";
+import { CardContent, CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
-import { almsSave, almsCommonSelect } from "../../api/alms";
-import { executeDynamicMutationColumn90 } from "../../api/lookups";
+import { almsCommonSelect } from "../../api/alms";
+import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
@@ -69,35 +85,206 @@ export type TCRHeader = {
   ACCOUNT_NO?: string;
 };
 
+type ActionKey = "draft" | "submit" | "reject" | "sendBack" | "cancel";
+
 type AddCRRequestPageProps = {
   isEditMode: boolean;
   isViewMode?: boolean;
+  isPendingTab?: boolean;
   existingData?: { request_number?: string };
-  onClose: (refresh?: boolean) => void;
+  onClose: (refresh?: boolean, message?: string) => void;
 };
 
-const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClose }: AddCRRequestPageProps) => {
+// ─── Field limits (match CREDIT_FORM_REQUEST column sizes) ───────────────
+const FIELD_MAX: Partial<Record<keyof TCRHeader, number>> = {
+  COMPANY_NAME: 50,
+  WAY_NO: 10,
+  BLDG_NO: 10,
+  FLAT_NO: 10,
+  LOCATION: 10,
+  PO_BOX: 10,
+  CITY: 10,
+  OFFICE_TEL_NO: 20,
+  FAX_NO: 20,
+  WEBSITE: 50,
+  EMAIL: 50,
+  FIN_CONTACT_PERSON: 50,
+  FIN_CONTACT_NUMBER: 10,
+  FIN_CONTACT_EMAIL: 50,
+  COMMERCIAL_REG_NO: 20,
+  BUSINESS_SECTOR: 50,
+  REMARKS_CONTACT_PERSON: 50,
+  AUTHORIZED_SIGNATORY: 50,
+  ACCOUNT_NO: 50,
+  DESCRIPTION: 200,
+  COMMENTS: 1000,
+  REMARKS: 1000,
+};
+
+// VARCHAR2(n BYTE) counts bytes, so non-English text can use more than 1 per character
+const clipBytes = (text: string, max: number) => {
+  const enc = new TextEncoder();
+  let out = "";
+  let bytes = 0;
+  for (const ch of text) {
+    const n = enc.encode(ch).length;
+    if (bytes + n > max) break;
+    out += ch;
+    bytes += n;
+  }
+  return out;
+};
+
+// Blocks e, +, - (and "." for whole-number fields) in number inputs
+const blockNumberKeys = (allowDecimal: boolean) => (e: KeyboardEvent<HTMLInputElement>) => {
+  const blocked = ["e", "E", "+", "-"];
+  if (!allowDecimal) blocked.push(".");
+  if (blocked.includes(e.key)) e.preventDefault();
+};
+
+// ─── Validation rules ────────────────────────────────────────────────────
+const MAX_AMOUNT = 999999999.999; // NUMBER(12,3)
+const MAX_PERIOD = 9999; // NUMBER(4)
+const MAX_SANCTIONED_PERIOD = 999999999999999; // NUMBER(20), kept within JS safe range
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_RE = /^[0-9+\-\s()]+$/;
+const WEB_RE = /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/\S*)?$/i;
+
+const DRAFT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
+  REQUEST_DATE: "Request Date",
+  COMPANY_NAME: "Company Name",
+};
+
+const SUBMIT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
+  ...DRAFT_REQUIRED,
+  WAY_NO: "Way No",
+  BLDG_NO: "Bldg No",
+  FLAT_NO: "Flat No",
+  LOCATION: "Location",
+  PO_BOX: "Po Box",
+  POSTAL_CODE: "Postal Code",
+  CITY: "City",
+  OFFICE_TEL_NO: "Tel No",
+  FAX_NO: "Fax No",
+  WEBSITE: "Website",
+  EMAIL: "Email",
+  FIN_CONTACT_PERSON: "Finance Contact Person",
+  FIN_CONTACT_NUMBER: "Finance Tel No",
+  FIN_CONTACT_EMAIL: "Finance Email",
+  COMMERCIAL_REG_NO: "Commercial Reg No",
+  BUSINESS_SECTOR: "Business Sector",
+  REMARKS_CONTACT_PERSON: "Contact Person",
+  AUTHORIZED_SIGNATORY: "Authorized Signatory",
+  CREDIT_FORM_SIGNATURE_DATE: "Credit Form Signature Date",
+  // CREDIT_LIMIT: "Credit Limit",
+  // REQUESTED_CREDIT_PERIOD: "Requested Credit Period",
+  // ACCOUNT_NO: "Account No",
+  DESCRIPTION: "Description",
+  COMMENTS: "Comments",
+  REMARKS: "Remarks",
+};
+
+// Approval levels that must NOT see the Send Back button
+const SEND_BACK_HIDDEN_LEVELS = [1, 5];
+// Approval levels that must NOT see the Reject and Cancel buttons
+const REJECT_CANCEL_HIDDEN_LEVELS = [5];
+// Approval levels allowed to enter the Account No
+const ACCOUNT_NO_EDIT_LEVELS = [5];
+// Approval levels that must NOT edit the Credit Requested / Sanctioned fields
+const CREDIT_FIELDS_LOCKED_LEVELS = [1, 5];
+
+
+const NUM_INPUT_CLS =
+  "text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+const Required = () => <span className="ml-0.5 text-destructive">*</span>;
+
+const GRID_4 = "grid grid-cols-1 gap-0.5 p-1 md:grid-cols-2 xl:grid-cols-4";
+
+const TEXTAREA_CLS =
+  "min-h-[56px] w-full resize-y rounded-md border bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60";
+
+type SectionCardProps = {
+  icon: LucideIcon;
+  title: string;
+  hint?: string;
+  children: ReactNode;
+};
+
+const SectionCard = ({ icon: Icon, title, hint, children }: SectionCardProps) => (
+  <div className="shrink-0 rounded-xl border bg-card shadow-sm">
+    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b bg-gradient-to-r from-slate-50 to-white px-3 py-2">
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#00378C] text-white shadow-sm">
+          <Icon size={16} />
+        </span>
+        <h3 className="m-0 text-sm font-semibold leading-tight">{title}</h3>
+      </div>
+      {hint && <span className="truncate text-xs text-muted-foreground">{hint}</span>}
+    </div>
+    {children}
+  </div>
+);
+
+const AddCRRequestPage = ({
+  isEditMode,
+  isViewMode = false,
+  isPendingTab = true,
+  existingData,
+  onClose,
+}: AddCRRequestPageProps) => {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? "";
   const loginid = user?.loginid ?? "";
 
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
+  const [dialogError, setDialogError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [requestNumber, setRequestNumber] = useState<string | undefined>(existingData?.request_number);
+  const [requestNumber] = useState<string | undefined>(existingData?.request_number);
   const [header, setHeader] = useState<Partial<TCRHeader>>({});
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
+
+const [sendBackUsers, setSendBackUsers] = useState<
+  { LEVEL_NO: number; EMPLOYEE_CODE_ID: string; RPT_NAME: string }[]
+>([]);
+
+const [sendBackUser, setSendBackUser] = useState("");
+const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+
+
+
+
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [userLevel, setUserLevel] = useState<number | null>(null);
 
-  const disabled = isViewMode || saving;
-  const Required = () => <span className="text-destructive ml-0.5">*</span>;
+  const isCancelled = String(header.LAST_ACTION || "").toUpperCase() === "CANCELED";
+  const disabled = isViewMode || saving || isCancelled;
+  const canTakeAction = !isViewMode && isPendingTab && !isCancelled;
+  const canSendBackOrReject = canTakeAction && isEditMode && !!requestNumber;
+
+  // Send Back is hidden for the levels in SEND_BACK_HIDDEN_LEVELS (and while the level is unknown)
+  const canSendBack =
+    canSendBackOrReject && userLevel !== null && !SEND_BACK_HIDDEN_LEVELS.includes(userLevel);
+  const canEditAccountNo = userLevel !== null && ACCOUNT_NO_EDIT_LEVELS.includes(userLevel);
+    const canEditCredit = userLevel !== null && !CREDIT_FIELDS_LOCKED_LEVELS.includes(userLevel);
+  const busy = saving || actionLoading !== null;
 
 
-  const { data: hdrList = [] } = useQuery<TCRHeader[]>({
+  const rejectCancelAllowed = userLevel !== null && !REJECT_CANCEL_HIDDEN_LEVELS.includes(userLevel);
+  const canReject = canSendBackOrReject && rejectCancelAllowed;
+  const canCancel = canTakeAction && !!requestNumber && rejectCancelAllowed;
+
+
+
+
+  const { data: hdrList = [], isLoading: hdrLoading, isError: hdrError } = useQuery<TCRHeader[]>({
     queryKey: ["cr-header", requestNumber, companyCode],
     queryFn: () =>
       almsCommonSelect<TCRHeader>({
@@ -110,19 +297,122 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   });
 
   useEffect(() => {
-    if (hdrList.length > 0) {
-      setHeader(hdrList[0]);
-      setLoading(false);
-    } else if (!isEditMode && !isViewMode) {
-      setLoading(false);
+    if (hdrList.length > 0) setHeader(hdrList[0]);
+    if (!(isEditMode || isViewMode) || !hdrLoading) setLoading(false);
+  }, [hdrList, hdrLoading, isEditMode, isViewMode]);
+
+  // Logged-in user's approval level (decides who sees "Send Back")
+  useEffect(() => {
+    if (!companyCode) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const rows = await getDynamicLookup({
+          parameter: "PS_CREDITREQUEST_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
+          code1: companyCode,
+          code2: loginid || user?.username || "ADMIN",
+          code3: "credit_request_form",
+        });
+        if (!mounted) return;
+        const first = (rows || [])[0] as Record<string, unknown> | undefined;
+        const level = first
+          ? Number(first.level ?? first.LEVEL ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0])
+          : 0;
+        setUserLevel(Number.isFinite(level) ? level : 0);
+      } catch {
+        // If the level can't be read, hide Send Back instead of showing it to everyone
+        if (mounted) setUserLevel(null);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [companyCode, loginid, user?.username]);
+
+
+
+
+  useEffect(() => {
+  if (!sendBackOpen || !companyCode || !requestNumber || userLevel === null) {
+    return;
+  }
+
+  let mounted = true;
+
+  const fetchSendBackUsers = async () => {
+    try {
+      setSendBackUsersLoading(true);
+      setSendBackUsers([]);
+
+      const rows = await getDynamicLookup({
+        parameter: "PS_CREDITREQUEST_ENTRY_SENDBACK_LEVELS",
+        code1: companyCode,
+        code2: requestNumber,
+        code3: loginid,
+        code4: String(userLevel),
+      });
+
+      if (!mounted) return;
+
+      const users = (rows || []).map((row: any) => ({
+  LEVEL_NO: Number(row.LEVEL_NO ?? row.level_no),
+  EMPLOYEE_CODE_ID: String(
+    row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""
+  ),
+  RPT_NAME:
+    row.RPT_NAME ??
+    row.rpt_name ??
+    row.EMPLOYEE_CODE_ID ??
+    row.employee_code_id ??
+    "",
+}));
+
+setSendBackUsers(
+  users.filter((u) => u.EMPLOYEE_CODE_ID)
+);
+    } catch (error) {
+      if (mounted) {
+        setDialogError("Unable to load Send Back users");
+      }
+    } finally {
+      if (mounted) setSendBackUsersLoading(false);
     }
-  }, [hdrList, isEditMode, isViewMode]);
+  };
+
+  fetchSendBackUsers();
+
+  return () => {
+    mounted = false;
+  };
+}, [sendBackOpen, companyCode, requestNumber, loginid, userLevel]);
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
-    setHeader((prev) => ({ ...prev, [field]: value }));
+    setHeader((prev) => ({
+      ...prev,
+      [field]:
+        typeof value === "string" && FIELD_MAX[field]
+          ? clipBytes(value, FIELD_MAX[field] as number)
+          : value,
+    }));
+
+  // Number fields: ignores any keystroke that would exceed the column's digits
+  const setNum = (field: keyof TCRHeader, raw: string, intDigits: number, decimals = 0) => {
+    if (raw === "") return setHdr(field, undefined);
+    const [i = "", d = ""] = raw.split(".");
+    if (!/^\d*$/.test(i) || !/^\d*$/.test(d)) return;
+    if (i.length > intDigits || d.length > decimals) return;
+    setHdr(field, Number(raw));
+  };
+
+  const envSelected = [
+    header.ACCOUNT_ENV_TMS === "Y" && "TMS",
+    header.ACCOUNT_ENV_WMS === "Y" && "WMS",
+    header.ACCOUNT_ENV_FREIGHT === "Y" && "FREIGHT",
+  ].filter(Boolean) as string[];
+
   const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     executeDynamicMutationColumn90({
-      parameter: "capex_req_ins_upd",
+      parameter: "credit_req_ins_upd",
       loginid,
       val1s1: requestNumber || "",
       val1s2: companyCode,
@@ -169,12 +459,11 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s41: header.ACCOUNT_ENV_FREIGHT === "Y" ? "Y" : "N",
       val1s42: header.ACCOUNT_NO || "",
 
-
-      val1s43: loginid,   // CREATED_BY 
-      val1s44: loginid,   // UPDATED_BY
-      val1s45: "",        // NEXT_ACTION_BY
-      val1s46: "",        // SENTBACK_REASON 
-      val1s47: "",        // REJECT_REASON 
+      val1s43: loginid,
+      val1s44: loginid,
+      val1s45: "",
+      val1s46: "",
+      val1s47: "",
 
       val1n1: header.FLOW_LEVEL_INITIAL || 1,
       val1n2: header.FLOW_LEVEL_RUNNING || 1,
@@ -186,94 +475,184 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1n9: header.SANCTIONED_CREDIT_LIMIT_AMT || 0,
       val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
 
-      ...extra, // Reject/Send Back override val1s46/47 here
+      ...extra,
     });
 
-  const runAction = async (status: string, successMsg: string) => {
-    if (header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10) {
-      setNotice({ type: "error", message: "Tel No must be exactly 10 digits" });
-      return;
+  const validateForm = (mode: "draft" | "submit") => {
+    const errs: string[] = [];
+    const text = (f: keyof TCRHeader) => String(header[f] ?? "").trim();
+    const num = (f: keyof TCRHeader) => Number(header[f] ?? 0);
+
+    // Required
+    const required = mode === "submit" ? SUBMIT_REQUIRED : DRAFT_REQUIRED;
+    (Object.keys(required) as (keyof TCRHeader)[]).forEach((f) => {
+      const v = header[f];
+      const empty = typeof v === "number" ? v <= 0 : text(f) === "";
+      if (empty) errs.push(`${required[f]} is required`);
+    });
+
+
+    // Account No is entered by the allowed level only
+
+        // Credit Limit / Requested Credit Period are required only from the levels that can edit them
+    if (mode === "submit" && canEditCredit) {
+      if (num("CREDIT_LIMIT") <= 0) errs.push("Credit Limit is required");
+      if (num("REQUESTED_CREDIT_PERIOD") <= 0) errs.push("Requested Credit Period is required");
     }
+
+    if (mode === "submit" && canEditAccountNo && text("ACCOUNT_NO") === "") {
+      errs.push("Account No is required");
+    }
+
+    // Formats
+    if (text("EMAIL") && !EMAIL_RE.test(text("EMAIL"))) errs.push("Email is not valid");
+    if (text("FIN_CONTACT_EMAIL") && !EMAIL_RE.test(text("FIN_CONTACT_EMAIL")))
+      errs.push("Finance Email is not valid");
+    if (text("OFFICE_TEL_NO") && !PHONE_RE.test(text("OFFICE_TEL_NO")))
+      errs.push("Tel No can contain only digits, +, -, spaces and brackets");
+    if (text("FAX_NO") && !PHONE_RE.test(text("FAX_NO")))
+      errs.push("Fax No can contain only digits, +, -, spaces and brackets");
+    if (text("WEBSITE") && !WEB_RE.test(text("WEBSITE")))
+      errs.push("Website is not valid (example: www.company.com)");
+    if (text("FIN_CONTACT_NUMBER") && text("FIN_CONTACT_NUMBER").length !== 10)
+      errs.push("Finance Tel No must be exactly 10 digits");
+
+    // Numbers
+    const postal = num("POSTAL_CODE");
+    if (postal && (!Number.isInteger(postal) || postal < 0 || String(postal).length > 10))
+      errs.push("Postal Code must be a whole number of up to 10 digits");
+
+    const checkAmount = (label: string, n: number) => {
+      if (n < 0) errs.push(`${label} cannot be negative`);
+      else if (n > MAX_AMOUNT) errs.push(`${label} cannot be more than ${MAX_AMOUNT.toLocaleString()}`);
+      else if ((String(n).split(".")[1] ?? "").length > 3)
+        errs.push(`${label} allows a maximum of 3 decimal places`);
+    };
+    checkAmount("Credit Limit", num("CREDIT_LIMIT"));
+    checkAmount("Sanctioned Credit Limit Amt", num("SANCTIONED_CREDIT_LIMIT_AMT"));
+
+    const checkPeriod = (label: string, n: number, max: number) => {
+      if (n < 0 || !Number.isInteger(n)) errs.push(`${label} must be a whole number`);
+      else if (n > max) errs.push(`${label} cannot be more than ${max.toLocaleString()}`);
+    };
+    checkPeriod("Requested Credit Period", num("REQUESTED_CREDIT_PERIOD"), MAX_PERIOD);
+    checkPeriod("Sanctioned Credit Period", num("SANCTIONED_CREDIT_PERIOD"), MAX_SANCTIONED_PERIOD);
+
+    return errs;
+  };
+
+  const runValidation = (mode: "draft" | "submit") => {
+    const list = validateForm(mode);
+    setErrors(list);
+    if (list.length) {
+      document.querySelector(".commercial-editor-body")?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return list.length === 0;
+  };
+
+  const execute = async (
+    key: ActionKey,
+    status: string,
+    successMsg: string,
+    extra: Record<string, unknown> = {},
+    afterOk?: () => void
+  ) => {
+    setActionLoading(key);
     setSaving(true);
     setNotice(null);
+    setDialogError("");
     try {
-      const result = await saveHeader(status);
+      const result = await saveHeader(status, extra);
       if (result.success) {
-        setNotice({ type: "success", message: successMsg });
-        onClose(true);
+        afterOk?.();
+        onClose(true, successMsg);
+      } else {
+        const msg = (result as any).message || "Action failed";
+
+        if (rejectOpen || sendBackOpen) setDialogError(msg);
+        else setNotice({ type: "error", message: msg });
       }
     } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Action failed" });
+      const msg = err instanceof Error ? err.message : "Action failed";
+      if (rejectOpen || sendBackOpen) setDialogError(msg);
+      else setNotice({ type: "error", message: msg });
     } finally {
       setSaving(false);
+      setActionLoading(null);
     }
   };
 
-  const handleSaveDraft = () => runAction("SAVEASDRAFT", "Draft saved successfully!");
-  const handleSubmit = () => runAction("SUBMITTED", "CR submitted successfully!");
-
-  const handleRejectConfirm = async () => {
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
-    setSaving(true);
-    setNotice(null);
-    try {
-
-      const result = await saveHeader("REJECTED", { val1s47: remarkText });
-      if (result.success) {
-        setNotice({ type: "success", message: "CR rejected successfully!" });
-        setRejectOpen(false);
-        setRemarkText("");
-        onClose(true);
-      }
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
-    } finally {
-      setSaving(false);
-    }
+  const handleSaveDraft = () => {
+    if (runValidation("draft")) void execute("draft", "SAVEASDRAFT", "Draft saved successfully!");
+  };
+  const handleSubmit = () => {
+    if (runValidation("submit")) void execute("submit", "SUBMITTED", "CR submitted successfully!");
   };
 
-  const handleSendBackConfirm = async () => {
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
-    setSaving(true);
-    setNotice(null);
-    try {
+  const handleRejectConfirm = () => {
+    if (!remarkText.trim()) return setDialogError("Please enter a reject remark");
+    void execute("reject", "REJECTED", "CR rejected successfully!", { val1s47: remarkText.trim() }, () =>
+      setRejectOpen(false)
+    );
+  };
+  const handleSendBackConfirm = () => {
+  if (!sendBackUser) {
+    return setDialogError("Please select a user to send back");
+  }
 
-      const result = await saveHeader("SENTBACK", { val1s46: remarkText });
-      if (result.success) {
-        setNotice({ type: "success", message: "CR sent back successfully!" });
-        setSendBackOpen(false);
-        setRemarkText("");
-        onClose(true);
-      }
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
-    } finally {
-      setSaving(false);
+  if (!remarkText.trim()) {
+    return setDialogError("Please enter a send back reason");
+  }
+
+  void execute(
+    "sendBack",
+    "SENTBACK",
+    "CR sent back successfully!",
+    {
+      val1s45: sendBackUser,
+      val1s46: remarkText.trim(),
+    },
+    () => {
+      setSendBackOpen(false);
+      setSendBackUser("");
+      setRemarkText("");
     }
+  );
+};
+  const handleCancelConfirm = () => {
+    void execute("cancel", "CANCELED", "CR canceled successfully!", {}, () => setCancelOpen(false));
   };
 
-
-  const handleCancelConfirm = async () => {
-    setSaving(true);
-    setNotice(null);
-    try {
-      const result = await saveHeader("CANCELED");
-      if (result.success) {
-        setNotice({ type: "success", message: "CR canceled successfully!" });
-        setCancelOpen(false);
-        onClose(true);
-      }
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to cancel" });
-    } finally {
-      setSaving(false);
-    }
+  const openReject = () => {
+    setRemarkText("");
+    setDialogError("");
+    setRejectOpen(true);
+  };
+ const openSendBack = () => {
+  setRemarkText("");
+  setSendBackUser("");
+  setSendBackUsers([]);
+  setDialogError("");
+  setSendBackOpen(true);
+};
+  const closeReject = () => {
+    if (actionLoading === "reject") return;
+    setRejectOpen(false);
+    setDialogError("");
+  };
+  const closeSendBack = () => {
+    if (actionLoading === "sendBack") return;
+    setSendBackOpen(false);
+    setDialogError("");
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background">
-      <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <section
+        className={`finance-document-ui payment-workbench commercial-editor grid h-full min-h-0 ${isCancelled ? "is-cancelled grid-rows-[auto_auto_minmax(0,1fr)]" : "grid-rows-[auto_minmax(0,1fr)]"
+          }`}
+      >
+        <CardHeader className="commercial-command-header h-auto overflow-visible border-b bg-primary px-4 pb-2 pt-3 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
@@ -285,29 +664,123 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
             </div>
 
             <div className="flex items-center gap-2">
-              <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}><Paperclip size={15} /> Files</Button>
-              <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}><FileText size={15} /> Log</Button>
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}><X size={16} /></Button>
+              {isCancelled && (
+                <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">
+                  Cancelled
+                </Badge>
+              )}
+
+              {canTakeAction && (
+                <>
+                  <Button
+                    type="button"
+                    onClick={handleSaveDraft}
+                    disabled={busy}
+                    className="rounded-full bg-blue-600 shadow-md hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                    {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                  </Button>
+
+                  <Button type="button" onClick={handleSubmit} disabled={busy}>
+                    {actionLoading === "submit" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
+                    {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                  </Button>
+
+                  {canSendBack && (
+                    <Button
+                      type="button"
+                      onClick={openSendBack}
+                      disabled={busy}
+                      className="rounded-full bg-yellow-500 shadow-md hover:bg-yellow-600 disabled:opacity-60"
+                    >
+                      <ChevronLeft size={15} /> {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                    </Button>
+                  )}
+
+                  {canReject && (
+                    <Button
+                      type="button"
+                      onClick={openReject}
+                      disabled={busy}
+                      className="rounded-full bg-red-600 shadow-md hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </Button>
+                  )}
+
+                  {canCancel && (
+                    <Button
+                      type="button"
+                      onClick={() => setCancelOpen(true)}
+                      disabled={busy}
+                      className="rounded-full bg-orange-500 shadow-md hover:bg-orange-600 disabled:opacity-60"
+                    >
+                      {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                    </Button>
+                  )}
+                </>
+              )}
+
+              <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}>
+                <Paperclip size={15} /> Files
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}>
+                <FileText size={15} /> Log
+              </Button>
+              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
+                <X size={16} />
+              </Button>
             </div>
           </div>
         </CardHeader>
 
-        <div className="min-h-0 overflow-auto p-3">
+        {isCancelled && (
+          <div className="cancelled-document-banner" role="status">
+            <div>
+              <span className="cancelled-document-kicker">Cancelled Document</span>
+              <strong>{requestNumber || "Credit Request"}</strong>
+            </div>
+            <p>This Credit Request is cancelled and opened in read-only mode.</p>
+          </div>
+        )}
+
+        <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">
+              Loading Credit Request...
+            </div>
+          ) : hdrError ? (
+            <div className="grid min-h-[420px] place-items-center text-sm text-destructive">
+              Unable to load Credit Request
+            </div>
           ) : (
-            <div className="grid gap-2">
+            <div
+              className="grid w-full min-w-0 grid-cols-1 auto-rows-max content-start gap-1"
+              style={{ height: "auto", maxHeight: "none", overflow: "visible" }}
+            >
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-              {/* Request Number / Date + Company */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1">
-                  <p className="eyebrow m-0">Header</p>
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
+              {errors.length > 0 && (
+                <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                  <p className="m-0 mb-1 font-semibold">Please fix the following:</p>
+                  <ul className="m-0 list-disc pl-5">
+                    {errors.map((e) => (
+                      <li key={e}>{e}</li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="grid grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-6">
+              )}
+
+              {/* ── 1. Request Information ─────────────────────────────────── */}
+              <SectionCard icon={ClipboardList} title="Request Information" hint="Credit Request">
+                <div className={GRID_4}>
                   <label className="field">
-                    <span>Request Number <Required /></span>
+                    <span>Request Number</span>
                     <Input disabled value={requestNumber || "New"} />
                   </label>
                   <label className="field">
@@ -319,44 +792,50 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       onChange={(e) => setHdr("REQUEST_DATE", e.target.value)}
                     />
                   </label>
-                  <label className="field col-span-3">
+                  <label className="field md:col-span-2">
                     <span>Company Name<Required /></span>
                     <Input disabled={disabled} value={header.COMPANY_NAME || ""} onChange={(e) => setHdr("COMPANY_NAME", e.target.value)} />
                   </label>
                 </div>
-              </div>
+              </SectionCard>
 
-              {/* Office Address */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Office Address</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-6">
+              {/* ── 2. Office Address ──────────────────────────────────────── */}
+              <SectionCard icon={MapPin} title="Office Address" hint={header.CITY || "Office location"}>
+                <div className={GRID_4}>
+                  {/* Row 1 */}
                   <label className="field"><span>Way No<Required /></span><Input disabled={disabled} value={header.WAY_NO || ""} onChange={(e) => setHdr("WAY_NO", e.target.value)} /></label>
                   <label className="field"><span>Bldg No<Required /></span><Input disabled={disabled} value={header.BLDG_NO || ""} onChange={(e) => setHdr("BLDG_NO", e.target.value)} /></label>
                   <label className="field"><span>Flat No<Required /></span><Input disabled={disabled} value={header.FLAT_NO || ""} onChange={(e) => setHdr("FLAT_NO", e.target.value)} /></label>
                   <label className="field"><span>Location<Required /></span><Input disabled={disabled} value={header.LOCATION || ""} onChange={(e) => setHdr("LOCATION", e.target.value)} /></label>
 
+                  {/* Row 2 */}
                   <label className="field"><span>Po Box<Required /></span><Input disabled={disabled} value={header.PO_BOX || ""} onChange={(e) => setHdr("PO_BOX", e.target.value)} /></label>
-                  <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" value={header.POSTAL_CODE ?? ""} onChange={(e) => setHdr("POSTAL_CODE", Number(e.target.value))} /></label>
+                  <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.POSTAL_CODE ?? ""} onChange={(e) => setNum("POSTAL_CODE", e.target.value, 10)} /></label>
                   <label className="field"><span>City<Required /></span><Input disabled={disabled} value={header.CITY || ""} onChange={(e) => setHdr("CITY", e.target.value)} /></label>
                   <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.OFFICE_TEL_NO || ""} onChange={(e) => setHdr("OFFICE_TEL_NO", e.target.value)} /></label>
 
+                  {/* Row 3 */}
                   <label className="field"><span>Fax No<Required /></span><Input disabled={disabled} value={header.FAX_NO || ""} onChange={(e) => setHdr("FAX_NO", e.target.value)} /></label>
                   <label className="field"><span>Website<Required /></span><Input disabled={disabled} value={header.WEBSITE || ""} onChange={(e) => setHdr("WEBSITE", e.target.value)} /></label>
-                  <label className="field col-span-2"><span>Email<Required /></span><Input disabled={disabled} type="email" value={header.EMAIL || ""} onChange={(e) => setHdr("EMAIL", e.target.value)} /></label>
+                  <label className="field md:col-span-2"><span>Email<Required /></span><Input disabled={disabled} type="email" value={header.EMAIL || ""} onChange={(e) => setHdr("EMAIL", e.target.value)} /></label>
                 </div>
-              </div>
+              </SectionCard>
 
-              {/* Finance Details */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Finance Details</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-6">
-                  <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_PERSON || ""} onChange={(e) => setHdr("FIN_CONTACT_PERSON", e.target.value)} /></label>
-                  <label className="field"><span>Tel No<Required /></span><Input  disabled={disabled}  type="tel" inputMode="numeric" maxLength={10} value={header.FIN_CONTACT_NUMBER || ""}  onChange={(e) => {
-                   const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+              {/* ── 3. Finance Details ─────────────────────────────────────── */}
+              <SectionCard icon={Landmark} title="Finance Details" hint="Contacts And Registration">
+                <div className={GRID_4}>
+                  {/* Row 1 */}
+                  <label className="field"><span>Finance Contact Person<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_PERSON || ""} onChange={(e) => setHdr("FIN_CONTACT_PERSON", e.target.value)} /></label>
+                  <label className="field">
+                    <span>Finance Tel No<Required /></span>
+                    <Input
+                      disabled={disabled}
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={header.FIN_CONTACT_NUMBER || ""}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
                         setHdr("FIN_CONTACT_NUMBER", digitsOnly);
                       }}
                     />
@@ -364,61 +843,13 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       <p className="mt-1 text-xs text-destructive">Tel No must be exactly 10 digits</p>
                     )}
                   </label>
-                  <label className="field"><span>Email<Required /></span><Input disabled={disabled} type="email" value={header.FIN_CONTACT_EMAIL || ""} onChange={(e) => setHdr("FIN_CONTACT_EMAIL", e.target.value)} /></label>
+                  <label className="field"><span>Finance Email<Required /></span><Input disabled={disabled} type="email" value={header.FIN_CONTACT_EMAIL || ""} onChange={(e) => setHdr("FIN_CONTACT_EMAIL", e.target.value)} /></label>
                   <label className="field"><span>Commercial Reg No<Required /></span><Input disabled={disabled} value={header.COMMERCIAL_REG_NO || ""} onChange={(e) => setHdr("COMMERCIAL_REG_NO", e.target.value)} /></label>
+
+                  {/* Row 2 */}
                   <label className="field"><span>Business Sector<Required /></span><Input disabled={disabled} value={header.BUSINESS_SECTOR || ""} onChange={(e) => setHdr("BUSINESS_SECTOR", e.target.value)} /></label>
                   <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.REMARKS_CONTACT_PERSON || ""} onChange={(e) => setHdr("REMARKS_CONTACT_PERSON", e.target.value)} /></label>
                   <label className="field"><span>Authorized Signatory<Required /></span><Input disabled={disabled} value={header.AUTHORIZED_SIGNATORY || ""} onChange={(e) => setHdr("AUTHORIZED_SIGNATORY", e.target.value)} /></label>
-                </div>
-              </div>
-
-              {/* Comments */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Comments</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3 p-1 md:grid-cols-3">
-                  <label className="field">
-                    <span>Description<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={2}
-                      value={header.DESCRIPTION || ""}
-                      onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Comments<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={2}
-                      value={header.COMMENTS || ""}
-                      onChange={(e) => setHdr("COMMENTS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Remarks<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={1}
-                      value={header.REMARKS || ""}
-                      onChange={(e) => setHdr("REMARKS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              {/* Credit Requested */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Credit Requested/Sanctioned</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-5">
-                  <label className="field"><span>Credit Limit<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setHdr("CREDIT_LIMIT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Requested Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("REQUESTED_CREDIT_PERIOD", Number(e.target.value))} /></label>
                   <label className="field">
                     <span>Credit Form Signature Date<Required /></span>
                     <Input
@@ -428,136 +859,249 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       onChange={(e) => setHdr("CREDIT_FORM_SIGNATURE_DATE", e.target.value)}
                     />
                   </label>
-                  <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
                 </div>
-              </div>
+              </SectionCard>
 
-              {/* Account Environment */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Account Environment</h3>
+              {/* ── 4. Credit Requested / Sanctioned ───────────────────────── */}
+              <SectionCard icon={CreditCard} title="Credit Requested / Sanctioned" hint="Requested And Sanctioned Limits">
+                <div className={GRID_4}>
+                  <label className="field"><span>Credit Limit{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} step="0.001" onKeyDown={blockNumberKeys(true)} value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setNum("CREDIT_LIMIT", e.target.value, 9, 3)} /></label>
+                  <label className="field"><span>Requested Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("REQUESTED_CREDIT_PERIOD", e.target.value, 4)} /></label>
+                  <label className="field"><span>Sanctioned Credit Limit Amt{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} step="0.001" onKeyDown={blockNumberKeys(true)} value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_LIMIT_AMT", e.target.value, 9, 3)} /></label>
+                  <label className="field"><span>Sanctioned Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number"  className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_PERIOD", e.target.value, 15)} /></label>
                 </div>
-                <div className="flex flex-wrap items-center gap-4 p-3">
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={disabled}
-                      checked={header.ACCOUNT_ENV_TMS === "Y"}
-                      onChange={(e) => setHdr("ACCOUNT_ENV_TMS", e.target.checked ? "Y" : "N")}
-                    />
-                    TMS
-                  </label>
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={disabled}
-                      checked={header.ACCOUNT_ENV_WMS === "Y"}
-                      onChange={(e) => setHdr("ACCOUNT_ENV_WMS", e.target.checked ? "Y" : "N")}
-                    />
-                    WMS
-                  </label>
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={disabled}
-                      checked={header.ACCOUNT_ENV_FREIGHT === "Y"}
-                      onChange={(e) => setHdr("ACCOUNT_ENV_FREIGHT", e.target.checked ? "Y" : "N")}
-                    />
-                    FREIGHT
-                  </label>
+              </SectionCard>
 
-                  <label className="field  min-w-[200px]">
-                    <span>Account No<Required /></span>
-                    <Input disabled={disabled} value={header.ACCOUNT_NO || ""} onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)} />
+              {/* ── 5. Account Environment ─────────────────────────────────── */}
+              <SectionCard
+                icon={Layers}
+                title="Account Environment"
+                hint={envSelected.length ? envSelected.join(" · ") : "No environment selected"}
+              >
+                <div className={GRID_4}>
+                  {(
+                    [
+                      ["ACCOUNT_ENV_TMS", "TMS"],
+                      ["ACCOUNT_ENV_WMS", "WMS"],
+                      ["ACCOUNT_ENV_FREIGHT", "FREIGHT"],
+                    ] as const
+                  ).map(([field, label]) => {
+                    const checked = header[field] === "Y";
+                    return (
+                      <label
+                        key={field}
+                        className={`flex h-9 items-center gap-2 self-end rounded-md border px-3 text-sm font-medium transition-colors ${checked ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]" : "bg-background"
+                          } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-secondary"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={disabled}
+                          checked={checked}
+                          onChange={(e) => setHdr(field, e.target.checked ? "Y" : "N")}
+                        />
+                        {label}
+                      </label>
+                    );
+                  })}
+
+                  <label className="field">
+                    <span>Account No{canEditAccountNo && <Required />}</span>
+                    <Input
+                      disabled={disabled || !canEditAccountNo}
+                      value={header.ACCOUNT_NO || ""}
+                      onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)}
+                    />
                   </label>
                 </div>
-              </div>
+              </SectionCard>
+
+              {/* ── 6. Comments ────────────────────────────────────────────── */}
+              <SectionCard icon={MessageSquare} title="Comments" hint="Description And Remarks">
+                <div className="grid grid-cols-1 gap-2 p-3 lg:grid-cols-3">
+                  <label className="field">
+                    <span>Description<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      placeholder="Description"
+                      value={header.DESCRIPTION || ""}
+                      onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
+                      className={TEXTAREA_CLS}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Comments<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      placeholder="Comments"
+                      value={header.COMMENTS || ""}
+                      onChange={(e) => setHdr("COMMENTS", e.target.value)}
+                      className={TEXTAREA_CLS}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Remarks<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      placeholder="Remarks"
+                      value={header.REMARKS || ""}
+                      onChange={(e) => setHdr("REMARKS", e.target.value)}
+                      className={TEXTAREA_CLS}
+                    />
+                  </label>
+                </div>
+              </SectionCard>
             </div>
           )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 border-t bg-secondary/60 px-4 py-2">
-          {!isViewMode && (
-            <>
-              <Button
-                disabled={saving}
-                type="button"
-                variant="outline"
-                onClick={() => setCancelOpen(true)}
-                className="border-red-300 text-red-700 hover:bg-red-50"
-              >
-                <X size={15} /> Cancel
-              </Button>
-              <Button disabled={saving} type="button" variant="outline" onClick={handleSaveDraft}>
-                <Save size={15} /> {saving ? "Saving..." : "Save As Draft"}
-              </Button>
-              <Button disabled={saving} type="button" variant="default" onClick={handleSubmit}>
-                <Send size={15} /> Submit
-              </Button>
-              <Button
-                disabled={saving}
-                type="button"
-                variant="outline"
-                onClick={() => { setRemarkText(""); setRejectOpen(true); }}
-                className="border-destructive/30 text-destructive hover:bg-destructive/10"
-              >
-                <X size={15} /> Reject
-              </Button>
-              <Button
-                disabled={saving}
-                type="button"
-                variant="outline"
-                onClick={() => { setRemarkText(""); setSendBackOpen(true); }}
-                className="border-purple-300 text-purple-700 hover:bg-purple-50"
-              >
-                <ChevronLeft size={15} /> Send Back
-              </Button>
-            </>
-          )}
-        </div>
+        </CardContent>
       </section>
 
+      {/* Reject */}
       <Dialog
         open={rejectOpen}
         title="Reject Request"
         description="Enter the reason for rejection."
-        onClose={() => setRejectOpen(false)}
+        onClose={closeReject}
         footer={
           <>
-            <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button>
-            <Button variant="destructive" disabled={saving} onClick={handleRejectConfirm}>Confirm Reject</Button>
+            <Button variant="outline" onClick={closeReject} disabled={actionLoading === "reject"}>Cancel</Button>
+            <Button variant="destructive" disabled={busy} onClick={handleRejectConfirm}>
+              {actionLoading === "reject" ? "Rejecting..." : "Confirm Reject"}
+            </Button>
           </>
         }
       >
-        <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter reject remark..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
+        <textarea
+          rows={3}
+          value={remarkText}
+          onChange={(e) => { setRemarkText(e.target.value); setDialogError(""); }}
+          placeholder="Enter reject remark..."
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+        />
+        {dialogError && <p className="mt-1 text-xs text-destructive">{dialogError}</p>}
       </Dialog>
 
-      <Dialog
-        open={sendBackOpen}
-        title="Send Back Request"
-        description="Enter the reason for sending back."
-        onClose={() => setSendBackOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setSendBackOpen(false)}>Cancel</Button>
-            <Button disabled={saving} onClick={handleSendBackConfirm} variant="default">Confirm Send Back</Button>
-          </>
-        }
+    
+{/* Send Back */}
+<Dialog
+  open={sendBackOpen}
+  title="Send Back Request"
+  description="Select who to send this back to, and enter the reason."
+  onClose={closeSendBack}
+  footer={
+    <>
+      <Button
+        variant="outline"
+        onClick={closeSendBack}
+        disabled={actionLoading === "sendBack"}
       >
-        <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter send back reason..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-      </Dialog>
+        Cancel
+      </Button>
 
+      <Button
+        disabled={busy || sendBackUsersLoading}
+        onClick={handleSendBackConfirm}
+        variant="default"
+      >
+        {actionLoading === "sendBack" ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Sending Back...
+          </>
+        ) : (
+          <>
+            <ChevronLeft size={15} className="mr-1" />
+            Confirm Send Back
+          </>
+        )}
+      </Button>
+    </>
+  }
+>
+  <div className="space-y-3">
+
+    {/* Send Back To */}
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">
+        Send Back To <span className="text-destructive">*</span>
+      </label>
+
+      <select
+        value={sendBackUser}
+        onChange={(e) => {
+          setSendBackUser(e.target.value);
+          setDialogError("");
+        }}
+        disabled={sendBackUsersLoading || busy}
+        className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+      >
+        <option value="">
+          {sendBackUsersLoading
+            ? "Loading users..."
+            : "Select user"}
+        </option>
+
+        {sendBackUsers.map((user) => (
+          <option
+            key={user.EMPLOYEE_CODE_ID}
+            value={user.EMPLOYEE_CODE_ID}
+          >
+            {user.RPT_NAME}
+          </option>
+        ))}
+      </select>
+
+      {!sendBackUsersLoading && sendBackUsers.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          No eligible users available for Send Back.
+        </p>
+      )}
+    </div>
+
+    {/* Send Back Reason */}
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">
+        Send Back Reason <span className="text-destructive">*</span>
+      </label>
+
+      <textarea
+        rows={4}
+        value={remarkText}
+        onChange={(e) => {
+          setRemarkText(e.target.value);
+          setDialogError("");
+        }}
+        placeholder="Enter send back reason..."
+        disabled={busy}
+        className="min-h-[110px] w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+      />
+    </div>
+
+    {dialogError && (
+      <p className="text-xs text-destructive">
+        {dialogError}
+      </p>
+    )}
+
+  </div>
+</Dialog>
+
+
+      {/* Cancel */}
       <Dialog
         open={cancelOpen}
         title="Cancel Request"
         description="Are you sure you want to cancel this credit request? This action cannot be undone."
-        onClose={() => setCancelOpen(false)}
+        onClose={() => { if (actionLoading !== "cancel") setCancelOpen(false); }}
         footer={
           <>
-            <Button variant="outline" onClick={() => setCancelOpen(false)}>No, Keep It</Button>
-            <Button variant="destructive" disabled={saving} onClick={handleCancelConfirm}>
-              {saving ? "Canceling..." : "Yes, Cancel Request"}
+            <Button variant="outline" onClick={() => setCancelOpen(false)} disabled={actionLoading === "cancel"}>
+              No, Keep It
+            </Button>
+            <Button variant="destructive" disabled={busy} onClick={handleCancelConfirm}>
+              {actionLoading === "cancel" ? "Canceling..." : "Yes, Cancel Request"}
             </Button>
           </>
         }
@@ -566,6 +1110,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
           Once canceled, this request will move to the "Canceled" tab and no further action can be taken on it.
         </p>
       </Dialog>
+
       <AttachmentDialog
         open={attachOpen}
         onClose={() => setAttachOpen(false)}

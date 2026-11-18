@@ -5,3 +5,5 @@ node_modules
 *.log
 *.tsbuildinfo
 *.md
+/dist/
+/scripts/

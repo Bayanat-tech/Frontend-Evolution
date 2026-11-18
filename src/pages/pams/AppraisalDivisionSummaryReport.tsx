@@ -271,7 +271,6 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
 });
 ReportDesign.displayName = "ReportDesign";
 
-// ─── Helper: Fetch dropdown items via pamsSelect ──────────────
 const fetchDropdown = async (
     parameter: string,
     loginid: string,
@@ -297,7 +296,6 @@ const fetchDropdown = async (
     }
 };
 
-// ─── Fetch periods (separate shape: PERIOD_NUMBER + dates) ───
 interface PeriodItem {
     code: string;
     label: string;
@@ -316,37 +314,26 @@ const fetchPeriods = async (loginid: string, company_code: string): Promise<Peri
     }
 };
 
-// ─── Convert DropdownItem[] → LookupRow[] for LookupField ────
 const toLookupRows = (items: DropdownItem[]): LookupRow[] =>
     items.map(i => ({ CODE: i.code, NAME: i.name } as unknown as LookupRow));
 
-// ─── Main Page ────────────────────────────────────────────────
 const AppraisalDivisionSummaryReport = () => {
     const { user } = useAuth();
     const reportRef = useRef<HTMLDivElement>(null);
-
     const company_code = user?.company_code ?? "";
     const loginid = user?.loginid ?? user?.username ?? "";
-
-    // ── Filter codes (sent to API) ────────────────────────────
     const [div, setDiv]   = useState("ALL");
     const [dept, setDept] = useState("ALL");
     const [period, setPeriod] = useState("ALL");
-
-    // ── Filter display names (shown in report header) ─────────
     const [divLabel, setDivLabel]   = useState("All");
     const [deptLabel, setDeptLabel] = useState("All");
-
-    // ── Dropdown option lists ──────────────────────────────────
     const [divOptions, setDivOptions]   = useState<DropdownItem[]>([{ code: "ALL", name: "All" }]);
     const [deptOptions, setDeptOptions] = useState<DropdownItem[]>([{ code: "ALL", name: "All" }]);
     const [periodOptions, setPeriodOptions] = useState<PeriodItem[]>([{ code: "ALL", label: "All Periods (Cumulative)" }]);
-
     const [reportData, setReportData]     = useState<SummaryRow[]>([]);
     const [isFetching, setIsFetching]     = useState(false);
     const [hasGenerated, setHasGenerated] = useState(false);
 
-    // ── Fetch divisions + periods on mount ─────────────────────
     useEffect(() => {
         if (!loginid) return;
         fetchDropdown("report_divisions", loginid, company_code)
@@ -363,7 +350,6 @@ const AppraisalDivisionSummaryReport = () => {
             });
     }, [loginid, company_code]);
 
-    // ── Cascade: departments when div changes ─────────────────
     useEffect(() => {
         if (!loginid) return;
         fetchDropdown("report_departments", loginid, company_code, div)
@@ -376,7 +362,7 @@ const AppraisalDivisionSummaryReport = () => {
         setDeptLabel("All");
     }, [div, loginid, company_code]);
 
-    // ── Generate report ───────────────────────────────────────
+
     const handleGenerate = async () => {
         if (!loginid) return;
         setIsFetching(true);
@@ -398,7 +384,7 @@ const AppraisalDivisionSummaryReport = () => {
         }
     };
 
-    // ── Print ─────────────────────────────────────────────────
+
     const fileName = `Appraisal-Division-Summary-${new Date().toISOString().slice(0, 10)}`;
     const printStyles = `
         @page{margin:10mm 8mm;size:A4 landscape;}
@@ -415,7 +401,6 @@ const AppraisalDivisionSummaryReport = () => {
         document.head.removeChild(style);
     };
 
-    // ── LookupField columns config ────────────────────────────
     const lookupColumns = [
         { field: "CODE", header: "Code" },
         { field: "NAME", header: "Name" },
@@ -423,8 +408,6 @@ const AppraisalDivisionSummaryReport = () => {
 
     return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-
-            {/* ── Breadcrumb + Title ── */}
             <div style={{ padding: "12px 24px", borderBottom: "1px solid #e0e0e0" }}>
                 <nav aria-label="breadcrumb" style={{ marginBottom: 4, fontSize: 13, color: "#666" }}>
                     <a href="/dashboard" style={{ color: "inherit", textDecoration: "none" }}>Home</a>
@@ -436,7 +419,6 @@ const AppraisalDivisionSummaryReport = () => {
                 <h6 style={{ margin: 0, fontWeight: 600, fontSize: 18 }}>Appraisal Division Summary Report</h6>
             </div>
 
-            {/* ── Filter Bar ── */}
             <div style={{
                 padding: "12px 24px",
                 borderBottom: "1px solid #e0e0e0",
@@ -446,7 +428,7 @@ const AppraisalDivisionSummaryReport = () => {
                 gap: 12,
                 alignItems: "flex-end",
             }}>
-                {/* Period Dropdown */}
+            
                 <div style={{ flex: 1, minWidth: 200 }}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4, display: "block" }}>
                         Period
@@ -465,7 +447,7 @@ const AppraisalDivisionSummaryReport = () => {
                     </select>
                 </div>
 
-                {/* Division Lookup */}
+            
                 <div style={{ flex: 1, minWidth: 160 }}>
                     <LookupField
                         label="Division"
@@ -487,7 +469,7 @@ const AppraisalDivisionSummaryReport = () => {
                     />
                 </div>
 
-                {/* Department Lookup */}
+       
                 <div style={{ flex: 1, minWidth: 160 }}>
                     <LookupField
                         label="Department"
@@ -522,7 +504,7 @@ const AppraisalDivisionSummaryReport = () => {
                 </Button>
             </div>
 
-            {/* ── Report Preview ── */}
+ 
             <div style={{ padding: 16, backgroundColor: "#eef1f5", flex: 1, minHeight: 0, overflow: "auto" }}>
                 {!hasGenerated ? (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#888", fontSize: 14 }}>
@@ -552,7 +534,7 @@ const AppraisalDivisionSummaryReport = () => {
                 )}
             </div>
 
-            {/* ── Print Button ── */}
+
             <div
                 style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: 16, borderTop: "1px solid #e0e0e0" }}
                 className="no-print"

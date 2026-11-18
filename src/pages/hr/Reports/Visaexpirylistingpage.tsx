@@ -1,557 +1,551 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Loader2, Search } from "lucide-react";
+
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
+import { Button } from "../../../components/ui/Button";
 import {
-    BarChart2,
-    RotateCcw,
-    Printer,
-    Loader2,
-    ChevronUp,
-    ChevronDown,
-} from "lucide-react";
+  MultiSelectField,
+  type MultiSelectOption,
+} from "../../../components/ui/MultiSelectField";
+import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { openVisaExpiryReport } from "../../../api/transactions";
+import {
+  getVisaExpiryReportHtml,
+  getVisaExpiryReportExcelDownload,
+} from "../../../api/transactions";
+import { NewReportDialog } from "../../../components/new_report_format";
 
+// ─── Lookup parameter names + column keys ─────────────────────────────────────
 
-// ─── Types ──────────────────────────────────────────────────────────────────────
+const LOOKUP = {
+  division:    { parameter: "AC_ASSETS_DEPRECIATION_DIVISION_LIST", code: "div_code",     name: "div_name" },
+  department:  { parameter: "HR_CAM_DEPARTMENT_DEPTCODE",           code: "dept_code",    name: "dept_name" },
+  section:     { parameter: "HR_DROPDOWN_MS_SECTION",                    code: "section_code", name: "section_name" },
+  grade:       { parameter: "MS_EMP_HR_EMPLOYEE_GRADE",              code: "grade_code",   name: "grade_name" },
+  designation: { parameter: "MST_HR_MS_HR_DESIGNATION_LIST",        code: "desg_code",    name: "desg_name" },
+  employee:    { parameter: "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",           code: "employee_id",       name: "employee_name" },
+  sponsor:     { parameter: "AC_ASSETS_HR_SPONSOR",                 code: "sponsor_name", name: "sponsor_short_name" },
+} as const;
 
-interface LookupOption {
-    code: string;
-    name: string;
-}
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type EmployeeFilter = "A" | "ALL";
 
-// ─── Date helpers ────────────────────────────────────────────────────────────────
-
-const getToday = (): string => {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-};
-
-const getNextMonth = (): string => {
-    const n = new Date();
-    n.setMonth(n.getMonth() + 1);
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-};
-
-// ─── Shared styles ────────────────────────────────────────────────────────────────
-
-const fieldLabelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#6b7280",
-    marginBottom: 5,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-};
-
-const inputStyle: React.CSSProperties = {
-    width: "100%",
-    fontSize: 12,
-    padding: "6px 9px",
-    border: "0.5px solid #d1d5db",
-    borderRadius: 6,
-    background: "#fff",
-    color: "#111827",
-    boxSizing: "border-box",
-};
-
-const radioLabelStyle: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    fontSize: 12,
-    cursor: "pointer",
-    color: "#374151",
-};
-
-// ─── Searchable Dropdown ──────────────────────────────────────────────────────────
-
-interface SearchableDropdownProps {
-    label: string;
-    value: LookupOption | null;
-    onChange: (v: LookupOption | null) => void;
-    options: LookupOption[];
-    placeholder?: string;
+interface Params {
+  division: string;
+  department: string;
+  section: string;
+  grade: string;
+  designation: string;
+  employee: string;
+  sponsor: string;
+  employeeFilter: EmployeeFilter;
+  visaExpiryFrom: string;
+  visaExpiryTo: string;
 }
 
-const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
-    label,
-    value,
-    onChange,
-    options,
-    placeholder = "Search...",
-}) => {
-    const [search, setSearch] = useState("");
-    const [open, setOpen] = useState(false);
-    const [display, setDisplay] = useState("");
+const ALL_SENTINEL = "__ALL__";
 
-    useEffect(() => {
-        if (!value) {
-            setDisplay("");
-            setSearch("");
-        } else {
-            setDisplay(`${value.code} - ${value.name}`);
-        }
-    }, [value]);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-    const filtered = options.filter((o) => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return (
-            o.code.toLowerCase().includes(q) ||
-            o.name.toLowerCase().includes(q)
-        );
-    });
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearch(e.target.value);
-        setOpen(true);
-        if (value) onChange(null);
-    };
-
-    return (
-        <div style={{ position: "relative" }}>
-            <div style={fieldLabelStyle}>{label}</div>
-            <input
-                type="text"
-                placeholder={placeholder}
-                value={search !== "" ? search : display}
-                onChange={handleInputChange}
-                onFocus={() => setOpen(true)}
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
-                style={inputStyle}
-            />
-            {open && (
-                <div style={{
-                    position: "absolute", zIndex: 200, top: "calc(100% + 2px)", left: 0, right: 0,
-                    background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 180, overflowY: "auto",
-                }}>
-                    <div
-                        className="dd-option"
-                        style={{
-                            padding: "6px 12px", fontSize: 11, color: "#9ca3af",
-                            cursor: "pointer", borderBottom: "0.5px solid #f3f4f6",
-                        }}
-                        onMouseDown={() => {
-                            onChange(null);
-                            setDisplay("");
-                            setSearch("");
-                            setOpen(false);
-                        }}
-                    >
-                        — All —
-                    </div>
-
-                    {filtered.length === 0 ? (
-                        <div style={{ padding: "8px 12px", fontSize: 12, color: "#9ca3af" }}>
-                            No results found
-                        </div>
-                    ) : (
-                        filtered.map((o) => (
-                            <div
-                                key={o.code}
-                                className="dd-option"
-                                style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
-                                onMouseDown={() => {
-                                    onChange(o);
-                                    setDisplay(`${o.code} - ${o.name}`);
-                                    setSearch("");
-                                    setOpen(false);
-                                }}
-                            >
-                                <span style={{ fontWeight: 500 }}>{o.code}</span>
-                                <span style={{ color: "#6b7280", marginLeft: 6 }}>{o.name}</span>
-                            </div>
-                        ))
-                    )}
-                </div>
-            )}
-        </div>
-    );
+/** Selected values -> "A,B,C" or "All" (nothing / All selected). */
+const toApiCodeString = (selected: string[]): string => {
+  if (selected.length === 0 || selected.includes(ALL_SENTINEL)) return "All";
+  return selected.join(",");
 };
 
-// ─── Generic lookup fetcher ───────────────────────────────────────────────────────
+const pad = (n: number) => String(n).padStart(2, "0");
 
-const fetchLookup = async (
-    parameter: string,
-    loginId: string,
-    companyCode: string,
-    codeKey: string,
-    nameKey: string,
-    extraNameKey?: string
-): Promise<LookupOption[]> => {
-    try {
-        const res = await getDynamicLookup({
-            parameter,
-            loginid: loginId,
-            code1: companyCode,
-            code2: "", code3: "", code4: "",
-            number1: 0, number2: 0, number3: 0, number4: 0,
-            date1: null, date2: null, date3: null, date4: null,
+const toIso = (d: Date): string =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/** Default "From": 6 months back, so recently expired visas are visible. */
+const getDefaultFrom = (): string => {
+  const n = new Date();
+  n.setMonth(n.getMonth() - 6);
+  return toIso(n);
+};
+
+/** Default "To": 1 year ahead. */
+const getDefaultTo = (): string => {
+  const n = new Date();
+  n.setFullYear(n.getFullYear() + 1);
+  return toIso(n);
+};
+
+const toDisplayDate = (isoDate: string): string => {
+  if (!isoDate) return "All";
+  const [y, m, d] = isoDate.split("-");
+  return `${d}/${m}/${y}`;
+};
+
+/** Turns lookup rows into MultiSelect options (tolerant of upper/lower-case keys). */
+const mapOptions = (rows: any, codeKey: string, nameKey: string): MultiSelectOption[] => {
+  const seen = new Set<string>();
+  return (Array.isArray(rows) ? rows : [])
+    .map((r: any) => {
+      const pick = (k: string) => {
+        const v = r[k] ?? r[k.toUpperCase()];
+        return v != null && String(v).trim() ? String(v).trim() : "";
+      };
+      const code = pick(codeKey);
+      const name = pick(nameKey);
+      if (!code || seen.has(code)) return null;
+      seen.add(code);
+      return { value: code, label: name && name !== code ? `${code} - ${name}` : code } as MultiSelectOption;
+    })
+    .filter(Boolean) as MultiSelectOption[];
+};
+
+/** Loads the options of one lookup for a MultiSelect. */
+function useLookupOptions(
+  cfg: { parameter: string; code: string; name: string },
+  loginId: string,
+  companyCode: string
+) {
+  const [options, setOptions] = useState<MultiSelectOption[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const rows = await getDynamicLookup({
+          parameter: cfg.parameter,
+          loginid: loginId,
+          code1: companyCode,
+          code2: "",
+          code3: "",
+          code4: "",
+          number1: 0,
+          number2: 0,
+          number3: 0,
+          number4: 0,
+          date1: null,
+          date2: null,
+          date3: null,
+          date4: null,
         });
+        if (alive) setOptions(mapOptions(rows, cfg.code, cfg.name));
+      } catch (err) {
+        console.error(`[${cfg.parameter}] Fetch error:`, err);
+        if (alive) setOptions([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loginId, companyCode]);
 
-        if (Array.isArray(res) && res.length > 0) {
-            console.log(`[${parameter}] First record keys:`, Object.keys(res[0]));
-            console.log(`[${parameter}] First record sample:`, res[0]);
-        } else {
-            console.warn(`[${parameter}] Empty or non-array response:`, res);
-        }
+  return { options, loading };
+}
 
-        return Array.isArray(res)
-            ? res
-                .filter((x: any) => x[codeKey] != null && String(x[codeKey]).trim() !== "")
-                .map((x: any) => ({
-                    code: String(x[codeKey]),
-                    name: extraNameKey && x[extraNameKey]
-                        ? `${x[nameKey] ?? ""} (${x[extraNameKey]})`
-                        : x[nameKey] ?? "",
-                }))
-            : [];
-    } catch (err) {
-        console.error(`[${parameter}] Fetch error:`, err);
-        return [];
-    }
-};
+// ─── Floating-label field wrapper (label sits on the top border, like Absence) ─
 
-// ─── Main Component ───────────────────────────────────────────────────────────────
+function Field({
+  label,
+  required,
+  hideInnerHint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  /** Hides the "Click to select multiple" helper text rendered by MultiSelectField. */
+  hideInnerHint?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`relative ${hideInnerHint ? "[&_p]:hidden" : ""}`}>
+      <span className="pointer-events-none absolute -top-2 left-3 z-10 bg-background px-1 text-[10px] font-semibold uppercase leading-4 tracking-wide text-muted-foreground">
+        {label}
+        {required && <span className="ml-0.5 text-destructive">*</span>}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function Select({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: { label: string; value: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      className="h-10 w-full rounded-md border bg-background px-3 text-sm font-medium text-foreground"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function VisaExpiryListingPage() {
-    const { user } = useAuth();
-    const companyCode = user?.company_code ?? "";
-    const loginId = user?.loginid ?? user?.username ?? "ADMIN";
+  const { user } = useAuth();
+  const companyCode = user?.company_code ?? "";
+  const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-    // ── Lookup options ────────────────────────────────────────────────────────────
-    const [divisionOptions, setDivisionOptions] = useState<LookupOption[]>([]);
-    const [departmentOptions, setDepartmentOptions] = useState<LookupOption[]>([]);
-    const [sectionOptions, setSectionOptions] = useState<LookupOption[]>([]);
-    const [gradeOptions, setGradeOptions] = useState<LookupOption[]>([]);
-    const [designationOptions, setDesignationOptions] = useState<LookupOption[]>([]);
-    const [employeeOptions, setEmployeeOptions] = useState<LookupOption[]>([]);
-    const [sponsorOptions, setSponsorOptions] = useState<LookupOption[]>([]);
+  // ── Lookups ───────────────────────────────────────────────────────────────
+  const divisionLookup    = useLookupOptions(LOOKUP.division,    loginId, companyCode);
+  const departmentLookup  = useLookupOptions(LOOKUP.department,  loginId, companyCode);
+  const sectionLookup     = useLookupOptions(LOOKUP.section,     loginId, companyCode);
+  const gradeLookup       = useLookupOptions(LOOKUP.grade,       loginId, companyCode);
+  const designationLookup = useLookupOptions(LOOKUP.designation, loginId, companyCode);
+  const employeeLookup    = useLookupOptions(LOOKUP.employee,    loginId, companyCode);
+  const sponsorLookup     = useLookupOptions(LOOKUP.sponsor,     loginId, companyCode);
 
-    // ── Selected filter values ────────────────────────────────────────────────────
-    const [division, setDivision] = useState<LookupOption | null>(null);
-    const [department, setDepartment] = useState<LookupOption | null>(null);
-    const [section, setSection] = useState<LookupOption | null>(null);
-    const [grade, setGrade] = useState<LookupOption | null>(null);
-    const [designation, setDesignation] = useState<LookupOption | null>(null);
-    const [employee, setEmployee] = useState<LookupOption | null>(null);
-    const [sponsor, setSponsor] = useState<LookupOption | null>(null);
+  // ── Selected filter values (multi-select) ─────────────────────────────────
+  const [divisions, setDivisions] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [sections, setSections] = useState<string[]>([]);
+  const [grades, setGrades] = useState<string[]>([]);
+  const [designations, setDesignations] = useState<string[]>([]);
+  const [employees, setEmployees] = useState<string[]>([]);
+  const [sponsors, setSponsors] = useState<string[]>([]);
 
-    // ── Date + radio ──────────────────────────────────────────────────────────────
-    const [visaExpiryFrom, setVisaExpiryFrom] = useState(getToday());
-    const [visaExpiryTo, setVisaExpiryTo] = useState(getNextMonth());
-    const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
+  // ── Date + employee type ──────────────────────────────────────────────────
+  const [visaExpiryFrom, setVisaExpiryFrom] = useState(getDefaultFrom());
+  const [visaExpiryTo, setVisaExpiryTo] = useState(getDefaultTo());
+  const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
 
-    // ── UI state ──────────────────────────────────────────────────────────────────
-    const [generating, setGenerating] = useState(false);
-    const [reportError, setReportError] = useState<string | null>(null);
-    const [filtersOpen, setFiltersOpen] = useState(true);
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-    // ── Fetch all lookups on mount ────────────────────────────────────────────────
-    useEffect(() => {
-        const load = async () => {
-            const [div, dept, sec, grd, desig, emp, spon] = await Promise.all([
-                fetchLookup("AC_ASSETS_DEPRECIATION_DIVISION_LIST", loginId, companyCode, "div_code", "div_name"),
-                fetchLookup("HR_CAM_DEPARTMENT_DEPTCODE", loginId, companyCode, "dept_code", "dept_short_name"),
-                fetchLookup("AC_ASSETS_SECTION", loginId, companyCode, "section_code", "section_name"),
-                fetchLookup("AC_ASSETS_HR_GRADE_LIST", loginId, companyCode, "grade_code", "grade_name"),
-                fetchLookup("MST_HR_MS_HR_DESIGNATION_LIST", loginId, companyCode, "desg_code", "desg_name"),
-                fetchLookup("AC_ASSETS_HR_EMPLOYEE_LIST", loginId, companyCode, "emp_id", "emp_name"),
-                fetchLookup("AC_ASSETS_HR_SPONSOR", loginId, companyCode, "sponsor_name", "sponsor_short_name"),
-            ]);
-            setDivisionOptions(div);
-            setDepartmentOptions(dept);
-            setSectionOptions(sec);
-            setGradeOptions(grd);
-            setDesignationOptions(desig);
-            setEmployeeOptions(emp);
-            setSponsorOptions(spon);
-        };
-        load();
-    }, []);
+  const lastParamsRef = useRef<Params | null>(null);
 
-    // ── Reset ─────────────────────────────────────────────────────────────────────
-    const handleReset = () => {
-        setDivision(null);
-        setDepartment(null);
-        setSection(null);
-        setGrade(null);
-        setDesignation(null);
-        setEmployee(null);
-        setSponsor(null);
-        setVisaExpiryFrom("");
-        setVisaExpiryTo("");
-        setEmployeeFilter("A");
-        setReportError(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+
+  const dateRangeValid =
+    !visaExpiryFrom || !visaExpiryTo || visaExpiryFrom <= visaExpiryTo;
+
+  const buildPayload = (p: Params) => ({
+    parameter: "Hr_Report_VISA_EXPIRY_REPORT",
+    loginid: loginId,
+    code1: companyCode,
+    code2: p.division,
+    code3: p.department,
+    code4: p.section,
+    code5: p.grade,
+    code6: p.designation,
+    code7: p.employee,
+    code8: p.sponsor,
+    code9: p.employeeFilter,
+    date1: p.visaExpiryFrom,
+    date2: p.visaExpiryTo,
+  });
+
+  // ── Fetch report HTML → NewReportDialog ───────────────────────────────────
+  const fetchReport = useCallback(
+    async (p: Params) => {
+      setLoading(true);
+      setError("");
+      setMessage("");
+      lastParamsRef.current = p;
+
+      setReportHtml(null);
+      setPreviewOpen(true);
+
+      try {
+        const html = await getVisaExpiryReportHtml(buildPayload(p));
+        setReportHtml(html);
+        setMessage("Report generated successfully.");
+      } catch (err: any) {
+        const msg = err?.message ?? "Failed to load report. Please try again.";
+        setError(msg);
+        setMessage(msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loginId, companyCode]
+  );
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleClearAll = () => {
+    setDivisions([]);
+    setDepartments([]);
+    setSections([]);
+    setGrades([]);
+    setDesignations([]);
+    setEmployees([]);
+    setSponsors([]);
+    setVisaExpiryFrom(getDefaultFrom());
+    setVisaExpiryTo(getDefaultTo());
+    setEmployeeFilter("A");
+    setError("");
+    setMessage("");
+  };
+
+  const handleGenerate = () => {
+    if (!visaExpiryFrom || !visaExpiryTo) {
+      setError("Please select both Visa Expiry From and To dates.");
+      return;
+    }
+    if (!dateRangeValid) return;
+
+    fetchReport({
+      division: toApiCodeString(divisions),
+      department: toApiCodeString(departments),
+      section: toApiCodeString(sections),
+      grade: toApiCodeString(grades),
+      designation: toApiCodeString(designations),
+      employee: toApiCodeString(employees),
+      sponsor: toApiCodeString(sponsors),
+      employeeFilter,
+      visaExpiryFrom,
+      visaExpiryTo,
+    });
+  };
+
+  const handleExcel = async () => {
+    if (!lastParamsRef.current) return;
+    setExporting(true);
+    try {
+      await getVisaExpiryReportExcelDownload(buildPayload(lastParamsRef.current));
+    } catch (err) {
+      console.error("Excel export error:", err);
+      setError("Excel export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleOpenInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleDownloadPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "visa-expiry-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
     };
 
-    // ── Generate ──────────────────────────────────────────────────────────────────
-    const handleGenerate = async () => {
-        if (!visaExpiryFrom || !visaExpiryTo) {
-            setReportError("Please select both Visa Expiry From and To dates.");
-            return;
-        }
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
 
-        setReportError(null);
-        setGenerating(true);
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setReportHtml(null);
+  };
 
-        try {
-            await openVisaExpiryReport({
-                parameter: "Hr_Report_VISA_EXPIRY_REPORT",
-                loginid: loginId,
-                code1: companyCode,
-                code2: division?.code ?? "",
-                code3: department?.code ?? "",
-                code4: section?.code ?? "",
-                code5: grade?.code ?? "",
-                code6: designation?.code ?? "",
-                code7: employee?.code ?? "",
-                code8: sponsor?.code ?? "",
-                code9: employeeFilter,
-                date1: visaExpiryFrom,
-                date2: visaExpiryTo,
-            });
-        } catch (err: any) {
-            setReportError(err?.message ?? "Failed to generate report. Please try again.");
-            console.error(err);
-        } finally {
-            setGenerating(false);
-        }
-    };
-
-    // ─── Render ───────────────────────────────────────────────────────────────────
-    return (
-        <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif", minHeight: "100%" }}>
-            <style>{`
-                .action-btn:hover          { background: #f9fafb !important; }
-                .action-btn-primary:hover  { background: #0C447C !important; border-color: #0C447C !important; }
-                .dd-option:hover           { background: #f0f7ff; }
-                .collapse-btn:hover        { background: #f0f7ff !important; }
-                @keyframes spin            { to { transform: rotate(360deg); } }
-            `}</style>
-
-            <div style={{margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
-
-                {/* ══ Card — Filters + Action bar ════════════════════════════════════ */}
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
-
-                    {/* Card header — collapsible */}
-                    <div
-                        style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "16px 24px", cursor: "pointer",
-                            borderBottom: filtersOpen ? "0.5px solid #e5e7eb" : "none",
-                        }}
-                        onClick={() => setFiltersOpen((p) => !p)}
-                    >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <BarChart2 size={18} color="#185FA5" />
-                            <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>
-                                Visa Expiry Report Filter
-                            </span>
-                        </div>
-                        <button
-                            className="collapse-btn"
-                            style={{
-                                background: "none", border: "none", cursor: "pointer",
-                                padding: "4px 6px", borderRadius: 6, color: "#6b7280",
-                            }}
-                        >
-                            {filtersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </button>
-                    </div>
-
-                    {filtersOpen && (
-                        <div style={{ padding: "20px 24px" }}>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
-
-                                {/* ── Col 1: Division, Department, Section ── */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 240, flex: "1 1 240px" }}>
-                                    <SearchableDropdown
-                                        label="Division"
-                                        value={division}
-                                        onChange={setDivision}
-                                        options={divisionOptions}
-                                        placeholder="Search division..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Department"
-                                        value={department}
-                                        onChange={setDepartment}
-                                        options={departmentOptions}
-                                        placeholder="Search department..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Section"
-                                        value={section}
-                                        onChange={setSection}
-                                        options={sectionOptions}
-                                        placeholder="Search section..."
-                                    />
-                                </div>
-
-                                {/* ── Col 2: Grade, Employee, Sponsor, Designation ── */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 240, flex: "1 1 240px" }}>
-                                    <SearchableDropdown
-                                        label="Grade"
-                                        value={grade}
-                                        onChange={setGrade}
-                                        options={gradeOptions}
-                                        placeholder="Search grade..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Employee Code"
-                                        value={employee}
-                                        onChange={setEmployee}
-                                        options={employeeOptions}
-                                        placeholder="Search employee..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Sponsor"
-                                        value={sponsor}
-                                        onChange={setSponsor}
-                                        options={sponsorOptions}
-                                        placeholder="Search sponsor..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Designation"
-                                        value={designation}
-                                        onChange={setDesignation}
-                                        options={designationOptions}
-                                        placeholder="Search designation..."
-                                    />
-                                </div>
-
-                                {/* ── Col 3: Visa Expiry dates + Employee type ── */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 220, flex: "1 1 220px" }}>
-
-                                    {/* Visa Expiry date range */}
-                                    <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
-                                        <legend style={{
-                                            fontSize: 10, color: "#6b7280", padding: "0 4px",
-                                            textTransform: "uppercase", letterSpacing: "0.05em",
-                                        }}>
-                                            Visa Expiry
-                                        </legend>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-                                            <div>
-                                                <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>From</div>
-                                                <input
-                                                    type="date"
-                                                    value={visaExpiryFrom}
-                                                    max={visaExpiryTo || undefined}
-                                                    onChange={(e) => setVisaExpiryFrom(e.target.value)}
-                                                    style={inputStyle}
-                                                />
-                                            </div>
-                                            <div>
-                                                <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>To</div>
-                                                <input
-                                                    type="date"
-                                                    value={visaExpiryTo}
-                                                    min={visaExpiryFrom || undefined}
-                                                    onChange={(e) => setVisaExpiryTo(e.target.value)}
-                                                    style={inputStyle}
-                                                />
-                                            </div>
-                                        </div>
-                                    </fieldset>
-
-                                    {/* Employee type radio */}
-                                    <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
-                                        <legend style={{
-                                            fontSize: 10, color: "#6b7280", padding: "0 4px",
-                                            textTransform: "uppercase", letterSpacing: "0.05em",
-                                        }}>
-                                            Employee Type
-                                        </legend>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-                                            <label style={radioLabelStyle}>
-                                                <input
-                                                    type="radio"
-                                                    name="empFilter"
-                                                    value="A"
-                                                    checked={employeeFilter === "A"}
-                                                    onChange={() => setEmployeeFilter("A")}
-                                                    style={{ accentColor: "#185FA5" }}
-                                                />
-                                                Active Employees
-                                            </label>
-                                            <label style={radioLabelStyle}>
-                                                <input
-                                                    type="radio"
-                                                    name="empFilter"
-                                                    value="ALL"
-                                                    checked={employeeFilter === "ALL"}
-                                                    onChange={() => setEmployeeFilter("ALL")}
-                                                    style={{ accentColor: "#185FA5" }}
-                                                />
-                                                All Employees
-                                            </label>
-                                        </div>
-                                    </fieldset>
-                                </div>
-                            </div>
-
-                            {/* Error banner */}
-                            {reportError && (
-                                <div style={{
-                                    marginTop: 14, fontSize: 12, color: "#dc2626",
-                                    background: "#fef2f2", border: "0.5px solid #fecaca",
-                                    borderRadius: 6, padding: "6px 12px",
-                                }}>
-                                    ⚠ {reportError}
-                                </div>
-                            )}
-
-                            {/* Action bar */}
-                            <div style={{
-                                display: "flex", justifyContent: "flex-end", gap: 8,
-                                paddingTop: 20, marginTop: 20, borderTop: "0.5px solid #e5e7eb",
-                            }}>
-                                <button
-                                    className="action-btn"
-                                    onClick={handleReset}
-                                    disabled={generating}
-                                    style={{
-                                        padding: "7px 16px", border: "0.5px solid #d1d5db",
-                                        background: "#fff", cursor: generating ? "not-allowed" : "pointer",
-                                        display: "flex", alignItems: "center", gap: 6,
-                                        fontSize: 12, borderRadius: 6, color: "#374151",
-                                        opacity: generating ? 0.6 : 1,
-                                    }}
-                                >
-                                    <RotateCcw size={13} /> Reset
-                                </button>
-
-                                <button
-                                    className="action-btn-primary"
-                                    onClick={handleGenerate}
-                                    disabled={generating}
-                                    style={{
-                                        padding: "7px 16px", border: "0.5px solid #185FA5",
-                                        background: "#185FA5", cursor: generating ? "not-allowed" : "pointer",
-                                        display: "flex", alignItems: "center", gap: 6,
-                                        fontSize: 12, borderRadius: 6, color: "#fff",
-                                        opacity: generating ? 0.7 : 1,
-                                    }}
-                                >
-                                    {generating
-                                        ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating…</>
-                                        : <><Printer size={13} /> Generate Report</>
-                                    }
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-            </div>
+  // ─── Render ───────────────────────────────────────────────────────────────
+  return (
+    <section className="freight-ui-standard freight-report-screen">
+      <div className="freight-report-card">
+        <div className="freight-report-titlebar">
+          <h1>Visa Expiry Report</h1>
+          <span className="freight-report-title-dot" aria-hidden="true" />
         </div>
-    );
+
+        <ReportFilterHeader onClear={handleClearAll} />
+
+        {/* Single compact grid: 4 columns on desktop (4 + 4 + 2 fields) */}
+        <div className="freight-report-fields grid gap-x-3 gap-y-5 px-3 pb-3 pt-5 md:grid-cols-2 xl:grid-cols-4">
+          <Field label="Division" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={divisionLookup.options}
+              loading={divisionLookup.loading}
+              value={divisions}
+              onChange={setDivisions}
+            />
+          </Field>
+
+          <Field label="Department" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={departmentLookup.options}
+              loading={departmentLookup.loading}
+              value={departments}
+              onChange={setDepartments}
+            />
+          </Field>
+
+          <Field label="Section" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={sectionLookup.options}
+              loading={sectionLookup.loading}
+              value={sections}
+              onChange={setSections}
+            />
+          </Field>
+
+          <Field label="Grade" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={gradeLookup.options}
+              loading={gradeLookup.loading}
+              value={grades}
+              onChange={setGrades}
+            />
+          </Field>
+
+          <Field label="Designation" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={designationLookup.options}
+              loading={designationLookup.loading}
+              value={designations}
+              onChange={setDesignations}
+            />
+          </Field>
+
+          <Field label="Employee" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={employeeLookup.options}
+              loading={employeeLookup.loading}
+              value={employees}
+              onChange={setEmployees}
+            />
+          </Field>
+
+          <Field label="Sponsor" hideInnerHint>
+            <MultiSelectField
+              className="freight-report-multi-select"
+              label=""
+              options={sponsorLookup.options}
+              loading={sponsorLookup.loading}
+              value={sponsors}
+              onChange={setSponsors}
+            />
+          </Field>
+
+          <Field label="Employee Type">
+            <Select
+              value={employeeFilter}
+              onChange={(v) => setEmployeeFilter(v as EmployeeFilter)}
+              options={[
+                { label: "Active Employees", value: "A" },
+                { label: "All Employees", value: "ALL" },
+              ]}
+            />
+          </Field>
+
+          <Field label="Visa Expiry From">
+            <BiscDatePicker
+              value={visaExpiryFrom}
+              onChange={(value) => {
+                if (!visaExpiryTo || value <= visaExpiryTo) setVisaExpiryFrom(value);
+              }}
+            />
+          </Field>
+
+          <Field label="Visa Expiry To">
+            <BiscDatePicker
+              value={visaExpiryTo}
+              onChange={(value) => {
+                if (!visaExpiryFrom || value >= visaExpiryFrom) setVisaExpiryTo(value);
+              }}
+            />
+          </Field>
+        </div>
+
+        {!dateRangeValid && (
+          <p className="px-3 pb-2 text-xs text-destructive">
+            Visa Expiry From must be on or before Visa Expiry To.
+          </p>
+        )}
+
+        {error && !previewOpen ? (
+          <p className="px-3 pb-2 text-sm text-destructive">{error}</p>
+        ) : null}
+
+        <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2 border-t px-3 py-3">
+          <Button type="button" size="sm" onClick={handleGenerate} disabled={loading || !dateRangeValid}>
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}{" "}
+            {loading ? "Generating..." : "Generate Report"}
+          </Button>
+        </div>
+      </div>
+
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closePreview}
+        title="Visa Expiry Report"
+        htmlContent={reportHtml}
+        loading={loading}
+        error={error || null}
+        meta={{
+          companyName: companyCode,
+          user: loginId,
+          period: `${toDisplayDate(visaExpiryFrom)} - ${toDisplayDate(visaExpiryTo)}`,
+          status: employeeFilter === "A" ? "Active Employees" : "All Employees",
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onExportExcel={handleExcel}
+        exportingExcel={exporting}
+        onOpenInNewWindow={handleOpenInNewWindow}
+        onDownloadPdf={handleDownloadPdf}
+      />
+    </section>
+  );
 }

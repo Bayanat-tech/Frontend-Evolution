@@ -34,7 +34,7 @@ export function Dialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 grid place-items-center p-5 backdrop-blur-[1px]",
+        "fixed inset-0 z-[9999] grid place-items-center p-5 backdrop-blur-[1px]",
         editorDialog ? "bg-background/95" : "bg-slate-950/50",
       )}
       onClick={onClose}

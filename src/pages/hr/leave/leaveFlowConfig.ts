@@ -1,4 +1,4 @@
-export type LeaveFlowKey = "request" | "inProgress" | "closed" | "cancelled" | "rejected";
+export type LeaveFlowKey = "request" | "inProgress" | "closed" | "sentBack" | "cancelled" | "rejected";
 
 export type LeaveFlowConfig = {
   key: LeaveFlowKey;
@@ -13,6 +13,7 @@ export type LeaveFlowConfig = {
 };
 
 export const leaveFlowConfigs: Record<LeaveFlowKey, LeaveFlowConfig> = {
+  sentBack: { key: 'sentBack', componentName: 'LeaveSentBackPage', title: 'Sent Back Leave Requests', eyebrow: 'HR Flow', endpoint: 'Pg_leave_flow_SentBack', description: 'Requests returned for correction or another review.', statusLabel: 'Sent Back', statusTone: 'amber', routeTokens: ['leavesentbackpage'] },
   request: {
     key: "request",
     componentName: "LeaveRequestPage",

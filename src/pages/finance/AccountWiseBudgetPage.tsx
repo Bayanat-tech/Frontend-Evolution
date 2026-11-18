@@ -1,13 +1,14 @@
-import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Edit2, Eye, FileText, Plus, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, getDynamicLookup, getLookupText, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
 
 type BudgetRow = {
@@ -15,6 +16,7 @@ type BudgetRow = {
   doc_no: string;
   doc_date: string;
   doc_type: string;
+  version: string;
   budget_year: string;
   div_code: string;
   div_name: string;
@@ -56,7 +58,18 @@ const MONTHS: { field: keyof BudgetRow; label: string }[] = [
   { field: "dec_budget_month", label: "Dec" },
 ];
 
-export function AccountWiseBudgetPage() {
+const inputClass =
+  "h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500";
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
+export function AccountWiseBudgetPage({ mode = "account" }: { mode?: "account" | "group" }) {
+  const isGroupMode = mode === "group";
+  const docType = isGroupMode ? "BDG" : "BDA";
+  const screenTitle = isGroupMode ? "A/c Group Budget" : "A/c Wise Budget";
+  const accountLabel = isGroupMode ? "Account Group" : "Account";
   const { user } = useAuth();
   const [rows, setRows] = useState<BudgetRow[]>([]);
   const [query, setQuery] = useState("");
@@ -73,7 +86,7 @@ export function AccountWiseBudgetPage() {
         parameter: "MS_BUDGET_ACWISE_PAGE",
         loginid: user?.loginid || "",
         code1: user?.company_code || "",
-        code2: "",
+        code2: docType,
         code3: "",
         code4: "",
         number1: 0,
@@ -100,8 +113,9 @@ export function AccountWiseBudgetPage() {
   };
 
   useEffect(() => {
+    setEditor(null);
     void loadRows();
-  }, []);
+  }, [mode]);
 
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -110,7 +124,29 @@ export function AccountWiseBudgetPage() {
   }, [rows, query]);
 
   const columns = useMemo<ColumnDef<BudgetRow>[]>(() => [
-    { accessorKey: "doc_type", header: "Type" },
+    {
+      accessorKey: "version",
+      header: "Version",
+      cell: ({ row }) => (
+        <button type="button" className="text-left font-mono font-medium text-slate-700 hover:text-primary transition-colors cursor-pointer" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Click to edit">
+          {String(row.original.version || "V1")}
+        </button>
+      ),
+      },
+      {
+      accessorKey: "doc_type",
+      header: "Type",
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          className="font-semibold text-[#00378C] hover:underline cursor-pointer text-left bg-transparent border-none p-0"
+          title="Click to edit"
+        >
+          {String(row.original.doc_type || "")}
+        </button>
+      ),
+    },
     {
       accessorKey: "doc_date",
       header: "Date",
@@ -119,29 +155,53 @@ export function AccountWiseBudgetPage() {
     { accessorKey: "budget_year", header: "Year" },
     {
       id: "account",
-      header: "Account",
+      header: accountLabel,
       accessorFn: (row) => `${row.ac_code} ${row.ac_name}`,
       cell: ({ row }) => <span className="block max-w-[220px] truncate">{row.original.ac_code} {row.original.ac_name ? `- ${row.original.ac_name}` : ""}</span>,
     },
     ...MONTHS.map<ColumnDef<BudgetRow>>((month) => ({
       accessorKey: month.field,
-      header: month.label,
+      header: () => <div className="text-right">{month.label}</div>,
       cell: ({ getValue }) => <span className="block text-right tabular-nums">{money(getValue())}</span>,
     })),
     {
       accessorKey: "total_budget",
-      header: "Total",
+      header: () => <div className="text-right">Total</div>,
       cell: ({ getValue }) => <span className="block text-right font-semibold tabular-nums">{money(getValue())}</span>,
     },
     {
       id: "actions",
-      header: "Actions",
+      header: () => <div className="text-center">Actions</div>,
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "view", row: row.original })}><Eye size={15} /></Button>
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
-          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)}><Trash2 size={15} /></Button>
+        <div className="flex items-center justify-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
+            title="View"
+            onClick={() => setEditor({ mode: "view", row: row.original })}
+          >
+            <Eye size={15} />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
+            title="Edit"
+            onClick={() => setEditor({ mode: "edit", row: row.original })}
+          >
+            <Edit2 size={15} />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
+            title="Delete"
+            onClick={() => setDeleteTarget(row.original)}
+          >
+            <Trash2 size={15} />
+          </Button>
         </div>
       ),
     },
@@ -176,81 +236,166 @@ export function AccountWiseBudgetPage() {
   };
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="eyebrow">Finance Master</p>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">A/c Wise Budget</h1>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setEditor({ mode: "create" })}><Plus size={15} /> Create Budget</Button>
-        </div>
-      </div>
-
-      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-
-      <DataTable
-        columns={columns}
-        data={filteredRows}
-        title={loading ? "Loading" : `${filteredRows.length} Records`}
-        subtitle="Budgets"
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search budget..."
-        loading={loading}
-        emptyText="No budgets found"
-        height={670}
-        minWidth={1260}
-        density="grid"
-        getRowId={(row, index) => `${row.doc_no}_${row.ac_code}_${row.budget_year}_${index}`}
-      />
-
-      {editor && (
-        <Dialog
-          open
-          wide
-          title={`${editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Edit" : "View"} A/c Wise Budget`}
-          description="Monthly budget details"
+    <section className="finance-list-page finance-utility-page grid gap-2 p-1">
+      {editor ? (
+        <BudgetEditor
+          mode={mode}
+          editor={editor}
           onClose={() => setEditor(null)}
-        >
-          <BudgetEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Budget updated successfully" : "Budget added successfully" }); await loadRows(false); }} />
-        </Dialog>
+          onSaved={async () => {
+            setNotice({ type: "success", message: editor.mode === "edit" ? "Budget updated successfully" : "Budget added successfully" });
+            setEditor(null);
+            await loadRows(false);
+          }}
+        />
+      ) : (
+        <>
+          {/* ---------- Top Header (compact) ---------- */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
+                <FileText size={14} />
+              </div>
+              <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">
+                {screenTitle}
+              </h1>
+            </div>
+          </div>
+
+          <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+          {/* ---------- LIST ---------- */}
+          <DataTable
+            columns={columns}
+            data={filteredRows}
+            title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Records`}
+            searchValue={query}
+            onSearchChange={setQuery}
+            searchPlaceholder="Search budget..."
+            loading={loading}
+            emptyText="No budgets found"
+            height="calc(100dvh - 150px)"
+            minWidth={1260}
+            density="grid"
+            enablePagination={false}
+            enableExport={false}
+            actionButton={
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setNotice(null);
+                    setEditor({ mode: "create" });
+                  }}
+                  className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
+                >
+                  <Plus size={14} strokeWidth={2.5} /> Add
+                </Button>
+                <FinanceListActionsMenu
+                  fyPeriod=""
+                  fyPeriods={[]}
+                  onFyPeriodChange={() => {}}
+                  onExport={() =>
+                    exportToCsv(
+                      filteredRows,
+                      columns,
+                      `${isGroupMode ? "account-group" : "account-wise"}-budget-${new Date().toISOString().slice(0, 10)}.csv`,
+                    )
+                  }
+                  onRefresh={() => void loadRows(false)}
+                />
+              </div>
+            }
+            getRowId={(row, index) => `${row.doc_no}_${row.ac_code}_${row.budget_year}_${index}`}
+          />
+        </>
       )}
 
-      {deleteTarget && (
-        <Dialog
-          open
-          compact
-          tone="danger"
-          title="Delete Budget"
-          description="This action cannot be undone."
-          onClose={() => setDeleteTarget(null)}
-          footer={
-            <>
-              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-              <Button variant="destructive" onClick={() => void deleteRow()}>Delete</Button>
-            </>
-          }
-        >
-          <p className="modal-copy">Delete budget <strong>{deleteTarget.doc_no || deleteTarget.ac_code}</strong>?</p>
-        </Dialog>
-      )}
+      {/* ---------- DELETE CONFIRM ---------- */}
+      <Dialog
+        open={Boolean(deleteTarget)}
+        compact
+        tone="danger"
+        title="Delete Budget"
+        description="This action cannot be undone."
+        onClose={() => setDeleteTarget(null)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Close</Button>
+            <Button variant="destructive" onClick={() => void deleteRow()}>Delete</Button>
+          </>
+        }
+      >
+        <p className="m-0 text-sm text-muted-foreground">
+          Delete budget <strong>{deleteTarget?.doc_no || deleteTarget?.ac_code}</strong>?
+        </p>
+      </Dialog>
     </section>
   );
 }
 
-function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState, null>; onClose: () => void; onSaved: () => Promise<void> }) {
+/* ------------------------------------------------------------------ */
+/*  Editor (in-page, same layout as Budget Version)                    */
+/* ------------------------------------------------------------------ */
+
+function BudgetEditor({ mode = "account", editor, onClose, onSaved }: { mode?: "account" | "group"; editor: Exclude<EditorState, null>; onClose: () => void; onSaved: () => Promise<void> }) {
+  const isGroupMode = mode === "group";
+  const docType = isGroupMode ? "BDG" : "BDA";
+  const accountLabel = isGroupMode ? "Account Group" : "Account";
   const { user } = useAuth();
   const readOnly = editor.mode === "view";
   const isEdit = editor.mode === "edit";
   const [form, setForm] = useState<BudgetRow>(() => ({
-    ...emptyBudget(user?.company_code || ""),
+    ...emptyBudget(user?.company_code || "", docType),
     ...(editor.row || {}),
+    doc_type: editor.row?.doc_type || docType,
     doc_date: toInputDate(editor.row?.doc_date) || new Date().toISOString().slice(0, 10),
   }));
+  const [annualInput, setAnnualInput] = useState<string>(() =>
+    editor.row ? money(editor.row.total_budget || calcTotal(editor.row)) : "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (editor.mode !== "create" || form.div_code) return;
+    let mounted = true;
+    void (async () => {
+      try {
+        const divs = await getDynamicLookup({
+          parameter: "Account_division",
+          loginid: user?.loginid || "",
+          code1: user?.company_code || "",
+        });
+        if (!mounted || !divs.length) return;
+        const divCode = String(getLookupValue(divs[0], "div_code") || "");
+        const divName = getLookupText(divs[0], ["div_name", "DIV_NAME", "division_name"]);
+        if (divCode) {
+          setForm((prev) => (prev.div_code ? prev : { ...prev, div_code: divCode, div_name: divName }));
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { mounted = false; };
+  }, [editor.mode, user?.company_code, user?.loginid]);
+
+  // PowerBuilder uof_dwitemchanged('amount'): distribute annual amount evenly across 12 months
+  const distributeAnnualBudget = (rawAmount: string) => {
+    setAnnualInput(rawAmount);
+    const annual = Number(rawAmount);
+    if (!Number.isFinite(annual) || annual < 0) return;
+    const perMonth = Math.round((annual / 12) * 100) / 100;
+    const decAmount = Math.round((annual - perMonth * 11) * 100) / 100;
+    setForm((prev) => {
+      const next: BudgetRow = { ...prev };
+      MONTHS.forEach((m, idx) => {
+        next[m.field] = (idx === 11 ? decAmount : perMonth).toFixed(2);
+      });
+      next.total_budget = annual.toFixed(2);
+      return next;
+    });
+  };
 
   const total = useMemo(() => MONTHS.reduce((sum, month) => sum + numberValue(form[month.field]), 0), [form]);
 
@@ -260,8 +405,8 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
     event.preventDefault();
     if (readOnly) return;
     setError("");
-    if (!form.budget_year || !form.ac_code || !form.div_code || !form.doc_type) {
-      setError("Version, Budget Year, Division and Account are required.");
+    if (!form.budget_year || !form.ac_code || !form.div_code || !form.version) {
+      setError(`Version, Budget Year, Division and ${accountLabel} are required.`);
       return;
     }
 
@@ -273,8 +418,11 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
         ac_code: form.ac_code,
         div_code: form.div_code,
         doc_no: isEdit ? numberValue(form.doc_no) : 0,
-        doc_type: form.doc_type,
+        doc_type: form.doc_type || docType,
+        version: form.version,
         doc_date: form.doc_date,
+        curr_code: "INR",
+        ex_rate: 1,
         jan_budget_month: numberValue(form.jan_budget_month),
         feb_budget_month: numberValue(form.feb_budget_month),
         mar_budget_month: numberValue(form.mar_budget_month),
@@ -297,104 +445,229 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
     }
   };
 
+  const modeTitle = isGroupMode ? "A/c Group Budget" : "A/c Wise Budget";
+  const pageTitle = editor.mode === "create" ? `New ${modeTitle}` : readOnly ? `View ${modeTitle}` : `Edit ${modeTitle}`;
+
   return (
-    <div className="flex min-h-[560px] flex-col">
-      <div className="border-b pb-3">
-        <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
-        <div className="flex items-end justify-between gap-3">
-          <h2 className="m-0 text-xl font-semibold tracking-tight">A/c Wise Budget</h2>
-          <strong className="text-lg tabular-nums">{money(String(total))}</strong>
+    <>
+      {/* ---------- Top Header (compact) ---------- */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
+            <FileText size={14} />
+          </div>
+          <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">
+            {pageTitle}
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="mr-2 text-sm font-semibold tabular-nums text-slate-900" title="Total Budget">
+            Total: {money(String(total))}
+          </span>
+          {!readOnly && (
+            <Button
+              type="submit"
+              form="account-budget-form"
+              disabled={saving}
+              className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
+            >
+              <Save size={13} /> Save
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Close"
+            title="Close"
+            className="h-7 w-7 rounded-md"
+          >
+            <X size={14} />
+          </Button>
         </div>
       </div>
-      <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="account-budget-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
-        <div className="grid grid-cols-2 gap-3">
-          <LookupField
-            label="Version"
-            value={form.doc_type}
-            displayValue={form.doc_type}
-            columns={[
-              { field: "version_code", header: "Version" },
-              { field: "version_desc", header: "Description" },
-            ]}
-            valueField="version_code"
-            displayFields={["version_code", "version_desc"]}
-            disabled={readOnly}
-            loadOptions={() => getDynamicLookup({ parameter: "AC_BUDGET_GET_VERSION", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-            onChange={(value) => setField("doc_type", value)}
-          />
-          <label className="field">
-            <span>Doc Date</span>
-            <Input type="date" value={form.doc_date} onChange={(event) => setField("doc_date", event.target.value)} disabled={readOnly} />
-          </label>
-          <LookupField
-            label="Budget Year"
-            value={form.budget_year}
-            displayValue={form.budget_year}
-            columns={[{ field: "budget_year", header: "Budget Year" }]}
-            valueField="budget_year"
-            displayFields={["budget_year"]}
-            disabled={readOnly}
-            loadOptions={() => getDynamicLookup({ parameter: "AC_BUDGET_GET_YEAR", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-            onChange={(value) => setField("budget_year", value)}
-          />
-          <LookupField
-            label="Division"
-            value={form.div_code}
-            displayValue={form.div_code ? `${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}` : ""}
-            columns={[
-              { field: "div_code", header: "Division Code" },
-              { field: "div_name", header: "Division Name" },
-            ]}
-            valueField="div_code"
-            displayFields={["div_code", "div_name"]}
-            disabled={readOnly}
-            loadOptions={() => getDynamicLookup({ parameter: "Account_division", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-            onChange={(value, row) => setForm((prev) => ({ ...prev, div_code: value, div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" }))}
-          />
+
+      {/* ---------- EDITOR ---------- */}
+      <form id="account-budget-form" className="flex flex-col gap-2" onSubmit={handleSubmit}>
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 rounded-t-lg">
+            <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
+              <FileText size={12} />
+            </div>
+            <h3 className="m-0 text-xs font-semibold text-slate-800">Budget Details</h3>
+          </div>
+
+          <div className="p-3">
+            {/* 4 fields in one row */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2.5">
+              <LookupField
+                label="Version"
+                required
+                value={form.version}
+                displayValue={form.version}
+                columns={[
+                  { field: "version_code", header: "Version" },
+                  { field: "version_desc", header: "Description" },
+                ]}
+                valueField="version_code"
+                displayFields={["version_code", "version_desc"]}
+                disabled={readOnly}
+                loadOptions={() => getDynamicLookup({ parameter: "AC_BUDGET_GET_VERSION", loginid: user?.loginid || "", code1: user?.company_code || "", code2: form.budget_year || "" })}
+                onChange={(value) => setField("version", value)}
+              />
+              <div className="flex flex-col">
+                <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
+                  Doc Date <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  value={form.doc_date}
+                  onChange={(event) => setField("doc_date", event.target.value)}
+                  disabled={readOnly}
+                  className={inputClass}
+                />
+              </div>
+              <LookupField
+                label="Budget Year"
+                required
+                value={form.budget_year}
+                displayValue={form.budget_year}
+                columns={[{ field: "budget_year", header: "Budget Year" }]}
+                valueField="budget_year"
+                displayFields={["budget_year"]}
+                disabled={readOnly}
+                loadOptions={() => getDynamicLookup({ parameter: "AC_BUDGET_GET_YEAR", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+                onChange={(value) => setField("budget_year", value)}
+              />
+              <LookupField
+                label="Division"
+                required
+                value={form.div_code}
+                displayValue={form.div_code ? `${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}` : ""}
+                columns={[
+                  { field: "div_code", header: "Division Code" },
+                  { field: "div_name", header: "Division Name" },
+                ]}
+                valueField="div_code"
+                displayFields={["div_code", "div_name"]}
+                disabled={readOnly}
+                loadOptions={() => getDynamicLookup({ parameter: "Account_division", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+                onChange={(value, row) => setForm((prev) => ({ ...prev, div_code: value, div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" }))}
+              />
+            </div>
+
+            {/* Account / Group & Annual Auto-Split */}
+            <div className="mt-2.5 grid grid-cols-1 lg:grid-cols-2 gap-x-3 gap-y-2.5">
+              <LookupField
+                label={accountLabel}
+                required
+                value={form.ac_code}
+                displayValue={form.ac_code ? `${form.ac_code}${form.ac_name ? ` - ${form.ac_name}` : ""}` : ""}
+                columns={[
+                  { field: "ac_code", header: isGroupMode ? "Group Code" : "Account Code" },
+                  { field: "ac_name", header: isGroupMode ? "Group Name" : "Account Name" },
+                ]}
+                valueField="ac_code"
+                displayFields={["ac_code", "ac_name"]}
+                disabled={readOnly}
+                loadOptions={() =>
+                  getDynamicLookup({
+                    parameter: isGroupMode ? "MS_BUDGET_AC_GROUP_LIST" : "MS_BUDGET_ACCOUNT_CODE_LIST",
+                    loginid: user?.loginid || "",
+                    code1: user?.company_code || "",
+                  })
+                }
+                onChange={(value, row) => setForm((prev) => ({ ...prev, ac_code: value, ac_name: row ? getLookupText(row, ["ac_name", "AC_NAME", "l4_description", "account_name"]) : "" }))}
+              />
+              <div className="flex flex-col">
+                <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
+                  Annual Amount (Auto ÷ 12 Months)
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    className={`${inputClass} text-right tabular-nums`}
+                    type="number"
+                    placeholder="Enter annual budget to split across 12 months..."
+                    value={annualInput}
+                    disabled={readOnly}
+                    onChange={(event) => distributeAnnualBudget(event.target.value)}
+                  />
+                  {!readOnly && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0 px-2.5 text-xs"
+                      onClick={() => distributeAnnualBudget(annualInput || String(total))}
+                    >
+                      Split ÷ 12
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <LookupField
-          label="Account"
-          value={form.ac_code}
-          displayValue={form.ac_code ? `${form.ac_code}${form.ac_name ? ` - ${form.ac_name}` : ""}` : ""}
-          columns={[
-            { field: "ac_code", header: "Account Code" },
-            { field: "ac_name", header: "Account Name" },
-          ]}
-          valueField="ac_code"
-          displayFields={["ac_code", "ac_name"]}
-          disabled={readOnly}
-          loadOptions={() => getDynamicLookup({ parameter: "MS_BUDGET_ACCOUNT_CODE_LIST", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-          onChange={(value, row) => setForm((prev) => ({ ...prev, ac_code: value, ac_name: row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "" }))}
-        />
-        <div className="grid grid-cols-3 gap-3">
-          {MONTHS.map((month) => (
-            <label className="field" key={month.field}>
-              <span>{month.label}</span>
-              <Input className="text-right tabular-nums" type="number" value={form[month.field]} onChange={(event) => setField(month.field, event.target.value)} disabled={readOnly} />
-            </label>
-          ))}
+
+        {/* Monthly budget card */}
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 rounded-t-lg">
+            <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
+              <FileText size={12} />
+            </div>
+            <h3 className="m-0 text-xs font-semibold text-slate-800">Monthly Budget</h3>
+          </div>
+          <div className="p-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-x-3 gap-y-2.5">
+              {MONTHS.map((month) => (
+                <div className="flex flex-col" key={month.field}>
+                  <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">{month.label}</label>
+                  <input
+                    className={`${inputClass} text-right tabular-nums`}
+                    type="number"
+                    value={form[month.field]}
+                    onChange={(event) => setField(month.field, event.target.value)}
+                    disabled={readOnly}
+                  />
+                </div>
+              ))}
+              <div className="flex flex-col">
+                <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">Total Budget</label>
+                <input
+                  className={`${inputClass} text-right font-semibold tabular-nums`}
+                  value={money(String(total))}
+                  disabled
+                />
+              </div>
+            </div>
+          </div>
         </div>
-        <label className="field">
-          <span>Total Budget</span>
-          <Input className="text-right font-semibold tabular-nums" value={money(String(total))} disabled />
-        </label>
       </form>
-      <div className="flex items-center justify-end gap-2 border-t bg-card pt-4">
-        <Button variant="outline" onClick={onClose}>Close</Button>
-        {!readOnly && <Button disabled={saving} type="submit" form="account-budget-form">{saving ? <span className="spinner small" /> : "Save"}</Button>}
-      </div>
-    </div>
+    </>
   );
 }
 
-function emptyBudget(companyCode: string): BudgetRow {
+/* ------------------------------------------------------------------ */
+/*  Helpers (unchanged)                                                */
+/* ------------------------------------------------------------------ */
+
+function emptyBudget(companyCode: string, docType = "BDA"): BudgetRow {
   const year = String(new Date().getFullYear());
   return {
     company_code: companyCode,
     doc_no: "",
     doc_date: new Date().toISOString().slice(0, 10),
-    doc_type: "BDA",
+    doc_type: docType,
+    version: "V1",
     budget_year: year,
     div_code: "",
     div_name: "",
@@ -422,6 +695,7 @@ function mapBudgetRow(row: LookupRow): BudgetRow {
     doc_no: String(getLookupValue(row, "doc_no") || ""),
     doc_date: String(getLookupValue(row, "doc_date") || ""),
     doc_type: String(getLookupValue(row, "doc_type") || ""),
+    version: String(getLookupValue(row, "version") || ""), 
     budget_year: String(getLookupValue(row, "budget_year") || ""),
     div_code: String(getLookupValue(row, "div_code") || ""),
     div_name: String(getLookupValue(row, "div_name") || ""),

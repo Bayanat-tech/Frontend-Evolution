@@ -33,11 +33,12 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild, ...props }, ref) => {
+  ({ className, variant, size, asChild, type = "button", ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
         ref={ref}
+        type={asChild ? undefined : type}
         className={cn(
           "ui-button",
           `ui-button-${variant || "default"}`,

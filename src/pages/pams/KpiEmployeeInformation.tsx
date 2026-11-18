@@ -61,10 +61,7 @@ function pick(row: Row, keys: string[]): string {
   return "";
 }
 
-// ★ Normalizes an employee row so the display name never has the
-// EMPLOYEE_CODE baked into it twice. `get_employees_by_division` returns
-// EMP_NAME as "CODE - NAME" already; employee_hierarchy returns RPT_NAME
-// as a plain name. Both are reduced here to one clean name field.
+
 function normalizeEmployeeRow(row: Row): Row {
   const normalized = normalizeRow(row);
   const code = pick(normalized, ["EMPLOYEE_CODE", "employee_code"]);
@@ -119,7 +116,6 @@ export function KpiEmployeeInformationPage() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
-
   const [selectedDivision, setSelectedDivision] = useState("");
   const [selectedDivisionRow, setSelectedDivisionRow] = useState<LookupRow | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState("");
@@ -128,9 +124,6 @@ export function KpiEmployeeInformationPage() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [resetKey, setResetKey] = useState(0);
-
-  // ── Lookup loaders ──────────────────────────────────────────────────────
-
   const loadDivisionOptions = useCallback(async (): Promise<LookupRow[]> => {
     if (!companyCode) return [];
     try {
@@ -151,9 +144,7 @@ export function KpiEmployeeInformationPage() {
     }
   }, [companyCode, loginid]);
 
-  // ★ Re-created whenever selectedDivision changes, and paired with
-  // key={selectedDivision} on the LookupField below so it actually refetches
-  // instead of serving stale cached rows for a different division.
+
   const loadEmployeeOptions = useCallback(async (): Promise<LookupRow[]> => {
     if (!companyCode) return [];
     try {
@@ -166,7 +157,7 @@ export function KpiEmployeeInformationPage() {
             code3: "NULL",
           })
         : await pamsProc({
-            parameter: "get_all_employees", // ★ was "employee_hierarchy" — that returned only the logged-in user's subordinates, not all employees
+            parameter: "get_all_employees", 
             loginid,
             code1: companyCode,
             code2: "NULL",
@@ -182,7 +173,7 @@ export function KpiEmployeeInformationPage() {
     }
   }, [companyCode, loginid, selectedDivision]);
 
-  // ── Employee details ─────────────────────────────────────────────────────
+
 
   const loadEmployeeDetails = async (employeeCode: string) => {
     if (!companyCode || !employeeCode) {

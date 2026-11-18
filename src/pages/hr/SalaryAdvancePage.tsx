@@ -166,9 +166,6 @@ export function SalaryAdvancePage() {
           <p className="m-0 mt-1 text-sm text-muted-foreground">Manage employee salary advance records.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
           <Button onClick={() => setPopup({ open: true, mode: "add", data: {} })}>
             <Plus size={15} /> Add Salary Advance
           </Button>

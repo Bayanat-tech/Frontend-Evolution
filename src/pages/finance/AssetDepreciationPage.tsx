@@ -1,11 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Calculator, FileText, RefreshCw, Save } from "lucide-react";
+import { AlertTriangle, Calculator, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { executeCommonProcedure, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
-import { Input } from "../../components/ui/Input";
+import { Dialog } from "../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
@@ -23,24 +23,51 @@ export function AssetDepreciationPage() {
   const [docNo, setDocNo] = useState("");
   const [rows, setRows] = useState<DepRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "info" | "warning"; message: string } | null>(null);
+  const [exceptions, setExceptions] = useState<any[]>([]);
+  const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
 
   const [year, month] = monthYear ? monthYear.split("-") : ["", ""];
 
+  // Helper to calculate exact PowerBuilder Doc No (division 10 uses YYYYMM, others use DIV+YYYYMM)
+  const calculateDocNo = (y: string, m: string, div: string) => {
+    if (!y || !m) return "";
+    const base = `${y}${m}`;
+    return div && div !== "10" ? `${div}${base}` : base;
+  };
+
+  // JV button is enabled only when the grid has at least one row
+  const hasRows = rows.length > 0;
+
   const columns = useMemo<ColumnDef<DepRow>[]>(() => [
-    col("asset_id", "Asset ID", 130),
+    col("asset_id", "Asset ID", 110),
     col("asset_name", "Asset Name", 220),
     col("reg_no", "Reg No", 110),
-    col("purchase_date", "Purchase Date", 120),
-    col("quantity", "Quantity", 100),
-    col("amount", "pur.Amount", 120),
-    col("dprc_percentage", "Dep. %", 90),
-    col("accdprc_amount", "Accu Amount", 120),
-    col("dprc_amount", "Dprc Amount", 130),
-    col("wd_value", "WD Value", 120),
-    col("last_dprc_date", "Last Dep.", 120),
-    col("div_code", "Division", 100),
+    colDate("purchase_date", "Purchase Date", 120),
+    col("quantity", "Quantity", 80),
+    colNumber("amount", "Pur. Amount", 120),
+    colNumber("dprc_percentage", "Dep. %", 90, 2),
+    colNumber("accudprc_amount", "Accu Amount", 120),
+    colNumber("dprc_amount", "Dprc Amount", 120),
+    colNumber("wd_value", "WD Value", 120),
+    colDate("last_dprc_date", "Last Dep.", 120),
+    col("div_code", "Division", 90),
   ], []);
+
+  const checkExceptions = async (div: string) => {
+    try {
+      const resp = await api.get<{ success: boolean; data: any[] }>(
+        `/api/finance/asset-depreciation/exceptions?div_code=${encodeURIComponent(div)}`
+      );
+      if (resp.data?.success && Array.isArray(resp.data.data)) {
+        setExceptions(resp.data.data);
+        return resp.data.data;
+      }
+    } catch {
+      // Non-blocking exception check
+    }
+    return [];
+  };
 
   const retrieve = async () => {
     setLoading(true);
@@ -51,9 +78,21 @@ export function AssetDepreciationPage() {
         loginid: loginId,
         code1: companyCode,
         code2: division,
-       
+        code3: "", code4: "",
+        number1: 0, number2: 0, number3: 0, number4: 0,
+        date1: null, date2: null, date3: null, date4: null,
       });
-      setRows(data.map(normalize));
+      const norm = data.map(normalize);
+      setRows(norm);
+      if (norm.length === 0) {
+        setNotice({
+          type: "info",
+          message: "No saved depreciation records found for this period. Click 'Save' to calculate and generate depreciation.",
+        });
+      }
+      if (division) {
+        await checkExceptions(division);
+      }
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to retrieve depreciation" });
     } finally {
@@ -78,69 +117,242 @@ export function AssetDepreciationPage() {
         val1s4: companyCode,
         val1s5: docType,
       });
-      const nextDocNo = `${year}${month}`;
+      const nextDocNo = calculateDocNo(year, month, division);
       setDocNo(nextDocNo);
-      setNotice({ type: "success", message: "Depreciation document generated successfully" });
+      setNotice({ type: "success", message: `Depreciation document ${nextDocNo} generated successfully` });
       await retrieve();
+      const exc = await checkExceptions(division);
+      if (exc.length > 0) {
+        setNotice({
+          type: "error",
+          message: `Depreciation generated with ${exc.length} exception(s). Please review the Exception Register before posting JV.`,
+        });
+      }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to save depreciation") });
     } finally {
       setLoading(false);
     }
   };
 
   const postJv = async () => {
-    if (!docNo || !division) {
+    if (!hasRows) return;
+    const computedDocNo = calculateDocNo(year, month, division) || docNo;
+    if (!computedDocNo || !division) {
       setNotice({ type: "error", message: "Retrieve or generate a document before posting JV." });
       return;
     }
+
     setLoading(true);
     setNotice(null);
     try {
+      // Check exceptions before posting JV
+      const exc = await checkExceptions(division);
+      if (exc.length > 0) {
+        setNotice({
+          type: "error",
+          message: `Cannot post JV: ${exc.length} assets have missing Employee/Custodian or Location in the Exception Register.`,
+        });
+        setExceptionDialogOpen(true);
+        return;
+      }
+
+      // Call PROC_DEPRECIATION_JVPOST (validates rowcount, checks exception register, and posts JV)
       await executeCommonProcedure({
         parameter: "PROC_DEPRECIATION_JVPOST",
         loginid: loginId,
         val1s1: companyCode,
         val1s2: docType,
-        val1s3: docNo,
+        val1s3: String(Number(computedDocNo)),
         val1s4: division,
         val1s5: String(rows.length),
+        val1n1: Number(computedDocNo),
       });
-      setNotice({ type: "success", message: "Depreciation JV posted successfully" });
+      setNotice({ type: "success", message: `Depreciation JV for document ${computedDocNo} posted successfully to General Ledger` });
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to post JV") });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="eyebrow">Asset Utility</p>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Asset Depreciation</h1>
+    <section className="finance-utility-page finance-list-page grid gap-4">
+      {/* ===================== PAGE HEADER (matches Prepaid Register) ===================== */}
+      <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="tariff-page-icon">
+            <TrendingDown size={20} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold leading-tight text-slate-900">Asset Depreciation</h1>
+            <p className="m-0 text-xs text-slate-500">Asset Utility</p>
+          </div>
         </div>
+
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button variant="outline" disabled={loading} onClick={() => void retrieve()}><RefreshCw size={15} /> Retrieve</Button>
-          <Button disabled={loading} onClick={() => void save()}><Save size={15} /> Save</Button>
-          <Button variant="secondary" disabled={loading} onClick={() => void postJv()}><FileText size={15} /> JV</Button>
+          {exceptions.length > 0 && (
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setExceptionDialogOpen(true)}
+              className="h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100"
+            >
+              <AlertTriangle size={14} /> Exceptions ({exceptions.length})
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            disabled={loading}
+            onClick={() => void retrieve()}
+            className="h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer"
+          >
+            <RefreshCw size={14} /> Retrieve
+          </Button>
+          <Button
+            disabled={loading}
+            onClick={() => void save()}
+            className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-4 rounded-lg cursor-pointer transition-colors"
+          >
+            <Save size={14} /> Save
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={loading || !hasRows}
+            onClick={() => void postJv()}
+            title={hasRows ? "Post depreciation JV" : "No rows to post"}
+            className="h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FileText size={14} /> JV
+          </Button>
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <Card>
-        <CardHeader className="border-b">
-          <div className="flex items-center gap-2"><Calculator size={18} /><h2 className="m-0 text-base font-semibold">Depreciation Run</h2></div>
-        </CardHeader>
-        <CardContent className="grid gap-3 pt-4 md:grid-cols-4">
-          <label className="field"><span>Month</span><Input type="month" value={monthYear} onChange={(event) => { setMonthYear(event.target.value); const [y, m] = event.target.value.split("-"); setDocNo(y && m ? `${y}${m}` : ""); }} /></label>
-          <LookupField label="Division" value={division} displayValue={division ? `${division}${divisionName ? ` - ${divisionName}` : ""}` : ""} columns={[{ field: "div_code", header: "Division" }, { field: "div_name", header: "Name" }]} valueField="div_code" displayFields={["div_code", "div_name"]} loadOptions={() => getDynamicLookup({ parameter: "AC_ASSETS_DEPRECIATION_DIVISION_LIST", loginid: loginId, code1: companyCode })} onChange={(value, row) => { setDivision(value); setDivisionName(String(getLookupValue(row || {}, "div_name") || "")); }} />
-        </CardContent>
-      </Card>
+      {/* ===================== CARD: DEPRECIATION RUN ===================== */}
+      <div className="freight-master-form-card">
+        <div className="freight-master-form-header">
+          <h3>
+            <span className="freight-section-icon"><Calculator size={16} /></span>
+            Depreciation Run
+          </h3>
+        </div>
+        <div className="freight-master-form-body">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="freight-master-field">
+              <label className="freight-master-label">
+                <span>Month</span>
+                <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
+              </label>
+              <input
+                className="freight-master-input"
+                type="month"
+                value={monthYear}
+                onChange={(event) => {
+                  setMonthYear(event.target.value);
+                  const [y, m] = event.target.value.split("-");
+                  setDocNo(calculateDocNo(y, m, division));
+                }}
+              />
+            </div>
 
-      <DataTable columns={columns} data={rows} title={loading ? "Loading" : `${rows.length} Rows`} subtitle="Depreciation Details" loading={loading} emptyText="No depreciation rows found" height={560} minWidth={1400} density="grid" getRowId={(row, index) => `${row.asset_id || "row"}_${index}`} />
+            <div className="freight-master-field">
+              <label className="freight-master-label">
+                <span>Division</span>
+                <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
+              </label>
+              <LookupField
+                compact
+                value={division}
+                displayValue={division ? `${division}${divisionName ? ` - ${divisionName}` : ""}` : ""}
+                columns={[{ field: "div_code", header: "Division" }, { field: "div_name", header: "Name" }]}
+                valueField="div_code"
+                displayFields={["div_code", "div_name"]}
+                loadOptions={() =>
+                  getDynamicLookup({
+                    parameter: "AC_ASSETS_DEPRECIATION_DIVISION_LIST",
+                    loginid: loginId,
+                    code1: companyCode,
+                  })
+                }
+                onChange={(value, row) => {
+                  setDivision(value);
+                  setDivisionName(String(getLookupValue(row || {}, "div_name") || ""));
+                  setDocNo(calculateDocNo(year, month, value));
+                }}
+              />
+            </div>
+
+            <div className="freight-master-field">
+              <label className="freight-master-label">Doc Type</label>
+              <input className="freight-master-input" value={docType} disabled readOnly />
+            </div>
+
+            <div className="freight-master-field">
+              <label className="freight-master-label">Doc No</label>
+              <input className="freight-master-input" value={docNo} disabled readOnly />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===================== DATA TABLE ===================== */}
+      <DataTable
+        columns={columns}
+        data={rows}
+        title={loading ? "Loading" : `${rows.length} Rows`}
+        subtitle="Depreciation Details"
+        loading={loading}
+        emptyText="No depreciation rows found"
+        height={560}
+        minWidth={1400}
+        density="grid"
+        getRowId={(row, index) => `${row.asset_id || "row"}_${index}`}
+      />
+      {/* ===================== EXCEPTION REGISTER MODAL ===================== */}
+      <Dialog
+        open={exceptionDialogOpen}
+        onClose={() => setExceptionDialogOpen(false)}
+        title={`Asset Depreciation Exception Register (${exceptions.length} Issues)`}
+      >
+        <div className="p-4 space-y-4">
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            <strong>Action Required:</strong> The following assets cannot have depreciation posted because they are missing a Custodian (Employee ID) or Location (Site) in the Asset Master, or have written-down value discrepancies. Please update these assets in the <strong>Asset Register</strong> page.
+          </div>
+          <div className="max-h-80 overflow-y-auto border rounded-md">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-100 font-semibold text-slate-700 border-b">
+                <tr>
+                  <th className="p-2">Asset ID</th>
+                  <th className="p-2">Asset Name</th>
+                  <th className="p-2">Division</th>
+                  <th className="p-2">WD Value</th>
+                  <th className="p-2">Amount</th>
+                  <th className="p-2">Issue / Missing</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {exceptions.map((exc, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50">
+                    <td className="p-2 font-mono font-medium">{exc.asset_id || exc.ASSET_ID}</td>
+                    <td className="p-2">{exc.asset_name || exc.ASSET_NAME}</td>
+                    <td className="p-2">{exc.div_code || exc.DIV_CODE}</td>
+                    <td className="p-2 font-mono">{String(exc.wd_value ?? exc.WD_VALUE ?? "")}</td>
+                    <td className="p-2 font-mono">{String(exc.amount ?? exc.AMOUNT ?? "")}</td>
+                    <td className="p-2 text-rose-600 font-medium">Missing Custodian / Location</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={() => setExceptionDialogOpen(false)}>Close</Button>
+          </div>
+        </div>
+      </Dialog>
     </section>
   );
 }
@@ -149,10 +361,62 @@ function col(key: string, header: string, size: number): ColumnDef<DepRow> {
   return { accessorKey: key, header, size, cell: ({ getValue }) => <span>{String(getValue() ?? "")}</span> };
 }
 
+function colDate(key: string, header: string, size: number): ColumnDef<DepRow> {
+  return {
+    accessorKey: key,
+    header,
+    size,
+    cell: ({ getValue }) => {
+      const v = getValue();
+      if (!v) return <span className="text-slate-400">—</span>;
+      const s = String(v);
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return <span>{s.slice(0, 10)}</span>;
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const yr = d.getFullYear();
+      return <span className="font-mono text-xs">{`${day}-${month}-${yr}`}</span>;
+    },
+  };
+}
+
+function colNumber(key: string, header: string, size: number, decimals: number = 3): ColumnDef<DepRow> {
+  return {
+    accessorKey: key,
+    header,
+    size,
+    cell: ({ getValue }) => {
+      const v = getValue();
+      if (v === null || v === undefined || v === "") return <span className="text-slate-400">—</span>;
+      const num = Number(v);
+      if (isNaN(num)) return <span>{String(v)}</span>;
+      return (
+        <span className="font-mono text-xs tabular-nums text-right block">
+          {num.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+        </span>
+      );
+    },
+  };
+}
+
 function normalize(row: LookupRow): DepRow {
   const output: DepRow = {};
   Object.keys(row).forEach((key) => {
     output[key.toLowerCase()] = row[key] as string | number;
   });
   return output;
+}
+
+function friendlyError(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (raw.includes("NO DETAILS FOUND"))
+    return "No depreciation has been saved for this month and division. Click Save first, then post the JV.";
+  if (raw.includes("Do Depreciation Calculation"))
+    return "Run the depreciation calculation (Save) before posting the JV.";
+  if (raw.includes("Please check the Exception register"))
+    return "Some assets are in the Exception Register. Fix them before posting the JV.";
+  // Any other ORA-20xxx: show only its message, without the ORA-06512 stack
+  const match = raw.match(/ORA-20\d{3}:\s*([\s\S]*?)(?=\s*ORA-\d{5}|$)/);
+  if (match?.[1]) return match[1].trim();
+  return fallback;
 }

@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { CheckCircle2, Eye, FileDown, Pencil, RefreshCw, Search, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, FileDown, Pencil, Search, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { getHrLeaveFlow } from "../../../api/hr";
@@ -10,6 +10,7 @@ import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToas
 import { useAuth } from "../../../state/AuthContext";
 import type { LeaveFlowConfig } from "./leaveFlowConfig";
 import { LeaveRequestDialog } from "./LeaveRequestDialog";
+import { formatApiDate, isApiDate } from "../../../hooks/apiDate";
 
 type LeaveFlowRow = Record<string, unknown>;
 
@@ -57,7 +58,7 @@ export function LeaveFlowTable({
   const [viewRow, setViewRow] = useState<LeaveFlowRow | null>(null);
   const [notice, setNotice] = useState<ToastNotice>(null);
 
-  const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
+  const loginId = String (user?.LOGINID1 || user?.loginid1  || user?.loginid || user?.LOGINID || user?.username || "");
 
   const loadRows = async (clearNotice = true) => {
     if (clearNotice) setNotice(null);
@@ -68,7 +69,8 @@ export function LeaveFlowTable({
     }
     setLoading(true);
     try {
-      const response = await getHrLeaveFlow(config.endpoint, loginId);
+      const tenantName = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || '')) ? 'MHDL' : 'ALMS';
+      const response = await getHrLeaveFlow(config.endpoint, loginId, 1, 1000, tenantName);
       setRows(response.tableData || []);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
@@ -134,22 +136,21 @@ export function LeaveFlowTable({
   }, [rows, onEditRow, config.key]);
 
   return (
-    <section className="leave-flow-page">
-      <div className="leave-flow-header">
-        <div className="min-w-0">
-          <p className="leave-flow-eyebrow">{config.eyebrow}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1>{config.title}</h1>
-            <span className={`leave-flow-status ${toneClasses[config.statusTone]}`}>{config.statusLabel}</span>
-            <Badge variant="outline">{rows.length.toLocaleString()} requests</Badge>
-          </div>
-          <p>{config.description}</p>
+    <section className="leave-flow-page grid gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            {config.title}
+          </h2>
+          <span className={`inline-flex items-center rounded border px-2 py-0 text-[10.5px] leading-tight font-medium ${toneClasses[config.statusTone]}`}>
+            {config.statusLabel}
+          </span>
         </div>
-        <div className="leave-flow-actions">
+        <div className="flex flex-wrap items-center gap-2">
           {headerActions}
-          <Button variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
         </div>
       </div>
 
@@ -225,11 +226,11 @@ function titleCase(value: string) {
 
 function formatValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return formatDate(value);
+  if (isApiDate(value)) return formatApiDate(value);
   return String(value);
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-GB");
-}
+// function formatDate(value: string) {
+//   const date = new Date(value);
+//   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-GB");
+// }

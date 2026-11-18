@@ -1,10 +1,16 @@
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
+import { Textarea as TextAreaControl } from "../../components/ui/Textarea";
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
+import { openFreightReport } from "../../components/freight/reportPreviewStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  ChevronDown,
   Copy,
   Eye,
   FileText,
@@ -15,11 +21,16 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Search,
   ShieldCheck,
   ShipWheel,
   Sparkles,
   Trash2,
-  CreditCard
+  CreditCard,
+  X,
+  Printer,
+  List,
+  Coins
 } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -27,10 +38,13 @@ import type { LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
+import { formatDate } from "../../utils/date";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
 type QuotationHeader = {
@@ -142,6 +156,7 @@ type QuotationHeaderNames = {
   vehicle_type_name: string;
   carrier_name: string;
   dept_name: string;
+  salesman_name: string;
 };
 
 const emptyHeaderNames: QuotationHeaderNames = {
@@ -154,6 +169,7 @@ const emptyHeaderNames: QuotationHeaderNames = {
   vehicle_type_name: "",
   carrier_name: "",
   dept_name: "", 
+  salesman_name: "",
 };
 
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -202,6 +218,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const initialHeader = useMemo(() => buildInitialHeader(userInfo, target), [target, userInfo]);
   const [header, setHeader] = useState<QuotationHeader>(initialHeader);
   const [details, setDetails] = useState<QuotationDetail[]>([buildInitialDetail(initialHeader, 1)]);
+  const [invalidLineIndices, setInvalidLineIndices] = useState<Set<number>>(new Set());
   const [terms, setTerms] = useState<QuotationTerm[]>([]);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
@@ -212,15 +229,39 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const cancelRowRef = useRef<LookupRow | null>(null);
+  const [showFcColumns, setShowFcColumns] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const termsWrapRef = useRef<HTMLDivElement | null>(null);
+  const focusNewTermRef = useRef(false);
   const [pendingValidateTab, setPendingValidateTab] = useState<FreightQuotationInitialTab | null>(null);
   const [approvalEnabled, setApprovalEnabled] = useState(false);
   const [deepOpenDone, setDeepOpenDone] = useState("");
   const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const [headerNames, setHeaderNames] = useState<QuotationHeaderNames>(emptyHeaderNames);
+  const [uocOptions, setUocOptions] = useState<{ value: string; label: string }[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    loadUocLookup(initialHeader.company_code)
+      .then((rows) => {
+        if (!alive) return;
+        setUocOptions(
+          rows.map((row) => ({
+            value: lookupText(row, "charge_code"),
+            label: lookupText(row, "description"),
+          })),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [initialHeader.company_code]);
 
   useEffect(() => {
     if (!notice) return;
@@ -305,54 +346,105 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   const requiredFieldChecks: { tab: FreightQuotationInitialTab; test: () => boolean; label: string }[] = [
   { tab: "cargo", test: () => Boolean(header.prin_code), label: "Principal" },
+  { tab: "cargo", test: () => Boolean(header.dept_code), label: "Department" },
   { tab: "cargo", test: () => Boolean(header.origin_port), label: "Port of Loading" },
   { tab: "payment", test: () => Boolean(header.curr_code), label: "Currency" },
   { tab: "payment", test: () => Number(header.ex_rate || 0) > 0, label: "Exchange Rate" },
  ];
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
-    {
-      accessorKey: "quotation_nr",
-      header: "Quotation No",
-      size: 160,
-      cell: ({ row }) => (
-        <button className="font-semibold text-primary hover:underline" type="button" onClick={() => openQuotation(row.original)}>
-          {lookupText(row.original, "quotation_nr")}
-        </button>
-      ),
-    },
-    { accessorKey: "quotation_date", header: "Date", size: 120, cell: ({ row }) => formatDisplayDate(lookupText(row.original, "quotation_date")) },
-    { accessorKey: "prin_code", header: "Principal", size: 120, cell: ({ row }) => lookupText(row.original, "prin_code") },
-    { accessorKey: "prin_name", header: "Principal Name", size: 260, cell: ({ row }) => lookupText(row.original, "prin_name") },
-    { accessorKey: "job_type", header: "Job Type", size: 110, cell: ({ row }) => jobTypeLabel(lookupText(row.original, "job_type")) },
-    { accessorKey: "transport_mode", header: "Mode", size: 100, cell: ({ row }) => modeLabel(lookupText(row.original, "transport_mode")) },
-    { accessorKey: "origin_port", header: "Origin", size: 110, cell: ({ row }) => lookupText(row.original, "origin_port") },
-    { accessorKey: "destination_port", header: "Destination", size: 130, cell: ({ row }) => lookupText(row.original, "destination_port") },
-    { accessorKey: "curr_code", header: "Currency", size: 100, cell: ({ row }) => lookupText(row.original, "curr_code") },
-    {
-      accessorKey: "indstatus",
-      header: "Status",
-      size: 130,
-      cell: ({ row }) => {
-        const status = lookupText(row.original, "indstatus");
-        return (
-          <span className={statusBadgeClass(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}>
-            {statusLabel(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}
-          </span>
-        );
+      {
+        accessorKey: "quotation_nr",
+        header: "Quotation No",
+        size: 140,
+        cell: ({ row }) => (
+          <button className="freight-table-link font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer" type="button" onClick={() => openQuotation(row.original)}>
+            {lookupText(row.original, "quotation_nr")}
+          </button>
+        ),
       },
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      size: 80,
-      enableColumnFilter: false,
-      cell: ({ row }) => (
-        <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
-          <Eye size={14} />
-        </Button>
-      ),
-    },
+      { accessorKey: "quotation_date", header: "Date", size: 100, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{formatDisplayDate(lookupText(row.original, "quotation_date"))}</span> },
+      { accessorKey: "prin_code", header: "Principal", size: 100, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "prin_code")}</span> },
+      {
+        accessorKey: "prin_name",
+        header: "Principal Name",
+        minSize: 220,
+        cell: ({ row }) => (
+          <div className="truncate" title={lookupText(row.original, "prin_name")}>
+            <span className="text-[11.5px] text-foreground">{lookupText(row.original, "prin_name")}</span>
+          </div>
+        ),
+      },
+      { accessorKey: "job_type", header: "Job Type", size: 95, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{jobTypeLabel(lookupText(row.original, "job_type"))}</span> },
+      { accessorKey: "transport_mode", header: "Mode", size: 85, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{modeLabel(lookupText(row.original, "transport_mode"))}</span> },
+      { accessorKey: "origin_port", header: "Origin", size: 95, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "origin_port")}</span> },
+      { accessorKey: "destination_port", header: "Destination", size: 105, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "destination_port")}</span> },
+      { accessorKey: "curr_code", header: "Currency", size: 85, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "curr_code")}</span> },
+      {
+        accessorKey: "indstatus",
+        header: "Status",
+        size: 100,
+        enableColumnFilter: false,
+        cell: ({ row }) => {
+          const status = lookupText(row.original, "indstatus");
+          return (
+            <span className={statusBadgeClass(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}>
+              {statusLabel(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "ACTIONS",
+        size: 100,
+        enableColumnFilter: false,
+        cell: ({ row }) => {
+          const status = lookupText(row.original, "indstatus");
+          const action = lookupText(row.original, "last_action");
+          const finalApproved = lookupText(row.original, "final_approved");
+          const cancelDisabled = status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED";
+          return (
+            <div className="flex items-center justify-center gap-1">
+              <button
+                type="button"
+                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="Open quotation"
+                onClick={() => openQuotation(row.original)}
+              >
+                <Eye size={13} />
+              </button>
+              <button
+                type="button"
+                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="Print quotation"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void printQuotation(row.original);
+                }}
+              >
+                <Printer size={13} />
+              </button>
+              <button
+                type="button"
+                className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                title={
+                  cancelDisabled
+                    ? `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled`
+                    : "Cancel quotation"
+                }
+                disabled={cancelDisabled}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  requestCancelRow(row.original);
+                }}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          );
+        },
+      },
   ], []);
 
   useEffect(() => {
@@ -417,32 +509,84 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
 
   const setDetailField = (index: number, field: keyof QuotationDetail, value: string) => {
+    if (invalidLineIndices.has(index)) {
+      setInvalidLineIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
     setDetails((current) => current.map((row, rowIndex) => (rowIndex === index ? recalcDetail({ ...row, [field]: value }, field) : row)));
   };
 
   const applyDetailActivityLookup = (index: number, value: string, row: LookupRow | null) => {
+    if (invalidLineIndices.has(index)) {
+      setInvalidLineIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
     setDetails((current) =>
       current.map((line, rowIndex) => {
         if (rowIndex !== index) return line;
-        const quantity = lookupText(row || {}, "quantity") || line.quantity || "1";
-        const costRate = lookupText(row || {}, "cost") || line.fc_costrate || "0";
-        const billRate = lookupText(row || {}, "bill") || line.fc_billrate || "0";
+        // const quantity = lookupText(row || {}, "quantity") || line.quantity || "1";
+        // const costRate = lookupText(row || {}, "cost") || line.fc_costrate || "0";
+        // const billRate = lookupText(row || {}, "bill") || line.fc_billrate || "0";
         return recalcDetail(
           {
             ...line,
             act_code: value,
             activity: lookupText(row || {}, "activity") || line.activity,
-            quantity,
-            uom: lookupText(row || {}, "uom") || line.uom,
-            cost_curr_code: line.cost_curr_code || header.curr_code,
-            cost_ex_rate: line.cost_ex_rate || header.ex_rate,
-            fc_costrate: costRate,
-            curr_code: line.curr_code || header.curr_code,
-            ex_rate: line.ex_rate || header.ex_rate,
-            fc_billrate: billRate,
+            // quantity,
+            // uom: lookupText(row || {}, "uom") || line.uom,
+            // cost_curr_code: line.cost_curr_code || header.curr_code,
+            // cost_ex_rate: line.cost_ex_rate || header.ex_rate,
+            // fc_costrate: costRate,
+            // curr_code: line.curr_code || header.curr_code,
+            // ex_rate: line.ex_rate || header.ex_rate,
+            // fc_billrate: billRate,
           },
           "quantity"
         );
+      })
+    );
+  };
+
+  const handleLineCurrencyChange = (
+    index: number,
+    kind: "cost" | "bill" | "partners",
+    newCurrCode: string,
+    row: LookupRow | null
+  ) => {
+    if (invalidLineIndices.has(index)) {
+      setInvalidLineIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
+
+    const exFromMaster = row ? (lookupText(row, "ex_rate") || "1") : (newCurrCode === "OMR" ? "1" : "1");
+
+    setDetails((current) =>
+      current.map((line, rowIndex) => {
+        if (rowIndex !== index) return line;
+        let updated = { ...line };
+        if (kind === "cost") {
+          updated.cost_curr_code = newCurrCode;
+          updated.cost_ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "cost_ex_rate");
+        } else if (kind === "bill") {
+          updated.curr_code = newCurrCode;
+          updated.ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "ex_rate");
+        } else if (kind === "partners") {
+          updated.partners_curr_code = newCurrCode;
+          updated.partners_ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "partners_ex_rate");
+        }
+        return updated;
       })
     );
   };
@@ -467,6 +611,15 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to load quotation terms" });
     }
   };
+
+    useEffect(() => {
+    if (!focusNewTermRef.current) return;
+    focusNewTermRef.current = false;
+    const areas = termsWrapRef.current?.querySelectorAll("textarea");
+    const last = areas?.[areas.length - 1] as HTMLTextAreaElement | undefined;
+    last?.focus();
+    last?.scrollIntoView({ block: "nearest" });
+  }, [terms.length]);
 
   const loadRows = async () => {
     const companyCode = String(userInfo?.company_code || userInfo?.COMPANY_CODE || header.company_code || "");
@@ -550,6 +703,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         vehicle_type_name: lookupText(loadedRow, "vtype_name"),
         carrier_name: lookupText(loadedRow, "carrier_name"),
         dept_name: lookupText(loadedRow, "dept_name"),
+        salesman_name: lookupText(loadedRow, "salesman_name"),
       });
       setDetails(data?.details?.length ? data.details.map((item, index) => toDetailFromRow(normalizeLookupRow(item), loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
       setTerms(data?.terms?.length ? data.terms.map((item, index) => toTermFromRow(normalizeLookupRow(item), index + 1)) : []);
@@ -559,6 +713,30 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to open quotation" });
     } finally {
       setLoading(false);
+    }
+  };
+
+    const printQuotation = async (row: LookupRow) => {
+    const companyCode = lookupText(row, "company_code") || header.company_code;
+    const prinCode = lookupText(row, "prin_code");
+    const quotationNr = lookupText(row, "quotation_nr");
+    if (!companyCode || !prinCode || !quotationNr) return;
+    const preview = openFreightReport(`Quotation ${quotationNr}`);
+    try {
+      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow; details?: LookupRow[] }; message?: string }>(
+        "/api/freight/quotation/get",
+        { company_code: companyCode, prin_code: prinCode, quotation_nr: quotationNr },
+      );
+      if (response.data?.success === false) throw new Error(response.data.message || "Unable to load quotation");
+      const loadedRow = normalizeLookupRow(response.data?.data?.header || row);
+      const printHeader = toHeaderFromRow(loadedRow, userInfo, target);
+      const printDetails = (response.data?.data?.details || [])
+        .map((detail) => normalizeLookupRow(detail))
+        .map((detail, index) => toDetailFromRow(detail, printHeader, index + 1));
+      preview.ready({ html: buildFreightPrintHtml(printHeader, printDetails), filename: `Quotation-${quotationNr}`, orientation: "portrait" });
+    } catch (error) {
+    preview.fail(error);
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to print quotation" });
     }
   };
 
@@ -595,7 +773,20 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       const copied = toHeaderFromEnquiry(sourceHeader, header);
       const nextHeader = { ...header, ...copied, enquiry_no: enquiryNo, enquiry_type: sourceType || copied.enquiry_type || "" };
       const sourceDetails = (response.data?.data?.details || []).map(normalizeLookupRow);
+      // setHeader((current) => ({ ...current, ...copied, enquiry_no: enquiryNo, enquiry_type: sourceType || copied.enquiry_type || "" }));
       setHeader((current) => ({ ...current, ...copied, enquiry_no: enquiryNo, enquiry_type: sourceType || copied.enquiry_type || "" }));
+      setHeaderNames((current) => ({
+        ...current,
+        prin_name: lookupText(sourceHeader, "prin_name") || current.prin_name,
+        walkin_prin_name: lookupText(sourceHeader, "walkin_prin_name"),
+        dept_name: lookupText(sourceHeader, "dept_name") || current.dept_name,
+        origin_port_name: lookupText(sourceHeader, "origin_port_name"),
+        destination_port_name: lookupText(sourceHeader, "destination_port_name"),
+        salesman_name: lookupText(sourceHeader, "salesman_name"),
+        forwarder_name: lookupText(sourceHeader, "forwarder_name"),
+        vehicle_type_name: lookupText(sourceHeader, "vtype_name"),
+        curr_name: lookupText(sourceHeader, "curr_name") || current.curr_name,
+      }));
       setDetails(sourceDetails.length ? sourceDetails.map((item, index) => toDetailFromSourceEnquiry(item, nextHeader, index + 1)) : [buildInitialDetail(nextHeader, 1)]);
       setActiveTab("charges");
     } catch (error) {
@@ -696,8 +887,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
 
   const approveQuotation = () => {
-    const remarks = window.prompt("Approval remarks", "") || "";
-    void runWorkflowAction("APPROVED", remarks);
+    // const remarks = window.prompt("Approval remarks", "") || "";
+    void runWorkflowAction("APPROVED", "");
   };
 
   const sendBackQuotation = () => {
@@ -742,12 +933,110 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     }
   };
 
+    const confirmCancel = async () => {
+    const rowTarget = cancelRowRef.current;
+    const companyCode = rowTarget ? lookupText(rowTarget, "company_code") || header.company_code : header.company_code;
+    const prinCode = rowTarget ? lookupText(rowTarget, "prin_code") || header.prin_code : header.prin_code;
+    const quotationNr = rowTarget ? lookupText(rowTarget, "quotation_nr") : header.quotation_nr;
+
+    setCancelling(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string }>("/api/freight/quotation/delete", {
+        company_code: companyCode,
+        prin_code: prinCode,
+        quotation_nr: quotationNr,
+        cancel_by: loginId,
+        cancel_remarks: "",
+      });
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || "Unable to cancel quotation");
+      }
+      if (!rowTarget) {
+        setHeader((current) => ({ ...current, indstatus: "C" }));
+      }
+      cancelRowRef.current = null;
+      setNotice({ type: "success", text: response.data?.message || "Quotation cancelled" });
+      await loadRows();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to cancel quotation" });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const requestCancel = () => {
+    if (!header.quotation_nr) {
+      setView("list");
+      return;
+    }
+    if (isReadOnly) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} quotation cannot be cancelled` });
+      return;
+    }
+    cancelRowRef.current = null;
+    void confirmCancel();
+  };
+
+  const requestCancelRow = (row: LookupRow) => {
+    const status = lookupText(row, "indstatus");
+    const action = lookupText(row, "last_action");
+    const finalApproved = lookupText(row, "final_approved");
+    if (status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED") {
+      setNotice({ type: "error", text: `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled` });
+      return;
+    }
+    cancelRowRef.current = row;
+    void confirmCancel();
+  };
+
   const addDetail = () => setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);
-  const removeDetail = (index: number) => setDetails((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, srno: rowIndex + 1 })));
-  const addTerm = () => setTerms((current) => [...current, { serial_no: current.length + 1, sr_no: String(current.length + 1), type_ind: "T", description: "", font_type: "Normal", font_size: "Normal" }]);
+  const syncJourneyPorts = () => {
+    if (!header.origin_port && !header.destination_port) {
+      setNotice({ type: "error", text: "Journey origin and destination ports are not set in the Journey tab." });
+      return;
+    }
+    setDetails((current) =>
+      current.map((row) => ({
+        ...row,
+        origin_port: header.origin_port || row.origin_port,
+        destination_port: header.destination_port || row.destination_port,
+      }))
+    );
+    setNotice({
+      type: "success",
+      text: `Journey ports synced to ${details.length} quotation line(s): ${header.origin_port || "-"} → ${header.destination_port || "-"}`,
+    });
+  };
+  const removeDetail = (index: number) => {
+    setInvalidLineIndices((prev) => {
+      const next = new Set<number>();
+      for (const i of prev) {
+        if (i < index) next.add(i);
+        else if (i > index) next.add(i - 1);
+      }
+      return next;
+    });
+    setDetails((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, srno: rowIndex + 1 })));
+  };
+  const addTerm = () => {
+    focusNewTermRef.current = true;
+    setTerms((current) => [...current, { serial_no: current.length + 1, sr_no: String(current.length + 1), type_ind: "T", description: "", font_type: "Normal", font_size: "Normal" }]);
+  };
   const removeTerm = (index: number) => setTerms((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, serial_no: rowIndex + 1, sr_no: String(rowIndex + 1) })));
 
-  const persistQuotation = async () => {
+  // const persistQuotation = async () => {
+  // const payload = {
+    const persistQuotation = async () => {
+      const zeroAmountRows = details
+    .map((row, idx) => (row.act_code.trim() && !(Number(row.bill) > 0 || Number(row.cost) > 0) ? idx : -1))
+    .filter((idx) => idx >= 0);
+  if (zeroAmountRows.length > 0) {
+    setInvalidLineIndices(new Set(zeroAmountRows));
+    setActiveTab("charges");
+    throw new Error(`Enter Bill Amt or Cost Amt (line ${zeroAmountRows.map((i) => i + 1).join(", ")})`);
+  }
+
   const payload = {
     header: { ...header, userid: loginId, user_date: new Date().toISOString(), quotation_type: "QTN" },
     details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
@@ -766,6 +1055,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     })),
     terms,
   };
+  assertFreightRecords("TF_QUOTATION", [payload.header], "Header");
+  assertFreightRecords("TF_QUOTATION_DET", payload.details, "Activity line");
+  assertFreightRecords("TF_QUOTATION_TERMS", terms, "Term");
   const response = await api.post<{ success?: boolean; message?: string; data?: { quotation_nr?: string } }>("/api/freight/quotation/save", payload);
   if (response.data?.success === false) throw new Error(response.data.message || "Unable to save quotation");
   if (response.data?.data?.quotation_nr) setHeaderField("quotation_nr", response.data.data.quotation_nr);
@@ -778,53 +1070,48 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       return;
     }
 
-  const failedCheck = requiredFieldChecks.find((check) => !check.test());
-  if (failedCheck) {
-    if (activeTab !== failedCheck.tab) {
-      setActiveTab(failedCheck.tab);
-      setPendingValidateTab(failedCheck.tab);
-    } else {
-      formRef.current?.reportValidity();
+    const headerError = freightValidationError("TF_QUOTATION", header);
+    const lineError = details.map((row, index) => { const error = freightValidationError("TF_QUOTATION_DET", row); return error ? `Line ${index + 1}: ${error}` : null; }).find(Boolean);
+    const schemaError = headerError || lineError;
+    if (schemaError) { setNotice({ type: "error", text: schemaError }); return; }
+
+    // Missing field validation on lines (activities)
+    if (!details || details.length === 0) {
+      setActiveTab("charges");
+      setNotice({ type: "error", text: "Kindly fill in the missing fields: Add at least one activity line." });
+      return;
     }
-    return;
-  }
-    // setSaving(true);
-    // setNotice(null);
-    // try {
-    //   const payload = {
-    //     header: { ...header, userid: loginId, user_date: new Date().toISOString(), quotation_type: "QTN" },
-    //     details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
-    //       ...row,
-    //       srno: index + 1,
-    //       company_code: header.company_code,
-    //       prin_code: header.prin_code,
-    //       quotation_nr: header.quotation_nr || "0",
-    //       curr_code: row.curr_code || header.curr_code,
-    //       ex_rate: row.ex_rate || header.ex_rate,
-    //       transport_mode: row.transport_mode || header.transport_mode,
-    //       origin_port: row.origin_port || header.origin_port,
-    //       destination_port: row.destination_port || header.destination_port,
-    //       userid: loginId,
-    //       user_dt: new Date().toISOString(),
-    //     })),
-    //     terms,
-    //   };
-    //   const response = await api.post<{ success?: boolean; message?: string; data?: { quotation_nr?: string } }>("/api/freight/quotation/save", payload);
-    //   if (response.data?.success === false) throw new Error(response.data.message || "Unable to save quotation");
-    //   if (response.data?.data?.quotation_nr) setHeaderField("quotation_nr", response.data.data.quotation_nr);
-    //   setNotice({ type: "success", text: response.data?.message || "Quotation saved" });
-    //   await loadRows();
-    // } catch (error) {
-    //   setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
-    // } finally {
-    //   setSaving(false);
-    // }
+
+    const invalidRows = details
+      .map((d, idx) => (!d.act_code?.trim() || !d.quantity || Number(d.quantity) <= 0 ? idx : -1))
+      .filter((idx) => idx >= 0);
+    if (invalidRows.length > 0) {
+      setInvalidLineIndices(new Set(invalidRows));
+      setActiveTab("charges");
+      setNotice({ type: "error", text: "Kindly fill in the missing fields." });
+      return;
+    }
+    setInvalidLineIndices(new Set());
+
+    const failedCheck = requiredFieldChecks.find((check) => !check.test());
+    if (failedCheck) {
+      if (activeTab !== failedCheck.tab) {
+        setActiveTab(failedCheck.tab);
+        setPendingValidateTab(failedCheck.tab);
+      } else {
+        formRef.current?.reportValidity();
+      }
+      setNotice({ type: "error", text: `${failedCheck.label} is required` });
+      return;
+    }
+
     setSaving(true);
     setNotice(null);
     try {
       await persistQuotation();
-      setNotice({ type: "success", text: "Quotation saved" });
       await loadRows();
+      setNotice({ type: "success", text: "Quotation saved" });
+      setView("list");
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
     } finally {
@@ -834,61 +1121,73 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   if (view === "list") {
     return (
-      <section className="grid gap-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={17} /></div>
-            <div>
-              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Freight Quotation</h1>
-              {/* <p className="eyebrow mb-0.5">Freight Quotation</p> */}
-              {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation Listing</h1>
-              <p className="m-0 mt-1 text-xs text-muted-foreground">Build quotations from enquiry/RFQ data and maintain charge lines.</p> */}
-            </div>
+      <section className="freight-list-screen grid gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+          <div className="flex items-center gap-2.5">
+            <h2
+              className="text-foreground m-0"
+              style={{ fontSize: "20px", letterSpacing: "-0.02em", fontWeight: 600 }}
+            >
+              Freight Quotation
+            </h2>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
             {notice && <NoticeChip notice={notice} />}
-            <HeaderChip label="Records" value={String(rows.length)} />
-            <Button type="button" size="sm" variant="outline" onClick={loadRows} disabled={loading}><RefreshCw size={14} />{loading ? "Loading" : "Refresh"}</Button>
-            <Button type="button" size="sm" onClick={startNew}><Plus size={14} />Add Quotation</Button>
+
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2 shadow-sm">
+
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
           {visibleListStatusTabs.map((tab) => {
             const count = rows.filter((row) => matchesListStatusTab(row, tab.key)).length;
             const active = activeListTab === tab.key;
             return (
-              <Button
+              <button
                 key={tab.key}
                 type="button"
-                size="sm"
-                variant={active ? "default" : "outline"}
                 onClick={() => setActiveListTab(tab.key)}
-                className={active ? "" : "bg-background"}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
               >
-                {tab.label}
-                <span className={`ml-1 rounded px-1.5 text-[10px] font-bold ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
                   {count}
                 </span>
-              </Button>
+              </button>
             );
           })}
         </div>
         <DataTable
           columns={columns}
           data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Quotation Records`}
-          subtitle="Freight Quotation"
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                title="Add Quotation"
+                onClick={startNew}
+              >
+                <Plus size={14} /> Add Quotation
+              </Button>
+              <FinanceListActionsMenu
+                onExport={() => exportToCsv(filteredRows, columns, "freight-quotation-list.csv")}
+                onRefresh={() => void loadRows()}
+              />
+            </div>
+          }
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search quotation, principal, port..."
           loading={loading}
-          height="calc(100vh - 240px)"
-          minWidth={1380}
+          height="calc(100dvh - 180px)"
           density="grid"
           enablePagination
-          pageSize={50}
-          enableExport
-          exportFilename="freight-quotation-list.csv"
+          pageSize={25}
+          enableExport={false}
           getRowId={(row, index) => `${lookupText(row, "company_code")}-${lookupText(row, "quotation_nr") || index}`}
           rowClassName={statusRowClassName}
           onRowClick={openQuotation}
@@ -899,31 +1198,55 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   return (
     <>
-      {/* <form className="freight-dense-form" onSubmit={saveQuotation}> */}
-      <form ref={formRef} className="freight-dense-form" onSubmit={saveQuotation}>
-        <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+      <form ref={formRef} className="freight-dense-form freight-ui-standard freight-quotation-form" onSubmit={saveQuotation}>
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
-            <div className="min-w-0">
-              <p className="eyebrow m-1000 text-lg">Freight Quotation</p>
-               {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation</h1> */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr}</h1>
-                {/* <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1> */}
-                {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
-                <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 transition-colors cursor-pointer"
+              title="Back to List"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className="flex items-center gap-2 mr-1">
+              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#00378C]/10 text-[#00378C]">
+                <FileText size={16} />
               </div>
-              {/* <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"> */}
-                {/* <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
-                {/* <span>{jobTypeLabel(header.job_type)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
-                {/* <h1>{header.quotation_nr}</h1> */}
-              {/* </div> */}
+              <h2 className="m-0 text-sm font-bold tracking-tight text-slate-900 whitespace-nowrap">
+                Freight Quotation
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              {/* Highlighted Doc No - Increased font size matching Finance */}
+              <div className="rounded-md bg-[#fef3c7] text-[#78350f] border border-[#f59e0b] px-3 py-1 shadow-xs flex items-center gap-1.5">
+                <span className="text-[12px] uppercase font-black text-[#78350f] tracking-wide">Doc No</span>
+                <span className="text-[#78350f] font-extrabold select-none opacity-70">-</span>
+                <strong className="text-[16px] font-black text-[#78350f] font-mono tracking-tight leading-none">
+                  {header.quotation_nr && header.quotation_nr !== "0"
+                    ? String(header.quotation_nr).trim()
+                    : "NEW"}
+                </strong>
+              </div>
+
+              {/* Highlighted Date - Same amber background & bold font matching Finance */}
+              <div className="rounded-md bg-[#fef3c7] text-[#78350f] border border-[#f59e0b] px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
+                <span className="text-[12px] uppercase font-black text-[#78350f] tracking-wide">Date</span>
+                <span className="text-[#78350f] font-extrabold select-none opacity-70">-</span>
+                <strong className="text-[14px] font-black text-[#78350f] font-mono tracking-tight">
+                  {formatDate(header.quotation_date) || "—"}
+                </strong>
+              </div>
+
+              {/* Status Badge */}
+              <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>
+                {statusLabel(header.indstatus, header.last_action, header.final_approved)}
+              </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
-            <HeaderChip label="Route" value={`${header.origin_port || "-"} -> ${header.destination_port || "-"}`} />
-            <HeaderChip label="Profit" value={formatAmount(totals.profit)} />
+
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
             {notice && <NoticeChip notice={notice} />}
             <Button type="button" size="sm" variant="outline" onClick={() => setAssistOpen((open) => !open)}><Sparkles size={14} />Check{checkCount > 0 && <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-700">{checkCount}</span>}</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentOpen(true)}><Paperclip size={14} />Files</Button>
@@ -931,7 +1254,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
               <Button type="button" size="sm" variant="outline" onClick={copyAsNew} disabled={isReadOnly || (!header.prin_code && !header.quotation_nr)}><Copy size={14} />Copy</Button>
             )}
             {!isApprovalInProgress && (
-              <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isReadOnly}><RotateCcw size={14} />Reset</Button>
+              <Button type="submit" size="sm" disabled={saving || isReadOnly}><Save size={14} />{saving ? "Saving" : "Save Draft"}</Button>
             )}
             {canSubmit && (
               <Button type="button" size="sm" variant="outline" onClick={submitQuotation} disabled={approving || saving}>
@@ -957,7 +1280,19 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
               </>
             )}
             {!isApprovalInProgress && (
-              <Button type="submit" size="sm" disabled={saving || isReadOnly}><Save size={14} />{saving ? "Saving" : "Save Draft"}</Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="!bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]"
+                onClick={() => setView("list")}
+                disabled={isReadOnly}
+              >
+                Close
+              </Button>
+            )}
+            {!isApprovalInProgress && (
+              <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isReadOnly}><RotateCcw size={14} />Reset</Button>
             )}
           </div>
         </div>
@@ -965,42 +1300,52 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
         <fieldset disabled={isReadOnly} className="contents">
-        <section className="freight-form-card rounded-md border bg-card shadow-sm">
-          <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
-            <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" disabled />
-            <FormInput label="Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
-            <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
-            <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
-            <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-2" />
-            {!header.quotation_nr ? (
-              <FormLookup label="Source Enquiry" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
-            ) : (
-              <ReadOnlyField label="Source Enquiry" value={header.enquiry_no || "-"} />
-            )}
-            <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
-            <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-            <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
-            <ReadOnlyField label="Approval Level" value={workflowLevelText(header)} />
-            <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
-            <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
-            <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
-            <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
-            <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} className="sm:col-span-2 xl:col-span-2" />
-            <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} className="sm:col-span-2 xl:col-span-2" />
+        <div className="freight-form-card freight-quotation-header-card rounded-xl border border-slate-300 dark:border-slate-700 bg-white shadow-xs overflow-hidden mb-2">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-50/70 via-slate-50 to-white px-3.5 py-2">
+            <div className="flex items-center gap-2">
+              <FileText size={14} className="text-[#00378C]" />
+              <span className="font-bold text-xs uppercase tracking-wide text-slate-800">
+                Quotation Header Information
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-500">
+              Principal &amp; Commercial Terms
+            </span>
           </div>
-        </section>
+          <div className="p-3">
+            <div className="freight-quotation-header-grid grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
+              <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
+              <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
+              <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-2" />
+              <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
+              <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
+              <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
+              <FormInput label="Quotation Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
+              <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
+              {!header.quotation_nr ? (
+                <FormLookup label="Source Enquiry" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
+              ) : (
+                <ReadOnlyField label="Source Enquiry" value={header.enquiry_no || "-"} />
+              )}
+              <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "" }))} />
+              <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
+              <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} className="sm:col-span-2 xl:col-span-2"  maxLength={freightTextLimit("TF_QUOTATION", "contact_person")} />
+              <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} className="sm:col-span-2 xl:col-span-2"  maxLength={freightTextLimit("TF_QUOTATION", "subject")} />
+            </div>
+          </div>
+        </div>
         </fieldset>
 
-        <div className="freight-tabs-shell grid min-h-0 gap-0 rounded-md border bg-card shadow-sm">
-          <div className="freight-tabs-list flex overflow-x-auto">
+        <div className="freight-tabs-shell freight-quotation-tabs grid min-h-0 gap-0 rounded-xl border border-slate-300 dark:border-slate-700 bg-white shadow-xs overflow-hidden">
+          <div className="freight-tabs-list flex">
             {tabs.map((tab) => <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />)}
           </div>
           <fieldset disabled={isReadOnly} className="contents">
-          <div className="freight-tabs-panel min-h-0 border-t">
+          <div className="freight-tabs-panel min-h-0 border-t border-slate-200 p-2.5">
             {activeTab === "cargo" && (
                <section className="grid gap-1.5 xl:grid-cols-12">
-          
-                <SectionPanel className="xl:col-span-6" icon={PackageCheck} title="Cargo" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
+
+                <SectionPanel className="xl:col-span-6" icon={PackageCheck} title="Cargo">
                   <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-4">
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
                     <FormInput label="Length(cm)" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
@@ -1009,33 +1354,36 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                     <FormInput label="Volume(c.b.m)" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} />
                     <FormInput label="Volume Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
                     <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
+                    <FormInput label="Chargeable Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
+                 
                   </div>
                 </SectionPanel>
                 <SectionPanel className="xl:col-span-6" icon={MapPinned} title="Journey" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-1 sm:grid-cols-2">
                     <FormLookup label="Port of Loading" value={header.origin_port} displayValue={headerNames.origin_port_name} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
+                    <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)}  maxLength={freightTextLimit("TF_QUOTATION", "country_origin")} />
                     <FormLookup label="Port of Destination" value={header.destination_port} displayValue={headerNames.destination_port_name} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
-                    <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
-                    <FormInput label="Country Destn" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
-                    <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} className="sm:col-span-2" />
+                    <FormInput label="Country Destn" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)}  maxLength={freightTextLimit("TF_QUOTATION", "country_destination")} />
+                    <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} className="sm:col-span-2"  maxLength={freightTextLimit("TF_QUOTATION", "via")} />
                   </div>
                 </SectionPanel>
                 <SectionPanel className="xl:col-span-12" icon={ShipWheel} title="Carrier And Equipment" meta={`${modeLabel(header.transport_mode)} / ${header.carrier || "Carrier pending"}`}>
                   <div className="grid gap-1 sm:grid-cols-3">
                     <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} displayValue={headerNames.carrier_name} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
                     <FormLookup label="Forwarder" value={header.forwarder_code} displayValue={headerNames.forwarder_name} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
-                    <FormInput label="Transit" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
-                    <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
+                    <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
+                    <FormInput label="Transit" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)}  maxLength={freightTextLimit("TF_QUOTATION", "transit_time")} />
+                    <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)}  maxLength={freightTextLimit("TF_QUOTATION", "frequency")} />
                     {header.transport_mode === "S" && (
                     <>
-                    <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
+                    <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)}  maxLength={freightTextLimit("TF_QUOTATION", "container_type")} />
                     <FormInput label="No of Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
-                    <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
+                    <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)}  maxLength={freightTextLimit("TF_QUOTATION", "t_f")} />
                     </>)}
                     {header.transport_mode === "R" && (
                     <><FormLookup label="Vehicle Type" value={header.vehicle_type} displayValue={headerNames.vehicle_type_name} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
                     </>)}
-                    <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
+                    <FormInput label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} className="truncate"  maxLength={freightTextLimit("TF_QUOTATION", "cargo_detail")} />
                   </div>
                 </SectionPanel>
                 {/* <SectionPanel className="xl:col-span-5" icon={PackageCheck} title="Notes" meta={header.remarks ? "Remarks added" : "No remarks"}>
@@ -1050,13 +1398,13 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
             {activeTab === "payment" && (
                         <section>
-                          <SectionPanel icon={CreditCard} title="Payment Terms" meta=" PaymentTerms & instructions"><div className="grid gap-2 sm:grid-cols-2">
+                          <SectionPanel icon={CreditCard} title="Payment Terms"><div className="grid gap-2 sm:grid-cols-2">
                    <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
                    <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
                    <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
                    <FormInput label="Exchange Rate" type="number" value={header.ex_rate} onChange={(value) => setHeaderField("ex_rate", value)} required/>
                     </div>
-                   <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} />
+                   <FormInput label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} className="truncate"  maxLength={freightTextLimit("TF_QUOTATION", "spl_instructions")} />
                     </SectionPanel>
                           {/* <div className="grid gap-2 lg:grid-cols-12">
                             <SectionPanel className="lg:col-span-5" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
@@ -1075,7 +1423,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                                                 <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
                                               </div>
                                             </SectionPanel>
-                            
+
                                             <SectionPanel className="lg:col-span-3" icon={Activity} title="Instructions" meta={header.spl_instructions ? "Added" : "Pending"}>
                                               <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} />
                                             </SectionPanel>
@@ -1084,97 +1432,357 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                                       )}
 
             {activeTab === "charges" && (
-              <section>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div className="grid gap-1">
-                    <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Quotation Rates</h2>
-                    <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                      <HeaderChip label="Cost" value={formatAmount(totals.cost)} />
-                      <HeaderChip label="Bill" value={formatAmount(totals.bill)} />
-                      <HeaderChip label="Agent" value={formatAmount(totals.partners)} />
-                      <HeaderChip label="Profit" value={formatAmount(totals.profit)} />
+              <section className="finance-document-ui">
+                <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
+                  <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+                    <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+                      <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+                        <List size={14} />
+                      </span>
+                      <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+                        Quotation Charges & Rates
+                      </span>
+                      <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+                        {details.length} {details.length === 1 ? "line" : "lines"}
+                      </span>
+
+                      <div className="hidden sm:flex items-center gap-2 ml-2 text-[11px]">
+                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
+                          <span className="text-slate-600 font-bold">Cost:</span> {formatAmount(totals.cost)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+                          <span className="text-blue-700 font-bold">Bill:</span> {formatAmount(totals.bill)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded bg-purple-50 border border-purple-200 px-2 py-0.5 font-medium text-purple-900">
+                          <span className="text-purple-700 font-bold">Agent:</span> {formatAmount(totals.partners)}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-bold ${
+                            totals.profit >= 0
+                              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                              : "bg-rose-50 border-rose-300 text-rose-800"
+                          }`}
+                        >
+                          <span>Profit:</span> {formatAmount(totals.profit)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={syncJourneyPorts}
+                        disabled={isReadOnly || details.length === 0}
+                        className="h-7 text-xs font-medium text-slate-700 hover:text-[#00378C] hover:bg-blue-50 border-slate-300 shadow-xs cursor-pointer"
+                        title="Copy Journey Origin & Destination ports from header to all quotation lines"
+                      >
+                        <MapPinned size={13} className="mr-1 text-[#00378C]" />
+                        Sync Journey Ports
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={showFcColumns ? "default" : "outline"}
+                        onClick={() => setShowFcColumns((prev) => !prev)}
+                        className={`h-7 text-xs font-medium shadow-xs cursor-pointer ${
+                          showFcColumns
+                            ? "!bg-[#00378C] !text-white !border-[#002d72]"
+                            : "text-slate-700 hover:text-[#00378C] hover:bg-blue-50 border-slate-300"
+                        }`}
+                        title="Toggle Multi-Currency & Foreign Currency Exchange rate columns"
+                      >
+                        <Coins size={13} className="mr-1" />
+                        {showFcColumns ? "Hide Multi-Currency" : "Multi-Currency"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={addDetail}
+                        disabled={isReadOnly}
+                        className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+                      >
+                        <Plus size={13} className="mr-1" />
+                        Add Line
+                      </Button>
                     </div>
                   </div>
-                  <Button type="button" size="sm" variant="outline" onClick={addDetail}><Plus size={14} />Add Line</Button>
-                </div>
 
-                <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner" style={{ maxWidth: "100%", overflowY: "hidden" }}>
-                  <table className="border-collapse text-[11px]" style={{ width: "max-content" }}>
-                    <thead>
-                      <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Act</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "180px" }}>Activity</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Mode</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Origin</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Dest</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "60px" }}>Qty</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "70px" }}>UOM</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Cost Curr</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Cost Ex</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost Rate</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Bill Curr</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Bill Ex</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill Rate</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Agent FC</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Agent</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Remarks</th>
-                        <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }}/>
+                  <div className="commercial-lines-scroll overflow-auto max-h-[70vh] min-h-[300px]">
+                    <table className={`finance-lines-table border-collapse text-xs w-full ${showFcColumns ? "min-w-[2500px]" : "min-w-[1660px]"}`}>
+                      <thead className="sticky top-0 z-30 bg-slate-100 text-left text-[11px] font-bold uppercase tracking-wider text-slate-700 shadow-xs whitespace-nowrap border-b-2 border-slate-300">
+                      <tr>
+                        <th className="sticky left-0 z-30 bg-slate-100 px-2 py-2 text-center w-10 text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">#</th>
+                        <th className="sticky left-10 z-30 bg-slate-100 px-2 py-2 w-[110px] text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">Activity Code</th>
+                        <th className="sticky left-[150px] z-30 bg-slate-100 px-2 py-2 w-[220px] text-slate-700 font-bold border-r-2 !border-r-slate-400 shadow-[inset_-2px_0_0_#94a3b8,3px_0_5px_-2px_rgba(0,0,0,0.15)]">Activity Name</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-l-2 !border-l-slate-400 border-r border-slate-200" style={{ width: "110px" }}>UOC</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>MOC</th>
+                        <th className="px-2 py-2 text-center text-slate-700 font-bold border-r border-slate-200" style={{ width: "75px" }}>Mode</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "140px" }}>Origin Port</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "140px" }}>Dest Port</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "65px" }}>Qty</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "80px" }}>UOM</th>
+                        {showFcColumns && (
+                          <>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Cost Curr</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Cost Ex</th>
+                          </>
+                        )}
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Cost Rate</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "105px" }}>Cost Amt</th>
+                        {showFcColumns && (
+                          <>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Bill Curr</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Bill Ex</th>
+                          </>
+                        )}
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Bill Rate</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "105px" }}>Bill Amt</th>
+                        {showFcColumns && (
+                          <>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent Curr</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Agent Ex</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent FC</th>
+                          </>
+                        )}
+                        <th className="px-2 py-2 text-right text-purple-900 font-bold border-r border-slate-200 bg-purple-50/50" style={{ width: "105px" }}>Agent Amt</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ minWidth: "200px" }}>Remarks</th>
+                        <th className="sticky right-0 z-30 bg-slate-100 px-2 py-2 text-center w-12 text-slate-700 font-bold border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]">Action</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {details.map((row, index) => (
-                        <tr key={`${row.srno}-main`} className="border-b border-slate-200 bg-white transition last:border-0 hover:bg-slate-50/80">
-                          <td className="px-1.5 py-1.5 align-middle">
+                    <tbody className="divide-y divide-slate-200">
+                      {details.map((row, index) => {
+                        const isInvalid = invalidLineIndices.has(index);
+                        const rowBg = isInvalid ? "bg-rose-50" : index % 2 === 1 ? "bg-slate-50" : "bg-white";
+                        return (
+                        <tr
+                          key={`${row.srno}-main`}
+                          className={`border-b border-slate-200 transition last:border-0 hover:bg-blue-50/40 ${
+                            isInvalid
+                              ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400"
+                              : index % 2 === 1
+                              ? "bg-slate-50/40"
+                              : "bg-white"
+                          }`}
+                        >
+                          {/* # */}
+                          <td className={`sticky left-0 z-10 ${rowBg} px-2 py-1.5 text-center text-slate-500 font-mono text-[11px] font-semibold border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]`}>
+                            {index + 1}
+                          </td>
+
+                          {/* Activity Code */}
+                          <td className={`sticky left-10 z-10 ${rowBg} px-1.5 py-1.5 border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]`}>
                            <LookupField
                               compact
                               label="Activity"
                               value={row.act_code}
-                              displayValue={row.act_code || ""}
+                              displayValue={row.act_code}
                               valueField="activity_code"
-                              displayFields={["activity_code"]}
+                              displayFields={["activity_code", "activity"]}
                               columns={[
                                { field: "activity_code", header: "Code" },
                                { field: "activity", header: "Activity" },
-                               { field: "uom", header: "UOM" },
-                               { field: "bill", header: "Bill" },
-                               { field: "cost", header: "Cost" },
                               ]}
                              loadOptions={() => loadActivityLookup(header.company_code)}
                              onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
                              placeholder="Activity"
+                             disabled={isReadOnly}
                              />
-                            </td>
-                          <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-[150px]" />
-                          <td className="px-1 py-1.5 align-middle"><select className={`${fieldClassName} h-7`} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
-                          <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-[90px]" />
-                          <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} className="w-[90px]" />
-                          <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-[60px] text-right" />
-                          <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-[70px]" />
-                          <CellInput value={row.cost_curr_code} onChange={(value) => setDetailField(index, "cost_curr_code", value)} className="w-[80px]" />
-                          <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-[80px] text-right" />
-                          <CellInput type="number" value={row.fc_costrate} onChange={(value) => setDetailField(index, "fc_costrate", value)} className="w-[100px] text-right" />
-                          <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-[100px] text-right" />
-                          <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-[80px]" />
-                          <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-[80px] text-right" />
-                          <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-[100px] text-right" />
-                          <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-[100px] text-right" />
-                          <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-[100px] text-right" />
-                          <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-[100px] text-right" />
-                          <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="min-w-[140px]" />
-                          <td className="px-1 py-1.5 text-right align-middle">
-                            <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={details.length === 1} onClick={() => removeDetail(index)}><Trash2 size={12} /></Button>
+                          </td>
+
+                          {/* Activity Name */}
+                          <td className={`sticky left-[150px] z-10 ${rowBg} px-1.5 py-1.5 border-r-2 !border-r-slate-400 shadow-[inset_-2px_0_0_#94a3b8,3px_0_5px_-2px_rgba(0,0,0,0.15)]`}>
+                            <div
+                              className="flex h-7 items-center rounded-md border border-slate-200 bg-slate-50/80 px-2 text-[11px] font-medium text-slate-700 truncate"
+                              title={row.activity}
+                            >
+                              {row.activity || "-"}
+                            </div>
+                          </td>
+
+                          {/* UOC */}
+                          <td className="px-1.5 py-1.5 align-middle border-l-2 !border-l-slate-400 border-r border-slate-200">
+                            <select
+                              className={fieldClassName}
+                              value={row.uoc}
+                              onChange={(e) => setDetailField(index, "uoc", e.target.value)}
+                              disabled={isReadOnly}
+                            >
+                              <option value=""> </option>
+                              {uocOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+
+                          {/* MOC */}
+                          <td className="px-1.5 py-1.5 align-middle border-r border-slate-200">
+                            <LookupField
+                              compact
+                              label="MOC 1"
+                              value={row.moc1}
+                              displayValue={row.moc1 || ""}
+                              valueField="moc_code"
+                              displayFields={["moc_name"]}
+                              columns={[
+                                { field: "moc_code", header: "Code" },
+                                { field: "moc_name", header: "MOC" },
+                              ]}
+                              loadOptions={() => loadMocLookup(header.company_code)}
+                              onChange={(value) => setDetailField(index, "moc1", value)}
+                              disabled={isReadOnly}
+                            />
+                          </td>
+
+                          {/* Mode */}
+                          <td className="px-1 py-1.5 align-middle border-r border-slate-200">
+                            <select
+                              className={`${fieldClassName} h-7 w-full`}
+                              value={row.transport_mode}
+                              onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}
+                              disabled={isReadOnly}
+                            >
+                              {transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                          </td>
+
+                          {/* Origin Port */}
+                          <td className="px-1.5 py-1.5 align-middle border-r border-slate-200">
+                            <LookupField
+                              compact
+                              label="Origin Port"
+                              value={row.origin_port}
+                              displayValue={row.origin_port}
+                              valueField="port_code"
+                              displayFields={["port_code", "port_name"]}
+                              columns={portColumns}
+                              loadOptions={() => loadPortLookup(header.company_code)}
+                              onChange={(value) => setDetailField(index, "origin_port", value)}
+                              placeholder="Origin"
+                              disabled={isReadOnly}
+                            />
+                          </td>
+
+                          {/* Dest Port */}
+                          <td className="px-1.5 py-1.5 align-middle border-r border-slate-200">
+                            <LookupField
+                              compact
+                              label="Dest Port"
+                              value={row.destination_port}
+                              displayValue={row.destination_port}
+                              valueField="port_code"
+                              displayFields={["port_code", "port_name"]}
+                              columns={portColumns}
+                              loadOptions={() => loadPortLookup(header.company_code)}
+                              onChange={(value) => setDetailField(index, "destination_port", value)}
+                              placeholder="Dest"
+                              disabled={isReadOnly}
+                            />
+                          </td>
+
+                          {/* Qty */}
+                          <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-full text-right" disabled={isReadOnly} />
+
+                          {/* UOM */}
+                          <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-full" maxLength={freightTextLimit("TF_QUOTATION_DET", "uom")} disabled={isReadOnly} />
+
+                          {/* FC Cost Curr & Ex */}
+                          {showFcColumns && (
+                            <>
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.cost_curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "cost", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
+                            </>
+                          )}
+
+                          {/* Cost Rate & Cost Amt */}
+                          <CellInput type="number" value={row.fc_costrate} onChange={(value) => setDetailField(index, "fc_costrate", value)} className="w-full text-right" disabled={isReadOnly} />
+                          <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-full text-right font-medium" disabled={isReadOnly} />
+
+                          {/* FC Bill Curr & Ex */}
+                          {showFcColumns && (
+                            <>
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "bill", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
+                            </>
+                          )}
+
+                          {/* Bill Rate & Bill Amt */}
+                          <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-full text-right font-medium" disabled={isReadOnly} />
+                          <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-full text-right font-bold text-blue-900" disabled={isReadOnly} />
+
+                          {/* Agent Share / Commission */}
+                          {showFcColumns && (
+                            <>
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.partners_curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "partners", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.partners_ex_rate || "1"} onChange={(value) => setDetailField(index, "partners_ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
+                              <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-full text-right font-medium" disabled={isReadOnly} />
+                            </>
+                          )}
+                          <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-full text-right font-bold text-purple-900 bg-purple-50/30" disabled={isReadOnly} />
+
+                          {/* Remarks */}
+                          <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="w-full" maxLength={freightTextLimit("TF_QUOTATION_DET", "activity_remarks")} disabled={isReadOnly} />
+
+                          {/* Action */}
+                          <td className={`sticky right-0 z-10 ${rowBg} px-1.5 py-1.5 text-center border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]`}>
+                            <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isReadOnly || details.length === 1} onClick={() => removeDetail(index)} className="h-7 w-7 text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"><Trash2 size={13} /></Button>
                           </td>
                         </tr>
-                      ))}
+                      );
+                    })}
                     </tbody>
+                    {details.length > 0 && (
+                      <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-30 whitespace-nowrap">
+                        <tr>
+                          <td colSpan={showFcColumns ? 13 : 11} className="px-3 py-1.5 text-right font-extrabold uppercase text-slate-600">
+                            Totals ({details.length} lines):
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">
+                            {formatAmount(totals.cost)}
+                          </td>
+                          <td colSpan={showFcColumns ? 3 : 1} className="px-2 py-1.5 text-right">-</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900">
+                            {formatAmount(totals.bill)}
+                          </td>
+                          {showFcColumns && (
+                            <td colSpan={3} className="px-2 py-1.5 text-right">-</td>
+                          )}
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold text-purple-900 bg-purple-50/50">
+                            {formatAmount(totals.partners)}
+                          </td>
+                          <td colSpan={2} className="px-2 py-1.5 text-center text-slate-500 font-mono text-[10px]">
+                            OMR
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
-              </section>
-            )}
+              </div>
+            </section>
+          )}
 
-            {activeTab === "terms" && (
+            {/* {activeTab === "terms" && (
               <section>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground">Terms And Conditions</h2>
@@ -1184,7 +1792,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   {terms.length === 0 && <div className="rounded-md border border-dashed bg-muted/25 p-6 text-center text-sm text-muted-foreground">No terms added. Oracle save procedure can also copy defaults from `MS_QUOTE_TERMS`.</div>}
                   {terms.map((term, index) => (
                     <div key={term.serial_no} className="grid gap-2 rounded-md border bg-background p-2 sm:grid-cols-[90px_120px_1fr_40px]">
-                      <FormInput label="Sr No" value={term.sr_no} onChange={(value) => setTermField(index, "sr_no", value)} />
+                      {/* <FormInput label="Sr No" value={term.serial_no} onChange={(value) => setTermField(index, "serial_no", value)} /> */}
+                      {/* <FormInput label="Sr No" value={String(term.serial_no)} onChange={(value) => {}} disabled />
                       <FormInput label="Type" value={term.type_ind} onChange={(value) => setTermField(index, "type_ind", value)} />
                       <FormTextarea label="Description" value={term.description} onChange={(value) => setTermField(index, "description", value)} compact />
                       <div className="grid place-items-end"><Button type="button" size="icon" variant="ghost" title="Remove term" onClick={() => removeTerm(index)}><Trash2 size={14} /></Button></div>
@@ -1192,7 +1801,72 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   ))}
                 </div>
               </section>
+            )} */} 
+
+            {activeTab === "terms" && (
+              <section>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  {/* <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground"></h2> */}
+                  <Button type="button" size="sm" variant="outline" onClick={addTerm}><Plus size={14} />Add Term</Button>
+                </div>
+                {terms.length === 0 ? (
+                  <div className="rounded-md border border-dashed bg-muted/25 p-5 text-center text-sm text-muted-foreground">No terms added. Oracle save procedure can also copy defaults from `MS_QUOTE_TERMS`.</div>
+                ) : (
+                  // <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner">
+                  <div ref={termsWrapRef} className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner">
+                  <table className="w-full border-collapse text-[11px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                          <th className="px-1.5 py-1.5" style={{ width: "60px" }}>Sr No</th>
+                          <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Type</th>
+                          <th className="px-1.5 py-1.5">Description</th>
+                          <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }} />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {terms.map((term, index) => (
+                          <tr key={term.serial_no} className="border-b border-slate-200 bg-white transition last:border-0 hover:bg-slate-50/80">
+                            <td className="px-1.5 py-1.5 align-middle text-slate-600">{term.serial_no}</td>
+                            <CellInput value={term.type_ind} onChange={(value) => setTermField(index, "type_ind", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_TERMS", "type_ind")} />
+                            <td className="px-1 py-0.5">
+                              <TextAreaControl
+                                className={`${fieldClassName} min-h-7 py-0.5 w-full`}
+                                value={term.description}
+                                onChange={(event) => setTermField(index, "description", event.target.value)}
+                               maxLength={freightTextLimit("TF_QUOTATION_TERMS", "description")}  maxBytes={freightTextLimit("TF_QUOTATION_TERMS", "description")} />
+                            </td>
+                                     {/* <td className="px-1 py-0.5">
+                              <TextAreaControl
+                               className="h-auto min-h-7 w-full rounded-md border border-slate-400 bg-slate-100 px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary resize-none overflow-hidden leading-snug py-0.5"
+                               //className={`${fieldClassName} min-h-7 py-0.5 w-full resize-none overflow-hidden leading-snug`}
+                                value={term.description}
+                                rows={1}
+                                onChange={(event) => setTermField(index, "description", event.target.value)}
+                                onInput={(event) => {
+                                  const el = event.target as HTMLTextAreaElement;
+                                  el.style.height = "auto";
+                                  el.style.height = `${el.scrollHeight}px`;
+                                }}
+                                ref={(el) => {
+                                  if (el) {
+                                    el.style.height = "auto";
+                                    el.style.height = `${el.scrollHeight}px`;
+                                  }
+                                }}
+                              />
+                            </td>  */}
+                            <td className="px-1 py-1.5 text-right align-middle">
+                              <Button type="button" size="icon" variant="ghost" title="Remove term" onClick={() => removeTerm(index)}><Trash2 size={12} /></Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
             )}
+
           </div>
           </fieldset>
         </div>
@@ -1204,7 +1878,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
 function TabButton({ tab, active, onClick }: { tab: { key: FreightQuotationInitialTab; label: string; icon: typeof PackageCheck }; active: boolean; onClick: () => void }) {
   const Icon = tab.icon;
-  return <button type="button" onClick={onClick} className={`ui-button ui-button-sm whitespace-nowrap ${active ? "ui-button-default" : "ui-button-outline"}`}><Icon size={14} />{tab.label}</button>;
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`freight-workspace-tab ${active ? "active" : ""}`}><Icon size={14} />{tab.label}</button>;
 }
 
 function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
@@ -1227,14 +1901,14 @@ function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
 
 function SectionPanel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta?: string; icon: typeof PackageCheck; children?: React.ReactNode; className?: string }) {
   return (
-    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
-      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35">
+    <section className={`freight-panel overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700 bg-white shadow-xs ${className}`}>
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-100/90 to-slate-50 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={12} /></span>
-          <div className="min-w-0"><h3 className="m-0 truncate text-[11px] font-semibold uppercase text-foreground">{title}</h3>{meta && <p className="m-0 truncate text-[10px] text-muted-foreground">{meta}</p>}</div>
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-blue-50 text-[#00378C]"><Icon size={13} /></span>
+          <div className="min-w-0"><h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-slate-800">{title}</h3></div>
         </div>
-      </div>
-      <div className="freight-panel-body">{children}</div>
+       </div>
+      <div className="freight-panel-body p-3">{children}</div>
     </section>
   );
 }
@@ -1249,21 +1923,21 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
 
 function statusBadgeClass(status: string, action = "", finalApproved = "") {
   if (status === "A" || finalApproved === "Y") {
-    return "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700";
+    return "inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-emerald-700";
   }
   if (status === "C") {
-    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+    return "inline-flex items-center rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700";
   }
   if (status === "R" || action === "REJECTED") {
-    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+    return "inline-flex items-center rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700";
   }
   if (action === "SENTBACK") {
-    return "inline-flex items-center rounded-md border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700";
+    return "inline-flex items-center rounded border border-orange-200 bg-orange-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-orange-700";
   }
   if (action === "SUBMITTED" || action === "APPROVED") {
-    return "inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700";
+    return "inline-flex items-center rounded border border-sky-200 bg-sky-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-sky-700";
   }
-  return "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
+  return "inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700";
 }
 
 function statusLabel(status: string, action = "", finalApproved = "") {
@@ -1291,41 +1965,30 @@ function matchesListStatusTab(row: LookupRow, tab: ListStatusTab) {
 function statusRowClassName(row: LookupRow) {
   const status = lookupText(row, "indstatus");
   const action = lookupText(row, "last_action");
-  if (status === "A") return "bg-emerald-50/60";
-  if (status === "C" || status === "R") return "bg-red-50/50";
-  if (action === "SENTBACK") return "bg-orange-50/50";
-  if (action === "SUBMITTED" || action === "APPROVED") return "bg-sky-50/50";
-  return "bg-amber-50/50";
+  const finalApproved = lookupText(row, "final_approved");
+  if (status === "A" || finalApproved === "Y") return "freight-status-row freight-status-approved";
+  if (status === "C" || status === "R") return "freight-status-row freight-status-danger";
+  if (action === "SENTBACK") return "freight-status-row freight-status-sentback";
+  if (action === "SUBMITTED" || action === "APPROVED") return "freight-status-row freight-status-progress";
+  return "freight-status-row freight-status-draft";
 }
 
 function StatusField({ status, action = "", finalApproved = "" }: { status: string; action?: string; finalApproved?: string }) {
   return (
-    <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+    <div className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
       Status
-      <div className="flex h-6 items-center rounded-md border border-input bg-muted/40 px-2">
+      <div className="flex h-7 items-center rounded-md border border-slate-300 bg-slate-50/80 px-2">
         <span className={statusBadgeClass(status, action, finalApproved)}>{statusLabel(status, action, finalApproved)}</span>
       </div>
     </div>
   );
 }
 
-function workflowLevelText(header: QuotationHeader) {
-  if (header.indstatus === "C") return "Cancelled";
-  if (header.indstatus === "R" || header.last_action === "REJECTED") return "Rejected";
-  if (header.indstatus === "A" || header.final_approved === "Y") return "Final approved";
-  if (header.last_action === "SENTBACK") return header.next_action_by ? `Sent back to ${header.next_action_by}` : "Sent back";
-  if (header.last_action === "SUBMITTED" || header.last_action === "APPROVED") {
-    const level = header.flow_level_running || "";
-    return header.next_action_by ? `Level ${level} - ${header.next_action_by}` : `Level ${level || "-"} pending`;
-  }
-  return "Draft";
-}
-
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+    <div className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
       {label}
-      <div className="flex h-6 items-center rounded-md border border-input bg-muted/40 px-2 text-[11px] font-semibold normal-case text-foreground">
+      <div className="flex h-7 items-center rounded-md border border-slate-300 bg-slate-50/80 px-2 text-[11px] font-bold normal-case text-slate-800">
         <span className="truncate">{value || "-"}</span>
       </div>
     </div>
@@ -1428,6 +2091,7 @@ function toHeaderFromRow(row: LookupRow, user: Record<string, unknown> | null, t
 function toHeaderFromEnquiry(row: LookupRow, fallback: QuotationHeader): Partial<QuotationHeader> {
   return {
     prin_code: lookupText(row, "prin_code") || fallback.prin_code,
+    walkin_prin_code: lookupText(row, "walkin_prin_code") || fallback.walkin_prin_code,
     dept_code: lookupText(row, "dept_code") || fallback.dept_code,
     job_type: lookupText(row, "job_type") || fallback.job_type,
     transport_mode: lookupText(row, "transport_mode") || fallback.transport_mode,
@@ -1493,6 +2157,8 @@ function toDetailFromSourceEnquiry(row: LookupRow, header: QuotationHeader, srno
       srno: Number(lookupText(row, "srno") || lookupText(row, "sr_no")) || srno,
       act_code: lookupText(row, "act_code"),
       activity: lookupText(row, "activity") || lookupText(row, "ms_activity_activity"),
+      uoc: lookupText(row, "uoc"),
+      moc1: lookupText(row, "moc1"),
       activity_remarks: lookupText(row, "remarks"),
       rate_remarks: lookupText(row, "remarks"),
       transport_mode: lookupText(row, "transport_mode") || header.transport_mode,
@@ -1528,15 +2194,64 @@ function toTermFromRow(row: LookupRow, index: number): QuotationTerm {
 
 function recalcDetail(row: QuotationDetail, field: keyof QuotationDetail): QuotationDetail {
   const qty = Number(row.quantity || 0);
-  const costEx = Number(row.cost_ex_rate || 0);
-  const billEx = Number(row.ex_rate || 0);
-  const partnerEx = Number(row.partners_ex_rate || 0);
+  const costEx = Number(row.cost_ex_rate || 1) || 1;
+  const billEx = Number(row.ex_rate || 1) || 1;
+  const partnerEx = Number(row.partners_ex_rate || 1) || 1;
   const fcCostRate = Number(row.fc_costrate || 0);
   const fcBillRate = Number(row.fc_billrate || 0);
   const fcPartners = Number(row.fc_partners || 0);
-  const shouldCost = ["quantity", "fc_costrate", "cost_ex_rate"].includes(field);
-  const shouldBill = ["quantity", "fc_billrate", "ex_rate"].includes(field);
-  const shouldPartner = ["fc_partners", "partners_ex_rate"].includes(field);
+
+  if (field === "cost") {
+    const cost = Number(row.cost || 0);
+    if (qty > 0 && costEx > 0) {
+      const rate = round3(cost / (qty * costEx));
+      return { ...row, fc_costrate: rate, fc_cost: round3(Number(rate) * qty), cost: String(cost) };
+    }
+  }
+
+  if (field === "bill") {
+    const bill = Number(row.bill || 0);
+    if (qty > 0 && billEx > 0) {
+      const rate = round3(bill / (qty * billEx));
+      return { ...row, fc_billrate: rate, fc_bill: round3(Number(rate) * qty), bill: String(bill) };
+    }
+  }
+
+  if (field === "partners_price") {
+    const pPrice = Number(row.partners_price || 0);
+    const fc = partnerEx > 0 ? round3(pPrice / partnerEx) : String(pPrice);
+    return { ...row, fc_partners: fc, partners_price: String(pPrice) };
+  }
+
+  if (field === "cost_ex_rate") {
+    if (fcCostRate > 0) {
+      return { ...row, cost: round3(fcCostRate * costEx * qty) };
+    } else if (Number(row.cost) > 0 && qty > 0 && costEx > 0) {
+      const rate = round3(Number(row.cost) / (qty * costEx));
+      return { ...row, fc_costrate: rate, fc_cost: round3(Number(rate) * qty) };
+    }
+  }
+
+  if (field === "ex_rate") {
+    if (fcBillRate > 0) {
+      return { ...row, bill: round3(fcBillRate * billEx * qty) };
+    } else if (Number(row.bill) > 0 && qty > 0 && billEx > 0) {
+      const rate = round3(Number(row.bill) / (qty * billEx));
+      return { ...row, fc_billrate: rate, fc_bill: round3(Number(rate) * qty) };
+    }
+  }
+
+  if (field === "partners_ex_rate") {
+    if (fcPartners > 0) {
+      return { ...row, partners_price: round3(fcPartners * partnerEx) };
+    } else if (Number(row.partners_price) > 0 && partnerEx > 0) {
+      return { ...row, fc_partners: round3(Number(row.partners_price) / partnerEx) };
+    }
+  }
+
+  const shouldCost = ["quantity", "fc_costrate"].includes(field);
+  const shouldBill = ["quantity", "fc_billrate"].includes(field);
+  const shouldPartner = ["fc_partners"].includes(field);
   return {
     ...row,
     ...(shouldCost ? { fc_cost: round3(fcCostRate * qty), cost: round3(fcCostRate * costEx * qty) } : {}),
@@ -1566,61 +2281,146 @@ function buildSmartChecks(header: QuotationHeader, details: QuotationDetail[], t
   ];
 }
 
-function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "",disabled }: { label: string; value: string; displayValue?: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean }) {
-  return (
-    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
-      <span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
-      <Input
-        className={fieldClassName}
+function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "", disabled, maxLength }: { label: string; value: string; displayValue?: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean; maxLength?: number }) {
+  const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
+ return (
+    <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
+      <span className="flex items-center justify-between">
+        <span className="flex items-center gap-0.5">
+          {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+        </span>
+      </span>
+      {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={value}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={value}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input
+        className={`${fieldClassName} border-slate-300 font-medium text-slate-900 bg-white ${isOverLimit ? "border-red-500 focus-visible:ring-red-500" : "focus:border-[#00378C]"}`}
         type={type}
         value={value}
         required={required}
         placeholder={placeholder}
         disabled={disabled}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+       maxBytes={maxLength} />)}
     </label>
   );
 }
 
-// function FormLookup({ label, value, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string }) {
-  function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: {
+function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "", forceOpenDown = true }: {
   label: string; value: string; displayValue?: string; valueField: string; displayFields: string[];
   columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
-  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string;
+  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string; forceOpenDown?: boolean;
   }) {
+  const formattedDisplay = value && displayValue && !displayValue.startsWith(value)
+    ? `${value} - ${displayValue}`
+    : displayValue || value;
+
   return (
-    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
-      <span>{label}{required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
+    <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
+      <span className="flex items-center gap-0.5">
+        {label}{required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+      </span>
       <LookupField
         value={value}
-        displayValue={displayValue}
+        displayValue={formattedDisplay}
         valueField={valueField}
         displayFields={displayFields}
         columns={columns}
         loadOptions={loadOptions}
         onChange={onChange}
         required={required}
+        disabled={disabled}
         enforceRequired={required}
         compact
+        forceOpenDown={forceOpenDown}
       />
     </label>
   );
 }
 
-function FormSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label">{label}<select className={fieldClassName} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
+function FormSelect({ label, value, onChange, options, required }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; required?: boolean }) {
+  return (
+    <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+      <span className="flex items-center gap-0.5">
+        {label}{required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+      </span>
+      <select className={`${fieldClassName} border-slate-300 font-medium text-slate-900 bg-white focus:border-[#00378C]`} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
 }
 
-function FormTextarea({ label, value, onChange, compact, className = "" }: { label: string; value: string; onChange: (value: string) => void; compact?: boolean; className?: string }) {
-  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>{label}<textarea className={`${fieldClassName} ${compact ? "min-h-7" : "min-h-10"} py-0.5`} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+function FormTextarea({ label, value, onChange, compact, className = "", maxLength }: { label: string; value: string; onChange: (value: string) => void; compact?: boolean; className?: string; maxLength?: number }) {
+  const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
+   return (
+    <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
+      <span className="flex items-center justify-between">
+        <span>{label}</span>
+      </span>
+      <TextAreaControl
+        className={`${fieldClassName} border-slate-300 font-medium text-slate-900 bg-white ${compact ? "min-h-7" : "min-h-10"} py-0.5 ${isOverLimit ? "border-red-500 focus:border-red-500" : "focus:border-[#00378C]"}`}
+        value={value}
+        maxLength={maxLength}
+        onChange={(event) => onChange(event.target.value)}
+       maxBytes={maxLength} />
+    </label>
+  );
 }
 
-function CellInput({ value, onChange, type = "text", className = "" }: { value: string; onChange: (value: string) => void; type?: string; className?: string }) {
-  return <td className="px-1 py-0.5"><Input className={`h-6 text-[11px] ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} /></td>;
+function CellInput({ value, onChange, type = "text", className = "", maxLength, disabled }: { value: string; onChange: (value: string) => void; type?: string; className?: string; maxLength?: number; disabled?: boolean }) {
+  return <td className="px-1 py-0.5 border-r border-slate-200">{type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={value}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={value}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input maxLength={maxLength} className={`h-6 text-[11px] ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)}  maxBytes={maxLength} disabled={disabled} />)}</td>;
 }
+
+function CurrencyLookup({
+  companyCode,
+  value,
+  onChange,
+  disabled,
+}: {
+  companyCode: string;
+  value: string;
+  onChange: (value: string, row: LookupRow | null) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <td className="px-1 py-0.5 border-r border-slate-200">
+      <LookupField
+        value={value}
+        compact
+        dense
+        forceOpenDown
+        placeholder="Curr"
+        valueField="curr_code"
+        displayFields={["curr_code", "curr_name"]}
+        columns={[
+          { field: "curr_code", header: "Currency", width: "90px" },
+          { field: "curr_name", header: "Name", width: "210px" },
+          { field: "ex_rate", header: "Ex. Rate", width: "90px" },
+        ]}
+        popoverWidth={420}
+        loadOptions={(query) => loadFreightLookup("freight_currency", companyCode, query)}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    </td>
+  );
+}
+
 
 // const fieldClassName = "h-6 w-full rounded-md border border-input bg-background px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
 const fieldClassName = "h-6 w-full rounded-md border border-slate-400 bg-slate-100 px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
@@ -1641,8 +2441,11 @@ async function loadVehicleTypeLookup(companyCode: string) { return loadFreightLo
 async function loadDefaultQuotationTerms(companyCode: string) { return loadFreightLookup("freight_quote_terms", companyCode); }
 async function loadActivityLookup(companyCode: string) { return loadFreightLookup("freight_activity", companyCode); }
 function carrierLookupProps(mode: string, companyCode: string) { if (mode === "S") return { valueField: "vessel_code", displayFields: ["vessel_code", "vessel_name"], columns: [{ field: "vessel_code", header: "Code" }, { field: "vessel_name", header: "Vessel" }], loadOptions: () => loadFreightLookup("freight_vessel", companyCode) }; if (mode === "R") return { valueField: "vehicle_no", displayFields: ["vehicle_no", "vehicle_desc"], columns: [{ field: "vehicle_no", header: "Vehicle" }, { field: "vehicle_desc", header: "Description" }], loadOptions: () => loadFreightLookup("freight_vehicle", companyCode) }; return { valueField: "airline_code", displayFields: ["airline_code", "airline_name"], columns: [{ field: "airline_code", header: "Code" }, { field: "airline_name", header: "Airline" }], loadOptions: () => loadFreightLookup("freight_airline", companyCode) }; }
-async function loadFreightLookup(parameter: string, companyCode: string, query = "") { return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map(normalizeLookupRow); }
+async function loadFreightLookup(parameter: string, companyCode: string, query = "") { return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 1000 })).map(normalizeLookupRow); }
 async function loadDepartmentLookup(companyCode: string) { return loadFreightLookup("freight_department", companyCode); }
+async function loadSalesmanLookup(companyCode: string) { return loadFreightLookup("freight_salesman", companyCode);  }
+async function loadUocLookup(companyCode: string) { return loadFreightLookup("freight_uoc", companyCode); }
+async function loadMocLookup(companyCode: string) { return loadFreightLookup("freight_moc", companyCode); }
 
 function normalizeLookupRow(row: LookupRow): LookupRow {
   return Object.entries(row || {}).reduce<LookupRow>((acc, [key, value]) => {
@@ -1658,3 +2461,279 @@ function modeLabel(mode: string) { return mode === "S" ? "Sea" : mode === "R" ? 
 function jobTypeLabel(jobType: string) { return jobType === "IMP" ? "Import" : "Export"; }
 function round3(value: number) { return Number.isFinite(value) ? value.toFixed(3) : "0.000"; }
 function formatAmount(value: number) { return value.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
+
+// function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) {
+//   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+//   const rows = activeDetails.length
+//     ? activeDetails
+//         .map(
+//           (row) => `
+//       <tr>
+//         <td>${escapeHtml(row.activity || row.act_code)}</td>
+//         <td>${escapeHtml(row.uom)}</td>
+//         <td class="num">${escapeHtml(row.quantity)}</td>
+//         <td class="num">${escapeHtml(row.fc_billrate)}</td>
+//       </tr>`,
+//         )
+//         .join("")
+//     : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+//   const html = `
+//   <html>
+//     <head>
+//       <title>Quotation ${header.quotation_nr}</title>
+//       <style>
+//         @page { margin: 14mm; }
+//         * { box-sizing: border-box; }
+//         body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 0; }
+//         .frame { padding: 0 4px; }
+
+//         .doc-header {
+//           display: flex; justify-content: space-between; align-items: flex-end;
+//           border-bottom: 2.5px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 18px;
+//         }
+//         .doc-header h1 { margin: 0; font-size: 14px; letter-spacing: 0.5px; color: #1e3a8a; }
+//         .doc-header .doc-meta { text-align: right; font-size: 11px; color: #374151; }
+//         .doc-header .doc-meta .qtn-no { font-size: 13px; font-weight: bold; color: #111827; }
+
+//         .top-row { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 11px; }
+//         .top-row .label { font-weight: bold; color: #6b7280; margin-right: 4px; }
+
+//         .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+//         .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; background: #fafbfc; }
+//         .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+//         .party-block .value { white-space: pre-line; color: #9ca3af; font-style: italic; }
+
+//         .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 18px; }
+//         .info-grid .field { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dotted #e5e7eb; }
+//         .info-grid .field .label { font-weight: bold; color: #374151; }
+
+//         table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+//         thead th { background: #1e3a8a; color: #fff; border: 1px solid #1e3a8a; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+//         td { border: 1px solid #e5e7eb; padding: 8px; }
+//         tr:nth-child(even) td { background: #f8fafc; }
+//         .num { text-align: right; font-variant-numeric: tabular-nums; }
+//         .empty { text-align: center; color: #9ca3af; font-style: italic; }
+
+//         .doc-footer {
+//           margin-top: 36px; display: flex; justify-content: space-between; align-items: flex-end;
+//           font-size: 10px; color: #6b7280;
+//         }
+//         .doc-footer .signature { border-top: 1px solid #9ca3af; padding-top: 4px; width: 200px; text-align: center; }
+
+//         .print-toolbar {
+//           position: sticky; top: 0; z-index: 10;
+//           display: flex; justify-content: flex-end; gap: 8px;
+//           padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e5e7eb;
+//           margin: 0 0 20px 0;
+//         }
+//         .print-toolbar button {
+//           font-family: Arial, sans-serif; font-size: 12px; font-weight: 600;
+//           padding: 6px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1;
+//         }
+//         .print-toolbar .btn-print { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+//         .print-toolbar .btn-close { background: #fff; color: #374151; }
+//         @media print { .print-toolbar { display: none; } }
+//       </style>
+//     </head>
+//     <body>
+//       <div class="print-toolbar">
+//         <button class="btn-print" onclick="window.print()">Print</button>
+//         <button class="btn-close" onclick="window.close()">Close</button>
+//       </div>
+//       <div class="frame">
+//         <div class="doc-header">
+//           <h1>REQUEST FOR QUOTATION</h1>
+//           <div class="doc-meta">
+//             <div class="qtn-no">${escapeHtml(header.quotation_nr) || "-"}</div>
+//             <div>Date: ${escapeHtml(formatDisplayDate(header.quotation_date))}</div>
+//           </div>
+//         </div>
+
+//         <div class="top-row">
+//           <div><span class="label">Enquiry No.</span>${escapeHtml(header.enquiry_no) || "-"}</div>
+//           <div><span class="label">Offer Validity</span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</div>
+//         </div>
+
+//         <div class="party-grid">
+//           <div class="party-block">
+//             <span class="label">Shipper</span>
+//             <span class="value">Not specified</span>
+//           </div>
+//           <div class="party-block">
+//             <span class="label">Consignee</span>
+//             <span class="value">Not specified</span>
+//           </div>
+//         </div>
+
+//         <div class="info-grid">
+//           <div>
+//             <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+//             <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+//             <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+//             <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+//           </div>
+//           <div>
+//             <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+//             <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+//             <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+//             <div class="field"><span class="label">Mode</span><span>${modeLabel(header.transport_mode)}</span></div>
+//           </div>
+//         </div>
+
+//         <table>
+//           <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+//           <tbody>${rows}</tbody>
+//         </table>
+
+//         <div class="doc-footer">
+//           <div>Generated on ${escapeHtml(new Date().toLocaleString())}</div>
+//           <div class="signature">Authorized Signatory</div>
+//         </div>
+//       </div>
+//     </body>
+//   </html>
+// `;
+
+//   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+//   const url = window.URL.createObjectURL(blob);
+
+//   const width = 960;
+//   const height = 760;
+//   const left = Math.max(0, (window.screen.width - width) / 2);
+//   const top = Math.max(0, (window.screen.height - height) / 2);
+//   const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`;
+
+//   const printWindow = window.open(url, "_blank", features);
+//   if (!printWindow) {
+//     window.URL.revokeObjectURL(url);
+//     alert("Please allow popups for this site to view the print preview.");
+//     return;
+//   }
+//   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+// }
+
+function buildFreightPrintHtml(header: QuotationHeader, details: QuotationDetail[]) {
+  const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+  const billTotal = activeDetails.reduce((sum, row) => sum + (Number(row.bill) || 0), 0);
+  const rows = activeDetails.length
+    ? activeDetails
+        .map(
+          (row) => `
+      <tr>
+        <td>${escapeHtml(row.activity || row.act_code)}</td>
+        <td>${escapeHtml(row.uom)}</td>
+        <td class="num">${escapeHtml(row.quantity)}</td>
+        <td class="num">${escapeHtml(row.fc_billrate)}</td>
+      </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+  const html = `
+    <html>
+      <head>
+        <title>Quotation ${escapeHtml(header.quotation_nr)}</title>
+        <style>
+          @page { margin: 14mm; }
+          * { box-sizing: border-box; }
+          body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; color: #1f2937; margin: 0; }
+
+          .doc-header {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            border-bottom: 2.5px solid #1e3a8a; padding-bottom: 10px; margin-bottom: 16px;
+          }
+          .doc-header h1 { margin: 0; font-size: 17px; letter-spacing: 0.5px; color: #1e3a8a; }
+          .doc-header .doc-meta { text-align: right; font-size: 10px; color: #374151; }
+          .doc-header .doc-meta .qtn-no { font-size: 14px; font-weight: bold; color: #111827; }
+
+          .top-row { display: flex; justify-content: space-between; margin-bottom: 14px; font-size: 10.5px; }
+          .top-row .label { font-weight: bold; color: #6b7280; margin-right: 4px; }
+
+          .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+          .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px 10px; background: #fafbfc; }
+          .party-block .label { display: block; font-weight: bold; font-size: 9px; text-transform: uppercase; color: #6b7280; margin-bottom: 3px; }
+          .party-block .value { color: #9ca3af; font-style: italic; font-size: 10.5px; }
+
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 14px; }
+          .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; font-size: 10.5px; }
+          .info-grid .field .label { font-weight: bold; color: #374151; }
+
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 4px; font-size: 10.5px; }
+          thead th { background: #1e3a8a; color: #fff; border: 1px solid #1e3a8a; padding: 5px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; }
+          td { border: 1px solid #e5e7eb; padding: 5px 8px; line-height: 1.3; }
+          tr:nth-child(even) td { background: #f8fafc; }
+          .num { text-align: right; font-variant-numeric: tabular-nums; }
+          .empty { text-align: center; color: #9ca3af; font-style: italic; }
+          tfoot td { border-top: 1.5px solid #1e3a8a; font-weight: bold; background: #fff; }
+
+          .doc-footer {
+            margin-top: 28px; display: flex; justify-content: space-between; align-items: flex-end;
+            font-size: 9px; color: #6b7280;
+          }
+          .doc-footer .signature { border-top: 1px solid #9ca3af; padding-top: 4px; width: 180px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="doc-header">
+          <h1>REQUEST FOR QUOTATION</h1>
+          <div class="doc-meta">
+            <div class="qtn-no">${escapeHtml(header.quotation_nr) || "-"}</div>
+            <div>Date: ${escapeHtml(formatDisplayDate(header.quotation_date))}</div>
+          </div>
+        </div>
+
+        <div class="top-row">
+          <div><span class="label">Enquiry No.</span>${escapeHtml(header.enquiry_no) || "-"}</div>
+          <div><span class="label">Offer Validity</span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</div>
+        </div>
+
+        <div class="party-grid">
+          <div class="party-block">
+            <span class="label">Shipper</span>
+            <span class="value">Not specified</span>
+          </div>
+          <div class="party-block">
+            <span class="label">Consignee</span>
+            <span class="value">Not specified</span>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div>
+            <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+            <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+            <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+            <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+          </div>
+          <div>
+            <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+            <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+            <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+            <div class="field"><span class="label">Mode</span><span>${modeLabel(header.transport_mode)}</span></div>
+          </div>
+        </div>
+
+        <table>
+          <colgroup>
+            <col style="width:46%"><col style="width:18%"><col style="width:18%"><col style="width:18%">
+          </colgroup>
+          <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+          <tbody>${rows}</tbody>
+          ${activeDetails.length ? `<tfoot><tr><td colspan="3" class="num">Total</td><td class="num">${formatAmount(billTotal)}</td></tr></tfoot>` : ""}
+        </table>
+
+        <div class="doc-footer">
+          <div>Generated on ${escapeHtml(new Date().toLocaleString())}</div>
+          <div class="signature">Authorized Signatory</div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  return html;
+}
+
+function escapeHtml(value: string) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}

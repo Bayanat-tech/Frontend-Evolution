@@ -1,18 +1,37 @@
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calculator, Eye, FileText, Plus, RefreshCw, Save, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Briefcase,
+  Calculator,
+  CheckCircle,
+  Eye,
+  Layers,
+  Pencil,
+  Plus,
+  Printer,
+  Receipt,
+  Save,
+  Search,
+  Trash2,
+  TrendingUp,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { api } from "../../api/client";
-import { freightSelect } from "../../api/freight";
+import { freightSelect, getFreightInvoiceDetailReport } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 
-type InvoiceEditorMode = "add" | "view";
+type InvoiceEditorMode = "add" | "edit" | "view";
 
 type InvoiceFormState = {
   invoice_no: string;
@@ -22,10 +41,41 @@ type InvoiceFormState = {
   prin_code: string;
   prin_name: string;
   curr_code: string;
+  ex_rate: string;
   inv_status: string;
+  remarks: string;
 };
 
 const today = new Date().toISOString().slice(0, 10);
+
+const statusTabs = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Draft" },
+  { value: "confirmed", label: "Confirmed" },
+];
+
+export function isInvoiceConfirmed(status: unknown): boolean {
+  const s = text(status).toUpperCase();
+  if (s === "N" || s === "DRAFT") return false;
+  // In PowerBuilder / Freight: 'B' = Billed/Confirmed, 'C' = Confirmed, 'CONFIRMED', 'F', 'Y' or null in TN_INVOICE = Confirmed
+  return true;
+}
+
+function filterInvoiceByStatus(row: LookupRow, status: string) {
+  const confirmed = isInvoiceConfirmed(row.inv_status);
+  if (status === "confirmed") return confirmed;
+  if (status === "draft") return !confirmed;
+  return true;
+}
+
+function StatusChip({ tone, label }: { tone: "green" | "red" | "slate"; label: string }) {
+  const cls = tone === "green"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : tone === "red"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-slate-200 bg-slate-50 text-slate-700";
+  return <span className={`rounded border px-2 py-0 text-[10.5px] leading-tight font-medium ${cls}`}>{label}</span>;
+}
 
 export function FreightInvoicePage() {
   const { user } = useAuth();
@@ -35,34 +85,39 @@ export function FreightInvoicePage() {
   const loginId = text(userRecord.loginid || userRecord.LOGINID || userRecord.user_id || userRecord.USER_ID || "Admin");
 
   const [rows, setRows] = useState<LookupRow[]>([]);
+  const [activeStatus, setActiveStatus] = useState("all");
   const [query, setQuery] = useState("");
-  const [filterPrincipal, setFilterPrincipal] = useState("");
-  const [filterPrincipalName, setFilterPrincipalName] = useState("");
-  const [filterFromDate, setFilterFromDate] = useState("");
-  const [filterToDate, setFilterToDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<InvoiceEditorMode>("add");
   const [form, setForm] = useState<InvoiceFormState>(emptyForm());
+  const candidateRequestRef = useRef(0);
   const [candidateRows, setCandidateRows] = useState<LookupRow[]>([]);
   const [selectedRows, setSelectedRows] = useState<LookupRow[]>([]);
   const [candidateSearch, setCandidateSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
-  const selectedTotal = useMemo(
+  const filteredRows = useMemo(() => {
+    return rows.filter((row) => filterInvoiceByStatus(row, activeStatus));
+  }, [rows, activeStatus]);
+
+  const selectedBase = useMemo(
     () => selectedRows.reduce((sum, row) => sum + number(row, "bill"), 0),
     [selectedRows]
   );
+  const selectedTax = useMemo(
+    () => selectedRows.reduce((sum, row) => sum + number(row, "tax_amount"), 0),
+    [selectedRows]
+  );
+  const selectedTotal = selectedBase + selectedTax;
+
 
   const loadRows = useCallback(async () => {
     setLoading(true);
     try {
       const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/list", {
         company_code: companyCode,
-        prin_code: filterPrincipal,
-        from_date: filterFromDate,
-        to_date: filterToDate,
-        search: query,
       });
       setRows((response.data.data || []).map(normalizeRow));
     } catch (error: any) {
@@ -71,52 +126,95 @@ export function FreightInvoicePage() {
     } finally {
       setLoading(false);
     }
-  }, [companyCode, filterFromDate, filterPrincipal, filterToDate, query, toast]);
+  }, [companyCode, toast]);
 
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
-  const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
-    {
-      accessorKey: "invoice_no",
-      header: "Invoice No",
-      size: 150,
-      cell: ({ row }) => (
-        <button type="button" className="font-semibold text-primary hover:underline" onClick={() => void openExisting(row.original)}>
-          {text(row.original.invoice_no)}
-        </button>
-      ),
-    },
-    { accessorKey: "invoice_date", header: "Date", size: 120, cell: ({ row }) => formatDate(text(row.original.invoice_date)) },
-    { accessorKey: "prin_code", header: "Principal", size: 100 },
-    { accessorKey: "prin_name", header: "Principal Name", size: 260, cell: ({ row }) => text(row.original.prin_name) || "-" },
-    { accessorKey: "job_count", header: "Jobs", size: 80, cell: ({ row }) => centered(text(row.original.job_count) || "0") },
-    { accessorKey: "line_count", header: "Lines", size: 80, cell: ({ row }) => centered(text(row.original.line_count) || "0") },
-    { accessorKey: "curr_code", header: "Currency", size: 90 },
-    { accessorKey: "inv_amount", header: "Amount", size: 130, cell: ({ row }) => money(number(row.original, "inv_amount")) },
-    { accessorKey: "inv_status", header: "Status", size: 90, cell: ({ row }) => statusChip(text(row.original.inv_status)) },
-    {
-      id: "actions",
-      header: "Actions",
-      size: 80,
-      enableColumnFilter: false,
-      cell: ({ row }) => <Button type="button" size="icon" variant="ghost" title="View invoice" onClick={() => void openExisting(row.original)}><Eye size={14} /></Button>,
-    },
-  ], []);
+  const openNewForJob = useCallback(async (jobNo: string) => {
+    candidateRequestRef.current += 1;
+    setEditorMode("add");
+    setForm(emptyForm());
+    setSelectedRows([]);
+    setCandidateRows([]);
+    setCandidateSearch(jobNo);
+    setEditorOpen(true);
+
+    try {
+      const jobRes = await api.post<{ success?: boolean; data?: { header?: LookupRow; lines?: LookupRow[] } }>("/api/freight/job-activities/get", {
+        company_code: companyCode,
+        job_no: jobNo,
+      });
+      const jobHeader = jobRes.data?.data?.header;
+      const prinCode = text(jobHeader?.prin_code || jobHeader?.PRIN_CODE);
+      const prinName = text(jobHeader?.prin_name || jobHeader?.PRIN_NAME);
+      const currCode = text(jobHeader?.curr_code || jobHeader?.CURR_CODE) || "OMR";
+      let exRate = text(jobHeader?.ex_rate || jobHeader?.EX_RATE);
+      if (!exRate || exRate === "0") {
+        if (currCode === "OMR") {
+          exRate = "1";
+        } else {
+          try {
+            const curRes = await api.post<{ success: boolean; data: { ex_rate: number } }>("/api/freight/currency/rate", {
+              company_code: companyCode,
+              curr_code: currCode,
+            });
+            if (curRes.data?.data?.ex_rate) {
+              exRate = String(curRes.data.data.ex_rate);
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (prinCode) {
+        setForm((prev) => ({
+          ...prev,
+          prin_code: prinCode,
+          prin_name: prinName,
+          curr_code: currCode,
+          ex_rate: exRate,
+        }));
+
+        const candRes = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
+          company_code: companyCode,
+          prin_code: prinCode,
+          search: jobNo,
+        });
+        const candList = (candRes.data?.data || []).map(normalizeRow);
+        setCandidateRows(candList);
+
+        const matchingLines = candList.filter((row) => text(row.job_no).toUpperCase() === jobNo.toUpperCase());
+        if (matchingLines.length > 0) {
+          setSelectedRows(matchingLines);
+        }
+      }
+    } catch {
+      // Non-fatal, user can still select manually
+    }
+  }, [companyCode]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paramJobNo = params.get("job_no");
+    if (paramJobNo) {
+      void openNewForJob(paramJobNo);
+    }
+  }, [openNewForJob]);
 
   function openNew() {
+    candidateRequestRef.current += 1;
     setEditorMode("add");
     setForm(emptyForm());
     setSelectedRows([]);
     setCandidateRows([]);
     setCandidateSearch("");
     setEditorOpen(true);
-    void loadCandidateJobs("", "");
   }
 
-  async function openExisting(row: LookupRow) {
-    setEditorMode("view");
+  async function openExisting(row: LookupRow, mode: Exclude<InvoiceEditorMode, "add">) {
+    candidateRequestRef.current += 1;
+    setEditorMode(mode);
     setSaving(true);
     try {
       const response = await api.post<{ success?: boolean; data?: { header?: LookupRow; jobSelection?: LookupRow[] } }>("/api/freight/invoice/get", {
@@ -124,7 +222,16 @@ export function FreightInvoicePage() {
         invoice_no: text(row.invoice_no),
       });
       const header = normalizeRow(response.data.data?.header || row);
-      const jobs = (response.data.data?.jobSelection || []).map(normalizeRow);
+      const rawJobs = (response.data.data?.jobSelection || []).map(normalizeRow);
+      const hasJobRows = rawJobs.some((r) => Boolean(text(r.job_no)));
+      const filteredJobs = hasJobRows ? rawJobs.filter((r) => Boolean(text(r.job_no))) : rawJobs;
+      const seen = new Set<string>();
+      const jobs = filteredJobs.filter((r) => {
+        const key = `${text(r.job_no)}|${text(r.act_code)}|${text(r.srno)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
       setForm({
         invoice_no: text(header.invoice_no),
         invoice_date: inputDate(text(header.invoice_date)) || today,
@@ -133,10 +240,13 @@ export function FreightInvoicePage() {
         prin_code: text(header.prin_code),
         prin_name: text(header.prin_name),
         curr_code: text(header.curr_code) || "OMR",
+        ex_rate: text(header.ex_rate || header.EX_RATE) || "1",
         inv_status: text(header.inv_status) || "N",
+        remarks: text(header.remarks || header.REMARKS || header.onl_remrks || header.ONL_REMRKS || ""),
       });
       setSelectedRows(jobs);
       setCandidateRows([]);
+      setCandidateSearch("");
       setEditorOpen(true);
     } catch (error: any) {
       toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to open freight invoice.");
@@ -145,21 +255,133 @@ export function FreightInvoicePage() {
     }
   }
 
-  async function loadCandidateJobs(search = candidateSearch, prinCode = form.prin_code) {
+  async function confirmExistingInvoice(invoiceNo: string) {
+    if (!invoiceNo) return;
+    if (!window.confirm(`Are you sure you want to confirm Invoice ${invoiceNo}? Once confirmed, the invoice is finalized.`)) {
+      return;
+    }
+    setSaving(true);
     try {
-      const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
+      const response = await api.post<{ success?: boolean; message?: string }>("/api/freight/invoice/confirm", {
         company_code: companyCode,
-        prin_code: prinCode,
-        from_date: form.from_date || filterFromDate,
-        to_date: form.to_date || filterToDate,
-        search,
+        invoice_no: invoiceNo,
+        user_id: loginId,
       });
-      setCandidateRows((response.data.data || []).map(normalizeRow));
+      if (!response.data.success) throw new Error(response.data.message || "Unable to confirm freight invoice.");
+      toast.success(response.data.message || `Freight invoice ${invoiceNo} confirmed successfully.`);
+      if (editorOpen) {
+        setEditorOpen(false);
+      }
+      await loadRows();
     } catch (error: any) {
-      toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to load billable freight jobs.");
-      setCandidateRows([]);
+      toast.error(error?.response?.data?.details || error?.response?.data?.message || error?.message || "Unable to confirm freight invoice.");
+    } finally {
+      setSaving(false);
     }
   }
+
+  const directPrintInvoice = useCallback(async (prinCode: string, invoiceNo: string) => {
+    if (!invoiceNo) return;
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      toast.error("Please allow pop-ups for this site to view the report.");
+      return;
+    }
+    reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Loading invoice report...</p>");
+    try {
+      const html = await getFreightInvoiceDetailReport(prinCode, invoiceNo, companyCode, "grouped");
+      if (reportWindow.closed) return;
+      reportWindow.document.open();
+      reportWindow.document.write(html);
+      reportWindow.document.close();
+    } catch {
+      reportWindow.close();
+      toast.error("Failed to load invoice report.");
+    }
+  }, [companyCode, toast]);
+
+  const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
+    {
+      accessorKey: "invoice_no",
+      header: "Invoice No",
+      size: 150,
+      cell: ({ row }) => (
+        <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => void openExisting(row.original, "view")}>
+          {text(row.original.invoice_no)}
+        </button>
+      ),
+    },
+    { accessorKey: "invoice_date", header: "Date", size: 120, cell: ({ row }) => formatDate(text(row.original.invoice_date)) },
+    { accessorKey: "from_date", header: "From Date", size: 120, cell: ({ row }) => formatDate(text(row.original.from_date)) },
+    { accessorKey: "to_date", header: "To Date", size: 120, cell: ({ row }) => formatDate(text(row.original.to_date)) },
+    { accessorKey: "prin_code", header: "Principal", size: 100 },
+    { accessorKey: "prin_name", header: "Principal Name", size: 260, cell: ({ row }) => text(row.original.prin_name) || "-" },
+    { accessorKey: "job_no", header: "Job No", size: 110, cell: ({ row }) => text(row.original.job_no) || "-" },
+    { accessorKey: "cust_code", header: "Customer Code", size: 120, cell: ({ row }) => text(row.original.cust_code) || "-" },
+    { accessorKey: "job_count", header: "Jobs", size: 80, cell: ({ row }) => centered(text(row.original.job_count) || "0") },
+    { accessorKey: "line_count", header: "Lines", size: 80, cell: ({ row }) => centered(text(row.original.line_count) || "0") },
+    { accessorKey: "curr_code", header: "Currency", size: 90 },
+    { accessorKey: "inv_amount", header: "Amount", size: 130, cell: ({ row }) => money(number(row.original, "inv_amount")) },
+    {
+      accessorKey: "inv_status",
+      header: "Status",
+      size: 100,
+      cell: ({ row }) => {
+        const confirmed = isInvoiceConfirmed(row.original.inv_status);
+        if (confirmed) return <StatusChip tone="green" label="Confirmed" />;
+        return <StatusChip tone="slate" label="Draft" />;
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      size: 120,
+      enableColumnFilter: false,
+      cell: ({ row }) => {
+        const confirmed = isInvoiceConfirmed(row.original.inv_status);
+        const invNo = text(row.original.invoice_no);
+        const prinCode = text(row.original.prin_code);
+        return (
+          <div className="flex items-center gap-1">
+            <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print / Download invoice" onClick={() => void directPrintInvoice(prinCode, invNo)}><Printer size={13} /></Button>
+            <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={13} /></Button>
+            {!confirmed && (
+              <>
+                <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Edit invoice" onClick={() => void openExisting(row.original, "edit")}><Pencil size={13} /></Button>
+                <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Confirm invoice" onClick={() => void confirmExistingInvoice(invNo)}><CheckCircle size={13} /></Button>
+              </>
+            )}
+          </div>
+        );
+      },
+    },
+  ], [companyCode, loginId, loadRows, directPrintInvoice]);
+
+  async function loadCandidateJobs(
+  search = candidateSearch,
+  prinCode = form.prin_code,
+  fromDate = form.from_date,
+  toDate = form.to_date,
+  invoiceNo = form.invoice_no
+) {
+  const requestId = ++candidateRequestRef.current;
+  if (!prinCode) { setCandidateRows([]); return; }
+  try {
+    const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
+      company_code: companyCode,
+      prin_code: prinCode,
+      from_date: fromDate,
+      to_date: toDate,
+      invoice_no: invoiceNo || undefined,
+      search,
+    });
+    if (requestId === candidateRequestRef.current) setCandidateRows((response.data.data || []).map(normalizeRow));
+  } catch (error: any) {
+    if (requestId !== candidateRequestRef.current) return;
+    toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to load billable freight jobs.");
+    setCandidateRows([]);
+  }
+}
 
   function toggleCandidate(row: LookupRow) {
     const key = lineKey(row);
@@ -189,15 +411,17 @@ export function FreightInvoicePage() {
     setSelectedRows((prev) => prev.filter((item) => lineKey(item) !== lineKey(row)));
   }
 
-  async function saveInvoice() {
-    if (!selectedRows.length) {
-      toast.error("Select at least one confirmed freight job activity.");
-      return;
-    }
+  async function saveInvoice(action: "draft" | "confirm" = "draft") {
     if (!form.prin_code) {
-      toast.error("Principal is required.");
+      toast.error("Kindly fill in the missing fields.");
       return;
     }
+    if (!selectedRows.length) {
+      toast.error("Kindly fill in the missing fields.");
+      return;
+    }
+
+    const nextStatus = action === "confirm" ? "C" : (form.inv_status || "N");
 
     setSaving(true);
     try {
@@ -212,7 +436,9 @@ export function FreightInvoicePage() {
         cust_code: form.prin_code,
         inv_amount: selectedTotal,
         curr_code: form.curr_code || "OMR",
-        inv_status: form.inv_status || "N",
+        ex_rate: Number(form.ex_rate) || 1,
+        inv_status: nextStatus,
+        remarks: form.remarks,
         user_id: loginId,
       }];
 
@@ -243,7 +469,7 @@ export function FreightInvoicePage() {
       });
 
       if (!response.data.success) throw new Error(response.data.message || "Unable to save freight invoice.");
-      toast.success(`Freight invoice ${response.data.data?.invoice_no || ""} saved.`);
+      toast.success(action === "confirm" ? `Freight invoice ${response.data.data?.invoice_no || form.invoice_no} confirmed successfully.` : `Freight invoice ${response.data.data?.invoice_no || ""} saved.`);
       setEditorOpen(false);
       await loadRows();
     } catch (error: any) {
@@ -254,163 +480,275 @@ export function FreightInvoicePage() {
   }
 
   const selectedKeys = useMemo(() => new Set(selectedRows.map(lineKey)), [selectedRows]);
-  const readOnly = editorMode === "view";
+  const isFormConfirmed = isInvoiceConfirmed(form.inv_status);
+  const readOnly = editorMode === "view" || (editorMode === "edit" && isFormConfirmed);
+
+  async function printInvoice(reportType: "grouped" | "activitywise") {
+    if (!form.prin_code || !form.invoice_no) return;
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      toast.error("Please allow pop-ups for this site to view the report.");
+      return;
+    }
+    reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Loading invoice report...</p>");
+    try {
+      const html = await getFreightInvoiceDetailReport(form.prin_code, form.invoice_no, companyCode, reportType);
+      if (reportWindow.closed) return;
+      reportWindow.document.open();
+      reportWindow.document.write(html);
+      reportWindow.document.close();
+      setPrintDialogOpen(false);
+    } catch {
+      reportWindow.close();
+      toast.error("Failed to load invoice report.");
+    }
+  }
 
   return (
-    <section className="grid gap-3">
-      <div className="rounded-md border bg-card px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-              <FileText size={20} />
-            </div>
-            <div>
-              <p className="eyebrow m-0">Freight Billing</p>
-              <h1 className="m-0 text-2xl font-semibold text-foreground">Freight Invoice</h1>
-              <p className="m-0 mt-1 text-sm text-muted-foreground">Create invoices from confirmed Freight job activity lines.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={15} />Refresh</Button>
-            <Button type="button" onClick={openNew}><Plus size={15} />Add Invoice</Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-md border bg-card p-3 shadow-sm">
-        <div className="grid gap-2 md:grid-cols-[170px_170px_minmax(260px,1fr)_auto_auto]">
-          <Field label="From"><Input type="date" value={filterFromDate} onChange={(event) => setFilterFromDate(event.target.value)} /></Field>
-          <Field label="To"><Input type="date" value={filterToDate} onChange={(event) => setFilterToDate(event.target.value)} /></Field>
-          <Field label="Principal">
-            <LookupField
-              compact
-              value={filterPrincipal}
-              displayValue={filterPrincipal ? [filterPrincipal, filterPrincipalName].filter(Boolean).join(" - ") : ""}
-              valueField="prin_code"
-              displayFields={["prin_code", "prin_name"]}
-              columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]}
-              loadOptions={(search) => loadFreightLookup("freight_principal", companyCode, search)}
-              onChange={(value, row) => {
-                setFilterPrincipal(value);
-                setFilterPrincipalName(text(row?.prin_name ?? row?.PRIN_NAME));
-              }}
-              placeholder="All principals"
-            />
-          </Field>
-          <Button type="button" className="self-end" onClick={() => void loadRows()} disabled={loading}><Search size={14} />Run</Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="self-end"
-            onClick={() => {
-              setFilterFromDate("");
-              setFilterToDate("");
-              setFilterPrincipal("");
-              setFilterPrincipalName("");
-              setQuery("");
-            }}
-          >
-            Clear
-          </Button>
-        </div>
+    <section className={`freight-workspace-ui grid gap-2 ${editorOpen ? "freight-invoice-editor-screen" : "freight-list-screen freight-invoice-list-screen"}`}>
+      {!editorOpen && (<>
+      {/* Filter Tabs Bar */}
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {statusTabs.map((tab) => {
+          const count = rows.filter((row) => filterInvoiceByStatus(row, tab.value)).length;
+          const active = activeStatus === tab.value;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setActiveStatus(tab.value)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                active
+                  ? "bg-[#00378C] text-white shadow-xs font-semibold ring-2 ring-[#00378C]/20"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <DataTable
         columns={columns}
-        data={rows}
+        data={filteredRows}
+        actionButton={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+              title="Create Invoice"
+              onClick={openNew}
+            >
+              <Plus size={14} /> Create Invoice
+            </Button>
+            <FinanceListActionsMenu
+              onExport={() => exportToCsv(filteredRows, columns, "freight-invoice-list.csv")}
+              onRefresh={() => void loadRows()}
+            />
+          </div>
+        }
         loading={loading}
         searchValue={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search invoice, principal, job..."
-        title={`${rows.length} Freight Invoices`}
-        subtitle="Invoice register"
-        height="calc(100vh - 340px)"
+        searchPlaceholder="Filter visible invoices..."
+        height="calc(100dvh - 180px)"
         minWidth={1100}
         density="grid"
         enablePagination
-        pageSize={50}
-        enableExport
-        exportFilename="freight-invoice-list.csv"
+        pageSize={25}
+        enableExport={false}
         getRowId={(row, index) => text(row.invoice_no) || String(index)}
-        onRowClick={(row) => void openExisting(row)}
       />
 
-      <Dialog
-        open={editorOpen}
-        wide
-        title={readOnly ? "View Freight Invoice" : "Add Freight Invoice"}
-        description={readOnly ? form.invoice_no : "Select confirmed Freight service lines and create an invoice."}
-        onClose={() => setEditorOpen(false)}
-        footer={
-          <>
-            <Button type="button" variant="outline" onClick={() => setEditorOpen(false)}>Close</Button>
-            {!readOnly && <Button type="button" onClick={() => void saveInvoice()} disabled={saving || !selectedRows.length}><Save size={14} />{saving ? "Saving" : "Save Invoice"}</Button>}
-          </>
-        }
-      >
-        <div className="grid gap-3">
-          <div className="grid gap-2 md:grid-cols-4">
-            <MetricCard label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
-            <MetricCard label="Activity Lines" value={String(selectedRows.length)} />
-            <MetricCard label="Invoice Amount" value={`${selectedTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight />
-            <MetricCard label="Status" value={readOnly ? "View" : "Draft"} />
-          </div>
+      </>)}
 
-          <div className="rounded-md border bg-card">
-            <div className="flex items-center gap-2 border-b bg-muted/25 px-3 py-2">
-              <Calculator size={15} className="text-primary" />
-              <h2 className="m-0 text-sm font-semibold text-foreground">Invoice Header</h2>
+      {editorOpen && <div className="freight-invoice-editor freight-document-editor">
+        <header className="freight-document-header">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <button type="button" className="freight-back-button" aria-label="Back to invoice list" title="Back to invoice list" disabled={saving} onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}><ArrowLeft size={18} /></button>
+            <Receipt size={18} className="text-primary" />
+            <h1 className="m-0 text-base font-bold">{readOnly ? "Freight Invoice" : editorMode === "edit" ? "Edit Freight Invoice" : "New Freight Invoice"}</h1>
+
+
+          </div>
+          <div className="freight-invoice-header-actions"><div className="flex w-full items-center justify-between">
+            {form.invoice_no ? <Button type="button" variant="outline" onClick={() => void directPrintInvoice(form.prin_code, form.invoice_no)}><Printer size={14} /> Print</Button> : <span />}
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" disabled={saving} onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}>{readOnly ? "Close" : "Cancel"}</Button>
+              {readOnly && form.invoice_no && !isFormConfirmed && (
+                <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void confirmExistingInvoice(form.invoice_no)} disabled={saving}>
+                  <CheckCircle size={14} />Confirm Invoice
+                </Button>
+              )}
+              {!readOnly && !isFormConfirmed && (
+                <>
+                  <Button type="button" variant="outline" onClick={() => void saveInvoice("draft")} disabled={saving || !selectedRows.length}>
+                    <Save size={14} />{saving ? "Saving..." : "Save Draft"}
+                  </Button>
+                  <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void saveInvoice("confirm")} disabled={saving || !selectedRows.length || isFormConfirmed}>
+                    <CheckCircle size={14} />{saving ? "Confirming..." : "Confirm Invoice"}
+                  </Button>
+                </>
+              )}
             </div>
-          <div className="grid gap-2 p-3 md:grid-cols-6">
-            <Field label="Invoice No"><Input value={form.invoice_no || "Auto"} disabled /></Field>
-            <Field label="Invoice Date"><Input type="date" value={form.invoice_date} disabled={readOnly} onChange={(event) => setFormField("invoice_date", event.target.value)} /></Field>
-            <Field label="From Date"><Input type="date" value={form.from_date} disabled={readOnly} onChange={(event) => setFormField("from_date", event.target.value)} /></Field>
-            <Field label="To Date"><Input type="date" value={form.to_date} disabled={readOnly} onChange={(event) => setFormField("to_date", event.target.value)} /></Field>
-            <Field label="Principal">
+          </div></div>
+        </header>
+        <div className="freight-document-body">
+        <div className="grid gap-3">
+          {(() => {
+            const isFc = form.curr_code && form.curr_code !== "OMR";
+            const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+            const fcTotal = isFc ? selectedTotal / exRate : selectedTotal;
+            const fcBase = isFc ? selectedBase / exRate : selectedBase;
+            const fcTax = isFc ? selectedTax / exRate : selectedTax;
+            return (
+              <div className="grid gap-2 md:grid-cols-6">
+                <MetricCard icon={Briefcase} label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
+                <MetricCard icon={Layers} label="Activity Lines" value={String(selectedRows.length)} />
+                <MetricCard label="Before Tax" value={`${fcBase.toFixed(3)} ${form.curr_code || "OMR"}`} helper={isFc ? `Base: OMR ${selectedBase.toFixed(3)}` : undefined} />
+                <MetricCard label="Tax" value={`${fcTax.toFixed(3)} ${form.curr_code || "OMR"}`} helper={isFc ? `Base: OMR ${selectedTax.toFixed(3)}` : undefined} />
+                <MetricCard icon={TrendingUp} label="Invoice Total" value={`${fcTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight helper={isFc ? `Base: OMR ${selectedTotal.toFixed(3)} (Ex: ${form.ex_rate})` : undefined} />
+                <MetricCard label="Status" value={isFormConfirmed ? "Confirmed" : "Draft"} tone={isFormConfirmed ? "emerald" : "amber"} />
+              </div>
+            );
+          })()}
+
+
+          <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-slate-200/80 bg-gradient-to-r from-blue-50/50 via-slate-50 to-slate-50 px-3 py-2">
+              <div className="grid h-6 w-6 place-items-center rounded-md bg-blue-100 text-[#00378C]">
+                <Calculator size={13} />
+              </div>
+              <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Invoice Header</h2>
+            </div>
+          <div className="grid gap-2 p-3 md:grid-cols-8">
+            <div className="grid gap-1 text-xs font-semibold text-muted-foreground md:col-span-2">
               <LookupField
+                label="Principal"
+                showLabelInCompact
                 compact
+                required
                 disabled={readOnly || selectedRows.length > 0}
                 value={form.prin_code}
                 displayValue={principalText(form)}
                 valueField="prin_code"
-                displayFields={["prin_code", "prin_name"]}
-                columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]}
+                displayFields={["prin_name", "prin_code"]}
+                columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]}
                 loadOptions={(search) => loadFreightLookup("freight_principal", companyCode, search)}
                 onChange={(value, row) => {
                   setForm((prev) => ({ ...prev, prin_code: value, prin_name: text(row?.prin_name ?? row?.PRIN_NAME), curr_code: text(row?.curr_code ?? row?.CURR_CODE) || prev.curr_code }));
                   setCandidateRows([]);
+                  void loadCandidateJobs(candidateSearch, value);
                 }}
                 placeholder="Select principal"
               />
+            </div>
+            <Field label="Invoice No"><Input value={form.invoice_no || "Auto"} disabled /></Field>
+            <Field label="Invoice Date" required><FreightDatePicker value={form.invoice_date}
+        disabled={readOnly}
+        onChange={(nextValue) => setFormField("invoice_date", nextValue)} /></Field>
+            <Field label="From Date"><FreightDatePicker value={form.from_date}
+        disabled={readOnly}
+        onChange={(nextValue) => {setFormField("from_date", nextValue); void loadCandidateJobs(candidateSearch, form.prin_code, nextValue, form.to_date);}} /></Field>
+            <Field label="To Date"><FreightDatePicker value={form.to_date}
+        disabled={readOnly}
+        onChange={(nextValue) => {setFormField("to_date", nextValue); void loadCandidateJobs(candidateSearch, form.prin_code, form.from_date, nextValue);}} /></Field>
+
+            <div className="grid gap-1 text-xs font-semibold text-muted-foreground">
+              <LookupField
+                label="Currency"
+                showLabelInCompact
+                compact
+                disabled={readOnly || selectedRows.length > 0}
+                value={form.curr_code}
+                displayValue={form.curr_code}
+                valueField="curr_code"
+                displayFields={["curr_code", "curr_name"]}
+                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }, { field: "ex_rate", header: "Rate" }]}
+                loadOptions={(search) => loadFreightLookup("freight_currency", companyCode, search)}
+                onChange={async (value, row) => {
+                  let ex = text(row?.ex_rate ?? row?.EX_RATE);
+                  if (!ex || ex === "0") {
+                    if (value === "OMR") {
+                      ex = "1";
+                    } else {
+                      try {
+                        const curRes = await api.post<{ success: boolean; data: { ex_rate: number } }>("/api/freight/currency/rate", {
+                          company_code: companyCode,
+                          curr_code: value,
+                        });
+                        if (curRes.data?.data?.ex_rate) {
+                          ex = String(curRes.data.data.ex_rate);
+                        }
+                      } catch (_) {}
+                    }
+                  }
+                  setForm((prev) => ({ ...prev, curr_code: value, ex_rate: ex || "1" }));
+                }}
+                placeholder="Currency"
+              />
+            </div>
+            <Field label="Ex Rate">
+              <Input
+                type="number"
+                step="any"
+                disabled={readOnly || form.curr_code === "OMR"}
+                value={form.ex_rate}
+                onChange={(e) => setForm((prev) => ({ ...prev, ex_rate: e.target.value }))}
+                className="text-right font-medium"
+                title={form.curr_code !== "OMR" ? `1 ${form.curr_code} = ${form.ex_rate} OMR` : "Base Currency (1.0)"}
+              />
             </Field>
-            <Field label="Amount"><Input value={selectedTotal.toFixed(3)} disabled className="text-right font-semibold" /></Field>
+            <div className="md:col-span-8">
+              <Field label="Invoice Remarks">
+                <Input
+                  disabled={readOnly}
+                  value={form.remarks}
+                  onChange={(e) => setFormField("remarks", e.target.value)}
+                  placeholder="Enter remarks or special instructions to print on invoice"
+                />
+              </Field>
+            </div>
           </div>
           </div>
 
+
+
           {!readOnly && (
-            <div className="rounded-md border">
-              <div className="flex flex-wrap items-end justify-between gap-2 border-b bg-muted/25 p-3">
-                <div>
-                  <h2 className="m-0 text-sm font-semibold text-foreground">Billable Freight Lines</h2>
-                  <p className="m-0 text-xs text-muted-foreground">Confirmed job activity lines not yet consolidated into another invoice.</p>
+            <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
+              <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200/80 bg-gradient-to-r from-blue-50/50 via-slate-50 to-slate-50 p-3">
+                <div className="flex items-center gap-2">
+                  <div className="grid h-6 w-6 place-items-center rounded-md bg-blue-100 text-[#00378C]">
+                    <Search size={13} />
+                  </div>
+                  <div>
+                    <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Billable Freight Lines</h2>
+                    <p className="m-0 text-xs text-muted-foreground">Confirmed job activity lines not yet consolidated into another invoice.</p>
+                  </div>
                 </div>
-                <div className="flex min-w-[360px] items-center gap-2">
-                  <Input value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="Search job, activity..." />
-                  <Button type="button" variant="outline" onClick={() => void loadCandidateJobs()}><Search size={14} />Find</Button>
+                <div className="flex min-w-[340px] items-center gap-2">
+                  <Input value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder={form.prin_code ? "Search job, activity..." : "Select a principal first"} disabled={!form.prin_code} />
+                  <Button type="button" variant="outline" onClick={() => void loadCandidateJobs()} disabled={!form.prin_code}><Search size={14} />Find</Button>
                 </div>
               </div>
               <div className="max-h-64 overflow-auto">
                 <table className="w-full min-w-[1050px] text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
+                  <thead className="sticky top-0 bg-[#00378C] text-[11px] font-semibold text-white uppercase tracking-wider shadow-sm z-10 whitespace-nowrap">
                     <tr>
-                      <th className="w-12 px-2 py-2 text-center">Use</th>
-                      <th className="px-2 py-2 text-left">Job</th>
-                      <th className="px-2 py-2 text-left">Date</th>
-                      <th className="px-2 py-2 text-left">Principal</th>
-                      <th className="px-2 py-2 text-left">Activity</th>
-                      <th className="px-2 py-2 text-right">Qty</th>
-                      <th className="px-2 py-2 text-right">Bill</th>
-                      <th className="px-2 py-2 text-right">Cost</th>
+                      <th className="w-12 px-2 py-2 text-center text-white font-semibold border-r border-white/15">Use</th>
+                      <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Job</th>
+                      <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Date</th>
+                      <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Principal</th>
+                      <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Activity</th>
+                      <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Qty</th>
+                      <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Bill</th>
+                      <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Tax</th>
+                      <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Total</th>
+                      <th className="px-2 py-2 text-right text-slate-700 font-bold">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -423,59 +761,105 @@ export function FreightInvoicePage() {
                         <td className="px-2 py-2">{text(row.act_code)} - {text(row.activity)}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{number(row, "quantity").toFixed(3)}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill").toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{number(row, "tax_amount").toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right font-semibold tabular-nums">{(number(row, "bill") + number(row, "tax_amount")).toFixed(3)}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
                       </tr>
                     ))}
-                    {!candidateRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={8}>No confirmed billable Freight activity lines found.</td></tr>}
+                    {!candidateRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={10}>{form.prin_code ? "No confirmed billable freight activity lines found." : "Select a principal to load billable freight lines."}</td></tr>}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
 
-          <div className="rounded-md border">
-            <div className="flex items-center justify-between border-b bg-muted/25 p-3">
-              <div>
-                <h2 className="m-0 text-sm font-semibold text-foreground">Selected Invoice Lines</h2>
-                <p className="m-0 text-xs text-muted-foreground">{selectedRows.length} lines / {unique(selectedRows.map((row) => text(row.job_no))).length} jobs</p>
+          <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-blue-50/50 via-slate-50 to-slate-50 p-3">
+              <div className="flex items-center gap-2">
+                <div className="grid h-6 w-6 place-items-center rounded-md bg-blue-100 text-[#00378C]">
+                  <Receipt size={13} />
+                </div>
+                <div>
+                  <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Selected Invoice Lines</h2>
+                  <p className="m-0 text-xs text-muted-foreground">{selectedRows.length} lines / {unique(selectedRows.map((row) => text(row.job_no))).length} jobs</p>
+                </div>
               </div>
               <div className="text-right">
-                <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Invoice Amount</p>
-                <p className="m-0 text-lg font-bold text-primary">{selectedTotal.toFixed(3)} {form.curr_code || "OMR"}</p>
+                {(() => {
+                  const isFc = form.curr_code && form.curr_code !== "OMR";
+                  const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+                  const fcTotal = isFc ? selectedTotal / exRate : selectedTotal;
+                  const fcBase = isFc ? selectedBase / exRate : selectedBase;
+                  const fcTax = isFc ? selectedTax / exRate : selectedTax;
+                  return (
+                    <>
+                      <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Before Tax {fcBase.toFixed(3)} / Tax {fcTax.toFixed(3)}</p>
+                      <p className="m-0 text-lg font-bold text-primary">{fcTotal.toFixed(3)} {form.curr_code || "OMR"}</p>
+                      {isFc && <p className="m-0 text-[10.5px] text-muted-foreground font-medium">Base: OMR {selectedTotal.toFixed(3)} (Ex: {form.ex_rate})</p>}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <div className="max-h-72 overflow-auto">
               <table className="w-full min-w-[960px] text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
+                <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
                   <tr>
-                    <th className="px-2 py-2 text-left">Job</th>
-                    <th className="px-2 py-2 text-left">Activity</th>
-                    <th className="px-2 py-2 text-right">Qty</th>
-                    <th className="px-2 py-2 text-right">Rate</th>
-                    <th className="px-2 py-2 text-right">Bill</th>
-                    <th className="px-2 py-2 text-right">Cost</th>
-                    {!readOnly && <th className="px-2 py-2 text-right">Action</th>}
+                    <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Job</th>
+                    <th className="px-2 py-2 text-left text-white font-semibold border-r border-white/15">Activity</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Qty</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Rate {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Bill {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Tax {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Total {form.curr_code && form.curr_code !== "OMR" ? `(${form.curr_code})` : ""}</th>
+                    <th className="px-2 py-2 text-right text-white font-semibold border-r border-white/15">Cost</th>
+                    {!readOnly && <th className="px-2 py-2 text-right text-slate-700 font-bold">Action</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedRows.map((row) => (
-                    <tr key={lineKey(row)} className="border-t">
-                      <td className="px-2 py-2 font-semibold text-primary">{text(row.job_no)}</td>
-                      <td className="px-2 py-2">{text(row.act_code)} - {text(row.activity)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "quantity").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill_rate").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill").toFixed(3)}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
-                      {!readOnly && <td className="px-2 py-2 text-right"><Button type="button" size="icon" variant="ghost" onClick={() => removeSelected(row)}><Trash2 size={14} /></Button></td>}
-                    </tr>
-                  ))}
-                  {!selectedRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={readOnly ? 6 : 7}>No lines selected.</td></tr>}
+                  {selectedRows.map((row) => {
+                    const isFc = form.curr_code && form.curr_code !== "OMR";
+                    const exRate = Number(form.ex_rate) > 0 ? Number(form.ex_rate) : 1;
+                    const baseBill = number(row, "bill");
+                    const baseTax = number(row, "tax_amount");
+                    const baseRate = number(row, "bill_rate");
+                    const qty = number(row, "quantity") || 1;
+                    const rowRate = isFc ? (Number(row.bill_rate_oc) > 0 ? Number(row.bill_rate_oc) : (baseBill / exRate) / qty) : baseRate;
+                    const rowBill = isFc ? (Number(row.bill_oc) > 0 ? Number(row.bill_oc) : baseBill / exRate) : baseBill;
+                    const rowTax = isFc ? baseTax / exRate : baseTax;
+                    const rowTotal = rowBill + rowTax;
+                    return (
+                      <tr key={lineKey(row)} className="border-t">
+                        <td className="px-2 py-2 font-semibold text-primary">{text(row.job_no)}</td>
+                        <td className="px-2 py-2">{text(row.act_code)} - {text(row.activity)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{qty.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums" title={isFc ? `Base Rate: OMR ${baseRate.toFixed(3)}` : undefined}>{rowRate.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums" title={isFc ? `Base Bill: OMR ${baseBill.toFixed(3)}` : undefined}>{rowBill.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{rowTax.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right font-semibold tabular-nums" title={isFc ? `Base Total: OMR ${(baseBill + baseTax).toFixed(3)}` : undefined}>{rowTotal.toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
+                        {!readOnly && <td className="px-2 py-2 text-right"><Button type="button" size="icon" variant="ghost" onClick={() => removeSelected(row)}><Trash2 size={14} /></Button></td>}
+                      </tr>
+                    );
+                  })}
+                  {!selectedRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={readOnly ? 8 : 9}>No lines selected.</td></tr>}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
-      </Dialog>
+        </div>
+      </div>}
+
+      {printDialogOpen && (
+        <Dialog open compact title="Print Invoice" onClose={() => setPrintDialogOpen(false)}>
+          <div className="grid gap-3 py-1">
+            <p className="m-0 text-sm text-muted-foreground">Choose how you want the invoice report to be generated.</p>
+            <Button type="button" variant="outline" className="justify-start" onClick={() => void printInvoice("grouped")}><Printer size={15} /> Grouped — summary by activity groups</Button>
+            <Button type="button" variant="outline" className="justify-start" onClick={() => void printInvoice("activitywise")}><Printer size={15} /> Activity-wise — detailed activity breakdown</Button>
+          </div>
+        </Dialog>
+      )}
     </section>
   );
 
@@ -493,19 +877,57 @@ function emptyForm(): InvoiceFormState {
     prin_code: "",
     prin_name: "",
     curr_code: "OMR",
+    ex_rate: "1",
     inv_status: "N",
+    remarks: "",
   };
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">{label}{children}</label>;
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
+      <span>
+        {label}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+      </span>
+      {children}
+    </label>
+  );
 }
 
-function MetricCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  helper,
+  highlight,
+  tone = "default",
+}: {
+  icon?: LucideIcon;
+  label: string;
+  value: string;
+  helper?: string;
+  highlight?: boolean;
+  tone?: "default" | "emerald" | "amber";
+}) {
+  const highlightClass = highlight
+    ? "border-blue-300 bg-gradient-to-br from-blue-50/80 to-white text-[#00378C] ring-1 ring-blue-200"
+    : tone === "emerald"
+      ? "border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-white text-emerald-800"
+      : tone === "amber"
+        ? "border-amber-200 bg-gradient-to-br from-amber-50/80 to-white text-amber-800"
+        : "border-slate-200 bg-gradient-to-b from-slate-50/80 to-white text-slate-800";
+
   return (
-    <div className={`rounded-md border px-3 py-2 ${highlight ? "border-primary/25 bg-primary/5" : "bg-muted/20"}`}>
-      <p className="m-0 text-[10px] font-semibold uppercase text-muted-foreground">{label}</p>
-      <p className={`m-0 mt-1 text-base font-bold ${highlight ? "text-primary" : "text-foreground"}`}>{value}</p>
+    <div className={`relative overflow-hidden rounded-xl border p-2.5 shadow-2xs ${highlightClass}`}>
+      <div className={`absolute top-0 left-0 right-0 h-[2px] ${highlight ? "bg-[#00378C]" : tone === "emerald" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-slate-300"}`} />
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+        {Icon && <Icon size={13} className={highlight ? "text-[#00378C]" : "text-slate-400"} />}
+      </div>
+      <div className={`mt-1 truncate text-base font-extrabold ${highlight ? "text-[#00378C]" : "text-slate-900"}`}>{value}</div>
+      {helper && <div className="mt-0.5 truncate text-[10px] font-medium text-slate-500">{helper}</div>}
     </div>
   );
 }
@@ -568,13 +990,7 @@ function centered(value: string) {
 }
 
 function principalText(form: InvoiceFormState) {
-  return [form.prin_code, form.prin_name].filter(Boolean).join(" - ") || "Select a job line";
-}
-
-function statusChip(status: string) {
-  const label = status === "Y" || status === "A" ? "Approved" : status === "C" ? "Cancelled" : "Open";
-  const color = status === "Y" || status === "A" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "C" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-700";
-  return <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${color}`}>{label}</span>;
+  return [form.prin_name, form.prin_code].filter(Boolean).join(" - ") || "";
 }
 
 export default FreightInvoicePage;

@@ -1,6 +1,6 @@
-import { LeaveFlowTable } from "./LeaveFlowTable";
-import { leaveFlowConfigs } from "./leaveFlowConfig";
+import { LeaveWorkspacePage } from "./LeaveWorkspacePage";
 
 export function LeaveClosedRequestPage() {
-  return <LeaveFlowTable config={leaveFlowConfigs.closed} />;
+  return <LeaveWorkspacePage initialTab="closed" />;
 }
+

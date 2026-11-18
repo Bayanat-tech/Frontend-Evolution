@@ -4,6 +4,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getDynamicLookup, LookupRow } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
 
+/** Value (and code) sent for the synthetic "All" row. */
+export const ALL_VALUE = "ALL";
+
 export type DropDownType =
   | "division"
   | "department"
@@ -28,7 +31,7 @@ interface DropDownConfig {
 const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   grade:{
     parameterCode: "GRADE_SALARY_INCREMENT_GRADE_DROP_DOWN",
-    label: "Grade",
+    label: "",
     valueField: "code",
     displayField: "name",
     columns: [
@@ -38,7 +41,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   payComponent: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_PAY_COMPONENT", // confirm/adjust name
-    label: "Pay Unit",
+    label: "",
     valueField: "code",
     displayField: "name",
     columns: [
@@ -48,7 +51,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   division: {
     parameterCode: "DROP_DOWN_DIVISION",
-    label: "Division",
+    label: "",
     valueField: "div_code",
     displayField: "div_name",
     columns: [
@@ -58,7 +61,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   department: {
     parameterCode: "DROP_DOWN_DEPT_BASED_ON_DIV",
-    label: "Department",
+    label: "",
     valueField: "dept_code",
     displayField: "dept_name",
     columns: [
@@ -67,8 +70,8 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
     ],
   },
   departmentBasedOnDivision: {
-    parameterCode: "DROP_DOWN_DEPT_BASED_ON_DIV",
-    label: "Department",
+    parameterCode: "HR_LEAVE_ENCASHMENT_DEPT_DROP_DOWN",
+    label: "",
     valueField: "dept_code",
     displayField: "dept_name",
     columns: [
@@ -78,7 +81,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   section: {
     parameterCode: "HR_LEAVE_ENCASHMENT_SECTION_DROP_DOWN",
-    label: "Section",
+    label: "",
     valueField: "section_code",
     displayField: "section_name",
     columns: [
@@ -88,7 +91,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   employee: {
     parameterCode: "HR_LEAVE_ENCASHMENT_EMPLOYEE_DROP_DOWN",
-    label: "Employee",
+    label: "",
     valueField: "employee_id",
     displayField: "rpt_name",
     columns: [
@@ -99,7 +102,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   dddwIncrementStatus: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_INCREMENT_STATUS",
-    label: "Increment Status",
+    label: "",
     valueField: "value_code",
     displayField: "value_desc",
     columns: [
@@ -109,7 +112,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   dddwYesNoFlag: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_YES_NO_FLAG",
-    label: "Yes/No",
+    label: "",
     valueField: "code",
     displayField: "name",
     columns: [
@@ -119,7 +122,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   dddwStatusFlag: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_STATUS_FLAG",
-    label: "Status",
+    label: "",
     valueField: "value_code",
     displayField: "value_desc",
     columns: [
@@ -141,7 +144,15 @@ interface DynamicDropDownProps {
   code3?: string;
   code4?: string;
   disabled?: boolean;
-  key?: string 
+  key?: string;
+  /**
+   * Adds an "All" row at the top of the list. Picking it calls
+   * onChange(ALL_VALUE, row) where every code column of `row` is "ALL"
+   * and the name column is `allLabel`, with `row.__all === true`.
+   */
+  includeAll?: boolean;
+  /** Text shown in the name column of the "All" row (default "All"). */
+  allLabel?: string;
 }
 
 export function DynamicDropDown({
@@ -156,7 +167,9 @@ export function DynamicDropDown({
   code3,
   code4,
   disabled,
-  key
+  key,
+  includeAll,
+  allLabel = "All",
 }: DynamicDropDownProps) {
   const config = DROPDOWN_CONFIG[type];
   const queryClient = useQueryClient();
@@ -185,12 +198,24 @@ export function DynamicDropDown({
         staleTime: 0,
         gcTime: 0,
       });
-      return (data ?? []) as LookupRow[];
+      const rows = (data ?? []) as LookupRow[];
+
+      if (!includeAll) return rows;
+
+      // Synthetic "All" row: code columns = "ALL", name column = allLabel
+      const allRow: LookupRow = { __all: true };
+      config.columns.forEach((c) => {
+        allRow[c.field] = c.field === config.displayField ? allLabel : ALL_VALUE;
+      });
+      allRow[config.valueField] = ALL_VALUE;
+      allRow[config.displayField] = allLabel;
+
+      return [allRow, ...rows];
     } catch (error) {
       console.error(`Error fetching dropdown data for "${type}":`, error);
       return [];
     }
-  }, [queryClient, config.parameterCode, type, code1, code2, code3, code4]);
+  }, [queryClient, config, type, code1, code2, code3, code4, key, includeAll, allLabel]);
 
   return (
     <LookupField

@@ -162,34 +162,6 @@ export async function almsSave(params: AlmsProcedureParams) {
   };
 }
 
-export async function almsGeneratePOFromPR(params: {
-  companyCode: string;
-  requestNumber: string;
-  docType?: string;
-}): Promise<{ success: boolean; message?: string }> {
-  try {
-    const response = await api.post<ApiResponse<unknown>>(
-      "/api/ALMS/gm/generatePOFromPR",
-      {
-        companyCode: params.companyCode,
-        requestNumber: params.requestNumber,
-        docType: params.docType || "LPO",
-      }
-    );
-    if (!response.data.success) {
-      return {
-        success: false,
-        message: response.data.message || "Failed to generate PO from PR.",
-      };
-    }
-    return { success: true, message: response.data.message };
-  } catch (error: unknown) {
-    return {
-      success: false,
-      message: (error as { message?: string })?.message || "Failed to generate PO from PR.",
-    };
-  }
-}
 
 export async function almsDelete(params: AlmsProcedureParams) {
   const response = await api.post<ApiResponse<unknown>>(
@@ -246,20 +218,38 @@ function normalizeParams(params: AlmsProcedureParams) {
   return normalized;
 }
 
-// Recursively uppercase all keys AND string values (frontend-only transform)
+// Free-text fields jinki value ka case waisa hi rehna chahiye
+const PRESERVE_CASE_KEYS = new Set([
+  "DESCRIPTION",
+  "REMARKS",
+  "REMARKS_HISTRY",
+  "SENTBACK_REASON",
+  "REJECT_REASON",
+  "CANCEL_REMARK",
+  "PR_DESCRIPTION",
+  "PO_REMARKS",
+  "DLVR_TERM",
+  "PAYMENT_TERMS",
+  "WARRANTY",
+  "COMMENTS",
+]);
+
+// Keys uppercase hongi; string values bhi, siraf PRESERVE_CASE_KEYS ko chhodkar
 function uppercaseData<T = Record<string, unknown>>(data: T[]): T[] {
-  const transformValue = (value: unknown): unknown => {
+  const transformValue = (value: unknown, keepCase = false): unknown => {
     if (typeof value === "string") {
-      return value.toUpperCase();
+      return keepCase ? value : value.toUpperCase();
     }
     if (Array.isArray(value)) {
-      return value.map(transformValue);
+      return value.map((v) => transformValue(v, keepCase));
     }
     if (value !== null && typeof value === "object") {
       const result: Record<string, unknown> = {};
       for (const key of Object.keys(value as Record<string, unknown>)) {
-        result[key.toUpperCase()] = transformValue(
-          (value as Record<string, unknown>)[key]
+        const upperKey = key.toUpperCase();
+        result[upperKey] = transformValue(
+          (value as Record<string, unknown>)[key],
+          PRESERVE_CASE_KEYS.has(upperKey)
         );
       }
       return result;

@@ -44,6 +44,7 @@ export function HrLeaveAttachmentDialog({ open, requestNumber, companyCode, logi
   const [editingKey, setEditingKey] = useState("");
   const [editName, setEditName] = useState("");
   const [previewFile, setPreviewFile] = useState<HrFile | null>(null);
+  const [deletingKey, setDeletingKey] = useState("");
   const [notice, setNotice] = useState<ToastNotice>(null);
 
   const loadFiles = async () => {
@@ -120,13 +121,25 @@ export function HrLeaveAttachmentDialog({ open, requestNumber, companyCode, logi
   };
 
   const removeFile = async (file: HrFile) => {
-    if (!requestNumber || !file.sr_no) return;
+    if (!requestNumber) {
+      setNotice({ type: "error", message: "The leave request number is missing." });
+      return;
+    }
+    if (file.sr_no === null || file.sr_no === undefined || !Number.isFinite(Number(file.sr_no))) {
+      setNotice({ type: "error", message: "This attachment has no valid file number and cannot be deleted." });
+      return;
+    }
+    if (!window.confirm(`Delete ${file.user_file_name || file.org_file_name || "this attachment"}?`)) return;
+    const key = fileKey(file);
+    setDeletingKey(key);
     try {
-      await deleteHrEmployeeFile(requestNumber, file.sr_no);
-      setFiles((current) => current.filter((item) => fileKey(item) !== fileKey(file)));
+      await deleteHrEmployeeFile(requestNumber, file.sr_no, file.aws_file_locn || undefined);
+      setFiles((current) => current.filter((item) => fileKey(item) !== key));
       setNotice({ type: "success", message: "Attachment deleted." });
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete file" });
+    } finally {
+      setDeletingKey("");
     }
   };
 
@@ -220,8 +233,8 @@ export function HrLeaveAttachmentDialog({ open, requestNumber, companyCode, logi
                               <Button size="icon" type="button" variant="ghost" onClick={() => beginRename(file)} title="Rename">
                                 <Pencil size={14} />
                               </Button>
-                              <Button size="icon" type="button" variant="ghost" onClick={() => void removeFile(file)} title="Delete">
-                                <Trash2 size={14} />
+                              <Button size="icon" type="button" variant="ghost" disabled={deletingKey === key} onClick={() => void removeFile(file)} title="Delete">
+                                {deletingKey === key ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
                               </Button>
                               </>
                             )}

@@ -1,19 +1,38 @@
-// src/pages/almswf/PurchaseRequestPage.tsx
-import { useState, useMemo, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../state/AuthContext";
-import { Plus, Eye, Edit2, RefreshCw } from "lucide-react";
+import { Plus, Eye, Edit2, Printer, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
-import { DataTable } from "../../components/ui/DataTable";
+import { DataTable } from "../../components/ui/DataTableAlms";
 import { Dialog } from "../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import type { TPPOGenerated, TPurchaseSummaryTxn } from "./PurchaseSummary-types";
 import AddPRRequestPage from "./Addprrequestpage";
 import { almsCommonSelect } from "../../api/alms";
+import { getPrRegisterFormReportExcel, getPrRegisterFormReportHtml, type Division } from "../../api/transactions";
+import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { PurchaseReportPreview } from "../purchase_sales/Reports/Purchasereportpreview";
+import { openPurchaseReport } from "../purchase_sales/Reports/PurchaseReportPreviewState";
+import { useToast } from "../../components/ui/AlertToast";
 
-const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED"] as const;
-const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated"];
+// ─── Constants ────────────────────────────────────────────────────────────────
+const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED", "CANCELLED"] as const;
+const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "PO Generated", "Cancelled"];
+
+const QUERY_ROOT = "purchase-request-page";
+
+// Employees who should always see the Add PR button (per sir's instruction).
+const HARDCODED_ADD_PR_EMPLOYEES = ["2019070493"];
+
+// Level-2 users who are also allowed to CREATE PRs for a specific flow.
+const LEVEL2_CREATOR_EXCEPTIONS = [
+  { loginid: "2016090408", flowCode: "003" },
+];
+const isLevel2CreatorFlow = (loginid: string, flowCode: string) =>
+  LEVEL2_CREATOR_EXCEPTIONS.some(
+    (e) => e.loginid === loginid && e.flowCode === String(flowCode).trim()
+  );
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(val: unknown): string {
@@ -24,10 +43,21 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-// Display status derived from LAST_ACTION / FINAL_APPROVED
+// Same as fmtDate, but if the value is not parseable (e.g. API already sends
+// "dd/mm/yyyy"), show the raw string instead of "NA".
+function fmtDateOrRaw(val: unknown): string {
+  const f = fmtDate(val);
+  if (f !== "NA") return f;
+  const raw = String(val ?? "").trim();
+  if (!raw || raw === "null" || raw === "undefined") return "NA";
+  return raw;
+}
+
 function statusOf(row: TPurchaseSummaryTxn): string {
-  const finalApproved = String((row as any).FINAL_APPROVED ?? "").toUpperCase();
+  const cancelFlag = String((row as any).CANCEL_FLAG ?? "").toUpperCase();
   const lastAction = String((row as any).LAST_ACTION ?? "").toUpperCase();
+  if (cancelFlag === "Y" || lastAction === "CANCELED" || lastAction === "CANCELLED") return "CANCELLED";
+  const finalApproved = String((row as any).FINAL_APPROVED ?? "").toUpperCase();
   if (finalApproved === "Y") return "APPROVED";
   if (lastAction) return lastAction;
   return "PENDING";
@@ -40,24 +70,97 @@ function getStatusBadgeStyle(status: string) {
   else if (val === "PENDING" || val === "DRAFT") { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
   else if (val === "SUBMITTED") { bg = "#dbeafe"; color = "#1e40af"; border = "#93c5fd"; }
   else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
-  else if (val === "SENDBACK" || val === "SENT BACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
+  else if (val === "SENDBACK" || val === "SENT BACK" || val === "SENTBACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
   else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
+  else if (val === "CANCELLED" || val === "CANCELED") { bg = "#fee2e2"; color = "#991b1b"; border = "#fca5a5"; }
   return { bg, color, border };
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
 interface PurchaseRequestPageProps {
   initialTab?: number;
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
-  const { user } = useAuth();
-  const loginid = user?.loginid || user?.username || "";
-  const companyCode = user?.company_code || "";
-  const queryClient = useQueryClient();
+type TaskPopupData = {
+  existingData: TPurchaseSummaryTxn | null;
+  isEditMode: boolean;
+  isViewMode: boolean;
+  flowCode: string;
+  flowDescription: string;
+  docType?: string;
+  docNo?: string;
+  divCode?: string;
+  divName?: string;
+};
 
-  // ── State ───────────────────────────────────────────────────────────────────
+type FlowRow = {
+  flowCode: string;
+  flowDescription: string;
+  divCode: string;
+  divName: string;
+  userLevel: number;
+};
+
+function pick(obj: any, ...keys: string[]): string {
+  if (!obj) return "";
+  for (const k of keys) {
+    const v = obj[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      return String(v).trim();
+    }
+  }
+  return "";
+}
+
+// PR rows use REQUEST_NUMBER, PO Generated rows may only have PR_NUMBER.
+function getRequestNo(row: any): string {
+  return String(row?.REQUEST_NUMBER || row?.PR_NUMBER || "").trim();
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
+  const { user } = useAuth();
+  const loginid = (user?.loginid || user?.username || "").trim();
+  const companyCode = (user?.company_code || "").trim();
+
+  const isHardcodedAddPrUser = HARDCODED_ADD_PR_EMPLOYEES.includes(loginid);
+
+  const { toast } = useToast();
+
+  const handlePrint = async (requestNumber: string) => {
+    if (!requestNumber) {
+      toast.warning("Request number not found.", 4000);
+      return;
+    }
+
+    const params = {
+      loginid,
+      company_code: companyCode,
+      request_number: requestNumber,
+    };
+
+    const preview = openPurchaseReport(`Purchase Request - ${requestNumber}`);
+    try {
+      const [html, htmlPortrait] = await Promise.all([
+        getPrRegisterFormReportHtml({ ...params, orientation: "landscape" }),
+        getPrRegisterFormReportHtml({ ...params, orientation: "portrait" }),
+      ]);
+      preview.ready({
+        html,
+        htmlPortrait,
+        filename: `purchase_request_${requestNumber}`,
+        orientation: "landscape",
+        onExcel: async () => {
+          await getPrRegisterFormReportExcel(params);
+        },
+      });
+    } catch (err: any) {
+      const msg = err?.message ?? "Failed to load report. Please try again.";
+      preview.fail(new Error(msg));
+      toast.error(msg, 5000);
+    }
+  };
+
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [query, setQuery] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
@@ -65,139 +168,179 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // ── Popup state ─────────────────────────────────────────────────────────────
-  const [taskPopup, setTaskPopup] = useState({
+  const [taskPopup, setTaskPopup] = useState<{
+    open: boolean;
+    title: string;
+    data: TaskPopupData;
+  }>({
     open: false,
     title: "",
     data: {
-      existingData: null as TPurchaseSummaryTxn | null,
+      existingData: null,
       isEditMode: false,
       isViewMode: false,
-      flowCode: "" as string,
-      flowDescription: "" as string,
+      flowCode: "",
+      flowDescription: "",
+      divCode: "",
+      divName: "",
     },
   });
 
-  // ── Approval-flow confirmation popup ──────────────────────────────────────
   const [flowConfirm, setFlowConfirm] = useState({
     open: false,
     loading: false,
-    rows: [] as { flowCode: string; flowDescription: string }[],
+    rows: [] as FlowRow[],
     selectedFlowCode: "",
   });
 
-  // ── Query with proper typing ──────────────────────────────────────────────
-  const activeCode3 = TAB_CODE3[activeTab];
-  const isPoGeneratedTab = activeCode3 === "POGENERATED";
+  const [divisionPicker, setDivisionPicker] = useState<{
+    open: boolean;
+    divisions: Division[];
+    allFlows: FlowRow[];
+  }>({
+    open: false,
+    divisions: [],
+    allFlows: [],
+  });
 
-  // ✅ FIXED: Use separate query for PO Generated tab
+  const [flowFetching, setFlowFetching] = useState(false);
+
+  const [pendingDivision, setPendingDivision] = useState<{ code: string; name: string }>({ code: "", name: "" });
+
+  const activeCode3 = TAB_CODE3[activeTab] ?? TAB_CODE3[0];
+  const isPoGeneratedTab = activeCode3 === "POGENERATED";
+  const isPendingTab = activeCode3 === "PENDING";
+
+  // ── Active tab data ────────────────────────────────────────────────────────
   const prQuery = useQuery({
-    queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "pr"],
-    queryFn: () => almsCommonSelect<TPurchaseSummaryTxn>({
-      parameter: "PS_PREQUEST_ENTRY_TAB_LIST",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: activeCode3,
-      code4: "",
-    }),
+    queryKey: [QUERY_ROOT, loginid, companyCode, activeCode3, "pr"],
+    queryFn: () =>
+      almsCommonSelect<TPurchaseSummaryTxn>({
+        parameter: "PS_PREQUEST_ENTRY_TAB_LIST",
+        loginid, code1: companyCode, code2: loginid, code3: activeCode3, code4: "",
+      }),
     enabled: !!loginid && !!companyCode && !isPoGeneratedTab,
   });
 
   const poQuery = useQuery({
-    queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "po"],
-    queryFn: () => almsCommonSelect<TPPOGenerated>({
-      parameter: "PS_PREQUEST_ENTRY_POGENERATED",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: activeCode3,
-      code4: "",
-    }),
+    queryKey: [QUERY_ROOT, loginid, companyCode, activeCode3, "po"],
+    queryFn: () =>
+      almsCommonSelect<TPPOGenerated>({
+        parameter: "PS_PREQUEST_ENTRY_POGENERATED",
+        loginid, code1: companyCode, code2: loginid, code3: activeCode3, code4: "",
+      }),
     enabled: !!loginid && !!companyCode && isPoGeneratedTab,
   });
 
-  // Select correct data based on tab
+  const tabCountQueries = useQueries({
+    queries: TAB_CODE3.map((code) => {
+      const isPo = code === "POGENERATED";
+      return {
+        queryKey: [QUERY_ROOT, loginid, companyCode, code, isPo ? "po" : "pr"],
+        queryFn: () =>
+          almsCommonSelect<Record<string, unknown>>({
+            parameter: isPo ? "PS_PREQUEST_ENTRY_POGENERATED" : "PS_PREQUEST_ENTRY_TAB_LIST",
+            loginid, code1: companyCode, code2: loginid, code3: code, code4: "",
+          }),
+        enabled: !!loginid && !!companyCode,
+      };
+    }),
+  });
+  const tabCounts = tabCountQueries.map((q) => (Array.isArray(q.data) ? q.data.length : 0));
+
+
+  const userFlowsQuery = useQuery({
+    queryKey: [QUERY_ROOT, loginid, companyCode, "user-flows"],
+    queryFn: () =>
+      almsCommonSelect<Record<string, unknown>>({
+        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
+        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
+      }),
+    enabled: !!loginid && !!companyCode && isPendingTab,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const allUserFlows = useMemo<FlowRow[]>(() => {
+    const raw = (userFlowsQuery.data as Record<string, unknown>[]) || [];
+    return raw
+      .map((row) => {
+        const levelRaw =
+          row.user_level ?? row.USER_LEVEL ?? row.userLevel ?? row.USERLEVEL ?? 0;
+        const levelNum = Number(levelRaw);
+        return {
+          flowCode: pick(row, "FLOW_CODE", "flow_code"),
+          flowDescription: pick(row, "FLOW_DESCRIPTION", "flow_description"),
+          divCode: pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code"),
+          divName: pick(row, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name"),
+          userLevel: Number.isFinite(levelNum) ? levelNum : 0,
+        };
+      })
+      .filter((r) => r.flowCode);
+  }, [userFlowsQuery.data]);
+
+  const selfFlows = useMemo(
+  () =>
+    allUserFlows.filter(
+      (f) =>
+        f.userLevel === 1 ||
+        (f.userLevel === 2 && isLevel2CreatorFlow(loginid, f.flowCode))
+    ),
+  [allUserFlows, loginid]
+);
+
+  const canCreatePR = isHardcodedAddPrUser || selfFlows.length > 0;
+
   const data = isPoGeneratedTab ? poQuery.data : prQuery.data;
   const isLoading = isPoGeneratedTab ? poQuery.isLoading : prQuery.isLoading;
   const isError = isPoGeneratedTab ? poQuery.isError : prQuery.isError;
   const error = isPoGeneratedTab ? poQuery.error : prQuery.error;
-  const refetch = isPoGeneratedTab ? poQuery.refetch : prQuery.refetch;
 
   const rows = useMemo(() => data ?? [], [data]);
 
-  // ── Client-side search filtering ──────────────────────────────────────────
   const filteredRows = useMemo(() => {
     if (!query.trim()) return rows;
     const q = query.toLowerCase();
-
-    // For PO Generated tab, filter PO data
     if (isPoGeneratedTab) {
-      return (rows as TPPOGenerated[]).filter((row) =>
-        [row.PO_NUMBER, row.PR_NUMBER, row.SUPPLIER_CODE, row.SUPPLIER_NAME, row.PR_DESCRIPTION]
+      return (rows as any[]).filter((row) =>
+        [
+          row.PO_NUMBER,
+          row.PO_NOS,
+          row.PR_NUMBER,
+          row.REQUEST_NUMBER,
+          row.SUPPLIER_CODE,
+          row.SUPPLIER_NAME,
+          row.PR_DESCRIPTION,
+          row.DESCRIPTION,
+          row.CREATE_USER,
+        ]
           .filter(Boolean)
           .some((field) => String(field).toLowerCase().includes(q))
       );
     }
-
-    // For PR tabs
     return (rows as TPurchaseSummaryTxn[]).filter((row) =>
-      [row.REQUEST_NUMBER, (row as any).DESCRIPTION, (row as any).SUPPLIER, (row as any).SUPPLIER_NAME]
+      [
+        row.REQUEST_NUMBER,
+        (row as any).DESCRIPTION,
+        (row as any).SUPPLIER,
+        (row as any).SUPPLIER_NAME,
+        (row as any).CREATE_USER,
+      ]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(q))
     );
   }, [rows, query, isPoGeneratedTab]);
 
-  // ── Auto-dismiss notice ────────────────────────────────────────────────────
   useEffect(() => {
     if (isError) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Failed to load purchase requests"
+        message: error instanceof Error ? error.message : "Failed to load purchase requests",
       });
     }
   }, [isError, error]);
 
-  // ── Popup handlers ──────────────────────────────────────────────────────────
-  const openAddPopup = async () => {
-    setFlowConfirm({ open: true, loading: true, rows: [], selectedFlowCode: "" });
-    try {
-      const rawRows = await almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
-        loginid,
-        code1: companyCode,
-        code2: loginid,
-        code3: "Admin",
-        code4: "",
-      });
-      const flowRows = rawRows
-        .map((row) => ({
-          flowCode: String(row.FLOW_CODE ?? row.flow_code ?? ""),
-          flowDescription: String(row.FLOW_DESCRIPTION ?? row.flow_description ?? ""),
-        }))
-        .filter((row) => row.flowCode);
-
-      if (flowRows.length === 0) {
-        setFlowConfirm({ open: false, loading: false, rows: [], selectedFlowCode: "" });
-        setNotice({ type: "error", message: "No approval flow found for this user. Please check MS_APPROVER_LEVELS setup." });
-        return;
-      }
-      setFlowConfirm({
-        open: true,
-        loading: false,
-        rows: flowRows,
-        selectedFlowCode: flowRows.length === 1 ? flowRows[0].flowCode : "",
-      });
-    } catch (err) {
-      setFlowConfirm({ open: false, loading: false, rows: [], selectedFlowCode: "" });
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to determine approval flow" });
-    }
-  };
-
-  const confirmFlowAndOpenPR = () => {
-    const selected = flowConfirm.rows.find((row) => row.flowCode === flowConfirm.selectedFlowCode);
-    if (!selected) return;
-    setFlowConfirm((prev) => ({ ...prev, open: false }));
+  // ── Add PR: division → flow → editor ───────────────────────────────────────
+  const openPrEditor = (flow: FlowRow, div: { code: string; name: string }) => {
     setTaskPopup({
       open: true,
       title: "Add PR",
@@ -205,319 +348,541 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         existingData: null,
         isEditMode: false,
         isViewMode: false,
-        flowCode: selected.flowCode,
-        flowDescription: selected.flowDescription,
+        flowCode: flow.flowCode,
+        flowDescription: flow.flowDescription,
+        divCode: div.code,
+        divName: div.name,
       },
     });
   };
 
-  const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
-    setTaskPopup({
-      open: true,
-      title: `${actionType === "edit" ? "Edit" : "View"} PR - ${row.REQUEST_NUMBER}`,
-      data: {
-        existingData: row,
-        isEditMode: actionType === "edit",
-        isViewMode: actionType === "view",
-        flowCode: "",
-        flowDescription: "",
-      },
-    });
+  const continueWithDivision = (div: { code: string; name: string }, allFlows: FlowRow[]) => {
+    const code = div.code.trim().toUpperCase();
+    const matched = code ? allFlows.filter((f) => String(f.divCode || "").trim().toUpperCase() === code) : [];
+    const usable = matched.length > 0 ? matched : allFlows;
+
+    setPendingDivision(div);
+
+    if (usable.length === 1) {
+      openPrEditor(usable[0], div);
+      return;
+    }
+    setFlowConfirm({ open: true, loading: false, rows: usable, selectedFlowCode: "" });
   };
 
-  const closePopup = (refresh?: boolean) => {
-    setTaskPopup((prev) => ({ ...prev, open: false }));
-    if (refresh) {
-      queryClient.invalidateQueries({ queryKey: ["purchase-request-page", loginid, companyCode] });
-      setNotice({ type: "success", message: "Purchase request updated successfully" });
+  const openAddPopup = async () => {
+    // ── Gate ────────────────────────────────────────────────────────────────
+    if (!canCreatePR) {
+      setNotice({
+        type: "error",
+        message: "You do not have a creation-level (user_level 1) flow assigned.",
+      });
+      return;
+    }
+
+    if (userFlowsQuery.isLoading) {
+      toast.warning("Loading your flows, please wait...", 3000);
+      return;
+    }
+
+    // Usable flows for the picker:
+    // - Normal path: only level-1 (self) flows
+    // - Hardcoded user with no level-1 flow: fallback to all their flows
+    const usableFlows: FlowRow[] =
+      selfFlows.length > 0
+        ? selfFlows
+        : (isHardcodedAddPrUser ? allUserFlows : []);
+
+    if (usableFlows.length === 0) {
+      setNotice({ type: "error", message: "No approval flow found for this user." });
+      return;
+    }
+
+    setFlowFetching(true);
+    setNotice(null);
+    try {
+      const divisionsRaw = (await almsCommonSelect<Record<string, unknown>>({
+        parameter: "PS_PREQUEST_ENTRY_DIVISION",
+        loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
+      })) as unknown as Record<string, unknown>[];
+
+      let divisions: Division[] = (divisionsRaw || [])
+        .map((d) => ({
+          div_code: pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code"),
+          div_name: pick(d, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name"),
+        }))
+        .filter((d) => d.div_code) as unknown as Division[];
+
+      if (divisions.length === 0) {
+        const divMap = new Map<string, Division>();
+        for (const row of usableFlows) {
+          const code = (row.divCode || "").toUpperCase();
+          if (code && !divMap.has(code)) {
+            divMap.set(code, {
+              div_code: row.divCode,
+              div_name: row.divName || row.divCode,
+            } as unknown as Division);
+          }
+        }
+        divisions = Array.from(divMap.values());
+      }
+
+      // API returns div_code = null → go straight to flow picker / editor
+      if (divisions.length === 0) {
+        if (usableFlows.length === 1) {
+          openPrEditor(usableFlows[0], { code: "", name: "" });
+        } else {
+          setFlowConfirm({
+            open: true,
+            loading: false,
+            rows: usableFlows,
+            selectedFlowCode: "",
+          });
+        }
+        return;
+      }
+
+      if (divisions.length === 1) {
+        const only = divisions[0] as any;
+        continueWithDivision(
+          { code: String(only.div_code), name: String(only.div_name || "") },
+          usableFlows
+        );
+        return;
+      }
+
+      setDivisionPicker({ open: true, divisions, allFlows: usableFlows });
+    } catch (err) {
+      setNotice({
+        type: "error",
+        message:
+          err instanceof Error ? err.message : "Unable to determine approval flow",
+      });
+    } finally {
+      setFlowFetching(false);
     }
   };
 
-  const handleRefresh = () => {
-    setNotice(null);
-    refetch();
+  const handleDivisionSelect = (division: Division) => {
+    const div = {
+      code: String((division as any).div_code ?? (division as any).DIV_CODE ?? "").trim(),
+      name: String((division as any).div_name ?? (division as any).DIV_NAME ?? "").trim(),
+    };
+    const flows = divisionPicker.allFlows;
+    setDivisionPicker({ open: false, divisions: [], allFlows: [] });
+    continueWithDivision(div, flows);
   };
 
-  // ── View PO Handler ────────────────────────────────────────────────────────
-  const handlePoView = (row: TPPOGenerated) => {
-    // ✅ Handle null PR_NUMBER
-    const prNumber = row.PR_NUMBER || '';
+  const confirmFlowAndOpenPR = () => {
+    const selected = flowConfirm.rows.find((row) => row.flowCode === flowConfirm.selectedFlowCode);
+    if (!selected) return;
+    setFlowConfirm((prev) => ({ ...prev, open: false }));
+    openPrEditor(selected, pendingDivision);
+  };
 
+  const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
+    const reqNo = getRequestNo(row);
+    const flowCode = (row as any).FLOW_CODE || "";
+    const flowDescription = (row as any).FLOW_DESCRIPTION || "";
+    // Make sure the editor always receives REQUEST_NUMBER (PO rows may only have PR_NUMBER)
+    const normalizedRow = { ...(row as any), REQUEST_NUMBER: reqNo } as TPurchaseSummaryTxn;
     setTaskPopup({
       open: true,
-      title: `PO - ${row.PO_NUMBER}`,
+      title: `${actionType === "edit" ? "Edit" : "View"} PR - ${reqNo}`,
       data: {
-        // ✅ Only pass PR number if it exists
-        existingData: prNumber ? { REQUEST_NUMBER: prNumber } as any : null,
-        isEditMode: false,
-        isViewMode: true,
-        flowCode: "",
-        flowDescription: "",
-        docType: row.DOC_TYPE || "LPO",
-        docNo: String(row.PO_NUMBER),
-      } as any,
+        existingData: normalizedRow,
+        isEditMode: actionType === "edit",
+        isViewMode: actionType === "view",
+        flowCode, flowDescription,
+      },
     });
   };
 
-  // ── PR Columns ─────────────────────────────────────────────────────────────
+  const closePopup = useCallback(
+    (refresh?: boolean) => {
+      setTaskPopup((prev) => ({ ...prev, open: false }));
+      if (refresh) {
+        void queryClient.invalidateQueries({ queryKey: [QUERY_ROOT, loginid, companyCode] });
+      }
+    },
+    [queryClient, loginid, companyCode]
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleSavedDraft = useCallback((savedRequestNumber: string) => {
+    setTaskPopup((prev) => {
+      if (!prev.data.existingData && savedRequestNumber) {
+        const syntheticRow = {
+          REQUEST_NUMBER: savedRequestNumber,
+          FLOW_CODE: prev.data.flowCode,
+          FLOW_DESCRIPTION: prev.data.flowDescription,
+        } as unknown as TPurchaseSummaryTxn;
+        return {
+          ...prev,
+          title: `Edit PR - ${savedRequestNumber}`,
+          data: { ...prev.data, existingData: syntheticRow },
+        };
+      }
+      return prev;
+    });
+  }, []);
+
+  // ── Columns: PR (used by all tabs; PO tab derives from this) ──────────────
   const prColumns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
     () => [
       {
-        accessorKey: "REQUEST_NO",
+        id: "REQUEST_NUMBER",
+        accessorFn: (row) => getRequestNo(row),
         header: "Request No",
         cell: ({ row }) => (
           <span className="font-semibold text-[#082A89]">
-            {row.original.REQUEST_NUMBER}
+            {getRequestNo(row.original) || "—"}
           </span>
         ),
       },
       {
-        accessorKey: "REQUEST_DATE",
+        id: "REQUEST_DATE",
+        accessorFn: (row) => (row as any).REQUEST_DATE ?? (row as any).PR_DATE ?? "",
         header: "Request Date",
-        cell: ({ row }) => fmtDate((row.original as any).REQUEST_DATE),
+        cell: ({ row }) => {
+          const r = row.original as any;
+          return fmtDateOrRaw(r.REQUEST_DATE ?? r.PR_DATE);
+        },
       },
       {
-        accessorKey: "DESCRIPTION",
+        id: "DESCRIPTION",
+        accessorFn: (row) => (row as any).DESCRIPTION || (row as any).PR_DESCRIPTION || "",
         header: "Description",
-        cell: ({ row }) => (row.original as any).DESCRIPTION || "—",
+        cell: ({ row }) => {
+          const r = row.original as any;
+          return r.DESCRIPTION || r.PR_DESCRIPTION || "—";
+        },
       },
       {
         accessorKey: "AMOUNT",
-        header: "Amount",
+        header: () => <div className="text-right">Amount</div>,
         cell: ({ row }) => {
-          const amt = (row.original as any).AMOUNT || 0;
-          return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
+          const r = row.original as any;
+          const amt = r.TOTAL_WITH_TAX ?? r.total_with_tax ?? r.AMOUNT ?? 0;
+          return (
+            <div className="text-right font-semibold">
+              {Number(amt).toLocaleString(undefined, {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3,
+              })}
+            </div>
+          );
         },
       },
       {
         accessorKey: "CREATE_USER",
         header: "Create User",
-      },
-      {
-        accessorKey: "create_date",
-        header: "Create Date",
-        cell: ({ row }) => fmtDate((row.original as any).CREATE_DATE),
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
         cell: ({ row }) => {
-          const val = statusOf(row.original);
+          const r = row.original as any;
+          const code = r.CREATE_USER || r.create_user || "";
+          if (!code) return "—";
+          const name =
+            r.CREATE_USER_NAME ||
+            r.create_user_name ||
+            r.CREATE_USERNAME ||
+            r.CREATED_BY_NAME ||
+            r.CREATE_BY_NAME ||
+            r.USER_NAME ||
+            r.CREATE_USER_DESC ||
+            "";
+          return name ? `${code} - ${name}` : code;
+        },
+      },
+      {
+        accessorKey: "CREATE_DATE",
+        header: "Create Date",
+        cell: ({ row }) => fmtDateOrRaw((row.original as any).CREATE_DATE),
+      },
+      {
+        id: "status",
+        accessorFn: (row) => (isPoGeneratedTab ? "PO GENERATED" : statusOf(row)),
+        header: () => <div className="text-center">Status</div>,
+        cell: ({ row }) => {
+          const val = isPoGeneratedTab ? "PO GENERATED" : statusOf(row.original);
           const style = getStatusBadgeStyle(val);
           return (
-            <span
-              className="inline-block rounded-full border px-3 py-0.5 text-xs font-bold whitespace-nowrap"
-              style={{
-                background: style.bg,
-                color: style.color,
-                borderColor: style.border,
-              }}
-            >
-              {val || "—"}
-            </span>
+            <div className="flex justify-center">
+              <span
+                className="inline-block whitespace-nowrap rounded-full border px-3 py-0.5 text-xs font-bold"
+                style={{ background: style.bg, color: style.color, borderColor: style.border }}
+              >
+                {val || "—"}
+              </span>
+            </div>
           );
         },
       },
       {
-  accessorKey: "next_action_by",
-  header: "Next Action By",
-  cell: ({ row }) => {
-    const r = row.original as any;
-    if (!r.NEXT_ACTION_BY) return "—";
-    return r.NEXT_ACTION_BY_NAME
-      ? `${r.NEXT_ACTION_BY} - ${r.NEXT_ACTION_BY_NAME}`
-      : r.NEXT_ACTION_BY;
-  },
-},
+        id: "reason",
+        header: "Reason",
+        accessorFn: (row) => {
+          const r = row as any;
+          return String(
+            r.SENTBACK_REASON || r.sentback_reason || r.LAST_SB_REASON ||
+            r.REJECT_REASON || r.reject_reason ||
+            r.CANCEL_REMARK || r.cancel_remark ||
+            r.REASON || ""
+          );
+        },
+        cell: ({ row }) => {
+          const r = row.original as any;
+          const sbReason = String(
+            r.SENTBACK_REASON || r.sentback_reason || r.LAST_SB_REASON || ""
+          ).trim();
+          const sbBy = String(r.LAST_SB_BY_NAME || "").trim();
+          const otherReason = String(
+            r.REJECT_REASON || r.reject_reason ||
+            r.CANCEL_REMARK || r.cancel_remark ||
+            r.REASON || ""
+          ).trim();
+
+          const text = sbReason || otherReason;
+          if (!text) return "—";
+          const showBy = !!sbReason && !!sbBy;
+          return (
+            <div
+              className="flex max-w-[280px] flex-col leading-tight"
+              title={showBy ? `${text} (Sent back by ${sbBy})` : text}
+            >
+              <span className="truncate">{text}</span>
+              {showBy && (
+                <span className="truncate text-[10px] font-semibold text-purple-700">
+                  Sent back by: {sbBy}
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: "next_action_by",
+        header: "Next Action By",
+        accessorFn: (row) => {
+          const r = row as any;
+          const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
+          return String(isDraft ? (r.USER_ID || r.user_id || "") : (r.NEXT_ACTION_BY || r.next_action_by || ""));
+        },
+        cell: ({ row }) => {
+          const r = row.original as any;
+          const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
+
+          const code = isDraft
+            ? (r.USER_ID || r.user_id || "")
+            : (r.NEXT_ACTION_BY || r.next_action_by || "");
+          if (!code) return "—";
+          const name = isDraft
+            ? (r.DRAFT_USER_NAME || r.draft_user_name || "")
+            : (r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "");
+          return name ? `${code} - ${name}` : code;
+        },
+      },
       {
         id: "actions",
         header: "Actions",
         enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              title="View"
-              onClick={() => handleActions("view", row.original)}
-            >
-              <Eye size={15} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              title="Edit"
-              onClick={() => handleActions("edit", row.original)}
-            >
-              <Edit2 size={15} />
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const r = row.original as any;
+          const finalApprovedFlag = String(r.FINAL_APPROVED || "").toUpperCase() === "Y";
+          const faUploaded = String(r.FA_UPLOADED || "N").toUpperCase();
+          // Final approved but PO not generated yet (FA_UPLOADED = 'N') => still editable.
+          // Locked only when final approved AND FA_UPLOADED is not 'N'.
+          const isFinalApproved = finalApprovedFlag && faUploaded !== "N";
+          const isCancelled =
+            String(r.CANCEL_FLAG || "").toUpperCase() === "Y" ||
+            String(r.LAST_ACTION || "").toUpperCase() === "CANCELED" ||
+            String(r.LAST_ACTION || "").toUpperCase() === "CANCELLED";
+          const requestNo = getRequestNo(r);
+
+          return (
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="ghost" title="View" onClick={() => handleActions("view", row.original)}>
+                <Eye size={15} />
+              </Button>
+
+              <Button
+                size="icon"
+                variant="ghost"
+                title="Print"
+                onClick={() => void handlePrint(requestNo)}
+                disabled={!requestNo}
+              >
+                <Printer size={15} />
+              </Button>
+
+              {isPendingTab && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title={isFinalApproved ? "Approved — cannot edit" : isCancelled ? "Cancelled — cannot edit" : "Edit"}
+                  onClick={() => handleActions("edit", row.original)}
+                  disabled={isFinalApproved || isCancelled}
+                >
+                  <Edit2 size={15} />
+                </Button>
+              )}
+            </div>
+          );
+        },
       },
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isPendingTab, isPoGeneratedTab, loginid, companyCode]
   );
 
-  // ── PO Columns ─────────────────────────────────────────────────────────────
-  // In PurchaseRequestPage.tsx - poColumns
+  // ── Columns: PO Generated ──────────────────────────────────────────────────
+  // Same columns as the other tabs, minus Reason / Next Action By,
+  // plus PO Number & PO Date placed after Status, and Actions at the end.
+  const poColumns = useMemo<ColumnDef<any>[]>(() => {
+    const all = prColumns as ColumnDef<any>[];
+    const base = all.filter(
+      (c) => !["reason", "next_action_by", "actions"].includes(String(c.id ?? ""))
+    );
+    const actionsCol = all.find((c) => c.id === "actions");
 
-  const poColumns = useMemo<ColumnDef<TPPOGenerated>[]>(
-    () => [
+    const poExtra: ColumnDef<any>[] = [
       {
-        accessorKey: "PO_NUMBER",
+        id: "PO_NUMBER",
+        // PO tab API returns PR.* from TTE_PREQUEST_HDR, where the PO numbers live in PO_NOS
+        accessorFn: (row) => (row as any).PO_NUMBER || (row as any).PO_NOS || "",
         header: "PO Number",
         cell: ({ row }) => (
           <span className="font-semibold text-[#082A89]">
-            {row.original.PO_NUMBER}
+            {(row.original as any).PO_NUMBER || (row.original as any).PO_NOS || "—"}
           </span>
         ),
       },
       {
         accessorKey: "PO_DATE",
         header: "PO Date",
-        cell: ({ row }) => row.original.PO_DATE || "NA",
+        cell: ({ row }) => fmtDateOrRaw((row.original as any).PO_DATE),
       },
-      {
-        accessorKey: "SUPPLIER_CODE",
-        header: "Supplier",
-        cell: ({ row }) => {
-          const r = row.original;
-          // ✅ Handle null values
-          if (r.SUPPLIER_CODE && r.SUPPLIER_NAME) {
-            return `${r.SUPPLIER_CODE} - ${r.SUPPLIER_NAME}`;
-          }
-          if (r.SUPPLIER_CODE) {
-            return r.SUPPLIER_CODE;
-          }
-          return "—";
-        },
-      },
-      {
-        accessorKey: "PR_NUMBER",
-        header: "PR Number",
-        cell: ({ row }) => (
-          <span className="font-medium text-blue-600">
-            {row.original.PR_NUMBER || "—"}  {/* ✅ Handle null */}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "PR_DATE",
-        header: "PR Date",
-        cell: ({ row }) => row.original.PR_DATE || "NA",
-      },
-      {
-        accessorKey: "PR_DESCRIPTION",
-        header: "PR Description",
-        cell: ({ row }) => row.original.PR_DESCRIPTION || "—",
-      },
-      {
-        accessorKey: "TOTAL_ITEMS",
-        header: "Items",
-        cell: ({ row }) => row.original.TOTAL_ITEMS || 0,
-      },
-      {
-        accessorKey: "PO_TOTAL_AMOUNT",
-        header: "PO Amount",
-        cell: ({ row }) => {
-          const amt = row.original.PO_TOTAL_AMOUNT || 0;
-          return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
-        },
-      },
-      {
-        id: "actions",
-        header: "Action",
-        enableSorting: false,
-        cell: ({ row }) => (
-          <Button
-            size="icon"
-            variant="ghost"
-            title="View PO"
-            onClick={() => handlePoView(row.original)}
-          >
-            <Eye size={15} />
-          </Button>
-        ),
-      },
-    ],
-    []
-  );
+    ];
 
-  // ── Select columns based on tab ──────────────────────────────────────────
+    return [...base, ...poExtra, ...(actionsCol ? [actionsCol] : [])];
+  }, [prColumns]);
+
   const columns = isPoGeneratedTab ? poColumns : prColumns;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Full-page editor ───────────────────────────────────────────────────────
+  if (taskPopup.open) {
+    return (
+      <AddPRRequestPage
+        isEditMode={taskPopup.data.isEditMode}
+        isViewMode={taskPopup.data.isViewMode}
+        existingData={
+          taskPopup.data.existingData
+            ? { request_number: getRequestNo(taskPopup.data.existingData) }
+            : undefined
+        }
+        flowCode={taskPopup.data.flowCode}
+        flowDescription={taskPopup.data.flowDescription}
+        divCode={taskPopup.data.divCode}
+        divName={taskPopup.data.divName}
+        docType={taskPopup.data.docType}
+        docNo={taskPopup.data.docNo}
+        onClose={closePopup}
+      />
+    );
+  }
+
+  // ── List page ──────────────────────────────────────────────────────────────
   return (
     <section className="finance-list-page grid gap-4">
-      {/* Header */}
-      <div className="finance-list-heading">
-        <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Request</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Manage purchase requisition requests</p>
-        </div>
-        <div className="finance-list-actions">
-          <Button
-            variant="outline"
-            size="icon"
-            title="Refresh"
-            aria-label="Refresh"
-            onClick={handleRefresh}
-          >
-            <RefreshCw size={15} />
-          </Button>
-          <Button
-            title="Add Purchase Request"
-            onClick={() => void openAddPopup()}
-            style={{ background: "#082A89" }}
-          >
-            <Plus size={15} /> Add PR
-          </Button>
-        </div>
+      <div className="finance-list-title">
+        <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase Request</h6>
       </div>
 
-      {/* Auto-dismiss alert */}
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Custom Tab Bar */}
-      <div className="flex flex-wrap gap-2 rounded-md">
-        {TAB_LABELS.map((label, index) => (
-          <Button
-            key={index}
-            size="default"
-            variant={activeTab === index ? "default" : "outline"}
-            onClick={() => {
-              setActiveTab(index);
-              setPageIndex(0);
-            }}
-            className="px-6 py-2.5 min-w-[120px]"
-            style={{
-              fontSize: "15px",
-              fontWeight: activeTab === index ? 600 : 500,
-              transition: "all 0.2s ease",
-              ...(activeTab === index && {
-                boxShadow: "0 2px 8px rgba(8, 42, 137, 0.2)",
-              })
-            }}
-          >
-            {label}
-          </Button>
-        ))}
+
+      <div
+        style={{
+          display: "flex", alignItems: "flex-end", gap: "4px",
+          padding: "3px 7px 0 8px", overflowX: "auto",
+          background: "#f1f5f9",
+          border: "1px solid #e2e8f0",
+          borderBottom: "1px solid #cbd5e1",
+          borderRadius: "10px",
+        }}
+      >
+        {TAB_LABELS.map((label, index) => {
+          const active = activeTab === index;
+          return (
+            <button
+              key={TAB_CODE3[index]}
+              type="button"
+              onClick={() => {
+                setActiveTab(index);
+                setPageIndex(0);
+                setQuery("");
+              }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "8px",
+                padding: "10px 16px", fontSize: "12.5px",
+                fontWeight: active ? 700 : 500,
+                color: active ? "#082A89" : "#475569",
+                background: active ? "#e8f0ff" : "transparent",
+                border: "none",
+                borderBottom: active ? "2px solid #082A89" : "2px solid transparent",
+                borderRadius: "10px 10px 0 0",
+                cursor: "pointer", whiteSpace: "nowrap",
+                transition: "background 0.15s, color 0.15s",
+              }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#e8eef7"; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+            >
+              <span>{label}</span>
+              <span
+                style={{
+                  minWidth: "20px", padding: "1px 7px", borderRadius: "999px",
+                  fontSize: "11px", fontWeight: 700, textAlign: "center",
+                  background: active ? "#082A89" : "#cbd5e1",
+                  color: active ? "#fff" : "#334155",
+                }}
+              >
+                {tabCounts[index] ?? 0}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Data Table */}
       <div className="min-h-[650px]">
         <DataTable
           columns={columns as ColumnDef<any, unknown>[]}
-          key={activeCode3}
           data={filteredRows}
-          title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`}
-          subtitle={isPoGeneratedTab ? "Generated PO List" : "Purchase Request List"}
+
+          subtitle={
+            isPendingTab && canCreatePR ? (
+              <button
+                type="button"
+                onClick={() => void openAddPopup()}
+                disabled={flowFetching || userFlowsQuery.isLoading}
+                title="Add Purchase Request"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-wait disabled:opacity-70"
+              >
+                {flowFetching || userFlowsQuery.isLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Plus size={14} />
+                )}
+                {flowFetching || userFlowsQuery.isLoading ? "Loading..." : "Add PR"}
+              </button>
+            ) : undefined
+          }
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
             setPageIndex(0);
           }}
-          searchPlaceholder={isPoGeneratedTab ? "Search PO number, PR number, supplier..." : "Search request no, description, user..."}
+          searchPlaceholder={
+            isPoGeneratedTab ? "Search PO number, PR number, supplier..." : "Search request no, description, user..."
+          }
           loading={isLoading}
           emptyText={isPoGeneratedTab ? "No purchase orders generated yet" : "No purchase requests found"}
           height={620}
@@ -527,7 +892,7 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
           manualPagination
           enableExport
           exportFilename={isPoGeneratedTab ? "purchase-orders.csv" : "purchase-requests.csv"}
-          initialSorting={[{ id: isPoGeneratedTab ? "PO_DATE" : "request_date", desc: true }]}
+          initialSorting={[{ id: isPoGeneratedTab ? "PO_DATE" : "REQUEST_DATE", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={filteredRows.length}
@@ -541,95 +906,88 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
             setPageSize(nextPageSize);
             setPageIndex(0);
           }}
-          getRowId={(row: any, index) => row.REQUEST_NUMBER || row.PO_NUMBER || `temp-${index}`}
+          getRowId={(row: any, index) => row.PO_NUMBER || row.REQUEST_NUMBER || row.PR_NUMBER || `temp-${index}`}
         />
       </div>
 
-      {/* ─── Approval Flow confirmation popup ─── */}
+      <DivisionPickerDialog
+        open={divisionPicker.open}
+        divisions={divisionPicker.divisions}
+        onSelect={handleDivisionSelect}
+        onClose={() => setDivisionPicker({ open: false, divisions: [], allFlows: [] })}
+        title="Select Division"
+      />
+
       <Dialog
         open={flowConfirm.open}
-        wide
-        title="Approval Flow"
-        description="Select the approval flow this purchase request will follow."
+        wide={false}
+        title="Select Approval Flow"
+        description="Choose the approval flow for this purchase request"
         onClose={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}
         footer={
           <>
-            <Button variant="outline" onClick={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}>
+            <Button variant="outline" size="sm" onClick={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}>
               Cancel
             </Button>
-            <Button disabled={flowConfirm.loading || !flowConfirm.selectedFlowCode} onClick={confirmFlowAndOpenPR}>
+            <Button disabled={!flowConfirm.selectedFlowCode} size="sm" onClick={confirmFlowAndOpenPR}>
               OK
             </Button>
           </>
         }
       >
-        {flowConfirm.loading ? (
-          <p className="m-0 text-sm text-muted-foreground">Loading approval flow...</p>
-        ) : (
-          <div className="max-h-[420px] overflow-auto rounded-md border">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+        <div className="max-h-[320px] overflow-auto rounded-md border">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="w-8 px-2 py-1.5 text-center"></th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-left">Flow Code</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-left">Description</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-left">Division</th>
+              </tr>
+            </thead>
+            <tbody>
+              {flowConfirm.rows.length === 0 ? (
                 <tr>
-                  <th className="w-12 px-3 py-2 text-center"></th>
-                  <th className="px-3 py-2 text-left">Flow Code</th>
-                  <th className="px-3 py-2 text-left">Description</th>
+                  <td className="px-3 py-4 text-center text-muted-foreground" colSpan={4}>No approval flow found</td>
                 </tr>
-              </thead>
-              <tbody>
-                {flowConfirm.rows.length === 0 ? (
-                  <tr>
-                    <td className="px-3 py-6 text-center text-muted-foreground" colSpan={3}>No approval flow found</td>
-                  </tr>
-                ) : flowConfirm.rows.map((row) => (
+              ) : (
+                flowConfirm.rows.map((row) => (
                   <tr
                     key={row.flowCode}
                     className="cursor-pointer border-t odd:bg-muted/20 hover:bg-accent"
                     onClick={() => setFlowConfirm((prev) => ({ ...prev, selectedFlowCode: row.flowCode }))}
                   >
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       <input
                         type="radio"
                         name="flow-code"
+                        className="h-3 w-3"
                         checked={flowConfirm.selectedFlowCode === row.flowCode}
                         onChange={() => setFlowConfirm((prev) => ({ ...prev, selectedFlowCode: row.flowCode }))}
                       />
                     </td>
-                    <td className="px-3 py-2 font-semibold">{row.flowCode}</td>
-                    <td className="px-3 py-2">{row.flowDescription || "—"}</td>
+                    <td className="whitespace-nowrap px-2 py-1.5 font-semibold">{row.flowCode}</td>
+                    <td className="whitespace-nowrap px-2 py-1.5">{row.flowDescription || "—"}</td>
+                    <td className="whitespace-nowrap px-2 py-1.5">
+                      {row.divCode ? (
+                        <span className="inline-block whitespace-nowrap rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800">
+                          {row.divCode} {row.divName ? `- ${row.divName}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </Dialog>
 
-      {/* Add / Edit / View Dialog */}
-      <Dialog
-        open={taskPopup.open}
-        wide
-        title={taskPopup.title}
-        onClose={() => closePopup()}
-      >
-        {taskPopup.open && (
-          <AddPRRequestPage
-            isEditMode={taskPopup.data.isEditMode}
-            isViewMode={taskPopup.data.isViewMode}
-            existingData={
-              taskPopup.data.existingData
-                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-                : undefined
-            }
-            flowCode={taskPopup.data.flowCode}
-            flowDescription={taskPopup.data.flowDescription}
-            docType={(taskPopup.data as any).docType}
-            docNo={(taskPopup.data as any).docNo}
-            onClose={closePopup}
-          />
-        )}
-      </Dialog>
+      <PurchaseReportPreview />
     </section>
   );
 };
 
-export default Purchase_Request_page;
+export default PurchaseRequestpage;

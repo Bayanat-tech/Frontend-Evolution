@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsDelete, pamsSave } from "../../api/pams";
-import { CheckCircle, Eye, Edit2, X, Save } from "lucide-react";
+import { CheckCircle, Eye, Edit2, Save, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -12,10 +12,11 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
-import { DataTable } from "../../components/ui/PamsDataTable";
+import { DataTable } from "../../components/ui/DataTablePams";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Row = Record<string, unknown>;
+type EmpType = "ALL" | "MANAGER" | "NON-MANAGER";
 
 interface MyTaskPageProps {
   initialTab?: number;
@@ -45,10 +46,10 @@ interface HodBatch {
   PENDING_COUNT: number | string;
 }
 
-const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
+const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENTBACK_TAB", "APPROVED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"] as const;
+const IN_PROGRESS_TAB = 1; // is tab me checkbox selection nahi dikhega
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
-// FLOW_LEVEL jispe HOD ke docs pahunchte hain jab HOD apna review complete kar leta hai (2 -> 3)
 const HOD_READY_FLOW_LEVEL = 3;
 const taskPageCache = new Map<string, Row[]>();
 
@@ -65,13 +66,10 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function formatPeriodQuarter(row: Row): string {
-  const dateValue = row.PERIOD_FROM_DATE;
-  if (!dateValue) return text(row.PERIOD_NUMBER);
-  const parsed = new Date(String(dateValue));
-  if (isNaN(parsed.getTime())) return text(row.PERIOD_NUMBER);
-  const quarter = Math.floor(parsed.getMonth() / 3) + 1;
-  return `Q${quarter} ${parsed.getFullYear()}`;
+function formatPeriodDisplay(periodNumber: unknown): string {
+  const raw = text(periodNumber);
+  if (!raw) return "";
+  return raw.replace(/-/g, " ");
 }
 
 function getStatusMeta(
@@ -113,6 +111,94 @@ function computeFinalRating(
   return Math.round((taskScore + charScore) / 2);
 }
 
+function isManagerRow(row: Row): boolean {
+  return text(row.EMPLOYEE_TYPE).toUpperCase() === "MANAGER";
+}
+
+// ── Helpers: search / filter ke liye "jo screen par dikhta hai wahi text" ──
+function getAvg(row: Row, weightage: ActiveWeightage | null): number {
+  const taskScore = Number(row.TASK_TOTAL ?? row.task_total ?? 0);
+  const charScore = Number(row.CHAR_TOTAL ?? row.char_total ?? 0);
+  return taskScore > 0 || charScore > 0
+    ? computeFinalRating(taskScore, charScore, weightage)
+    : Math.round(Number(row.FINAL_RATING || 0));
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function fmtRangeDate(v: unknown): string {
+  if (!v) return "";
+  const s = String(v);
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
+  return `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function desgLabel(r: Row): string {
+  const c = text(r.DESG_CODE);
+  const n = text(r.DESG_NAME);
+  return c && n ? `${c} - ${n}` : c || n;
+}
+
+function nextActionLabel(r: Row): string {
+  const c = text(r.NEXT_ACTION_BY);
+  const n = text(r.NEXT_ACTION_BY_NAME);
+  return c ? (n ? `${c} - ${n}` : c) : "";
+}
+
+function employeeLabel(r: Row): string {
+  return `${text(r.EMPLOYEE_CODE)} - ${text(r.EMPLOYEE_NAME)}`;
+}
+
+function statusLabelOf(r: Row): string {
+  return getStatusMeta(text(r.LAST_ACTION), Number(r.FLOW_LEVEL_RUNNING || 0), text(r.STATUS)).label;
+}
+
+// Division: pehle row ke apne DIV_* fields, na mile to employee->division map se
+function rowDiv(r: Row, empDiv: Record<string, string>, divName: Record<string, string>) {
+  let code = text(r.DIV_CODE ?? r.DIVISION_CODE).trim();
+  let name = text(r.DIV_NAME ?? r.DIVISION_NAME).trim();
+  if (!code) code = empDiv[text(r.EMPLOYEE_CODE).trim().toUpperCase()] || "";
+  if (code && !name) name = divName[code] || "";
+  return { key: code || name, label: code && name ? `${code} - ${name}` : code || name };
+}
+
+function rowDept(r: Row) {
+  const code = text(r.DEPT_CODE ?? r.DEPARTMENT_CODE).trim();
+  const name = text(r.DEPT_NAME ?? r.DEPARTMENT_NAME).trim();
+  return { key: code || name, label: code && name ? `${code} - ${name}` : code || name };
+}
+
+// Ek row ka poora "dikhne wala" text (search ke liye)
+function buildSearchText(
+  r: Row,
+  w: ActiveWeightage | null,
+  empDiv: Record<string, string>,
+  divName: Record<string, string>
+): string {
+  return [
+    text(r.APPRAISAL_DOC_NO),
+    fmtDate(r.APPRAISAL_DOC_DATE),
+    text(r.PERIOD_NUMBER),
+    formatPeriodDisplay(r.PERIOD_NUMBER),
+    text(r.EMPLOYEE_CODE),
+    text(r.EMPLOYEE_NAME),
+    employeeLabel(r),
+    desgLabel(r),
+    text(r.DEPT_NAME),
+    rowDiv(r, empDiv, divName).label,
+    rowDept(r).label,
+    fmtRangeDate(r.APPRAISAL_FROM),
+    fmtRangeDate(r.APPRAISAL_TO),
+    String(getAvg(r, w) || ""),
+    nextActionLabel(r),
+    text(r.SENT_BACK_REASON),
+    text(r.SENT_BACK_BY),
+    statusLabelOf(r),
+  ].join(" | ");
+}
+
 const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -120,12 +206,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
   const isHRApprover = HR_APPROVERS.includes(loginid);
-
   const cacheKey = useCallback(
     (tabIdx: number) => `${loginid}-${companyCode}-${TAB_STATUS[tabIdx]}`,
     [loginid, companyCode]
   );
-
   const [activeTab, setActiveTab] = useState(initialTab);
   const [rows, setRows] = useState<Row[]>(
     () => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`) ?? []
@@ -133,9 +217,15 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const [loading, setLoading] = useState(
     () => !taskPageCache.has(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`)
   );
+  const [tabCounts, setTabCounts] = useState<number[]>(() =>
+    TAB_STATUS.map((_, i) => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[i]}`)?.length ?? 0)
+  );
   const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
+  const [empType, setEmpType] = useState<EmpType>("ALL");
+  const [divFilter, setDivFilter] = useState("ALL");
+  const [deptFilter, setDeptFilter] = useState("ALL");
   const [activeWeightage, setActiveWeightage] = useState<ActiveWeightage | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState(false);
@@ -152,10 +242,110 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const [employees, setEmployees] = useState<Row[]>([]);
   const fetchRequestId = useRef(0);
   const prevUserKeyRef = useRef(`${loginid}-${companyCode}`);
-  const statusFilter = TAB_STATUS[activeTab];
-
   const [hodBatches, setHodBatches] = useState<HodBatch[]>([]);
   const [notifying, setNotifying] = useState<string | null>(null);
+  const showSelection = isHRApprover && activeTab !== IN_PROGRESS_TAB;
+  const [approving, setApproving] = useState(false);
+  const [approveProgress, setApproveProgress] = useState({ done: 0, total: 0 });
+  const APPROVE_CHUNK_SIZE = 50;
+
+  const resetFilters = () => {
+    setQuery("");
+    setEmpType("ALL");
+    setDivFilter("ALL");
+    setDeptFilter("ALL");
+  };
+
+  // Division master + employee->division map (Trn_appraisal rows me DIV_* nahi aata)
+  const [divMaster, setDivMaster] = useState<Row[]>([]);
+  const [empDivMap, setEmpDivMap] = useState<Record<string, string>>({});
+
+  const divNameMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    divMaster.forEach((d) => {
+      const c = text(d.DIV_CODE).trim();
+      if (c) m[c] = text(d.DIV_NAME).trim();
+    });
+    return m;
+  }, [divMaster]);
+
+  useEffect(() => {
+    if (!isHRApprover || !companyCode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const divs = (await pamsSelect({ parameter: "division", loginid, code1: companyCode })).map(normalizeRow);
+        if (cancelled) return;
+        setDivMaster(divs);
+        const map: Record<string, string> = {};
+        await Promise.all(
+          divs.map(async (d) => {
+            const code = text(d.DIV_CODE).trim();
+            if (!code) return;
+            try {
+              const emps = await pamsSelect({
+                parameter: "get_employees_by_division",
+                loginid, code1: companyCode, code2: code,
+              });
+              emps.forEach((e) => {
+                const ec = text(normalizeRow(e as Row).EMPLOYEE_CODE).trim().toUpperCase();
+                if (ec) map[ec] = code;
+              });
+            } catch {
+              /* ek division fail ho to baaki chalte rahein */
+            }
+          })
+        );
+        if (!cancelled) setEmpDivMap(map);
+      } catch (error) {
+        console.error("Error loading divisions:", error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isHRApprover, loginid, companyCode]);
+
+  const typeCounts = useMemo(() => ({
+    MANAGER: rows.filter(isManagerRow).length,
+    "NON-MANAGER": rows.filter((r) => !isManagerRow(r)).length,
+  }), [rows]);
+
+  const divOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    rows.forEach((r) => {
+      const d = rowDiv(r, empDivMap, divNameMap);
+      if (d.key) m.set(d.key, d.label);
+    });
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows, empDivMap, divNameMap]);
+
+  const deptOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    rows.forEach((r) => {
+      if (divFilter !== "ALL" && rowDiv(r, empDivMap, divNameMap).key !== divFilter) return;
+      const d = rowDept(r);
+      if (d.key) m.set(d.key, d.label);
+    });
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows, divFilter, empDivMap, divNameMap]);
+
+  // Har row me _SEARCH field: table ka global search isko bhi dekhta hai
+  const decoratedRows = useMemo(
+    () => rows.map((r): Row => ({ ...r, _SEARCH: buildSearchText(r, activeWeightage, empDivMap, divNameMap) })),
+    [rows, activeWeightage, empDivMap, divNameMap]
+  );
+
+  const visibleRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return decoratedRows.filter((r) => {
+      if (isHRApprover) {
+        if (empType === "MANAGER" && !isManagerRow(r)) return false;
+        if (empType === "NON-MANAGER" && isManagerRow(r)) return false;
+        if (divFilter !== "ALL" && rowDiv(r, empDivMap, divNameMap).key !== divFilter) return false;
+        if (deptFilter !== "ALL" && rowDept(r).key !== deptFilter) return false;
+      }
+      return !q || text(r._SEARCH).toLowerCase().includes(q);
+    });
+  }, [decoratedRows, query, isHRApprover, empType, divFilter, deptFilter, empDivMap, divNameMap]);
 
   const loadHodBatches = useCallback(async () => {
     try {
@@ -204,6 +394,30 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     void loadLookups();
   }, [loginid, companyCode]);
 
+  const loadTabCounts = useCallback(async () => {
+    if (!loginid || !companyCode) return;
+    const results = await Promise.all(
+      TAB_STATUS.map(async (status, i) => {
+        try {
+          const data = await pamsSelect({
+            parameter: "Trn_appraisal",
+            loginid,
+            code1: companyCode,
+            code2: "NULL",
+            code3: status,
+          });
+          const normalized = data.map(normalizeRow);
+          taskPageCache.set(cacheKey(i), normalized);
+          return normalized.length;
+        } catch {
+          return null;
+        }
+      })
+    );
+    setTabCounts((prev) => results.map((c, i) => (c ?? prev[i] ?? 0)));
+  }, [loginid, companyCode, cacheKey]);
+
+  useEffect(() => { void loadTabCounts(); }, [loadTabCounts]);
 
   const fetchData = useCallback(async (tabIndex: number, isBackground = false) => {
     const myRequestId = ++fetchRequestId.current;
@@ -225,6 +439,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       const normalizedData = data.map(normalizeRow);
       setRows(normalizedData);
       taskPageCache.set(cacheKey(tabIndex), normalizedData);
+      setTabCounts((prev) => {
+        const next = [...prev];
+        next[tabIndex] = normalizedData.length;
+        return next;
+      });
 
       const initSelected: Record<string, boolean> = {};
       normalizedData.forEach((row) => {
@@ -232,10 +451,9 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       });
       setSelectedRows(initSelected);
     } catch (err: unknown) {
-      if (myRequestId !== fetchRequestId.current) return; // stale error, ignore
+      if (myRequestId !== fetchRequestId.current) return;
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to load data" });
     } finally {
-      // Only clear loading spinner if we're still the latest request
       if (myRequestId === fetchRequestId.current) setLoading(false);
     }
   }, [loginid, companyCode, cacheKey]);
@@ -252,7 +470,9 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     taskPageCache.clear();
     setRows([]);
     setSelectedRows({});
+    setTabCounts(TAB_STATUS.map(() => 0));
     setLoading(true);
+    resetFilters();
     void fetchData(activeTab, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginid, companyCode]);
@@ -274,16 +494,20 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
     setActiveTab(index);
     setQuery("");
+    setEmpType("ALL");
+    setDivFilter("ALL");
+    setDeptFilter("ALL");
   }, [activeTab, cacheKey]);
 
-  const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
+  const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" | "open" = "open") => {
     const docNo = text(row.APPRAISAL_DOC_NO);
     const employeeCode = text(row.EMPLOYEE_CODE);
     const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
     const designation = encodeURIComponent(text(row.DESG_NAME));
     const department = encodeURIComponent(text(row.DEPT_NAME));
+    const sourceTab = encodeURIComponent(TAB_STATUS[activeTab]);
     navigate(
-      `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`,
+      `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}&source_tab=${sourceTab}`,
       { state: { prefetchedRow: row } }
     );
   };
@@ -363,6 +587,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       setNotice({ type: "success", message: "Appraisal updated successfully" });
       closeDialog();
       void fetchData(activeTab);
+      void loadTabCounts();
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Failed to update appraisal" });
     } finally {
@@ -379,40 +604,80 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       });
       setNotice({ type: "success", message: "Appraisal deleted successfully" });
       void fetchData(activeTab);
+      void loadTabCounts();
     } catch (err: unknown) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to delete" });
     }
   };
 
-  const handleBulkApprove = async () => {
-    const ids = Object.entries(selectedRows).filter(([, v]) => v).map(([id]) => id);
-    if (!ids.length) {
-      setNotice({ type: "warning", message: "Please select at least one appraisal!" });
-      return;
-    }
-    try {
-      await pamsSelect({
-        parameter: "proc_update_pams_doc_status_bulk", loginid,
-        code1: companyCode, code2: ids.join(","), code3: "A", code4: "",
-      });
-      setNotice({ type: "success", message: "Appraisals approved successfully!" });
-      setSelectedRows({});
-      void fetchData(activeTab);
-    } catch (err: unknown) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
-    }
-  };
+  // ── Selection (sirf visible rows par kaam karta hai) ──
+  const visibleIds = useMemo(
+    () => visibleRows.map((r) => text(r.APPRAISAL_DOC_NO)).filter(Boolean),
+    [visibleRows]
+  );
+  const selectedVisibleIds = useMemo(
+    () => visibleIds.filter((id) => selectedRows[id]),
+    [visibleIds, selectedRows]
+  );
 
   const toggleSelect = (id: string, checked: boolean) =>
     setSelectedRows((prev) => ({ ...prev, [id]: checked }));
 
   const toggleSelectAll = (checked: boolean) => {
-    const next: Record<string, boolean> = {};
-    rows.forEach((row) => { next[text(row.APPRAISAL_DOC_NO)] = checked; });
-    setSelectedRows(next);
+    setSelectedRows((prev) => {
+      const next = { ...prev };
+      visibleIds.forEach((id) => { next[id] = checked; });
+      return next;
+    });
   };
 
-  // flowLevel = jis level pe docs abhi khade hain (HOD ke liye ye hamesha 3 hai)
+  const handleBulkApprove = async () => {
+    if (approving) return; // double click guard
+
+    const ids = selectedVisibleIds;
+    if (!ids.length) {
+      setNotice({ type: "warning", message: "Please select at least one appraisal!" });
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to approve ${ids.length} appraisal(s)?`)) return;
+
+    setApproving(true);
+    setApproveProgress({ done: 0, total: ids.length });
+    setNotice(null);
+
+    const failedIds: string[] = [];
+    let approvedCount = 0;
+
+    for (let i = 0; i < ids.length; i += APPROVE_CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + APPROVE_CHUNK_SIZE);
+      try {
+        await pamsSelect({
+          parameter: "proc_update_pams_doc_status_bulk", loginid,
+          code1: companyCode, code2: chunk.join(","), code3: "A", code4: "",
+        });
+        approvedCount += chunk.length;
+      } catch {
+        failedIds.push(...chunk);
+      }
+      setApproveProgress({ done: Math.min(i + chunk.length, ids.length), total: ids.length });
+    }
+
+    if (failedIds.length === 0) {
+      toast.success(`${approvedCount} appraisal(s) approved successfully.`);
+      setSelectedRows({});
+    } else {
+      toast.warning(`${approvedCount} approved, ${failedIds.length} failed. Failed records selected rehenge, dobara try karo.`);
+      // sirf failed wale selected rakho
+      const next: Record<string, boolean> = {};
+      failedIds.forEach((id) => { next[id] = true; });
+      setSelectedRows(next);
+    }
+
+    setApproving(false);
+    void fetchData(activeTab);
+    void loadTabCounts();
+  };
+
   const handleNotifyNextLevel = async (flowLevel: number, periodNumber: string) => {
     const key = `${flowLevel}-${periodNumber}`;
     setNotifying(key);
@@ -420,7 +685,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       const res = await pamsSelect({
         parameter: "notify_next_level_hod_bulk",
         loginid, code1: companyCode,
-        code2: String(flowLevel - 1),   // p_flow_level jispe wo baitha tha (2 for HOD)
+        code2: String(flowLevel - 1),
         code3: periodNumber,
       });
       const result = text((res as unknown as Row[])?.[0]?.P_RESULT);
@@ -449,8 +714,27 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
     cols.push({
       accessorKey: "APPRAISAL_DOC_NO",
-      header: "Appraisal Doc No",
-      size: 200,
+      size: 220,
+      header: () => {
+        if (!showSelection) return <span>Appraisal Doc No</span>;
+        const allChecked = visibleIds.length > 0 && selectedVisibleIds.length === visibleIds.length;
+        const someChecked = selectedVisibleIds.length > 0 && !allChecked;
+        return (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            <input
+              type="checkbox"
+              checked={allChecked}
+              ref={(el) => { if (el) el.indeterminate = someChecked; }}
+              disabled={visibleIds.length === 0}
+              title={`Select all (${visibleIds.length})`}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => toggleSelectAll(e.target.checked)}
+              style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#082A89" }}
+            />
+            <span>Appraisal Doc No</span>
+          </span>
+        );
+      },
       cell: ({ row }) => {
         const id = text(row.original.APPRAISAL_DOC_NO);
         if (!id) return null;
@@ -458,7 +742,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
           <div
             onClick={(e) => {
               if ((e.target as HTMLElement).tagName !== "INPUT")
-                openAppraisalTabsPage(row.original, "view");
+                openAppraisalTabsPage(row.original, "open");
             }}
             style={{
               display: "flex", alignItems: "center", gap: "8px",
@@ -466,7 +750,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
               overflow: "hidden", textOverflow: "ellipsis"
             }}
           >
-            {isHRApprover && (
+            {showSelection && (
               <input
                 type="checkbox"
                 checked={!!selectedRows[id]}
@@ -497,18 +781,24 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     cols.push({
-  accessorKey: "PERIOD_NUMBER",
-  header: "Period No",
-  size: 100,
-  cell: ({ row }) =>
-    formatPeriodQuarter({
-      PERIOD_FROM_DATE: row.original.APPRAISAL_FROM,
-      PERIOD_NUMBER: row.original.PERIOD_NUMBER,
-    }) || "—",
-});
+      id: "PERIOD_NUMBER",
+      accessorFn: (r) => formatPeriodDisplay(r.PERIOD_NUMBER),
+      header: "Period No",
+      size: 130,
+      cell: ({ row }) => {
+        const periodNumber = text(row.original.PERIOD_NUMBER);
+        if (!periodNumber) return <span style={{ color: "#9ca3af" }}>—</span>;
+        return (
+          <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
+            {formatPeriodDisplay(periodNumber)}
+          </span>
+        );
+      },
+    });
 
     cols.push({
-      accessorKey: "EMPLOYEE_CODE",
+      id: "EMPLOYEE_CODE",
+      accessorFn: (r) => employeeLabel(r),
       header: "Employee",
       size: 280,
       cell: ({ row }) => (
@@ -519,52 +809,23 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     cols.push({
-      accessorKey: "DESG_NAME",
+      id: "DESG_NAME",
+      accessorFn: (r) => desgLabel(r),
       header: "Designation",
       size: 200,
-      cell: ({ row }) => {
-        const desgCode = text(row.original.DESG_CODE);
-        const desgName = text(row.original.DESG_NAME);
-        const desgLabel = desgCode && desgName ? `${desgCode} - ${desgName}` : desgCode || desgName || "—";
-        return <span style={{ whiteSpace: "nowrap" }}>{desgLabel}</span>;
-      },
+      cell: ({ row }) => (
+        <span style={{ whiteSpace: "nowrap" }}>{desgLabel(row.original) || "—"}</span>
+      ),
     });
 
     cols.push({
-      accessorKey: "PERIOD_RANGE",
+      id: "PERIOD_RANGE",
+      accessorFn: (r) => `${fmtRangeDate(r.APPRAISAL_FROM)} ${fmtRangeDate(r.APPRAISAL_TO)}`.trim(),
       header: "Period Range",
       size: 210,
       cell: ({ row }) => {
-        const fromDate = row.original.APPRAISAL_FROM;
-        const toDate = row.original.APPRAISAL_TO;
-
-
-        const formatDateRange = (dateVal: unknown) => {
-          if (!dateVal) return null;
-
-
-          let dateStr = String(dateVal);
-
-          if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-            return dateStr;
-          }
-
-          const d = new Date(dateStr);
-          if (isNaN(d.getTime())) return null;
-
-          const day = String(d.getDate()).padStart(2, "0");
-          const month = String(d.getMonth() + 1).padStart(2, "0");
-          const year = d.getFullYear();
-          return `${day} ${getMonthAbbreviation(d.getMonth())} ${year}`;
-        };
-
-        const getMonthAbbreviation = (monthIndex: number) => {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          return months[monthIndex];
-        };
-
-        const from = formatDateRange(fromDate);
-        const to = formatDateRange(toDate);
+        const from = fmtRangeDate(row.original.APPRAISAL_FROM);
+        const to = fmtRangeDate(row.original.APPRAISAL_TO);
 
         if (!from && !to) return <span style={{ color: "#9ca3af" }}>—</span>;
 
@@ -579,15 +840,12 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     cols.push({
-      accessorKey: "FINAL_RATING",
+      id: "FINAL_RATING",
+      accessorFn: (r) => getAvg(r, activeWeightage) || "",
       header: "Avg Score",
       size: 110,
       cell: ({ row }) => {
-        const taskScore = Number(row.original.TASK_TOTAL ?? row.original.task_total ?? 0);
-        const charScore = Number(row.original.CHAR_TOTAL ?? row.original.char_total ?? 0);
-        const avg = (taskScore > 0 || charScore > 0)
-          ? computeFinalRating(taskScore, charScore, activeWeightage)
-          : Math.round(Number(row.original.FINAL_RATING || 0));
+        const avg = getAvg(row.original, activeWeightage);
 
         if (!avg) return <span style={{ color: "#9ca3af" }}>—</span>;
 
@@ -610,19 +868,20 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     cols.push({
-      accessorKey: "NEXT_ACTION_BY",
+      id: "NEXT_ACTION_BY",
+      accessorFn: (r) => nextActionLabel(r),
       header: "Next Action By",
       size: 190,
       cell: ({ row }) => {
-        const code = text(row.original.NEXT_ACTION_BY);
-        const name = text(row.original.NEXT_ACTION_BY_NAME);
-        if (!code) return <span style={{ color: "#9ca3af" }}>—</span>;
-        return <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{code}{name ? ` - ${name}` : ""}</span>;
+        const label = nextActionLabel(row.original);
+        if (!label) return <span style={{ color: "#9ca3af" }}>—</span>;
+        return <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{label}</span>;
       },
     });
 
     cols.push({
-      accessorKey: "SENT_BACK_REASON",
+      id: "SENT_BACK_REASON",
+      accessorFn: (r) => `${text(r.SENT_BACK_REASON)} ${text(r.SENT_BACK_BY)}`.trim(),
       header: "Sent Back Remarks",
       size: 230,
       cell: ({ row }) => {
@@ -644,7 +903,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     cols.push({
-      accessorKey: "LAST_ACTION",
+      id: "LAST_ACTION",
+      accessorFn: (r) => statusLabelOf(r),
       header: "Status",
       size: 140,
       cell: ({ row }) => {
@@ -669,15 +929,21 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       id: "actions",
       header: "Actions",
       size: 100,
+      enableColumnFilter: false,
       cell: ({ row }) => (
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <Button size="sm" variant="ghost" title="Edit"
-            onClick={() => openEditDialog(row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}>
-            <Edit2 size={14} />
-          </Button>
+          {/* Edit sirf Pending tab me */}
+          {activeTab === 0 && (
+            <Button size="sm" variant="ghost" title="Edit"
+              onClick={(e) => { e.stopPropagation(); openAppraisalTabsPage(row.original, "edit"); }}
+              style={{ padding: "4px", height: "28px", width: "28px" }}>
+              <Edit2 size={14} />
+            </Button>
+          )}
+
+          {/* View har tab me, hamesha read-only */}
           <Button size="sm" variant="ghost" title="View"
-            onClick={() => openViewDialog(row.original)}
+            onClick={(e) => { e.stopPropagation(); openAppraisalTabsPage(row.original, "view"); }}
             style={{ padding: "4px", height: "28px", width: "28px" }}>
             <Eye size={14} />
           </Button>
@@ -686,60 +952,143 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     return cols;
-  }, [isHRApprover, selectedRows, activeWeightage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSelection, selectedRows, visibleIds, selectedVisibleIds, activeWeightage, activeTab]);
+
+  // Sirf 3 HR users ko: search box ke right side me 3 dropdown
+  // LookupField ke liye options (har list me pehla "ALL" option)
+  const empTypeLookupRows = useMemo(
+    () => [
+      { CODE: "ALL", LABEL: `All Employees (${rows.length})` },
+      { CODE: "NON-MANAGER", LABEL: `Non Manager (${typeCounts["NON-MANAGER"]})` },
+      { CODE: "MANAGER", LABEL: `Manager (${typeCounts.MANAGER})` },
+    ] as LookupRow[],
+    [rows.length, typeCounts]
+  );
+  const divLookupRows = useMemo(
+    () => [
+      { CODE: "ALL", LABEL: "All Divisions" },
+      ...divOptions.map(([k, label]) => ({ CODE: k, LABEL: label })),
+    ] as LookupRow[],
+    [divOptions]
+  );
+  const deptLookupRows = useMemo(
+    () => [
+      { CODE: "ALL", LABEL: "All Departments" },
+      ...deptOptions.map(([k, label]) => ({ CODE: k, LABEL: label })),
+    ] as LookupRow[],
+    [deptOptions]
+  );
+
+  const labelOf = (list: LookupRow[], code: string) =>
+    text(list.find((r) => text(r.CODE) === code)?.LABEL);
+
+  const filterToolbar = isHRApprover ? (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+      <div style={{ width: "190px" }}>
+        <LookupField
+          compact
+          label="Employee Type"
+          value={empType}
+          displayValue={labelOf(empTypeLookupRows, empType)}
+          placeholder="Employee type"
+          columns={[{ field: "LABEL", header: "Employee Type" }]}
+          valueField="CODE"
+          displayFields={["LABEL"]}
+          popoverWidth={260}
+          loadOptions={async () => empTypeLookupRows}
+          onChange={(v) => setEmpType((v || "ALL") as EmpType)}
+        />
+      </div>
+
+      <div style={{ width: "230px" }}>
+        <LookupField
+          compact
+          label="Division"
+          value={divFilter}
+          displayValue={labelOf(divLookupRows, divFilter)}
+          placeholder="Division"
+          columns={[{ field: "LABEL", header: "Division" }]}
+          valueField="CODE"
+          displayFields={["LABEL"]}
+          popoverWidth={340}
+          loadOptions={async () => divLookupRows}
+          onChange={(v) => { setDivFilter(v || "ALL"); setDeptFilter("ALL"); }}
+        />
+      </div>
+
+      <div style={{ width: "230px" }}>
+        <LookupField
+          compact
+          label="Department"
+          value={deptFilter}
+          displayValue={labelOf(deptLookupRows, deptFilter)}
+          placeholder="Department"
+          columns={[{ field: "LABEL", header: "Department" }]}
+          valueField="CODE"
+          displayFields={["LABEL"]}
+          popoverWidth={340}
+          loadOptions={async () => deptLookupRows}
+          onChange={(v) => setDeptFilter(v || "ALL")}
+        />
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
 
-      {/* Breadcrumb */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
-        <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <a href="/pams/masters" style={{ color: "#6b7280", textDecoration: "none" }}>Master</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <span style={{ color: "#111827", fontWeight: 500 }}>Appraisal</span>
-      </div>
-
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Tabs */}
-      <div style={{ display: "flex", alignItems: "center", gap: "2px", borderBottom: "2px solid #e5e7eb" }}>
-        {TAB_LABELS.map((label, index) => (
-          <button
-            key={index}
-            onClick={() => handleTabChange(index)}
-            style={{
-              padding: "8px 20px", fontSize: "14px",
-              fontWeight: activeTab === index ? 700 : 500,
-              color: activeTab === index ? "#082A89" : "#6b7280",
-              background: activeTab === index ? "#f0f4ff" : "transparent",
-              border: "none",
-              borderBottom: activeTab === index ? "2px solid #082A89" : "2px solid transparent",
-              borderRadius: "8px 8px 0 0", cursor: "pointer",
-              marginBottom: "-2px", whiteSpace: "nowrap",
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Tabs UI: Purchase Request wala same */}
+      <div
+        style={{
+          display: "flex", alignItems: "flex-end", gap: "4px",
+          padding: "3px 7px 0 8px", overflowX: "auto",
+          background: "#f1f5f9",
+          border: "1px solid #e2e8f0",
+          borderBottom: "1px solid #cbd5e1",
+          borderRadius: "10px",
+        }}
+      >
+        {TAB_LABELS.map((label, index) => {
+          const active = activeTab === index;
+          return (
+            <button
+              key={TAB_STATUS[index]}
+              type="button"
+              onClick={() => handleTabChange(index)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "8px",
+                padding: "10px 16px", fontSize: "12.5px",
+                fontWeight: active ? 700 : 500,
+                color: active ? "#082A89" : "#475569",
+                background: active ? "#e8f0ff" : "transparent",
+                border: "none",
+                borderBottom: active ? "2px solid #082A89" : "2px solid transparent",
+                borderRadius: "10px 10px 0 0",
+                cursor: "pointer", whiteSpace: "nowrap",
+                transition: "background 0.15s, color 0.15s",
+              }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#e8eef7"; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+            >
+              <span>{label}</span>
+              <span
+                style={{
+                  minWidth: "20px", padding: "1px 7px", borderRadius: "999px",
+                  fontSize: "11px", fontWeight: 700, textAlign: "center",
+                  background: active ? "#082A89" : "#cbd5e1",
+                  color: active ? "#fff" : "#334155",
+                }}
+              >
+                {tabCounts[index] ?? 0}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Select All */}
-      {isHRApprover && rows.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "0 4px" }}>
-          <input
-            type="checkbox"
-            checked={rows.length > 0 && rows.every((row) => selectedRows[text(row.APPRAISAL_DOC_NO)])}
-            onChange={(e) => toggleSelectAll(e.target.checked)}
-            style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#082A89" }}
-          />
-          <span style={{ fontSize: "12px", color: "#6b7280" }}>
-            Select All ({rows.length} records)
-          </span>
-        </div>
-      )}
-
-      {/* HOD — Notify Next Level batches */}
       {hodBatches
         .filter((b) => Number(b.PENDING_COUNT) === 0 && Number(b.READY_COUNT) > 0)
         .map((batch) => {
@@ -759,36 +1108,73 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
                 onClick={() => handleNotifyNextLevel(HOD_READY_FLOW_LEVEL, batch.PERIOD_NUMBER)}
                 style={{ background: "#082a89" }}
               >
-                <CheckCircle size={14} /> {notifying === key ? "Sending..." : "Notify Next Reviewer"}
+                <CheckCircle size={14} /> {notifying === key ? "Sending..." : "Completed Appraisal"}
               </Button>
             </div>
           );
         })}
+      <div style={{ position: "relative" }}>
+        <DataTable
+          columns={columns}
+          data={visibleRows}
+          title={`${visibleRows.length.toLocaleString()} Records`}
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search appraisal..."
+          toolbar={filterToolbar}
+          enableExport={false}
+          loading={loading}
+          loaderType="circle"
+          height={550}
+          minWidth={1300}
+          density="compact"
+          enablePagination
+          pageSize={100}
+          enableColumnFilters={true}
+          getRowId={(row) => text(row.APPRAISAL_DOC_NO)}
+        />
+        {approving && (
+          <div
+            style={{
+              position: "absolute", inset: 0, zIndex: 40,
+              background: "rgba(255,255,255,0.55)", cursor: "wait",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <div style={{
+              display: "flex", alignItems: "center", gap: "10px",
+              padding: "10px 18px", background: "#fff", borderRadius: "10px",
+              border: "1px solid #b3caf5", boxShadow: "0 4px 16px rgba(8,42,137,0.15)",
+              fontSize: "13px", fontWeight: 600, color: "#082A89",
+            }}>
+              <Loader2 size={18} className="animate-spin" />
+              Approving {approveProgress.done}/{approveProgress.total}...
+            </div>
+          </div>
+        )}
+      </div>
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        title={`${rows.length.toLocaleString()} Records`}
-        subtitle={`${statusFilter} Appraisals`}
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search appraisal..."
-        loading={loading}
-        loaderType="circle" 
-        height={550}
-        minWidth={1300}
-        density="compact"
-        enablePagination
-        pageSize={100}
-        enableColumnFilters={true}
-        getRowId={(row) => text(row.APPRAISAL_DOC_NO)}
-      />
-
-      {/* Bulk Approve */}
-      {isHRApprover && Object.values(selectedRows).some(Boolean) && (
-        <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
-          <Button onClick={handleBulkApprove} style={{ background: "#082a89" }}>
-            <CheckCircle size={15} /> Approve Selected ({Object.values(selectedRows).filter(Boolean).length})
+      {showSelection && selectedVisibleIds.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "5px" }}>
+          {approving && (
+            <span style={{ fontSize: "12px", color: "#6b7280" }}>
+              Please wait, do not close this page...
+            </span>
+          )}
+          <Button
+            onClick={handleBulkApprove}
+            disabled={approving}
+            style={{ background: "#082a89", opacity: approving ? 0.85 : 1, cursor: approving ? "wait" : "pointer" }}
+          >
+            {approving ? (
+              <>
+                <Loader2 size={15} className="animate-spin" /> Approving... {approveProgress.done}/{approveProgress.total}
+              </>
+            ) : (
+              <>
+                <CheckCircle size={15} /> Approve Selected ({selectedVisibleIds.length})
+              </>
+            )}
           </Button>
         </div>
       )}
@@ -801,7 +1187,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         onClose={closeDialog}
         footer={
           <>
-            <Button variant="outline" onClick={closeDialog}><X size={15} /> Close</Button>
+            <Button variant="outline" onClick={closeDialog}>Close</Button>
             {editMode && (
               <Button disabled={saving} onClick={saveRecord}>
                 <Save size={15} /> {saving ? "Saving..." : "Save Changes"}
@@ -864,7 +1250,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
                   <option value="">Select Period</option>
                   {periods.map((period, idx) => (
                     <option key={idx} value={text(period.PERIOD_NUMBER)}>
-                      {text(period.PERIOD_NUMBER)}
+                      {formatPeriodDisplay(period.PERIOD_NUMBER)}
                     </option>
                   ))}
                 </select>

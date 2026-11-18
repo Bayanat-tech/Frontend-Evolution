@@ -13,14 +13,17 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Loader2, Search, X } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Filter, Loader2, Search } from "lucide-react";
 import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
 import { Button } from "./Button";
 import { ExportCSVButton } from "./ExportCSVButton";
 import { Input } from "./Input";
 import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
+import { BiscDatePicker } from "./BiscDatePicker";
+import { formatDate } from "../../utils/date";
 
 export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
 
@@ -35,6 +38,7 @@ export type DataTableProps<TData, TValue> = {
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
   toolbar?: ReactNode;
+  actionButton?: ReactNode;
   loading?: boolean;
   loaderType?: DataTableLoaderType; 
   emptyText?: string;
@@ -49,6 +53,7 @@ export type DataTableProps<TData, TValue> = {
   onPageChange?: (pageIndex: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
   columnFilters?: ColumnFiltersState;
+  initialColumnFilters?: ColumnFiltersState;
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
   manualFiltering?: boolean;
   enableColumnFilters?: boolean;
@@ -59,20 +64,109 @@ export type DataTableProps<TData, TValue> = {
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
   /** Called whenever row selection changes; receives array of selected row originals */
-   onRowSelectionChange?: (selectedRows: TData[]) => void;
+  onRowSelectionChange?: (selectedRows: TData[]) => void;
   initialSorting?: SortingState;
+  /**
+   * STANDARD WIDE-TABLE PATTERN — on by default for every table using this
+   * component. Pins the first column (row identity) while scrolling
+   * horizontally. Set false only if the table has no natural identity
+   * column, or is narrow enough to never scroll.
+   */
+  stickyFirstColumn?: boolean;
+  /**
+   * Pins the last column (typically Actions) while scrolling horizontally,
+   * so view/edit/delete controls never require scrolling back. On by
+   * default — set false only for tables with no action column.
+   */
+  stickyLastColumn?: boolean;
+  /**
+   * Shows a soft edge shadow on whichever side still has more columns to
+   * scroll to, fading out at each end. This is the only reliable "there's
+   * more here" signal until the user is already dragging the scrollbar.
+   * On by default.
+   */
+  enableScrollShadow?: boolean;
+  /**
+   * STANDARD WIDE-TABLE PATTERN — truncates body cell content to a single
+   * line with an ellipsis instead of letting long values wrap the row
+   * taller. The full value is still available on hover via a native title
+   * tooltip. Column headers are never truncated — a header is always
+   * short, fixed text, so the column simply widens to fit it. On by
+   * default; set false for tables that genuinely need wrapped text (e.g.
+   * multi-line notes columns).
+   */
+  truncateCellText?: boolean;
 };
 
+// Density presets — "grid" is the most compact (used everywhere in WMS).
+// Header text is intentionally LARGER and bolder than body text so column
+// titles read clearly while data stays dense.
 const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
-  grid: { row: "h-7", cell: "px-2 py-0.5 text-[11px] leading-tight" },
-  compact: { row: "h-8", cell: "px-2 py-1 text-xs leading-tight" },
-  comfortable: { row: "h-12", cell: "py-3" },
+  grid: { row: "h-[27px]", cell: "px-2 py-0 text-[11.5px] leading-tight" },
+  compact: { row: "h-7", cell: "px-2 py-0.5 text-[11.5px] leading-tight" },
+  comfortable: { row: "h-9", cell: "px-2 py-1 text-xs leading-tight" },
   large: { row: "h-14", cell: "py-3.5" },
 };
+
+// STANDARD WIDE-TABLE PATTERN — sticky column dividers.
+// Plain box-shadow (not a border color) so it reads correctly in both
+// light/dark and doesn't fight the table's existing border tokens.
+const STICKY_LEFT_SHADOW = "6px 0 6px -6px rgba(0,0,0,0.10)";
+const STICKY_RIGHT_SHADOW = "-6px 0 6px -6px rgba(0,0,0,0.10)";
+// Sticky cells need an opaque background or the scrolling columns behind
+// them show through. bg-white matches the convention already used
+// elsewhere in this file (data-table-scroll, data-table-header, etc).
+// NOTE: this means a sticky cell will NOT pick up row hover / [data-state
+// =selected] styling from Table.tsx if that styling relies on the row's
+// own background showing through cells — flag this to whoever owns
+// Table.tsx if that's needed; not fixed here since Table.tsx wasn't in
+// scope for this change.
+const STICKY_CELL_BG = "bg-white";
+
+// STANDARD WIDE-TABLE PATTERN — every border in this component (shell
+// outline, header rule, row rule, column dividers, pagination rule) comes
+// from these two literal, fully-written-out class strings. IMPORTANT: keep
+// them as plain literals, not built with template-literal interpolation
+// (e.g. `border-[${SOME_VAR}]`) — Tailwind's compiler finds classes by
+// statically scanning the raw source text, so an interpolated arbitrary
+// value never gets its CSS generated and silently renders as nothing.
+const GRID_OUTLINE = "border-[#878787]"; // shell's outer border — a touch stronger, it's the table's boundary
+const GRID_LINE = "border-[#ecf0f5]"; // internal rules — header/row/column dividers
+const CELL_DIVIDER = `border-r ${GRID_LINE} last:border-r-0`;
+
+// Header text formatter — "First letter big, rest small" per word, so
+// "SKU CODE" / "sku code" / "Sku Code" all render as "Sku Code". CSS
+// `capitalize` can't do this (it never lowercases the rest), hence JS.
+// Words in HEADER_ACRONYMS stay fully uppercase (e.g. "UOM", "GRN").
+// Add to this set as you hit more WMS acronyms.
+// Only applies to plain-string headers — custom header renderers (JSX /
+// functions) are left untouched.
+const HEADER_ACRONYMS = new Set(["ID", "SKU", "UOM", "GRN", "ASN", "EDI", "PO", "UPC", "EAN", "SN"]);
+
+// Descriptive values must not determine the width of an operational grid.
+// These columns receive a predictable reading width and expose their full
+// value through the shared overflow tooltip below.
+const LONG_TEXT_COLUMN = /(^|_)(description|remarks?|notes?|comments?)$/i;
+
+function formatHeaderText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[a-z][a-z0-9']*/g, (word) =>
+      HEADER_ACRONYMS.has(word.toUpperCase())
+        ? word.toUpperCase()
+        : word.charAt(0).toUpperCase() + word.slice(1),
+    );
+}
 
 const includesText: FilterFn<unknown> = (row, columnId, filterValue) => {
   const search = String(filterValue ?? "").trim().toLowerCase();
   if (!search) return true;
+  if (columnId === "canceled" || columnId === "status") {
+    const rowVal = String(row.getValue(columnId) || "N").toUpperCase();
+    if (search === "y" || search === "cancelled" || search === "canceled") return rowVal === "Y";
+    if (search === "n" || search === "active") return rowVal !== "Y";
+    return true;
+  }
   return String(row.getValue(columnId) ?? "").toLowerCase().includes(search);
 };
 
@@ -101,13 +195,14 @@ export function DataTable<TData, TValue>({
   onSearchChange,
   searchPlaceholder = "Search...",
   toolbar,
+  actionButton,
   loading,
   loaderType = "skeleton",
   emptyText = "No records found",
   height = 590,
   minWidth,
   density = "comfortable",
-  pageSize = 500,
+  pageSize = 25,
   enablePagination = false,
   manualPagination = false,
   pageIndex = 0,
@@ -115,6 +210,7 @@ export function DataTable<TData, TValue>({
   onPageChange,
   onPageSizeChange,
   columnFilters: controlledColumnFilters,
+  initialColumnFilters = [],
   onColumnFiltersChange,
   manualFiltering = false,
   enableColumnFilters = true,
@@ -126,9 +222,13 @@ export function DataTable<TData, TValue>({
   getRowId,
   onRowSelectionChange,
   initialSorting = [],
+  stickyFirstColumn = true,
+  stickyLastColumn = true,
+  enableScrollShadow = true,
+  truncateCellText = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting);
-  const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
+  const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>(initialColumnFilters);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
@@ -136,13 +236,34 @@ export function DataTable<TData, TValue>({
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const topScrollRef = useRef<HTMLDivElement>(null);
   const [scrollContentWidth, setScrollContentWidth] = useState(0);
+  // STANDARD WIDE-TABLE PATTERN — scroll-shadow state, driven off the same
+  // horizontal scroll position already tracked for the synced top scrollbar.
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const globalFilter = searchValue ?? internalSearch;
   const columnFilters = controlledColumnFilters ?? internalColumnFilters;
   const rowStyle = densityClasses[density];
   const enhancedColumns = useMemo(
     () => columns.map((column) => {
       const id = "id" in column && column.id ? column.id : "accessorKey" in column ? String(column.accessorKey) : "";
-      return isDateColumn(id) && !column.filterFn ? { ...column, filterFn: dateBetween as FilterFn<TData> } : column;
+      const isDate = isDateColumn(id) || (typeof column.header === "string" && /(^|_|\s)(date|dt)(_|\s|$)/i.test(column.header));
+      const isLongText = LONG_TEXT_COLUMN.test(id);
+      const widthDefaults = isLongText
+        ? {
+            size: column.size ?? 340,
+            minSize: column.minSize ?? 220,
+            maxSize: column.maxSize ?? 420,
+          }
+        : {};
+      if (isDate) {
+        return {
+          ...column,
+          ...widthDefaults,
+          filterFn: column.filterFn || (dateBetween as FilterFn<TData>),
+          ...(!column.cell ? { cell: ({ getValue }: { getValue: () => unknown }) => formatDate(getValue()) } : {}),
+        };
+      }
+      return { ...column, ...widthDefaults };
     }),
     [columns],
   );
@@ -194,20 +315,42 @@ export function DataTable<TData, TValue>({
     pageCount: manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : undefined,
   });
 
-  const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
-  const exportRows = (manualPagination || manualFiltering ? table.getCoreRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
+  const visibleRows = manualPagination
+    ? table.getSortedRowModel().rows
+    : enablePagination
+      ? table.getRowModel().rows
+      : table.getSortedRowModel().rows;
+  const exportRows = (manualPagination ? table.getSortedRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
   const showExport = enableExport ?? Boolean(onSearchChange || enablePagination || manualPagination);
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
-  const responsiveMinWidth = minWidth ?? Math.max(760, enhancedColumns.length * 140);
+  const responsiveMinWidth = minWidth ?? (enhancedColumns.length > 14 ? Math.max(760, enhancedColumns.length * 110) : "100%");
   const minWidthValue = typeof responsiveMinWidth === "number" ? `${responsiveMinWidth}px` : responsiveMinWidth;
   const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
   const currentPageIndex = manualPagination ? pageIndex : table.getState().pagination.pageIndex;
+  const currentPageSize = manualPagination ? pageSize : table.getState().pagination.pageSize;
   const effectiveTotalRows = totalRows ?? (manualPagination ? data.length : table.getFilteredRowModel().rows.length);
-  const firstVisibleRow = effectiveTotalRows === 0 ? 0 : currentPageIndex * pageSize + 1;
-  const lastVisibleRow = Math.min(effectiveTotalRows, currentPageIndex * pageSize + visibleRows.length);
+  const firstVisibleRow = effectiveTotalRows === 0 ? 0 : currentPageIndex * currentPageSize + 1;
+  const lastVisibleRow = Math.min(effectiveTotalRows, currentPageIndex * currentPageSize + visibleRows.length);
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
+  const totalPages = Math.max(pageCount, 1);
+  // STANDARD WIDE-TABLE PATTERN — condensed page-number list (1 2 3 … 42)
+  // instead of only first/prev/next/last controls, so pagination reads the
+  // same regardless of how many pages there are.
+  const pageNumbers = useMemo(() => {
+    const pages: number[] = [];
+    if (totalPages <= 5) {
+      for (let i = 0; i < totalPages; i += 1) pages.push(i);
+    } else if (currentPageIndex <= 2) {
+      pages.push(0, 1, 2, -1, totalPages - 1);
+    } else if (currentPageIndex >= totalPages - 3) {
+      pages.push(0, -1, totalPages - 3, totalPages - 2, totalPages - 1);
+    } else {
+      pages.push(0, -1, currentPageIndex - 1, currentPageIndex, currentPageIndex + 1, -1, totalPages - 1);
+    }
+    return pages;
+  }, [currentPageIndex, totalPages]);
   const goToPage = (nextPageIndex: number) => {
     const boundedPageIndex = Math.min(Math.max(nextPageIndex, 0), Math.max(pageCount - 1, 0));
     if (manualPagination) {
@@ -236,10 +379,23 @@ export function DataTable<TData, TValue>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowSelection]);
 
+  // STANDARD WIDE-TABLE PATTERN — recompute shadow visibility from the
+  // scroll container's current scrollLeft/scrollWidth/clientWidth.
+  const updateScrollShadows = () => {
+    if (!enableScrollShadow) return;
+    const el = tableScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 1);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
   useEffect(() => {
     const scrollElement = tableScrollRef.current;
     if (!scrollElement) return undefined;
-    const updateWidth = () => setScrollContentWidth(scrollElement.scrollWidth);
+    const updateWidth = () => {
+      setScrollContentWidth(scrollElement.scrollWidth);
+      updateScrollShadows();
+    };
     updateWidth();
     const resizeObserver = new ResizeObserver(updateWidth);
     resizeObserver.observe(scrollElement);
@@ -249,34 +405,47 @@ export function DataTable<TData, TValue>({
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateWidth);
     };
-  }, [columns.length, data.length, visibleRows.length, minWidthValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns.length, data.length, visibleRows.length, minWidthValue, enableScrollShadow]);
 
   const syncTableScroll = (event: UIEvent<HTMLDivElement>) => {
     if (!tableScrollRef.current) return;
     tableScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+    updateScrollShadows();
   };
 
   const syncTopScroll = (event: UIEvent<HTMLDivElement>) => {
     if (!topScrollRef.current) return;
     topScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+    updateScrollShadows();
   };
 
   return (
-    <div className="data-table-wrap grid w-full min-w-0 max-w-full gap-2">
-      <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
+    <div className="data-table-wrap grid w-full min-w-0 max-w-full gap-2 font-sans">
       {(onSearchChange || toolbar || enableColumnVisibility || showExport) && (
-        <div className="data-table-header grid gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
-          <div className="data-table-actions flex w-full flex-wrap items-center justify-between gap-2">
+        <div className="data-table-header flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-2 px-3 shadow-sm">
+          <div className="data-table-actions flex w-full flex-wrap items-center justify-between gap-3">
             {onSearchChange && (
-              <label className="data-table-search flex h-10 w-full min-w-[260px] max-w-[520px] items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
-                <Search size={16} />
-                <Input
-                  className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
                   value={globalFilter ?? ""}
                   onChange={(event) => table.setGlobalFilter(event.target.value)}
-                  placeholder={searchPlaceholder}
+                  placeholder={searchPlaceholder || "Search...."}
+                  className="data-table-search-input w-full h-9 pl-9 pr-8 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-[13px] transition-all"
                 />
-              </label>
+                {globalFilter ? (
+                  <button
+                    onClick={() => table.setGlobalFilter("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer text-xs leading-none"
+                    type="button"
+                    aria-label="Clear search"
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </div>
             )}
             {enableColumnVisibility && (
               <details className="relative">
@@ -297,22 +466,72 @@ export function DataTable<TData, TValue>({
                 </div>
               </details>
             )}
-            {toolbar && (
-              <div className="data-table-toolbar flex flex-wrap items-center justify-end gap-2">
-                {toolbar}
+            <div className="flex items-center gap-2">
+              {toolbar && (
+                <div className="data-table-toolbar flex flex-wrap items-center justify-end gap-2">
+                  {toolbar}
+                </div>
+              )}
+              {showExport && (
+                <ExportCSVButton
+                  columns={enhancedColumns}
+                  data={exportRows}
+                  filename={exportFilename ?? `${slugifyFilename(_title || "table")}.csv`}
+                />
+              )}
+              {actionButton}
+            </div>
+            {!onSearchChange && !toolbar && !showExport && !(_subtitle || _title) && <span className="min-h-1 flex-1" />}
+            {table.getState().columnFilters.filter((f) => hasFilterValue(f.value) && !isStatusColumn(f.id)).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 w-full pt-2 border-t border-border/50 text-xs">
+                <span className="text-[#64748b] font-semibold text-[11px] uppercase tracking-wide">
+                  Filtered by:
+                </span>
+                {table.getState().columnFilters
+                  .filter((f) => hasFilterValue(f.value) && !isStatusColumn(f.id))
+                  .map((f) => {
+                    const col = table.getColumn(f.id);
+                    const headerTitle = typeof col?.columnDef.header === "string" ? formatHeaderText(col.columnDef.header) : f.id;
+                    const val = f.value as any;
+                    const displayVal = typeof val === "object" && val
+                      ? `${val.from || "Any"} → ${val.to || "Any"}`
+                      : String(val);
+                    return (
+                      <span
+                        key={f.id}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#00378C]/10 text-[#00378C] font-semibold text-xs border border-[#00378C]/20 shadow-sm"
+                      >
+                        <span>{headerTitle}:</span>
+                        <span className="font-normal text-foreground">{displayVal}</span>
+                        <button
+                          type="button"
+                          onClick={() => col?.setFilterValue(undefined)}
+                          className="hover:bg-[#00378C]/20 rounded-full p-0.5 cursor-pointer text-[#00378C] ml-0.5 transition-colors"
+                          title={`Clear ${headerTitle} filter`}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    );
+                  })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentFilters = table.getState().columnFilters;
+                    const statusOnly = currentFilters.filter((f) => isStatusColumn(f.id));
+                    table.setColumnFilters(statusOnly);
+                  }}
+                  className="text-xs font-semibold text-[#00378C] hover:underline cursor-pointer ml-1"
+                >
+                  Clear all
+                </button>
               </div>
             )}
-            {showExport && (
-              <ExportCSVButton
-                columns={enhancedColumns}
-                data={exportRows}
-                filename={exportFilename ?? `${slugifyFilename(_title || "table")}.csv`}
-              />
-            )}
-            {!onSearchChange && !toolbar && !showExport && <span className="min-h-1 flex-1" />}
-            </div>
+          </div>
         </div>
       )}
+
+      <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
 
       <div
         ref={topScrollRef}
@@ -323,118 +542,320 @@ export function DataTable<TData, TValue>({
         <div style={{ width: scrollContentWidth ? `${scrollContentWidth}px` : minWidthValue, height: 1 }} />
       </div>
 
-      <div
-        ref={tableScrollRef}
-        className="data-table-scroll overflow-auto bg-white"
-        style={{ maxHeight: heightValue, overflowX: "auto" }}
-        onScroll={syncTopScroll}
-      >
-        <Table style={{ minWidth: minWidthValue, width: `max(100%, ${minWidthValue})` }}>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    style={{ width: header.getSize() || undefined }}
-                    className={cn("relative", header.column.getCanSort() ? "cursor-pointer select-none" : undefined)}
-                    onClick={header.column.getToggleSortingHandler()}
-                  >
-                    <div className="flex min-h-7 items-center justify-between gap-1">
-                      <span className="flex min-w-0 items-center gap-1 truncate">
-                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getCanSort() && (
-                          <SortIcon sorted={header.column.getIsSorted()} />
+      {/* STANDARD WIDE-TABLE PATTERN — relative wrapper so the scroll-shadow
+          overlays below can sit absolutely positioned against the actual
+          scrolling viewport, not the whole table shell. */}
+      <div className="relative">
+        {enableScrollShadow && (
+          <>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 left-0 z-30 w-6 transition-opacity duration-150"
+              style={{
+                opacity: canScrollLeft ? 1 : 0,
+                background: "linear-gradient(to right, rgba(0,0,0,0.06), transparent)",
+              }}
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 z-30 w-6 transition-opacity duration-150"
+              style={{
+                opacity: canScrollRight ? 1 : 0,
+                background: "linear-gradient(to left, rgba(0,0,0,0.06), transparent)",
+              }}
+            />
+          </>
+        )}
+
+        <div
+          ref={tableScrollRef}
+          className="data-table-scroll overflow-auto bg-white"
+          style={{ maxHeight: heightValue, overflowX: "auto" }}
+          onScroll={syncTopScroll}
+        >
+          <Table style={{ minWidth: minWidthValue === "100%" ? undefined : minWidthValue, width: "100%" }}>
+            {/* STANDARD WIDE-TABLE PATTERN — sticky header stays visible on
+                vertical scroll. z-20 so it sits above sticky body columns
+                (z-10) at the header/body seam. Header text is larger and
+                bolder than body cells. */}
+            <TableHeader className={cn("sticky top-0 z-20 border-b bg-white", GRID_LINE)}>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="border-b border-[#8e97a8]">
+                  {headerGroup.headers.map((header, colIndex) => {
+                    const isFirst = colIndex === 0;
+                    const isLast = colIndex === headerGroup.headers.length - 1;
+                    const stickLeft = stickyFirstColumn && isFirst;
+                    // Guard against a 1-column table trying to stick both sides at once.
+                    const stickRight = stickyLastColumn && isLast && headerGroup.headers.length > 1;
+                    const isFilterActive = hasFilterValue(header.column.getFilterValue());
+
+                    return (
+                      <TableHead
+                        key={header.id}
+                        style={{
+                          width: header.column.columnDef.size ? `${header.column.columnDef.size}px` : undefined,
+                          minWidth: header.column.columnDef.minSize ? `${header.column.columnDef.minSize}px` : undefined,
+                          maxWidth: header.column.columnDef.maxSize ? `${header.column.columnDef.maxSize}px` : undefined,
+                          boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
+                        }}
+                        data-column-id={header.column.id}
+                        className={cn(
+                          "relative transition-colors border-r border-[#8e97a8] last:border-r-0",
+                          isFilterActive && "bg-[#00378C]/[0.06] border-b-2 border-b-[#00378C]",
+                          header.column.getCanSort() ? "cursor-pointer select-none" : undefined,
+                          (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
+                          stickLeft && "left-0",
+                          stickRight && "right-0",
                         )}
-                      </span>
-                      {enableColumnFilters && header.column.getCanFilter() && (
-                        <ColumnFilterButton
-                          column={header.column}
-                          open={activeFilterColumn === header.column.id}
-                          onOpenChange={(open) => setActiveFilterColumn(open ? header.column.id : null)}
-                        />
-                      )}
-                    </div>
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-  {loading ? (
-    loaderType === "circle" ? (
-      <TableRow>
-        <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
-          <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-            <Loader2 className="animate-spin text-primary" size={22} />
-            <span className="text-xs font-medium">Loading...</span>
-          </div>
-        </TableCell>
-      </TableRow>
-    ) : (
-      skeletonRows.map((_, index) => (
-        <TableRow className={rowStyle.row} key={index}>
-          <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
-        </TableRow>
-      ))
-    )
-  ) : visibleRows.length ? (
-              visibleRows.map((row) => (
-                <TableRow
-                  className={cn(rowStyle.row, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
-                  data-state={row.getIsSelected() && "selected"}
-                  key={row.id}
-                  onClick={() => onRowClick?.(row.original)}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell className={rowStyle.cell} key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        <div className="flex min-h-7 items-center justify-between gap-1">
+                          {/* Header: capitalize, bold, bigger than body */}
+                          <span className={cn(
+                            "flex min-w-0 items-center gap-1 truncate capitalize text-[13px] font-bold tracking-wide",
+                            isFilterActive ? "text-[#00378C]" : "text-[#334155]"
+                          )}>
+                            {header.isPlaceholder
+                              ? null
+                              : typeof header.column.columnDef.header === "string"
+                                ? formatHeaderText(header.column.columnDef.header)
+                                : flexRender(header.column.columnDef.header, header.getContext())}
+                            {header.column.getCanSort() && (
+                              <SortIcon sorted={header.column.getIsSorted()} />
+                            )}
+                          </span>
+                          {enableColumnFilters && header.column.getCanFilter() && (
+                            <ColumnFilterButton
+                              column={header.column}
+                              open={activeFilterColumn === header.column.id}
+                              onOpenChange={(open) => setActiveFilterColumn(open ? header.column.id : null)}
+                            />
+                          )}
+                        </div>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell className="h-32 text-center text-muted-foreground" colSpan={enhancedColumns.length}>
-                  {emptyText}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                loaderType === "circle" ? (
+                  <TableRow>
+                    <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
+                      <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+                        <Loader2 className="animate-spin text-primary" size={22} />
+                        <span className="text-xs font-medium">Loading...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  skeletonRows.map((_, index) => (
+                    <TableRow className={cn(rowStyle.row, "border-b", GRID_LINE)} key={index}>
+                      <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
+                    </TableRow>
+                  ))
+                )
+              ) : visibleRows.length ? (
+                visibleRows.map((row) => (
+                  <TableRow
+                    className={cn(rowStyle.row, "border-b", GRID_LINE, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
+                    data-state={row.getIsSelected() && "selected"}
+                    key={row.id}
+                    onClick={() => onRowClick?.(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell, colIndex) => {
+                      const cells = row.getVisibleCells();
+                      const rawCellValue = cell.getValue();
+                      const cellTitle =
+                        typeof rawCellValue === "string" || typeof rawCellValue === "number"
+                          ? String(rawCellValue)
+                          : undefined;
+                      const isFirst = colIndex === 0;
+                      const isLast = colIndex === cells.length - 1;
+                      const stickLeft = stickyFirstColumn && isFirst;
+                      const stickRight = stickyLastColumn && isLast && cells.length > 1;
+                      // Actions-style columns (buttons/icons) render their own
+                      // layout — truncating those would clip controls rather
+                      // than text, so they're left alone.
+                      const skipTruncate = cell.column.id === "actions";
+                      return (
+                        <TableCell
+                          className={cn(
+                            rowStyle.cell,
+                            "overflow-hidden",
+                            CELL_DIVIDER,
+                            (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
+                            stickLeft && "left-0",
+                            stickRight && "right-0",
+                          )}
+                          style={{
+                            width: cell.column.columnDef.size ? `${cell.column.columnDef.size}px` : undefined,
+                            minWidth: cell.column.columnDef.minSize ? `${cell.column.columnDef.minSize}px` : undefined,
+                            maxWidth: cell.column.columnDef.maxSize ? `${cell.column.columnDef.maxSize}px` : undefined,
+                            boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
+                          }}
+                          key={cell.id}
+                          data-column-id={cell.column.id}
+                        >
+                          {truncateCellText && !skipTruncate ? (
+                            <OverflowCellText text={getCellTitle(cell) ?? cellTitle}>
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </OverflowCellText>
+                          ) : (
+                            flexRender(cell.column.columnDef.cell, cell.getContext())
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell className="h-32 text-center text-muted-foreground" colSpan={enhancedColumns.length}>
+                    {emptyText}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {enablePagination && (
-        <div className="data-table-pagination flex flex-wrap items-center justify-between gap-3 border-t border-[#c7d2e3] bg-white px-3 py-2 text-sm text-muted-foreground">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="data-table-pagination flex flex-wrap items-center justify-between gap-3 border-t border-[#8e97a8] bg-white px-4 py-2.5 text-xs text-muted-foreground font-sans">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span>
-              Showing <strong className="text-foreground">{firstVisibleRow}-{lastVisibleRow}</strong> of <strong className="text-foreground">{effectiveTotalRows.toLocaleString()}</strong>
+              {effectiveTotalRows === 0 ? (
+                <span>Showing 0 records</span>
+              ) : (
+                <span>
+                  Showing <span className="font-semibold text-foreground">{firstVisibleRow}</span>–
+                  <span className="font-semibold text-foreground">{lastVisibleRow}</span> of{" "}
+                  <span className="font-semibold text-foreground">{effectiveTotalRows.toLocaleString()}</span> {effectiveTotalRows === 1 ? "record" : "records"}
+                </span>
+              )}
             </span>
           </div>
           <div className="data-table-pager flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs">
-              Show
+            <ul className="flex items-center gap-1 m-0 p-0 list-none">
+              <li>
+                <button
+                  type="button"
+                  className="data-table-page-button"
+                  disabled={!canPreviousPage}
+                  onClick={() => goToPage(currentPageIndex - 1)}
+                  title="Previous Page"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+              </li>
+
+              {pageNumbers.map((page, idx) => (
+                <li key={`${page}-${idx}`}>
+                  {page === -1 ? (
+                    <span className="data-table-page-ellipsis">...</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={cn("data-table-page-button", currentPageIndex === page && "is-active")}
+                      onClick={() => goToPage(page)}
+                      aria-current={currentPageIndex === page ? "page" : undefined}
+                    >
+                      {page + 1}
+                    </button>
+                  )}
+                </li>
+              ))}
+
+              <li>
+                <button
+                  type="button"
+                  className="data-table-page-button"
+                  disabled={!canNextPage}
+                  onClick={() => goToPage(currentPageIndex + 1)}
+                  title="Next Page"
+                  aria-label="Next page"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </li>
+            </ul>
+
+            <label className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
               <select
-                className="h-8 rounded-md border border-[#aebbd0] bg-background px-2 text-xs font-medium text-foreground"
-                value={pageSize}
+                className="data-table-page-size"
+                value={currentPageSize}
                 onChange={(event) => changePageSize(Number(event.target.value))}
               >
-                {[50, 100, 250, 500].map((size) => (
-                  <option value={size} key={size}>{size}</option>
+                {[10, 20, 25, 30, 50, 100].map((size) => (
+                  <option value={size} key={size}>Show {size}</option>
                 ))}
               </select>
             </label>
-            <div className="flex items-center gap-1">
-              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(0)}><ChevronsLeft size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(currentPageIndex - 1)}><ChevronLeft size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(currentPageIndex + 1)}><ChevronRight size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(pageCount - 1)}><ChevronsRight size={15} /></Button>
-            </div>
           </div>
         </div>
       )}
       </div>
     </div>
+  );
+}
+
+function OverflowCellText({ children, text }: { children: ReactNode; text?: string }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<{ left: number; top: number; width: number } | null>(null);
+
+  const showTooltip = () => {
+    const element = contentRef.current;
+    if (!element || !text || element.scrollWidth <= element.clientWidth + 1) {
+      setTooltip(null);
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const width = Math.min(420, Math.max(220, window.innerWidth - 32));
+    const left = Math.min(Math.max(16, rect.left), Math.max(16, window.innerWidth - width - 16));
+    const placeAbove = rect.bottom + 110 > window.innerHeight;
+    setTooltip({
+      left,
+      top: placeAbove ? Math.max(12, rect.top - 8) : rect.bottom + 7,
+      width,
+    });
+  };
+
+  useEffect(() => {
+    if (!tooltip) return undefined;
+    const hideTooltip = () => setTooltip(null);
+    window.addEventListener("resize", hideTooltip);
+    window.addEventListener("scroll", hideTooltip, true);
+    return () => {
+      window.removeEventListener("resize", hideTooltip);
+      window.removeEventListener("scroll", hideTooltip, true);
+    };
+  }, [tooltip]);
+
+  return (
+    <>
+      <div ref={contentRef} className="data-table-cell-text truncate" onMouseEnter={showTooltip} onMouseLeave={() => setTooltip(null)}>
+        {children}
+      </div>
+      {tooltip && createPortal(
+        <div
+          className="data-table-overflow-tooltip"
+          role="tooltip"
+          style={{
+            left: tooltip.left,
+            top: tooltip.top,
+            width: tooltip.width,
+            transform: tooltip.top < (contentRef.current?.getBoundingClientRect().top ?? 0) ? "translateY(-100%)" : undefined,
+          }}
+        >
+          {text}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -444,6 +865,20 @@ function slugifyFilename(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "table";
+}
+
+// STANDARD WIDE-TABLE PATTERN — best-effort tooltip text for a truncated
+// cell. Columns without an accessor (id-only custom cells) don't have a
+// getValue() to call, so this fails safe rather than throwing.
+function getCellTitle(cell: { getValue: () => unknown }): string | undefined {
+  try {
+    const value = cell.getValue();
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === "string" || typeof value === "number") return String(value);
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function ColumnFilterButton<TData, TValue>({
@@ -463,12 +898,12 @@ function ColumnFilterButton<TData, TValue>({
     if (!rect) return;
     const workspaceRect = document.querySelector(".workspace-main")?.getBoundingClientRect();
     const contentLeft = (workspaceRect?.left ?? 0) + 12;
-    const popupWidth = 196;
-    const popupHeight = 118;
-    const preferredLeft = rect.left;
-    const maxLeft = window.innerWidth - popupWidth - 12;
+    const popupWidth = 260;
+    const popupHeight = 220;
+    const preferredLeft = rect.left - 20;
+    const maxLeft = window.innerWidth - popupWidth - 16;
     const left = Math.min(maxLeft, Math.max(contentLeft, preferredLeft));
-    const top = Math.min(window.innerHeight - popupHeight - 12, Math.max(12, rect.bottom + 8));
+    const top = Math.min(window.innerHeight - popupHeight - 12, Math.max(12, rect.bottom + 6));
     setPosition({ left, top });
   };
 
@@ -484,29 +919,40 @@ function ColumnFilterButton<TData, TValue>({
     };
   }, [open]);
 
+  const isActive = hasFilterValue(rawValue);
+
   return (
     <span className="flex shrink-0 items-center">
       <button
         ref={buttonRef}
         type="button"
         className={cn(
-          "grid h-5 w-5 place-items-center rounded text-muted-foreground hover:bg-background hover:text-primary",
-          hasFilterValue(rawValue) && "bg-primary/10 text-primary",
+          "relative grid h-5 w-5 place-items-center rounded transition-all cursor-pointer",
+          isActive
+            ? "bg-[#00378C] text-white shadow-sm ring-2 ring-[#00378C]/25"
+            : "text-muted-foreground hover:bg-slate-100 hover:text-[#00378C]"
         )}
         onClick={(event) => {
           event.stopPropagation();
           updatePosition();
           onOpenChange(!open);
         }}
-        title="Column filter"
+        title={isActive ? "Filter is active (click to modify or clear)" : "Column filter"}
         aria-label="Column filter"
       >
-        <Filter size={12} />
+        <Filter size={11} strokeWidth={isActive ? 2.8 : 2} className={isActive ? "text-white" : "text-muted-foreground"} />
+        {isActive && (
+          <span className="absolute -top-1 -right-1 flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00378C] opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00378C] border border-white"></span>
+          </span>
+        )}
       </button>
       {open && (
         <ColumnFilterPopup
           value={rawValue}
           isDate={isDateColumn(column.id)}
+          isStatus={isStatusColumn(column.id, typeof column.columnDef.header === "string" ? column.columnDef.header : undefined)}
           position={position}
           onChange={(nextValue) => column.setFilterValue(nextValue)}
           onClose={() => onOpenChange(false)}
@@ -519,77 +965,225 @@ function ColumnFilterButton<TData, TValue>({
 function ColumnFilterPopup({
   value,
   isDate,
+  isStatus,
   position,
   onChange,
   onClose,
 }: {
   value: unknown;
   isDate: boolean;
+  isStatus?: boolean;
   position: { left: number; top: number };
   onChange: (value: unknown) => void;
   onClose: () => void;
 }) {
+  const popoverRef = useRef<HTMLDivElement | null>(null);
   const textValue = typeof value === "string" ? value : "";
   const dateValue = (typeof value === "object" && value ? value : {}) as { from?: string; to?: string };
+  const [tempText, setTempText] = useState(textValue);
+  const [tempStatus, setTempStatus] = useState(textValue || "");
+  const [tempFrom, setTempFrom] = useState(dateValue.from || "");
+  const [tempTo, setTempTo] = useState(dateValue.to || "");
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (popoverRef.current && !popoverRef.current.contains(target)) {
+        if (target.closest?.(".bisc-date-picker-portal") || target.closest?.("[data-bisc-calendar]")) {
+          return;
+        }
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [onClose]);
+
   return (
     <div
-      className="data-table-filter-popover fixed z-[90] grid w-[228px] gap-2 rounded-lg border border-[#9fb0c8] bg-white p-3 text-xs normal-case text-foreground shadow-[0_18px_42px_rgba(15,23,42,0.22)] ring-1 ring-slate-900/5"
+      ref={popoverRef}
+      className="data-table-filter-popover fixed z-[90] w-[260px] p-3.5 space-y-2.5 rounded-2xl border border-border bg-card text-xs normal-case text-foreground shadow-xl shadow-primary/10 font-sans"
       style={{ left: position.left, top: position.top }}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
       }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold leading-none text-foreground">{isDate ? "Date filter" : "Column filter"}</span>
-        <button type="button" className="grid h-5 w-5 place-items-center rounded hover:bg-accent" onClick={onClose} aria-label="Close filter">
-          <X size={12} />
-        </button>
-      </div>
-      {isDate ? (
-        <div className="grid gap-2">
-          <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
-            From
-            <span className="flex h-8 items-center gap-2 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2">
-              <CalendarDays size={13} />
-              <Input
-                autoFocus
-                type="date"
-                className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
-                value={dateValue.from || ""}
-                onChange={(event) => onChange({ ...dateValue, from: event.target.value })}
-              />
-            </span>
-          </label>
-          <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
-            To
-            <span className="flex h-8 items-center gap-2 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2">
-              <CalendarDays size={13} />
-              <Input
-                type="date"
-                className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
-                value={dateValue.to || ""}
-                onChange={(event) => onChange({ ...dateValue, to: event.target.value })}
-              />
-            </span>
-          </label>
+      {isStatus ? (
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[12px] font-semibold text-slate-700">
+                Filter Status
+              </label>
+              {tempStatus && (
+                <span className="text-[10px] text-muted-foreground font-medium">1 selected</span>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              {[
+                { label: "All Statuses", val: "", badge: null, desc: "Show both active & cancelled" },
+                { label: "Active", val: "N", badge: "bg-emerald-500", desc: "Active documents only" },
+                { label: "Cancelled", val: "Y", badge: "bg-rose-500", desc: "Cancelled documents only" },
+              ].map((opt) => {
+                const isSelected =
+                  (!tempStatus && !opt.val) ||
+                  (tempStatus.toUpperCase() === opt.val) ||
+                  (opt.val === "N" && tempStatus.toLowerCase() === "active") ||
+                  (opt.val === "Y" && (tempStatus.toLowerCase() === "cancelled" || tempStatus.toLowerCase() === "canceled"));
+                return (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => setTempStatus(opt.val)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left cursor-pointer transition-all",
+                      isSelected
+                        ? "border-[#00378C] bg-[#00378C]/5 text-[#00378C] ring-1 ring-[#00378C]"
+                        : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={cn(
+                          "w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors",
+                          isSelected ? "border-[#00378C] bg-[#00378C]" : "border-slate-300 bg-white"
+                        )}
+                      >
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <div className="text-[12px] font-semibold leading-none">{opt.label}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{opt.desc}</div>
+                      </div>
+                    </div>
+                    {opt.badge && (
+                      <span className={cn("w-2 h-2 rounded-full ring-2 ring-white shrink-0", opt.badge)} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-sm border border-border bg-card text-foreground hover:bg-secondary transition-colors font-medium cursor-pointer text-xs"
+              onClick={() => {
+                setTempStatus("");
+                onChange(undefined);
+                onClose();
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="px-3.5 py-1.5 rounded-sm bg-[#00378C] text-white transition-all hover:opacity-90 shadow-md shadow-[#00378C]/20 font-medium cursor-pointer text-xs"
+              onClick={() => {
+                onChange(tempStatus || undefined);
+                onClose();
+              }}
+            >
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      ) : isDate ? (
+        <div className="space-y-2.5">
+          <div className="space-y-1">
+            <label className="text-[12px] font-medium text-slate-500">
+              From
+            </label>
+            <BiscDatePicker
+              value={tempFrom}
+              onChange={setTempFrom}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[12px] font-medium text-slate-500">
+              To
+            </label>
+            <BiscDatePicker
+              value={tempTo}
+              onChange={setTempTo}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-sm border border-border bg-card text-foreground hover:bg-secondary transition-colors font-medium cursor-pointer text-xs"
+              onClick={() => {
+                setTempFrom("");
+                setTempTo("");
+                onChange(undefined);
+                onClose();
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="px-3.5 py-1.5 rounded-sm bg-[#00378C] text-white transition-all hover:opacity-90 shadow-md shadow-[#00378C]/20 font-medium cursor-pointer text-xs"
+              onClick={() => {
+                let nextValue: { from?: string; to?: string } | undefined;
+                if (tempFrom && tempTo) {
+                  nextValue = { from: tempFrom, to: tempTo };
+                } else if (tempFrom) {
+                  nextValue = { from: tempFrom };
+                } else if (tempTo) {
+                  nextValue = { to: tempTo };
+                }
+                onChange(nextValue);
+                onClose();
+              }}
+            >
+              Apply Range
+            </button>
+          </div>
         </div>
       ) : (
-        <label className="flex h-8 items-center gap-1 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2 text-muted-foreground">
-          <Search size={13} />
-          <Input
-            autoFocus
-            className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
-            value={textValue}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder="Contains..."
-          />
-        </label>
+        <div className="space-y-2.5">
+          <div className="space-y-1">
+            <label className="text-[12px] font-medium text-slate-500">
+              Search
+            </label>
+            <Input
+              autoFocus
+              className="w-full h-8 px-2.5 rounded-lg border border-border bg-slate-100 text-foreground text-xs shadow-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary transition-all"
+              value={tempText}
+              onChange={(e) => setTempText(e.target.value)}
+              placeholder="Enter value..."
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-sm border border-border bg-card text-foreground hover:bg-secondary transition-colors font-medium cursor-pointer text-xs"
+              onClick={() => {
+                setTempText("");
+                onChange("");
+                onClose();
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="px-3.5 py-1.5 rounded-sm bg-[#00378C] text-white transition-all hover:opacity-90 shadow-md shadow-[#00378C]/20 font-medium cursor-pointer text-xs"
+              onClick={() => {
+                onChange(tempText || undefined);
+                onClose();
+              }}
+            >
+              Apply Filter
+            </button>
+          </div>
+        </div>
       )}
-      <div className="flex justify-end gap-1">
-        <Button size="sm" variant="ghost" type="button" onClick={() => onChange(isDate ? undefined : "")}>Clear</Button>
-        <Button size="sm" type="button" onClick={onClose}>Done</Button>
-      </div>
     </div>
   );
 }
@@ -604,19 +1198,37 @@ function isDateColumn(columnId: string) {
   return /(^|_)(date|dt)(_|$)/i.test(columnId);
 }
 
-function hasFilterValue(value: unknown) {
-  if (typeof value === "string") return value.trim().length > 0;
-  if (value && typeof value === "object") return Boolean((value as { from?: string; to?: string }).from || (value as { from?: string; to?: string }).to);
+function isStatusColumn(columnId: string, headerText?: string) {
+  if (/^(canceled|cancelled|status|doc_status)$/i.test(columnId)) return true;
+  if (headerText && /status/i.test(headerText)) return true;
   return false;
+}
+
+function hasFilterValue(value: unknown): boolean {
+  if (value === undefined || value === null || value === "") return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    return Object.values(obj).some((v) => v !== undefined && v !== null && String(v).trim().length > 0);
+  }
+  return Boolean(value);
 }
 
 function toDateOnly(value: unknown) {
   if (!value) return "";
-  const raw = String(value);
+  const raw = String(value).trim();
+  const ymdMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    const [, y, m, d] = ymdMatch;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  const dmyMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const [, d, m, y] = dmyMatch;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  const match = raw.match(/^(\d{4}-\d{2}-\d{2})|^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!match) return "";
-  if (match[1]) return match[1];
-  return `${match[4]}-${match[3]}-${match[2]}`;
+  return "";
 }

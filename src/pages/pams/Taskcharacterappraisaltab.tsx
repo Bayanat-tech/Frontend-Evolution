@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect } from "../../api/pams";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Row = Record<string, unknown>;
 
 interface Props {
@@ -28,7 +28,7 @@ function num(val: unknown): number {
   return isFinite(n) ? n : 0;
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const S = {
   wrapper: {
     width: "100%", height: "420px", overflowY: "auto" as const,

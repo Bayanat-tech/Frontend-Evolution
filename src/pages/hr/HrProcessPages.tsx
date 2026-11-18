@@ -519,7 +519,7 @@ function PayUnitEditor({
         </Card>
         <DataTable columns={dependant ? dependantDetailColumns : unitDetailColumns} data={detailRows} subtitle={dependant ? "Dependent Rules" : "Component Dependencies"} title={`${detailRows.length} Detail Rows`} height={260} minWidth={dependant ? 980 : 820} density="grid" enablePagination pageSize={25} />
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}><X size={15} /> Close</Button>
+          <Button variant="outline" onClick={onClose}>Close</Button>
           {!readonly && <Button disabled={saving} onClick={save}><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>}
         </div>
       </div>

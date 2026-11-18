@@ -53,54 +53,72 @@ export function EmployeePayslipViewPage() {
   };
 
   return (
-    <section className="payslip-page">
-      <div className="payslip-page-actions">
-        <div>
-          <p className="leave-flow-eyebrow">HR Flow</p>
-          <h1>Employee Payslip</h1>
+    <section className="payslip-freight-view grid gap-4 max-w-4xl mx-auto py-3">
+      {/* Top Header Row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1 border-b border-border/40 pb-2">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Employee Payslip
+          </h2>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate("/workspace/ems/ems/activity/request/employee_payslip")}>
-            <ArrowLeft size={15} /> Back
-          </Button>
-          <Button onClick={downloadPdf}>
-            <Download size={15} /> Download PDF
-          </Button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/workspace/ems/ems/activity/request/employee_payslip")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary text-xs font-medium cursor-pointer transition-all shadow-sm"
+          >
+            <ArrowLeft size={13} /> Back
+          </button>
+          <button
+            type="button"
+            onClick={downloadPdf}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+          >
+            <Download size={13} /> Download PDF
+          </button>
         </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      <article id="payslip-content" className="payslip-report">
-        <header className="payslip-report-header">
-          <div className="payslip-logo-mark">
-            <FileText size={22} />
+      <article id="payslip-content" className="rounded-2xl border border-border bg-card shadow-sm p-6 grid gap-5">
+        <header className="flex items-center justify-between gap-3 border-b border-border/40 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-xl bg-[#00378C]/10 text-[#00378C] flex items-center justify-center shrink-0">
+              <FileText size={22} />
+            </div>
+            <div>
+              <h3 className="m-0 text-base font-semibold text-foreground">Employee Payslip</h3>
+              <p className="m-0 text-xs text-muted-foreground mt-0.5">Official Payroll Statement</p>
+            </div>
           </div>
-          <div>
-            <h2>Employee Payslip</h2>
-            <p>{getMonthName(month)} {year}</p>
-          </div>
+          <span className="inline-flex items-center rounded-xl border border-[#00378C]/20 bg-[#00378C]/10 px-3 py-1 text-xs font-bold text-[#00378C]">
+            {getMonthName(month)} {year}
+          </span>
         </header>
 
-        <section className="payslip-employee-grid">
+        <section className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           <Metric label="Employee" value={`${employeeId || "-"} - ${String(header?.RPT_NAME || header?.EMPLOYEE_NAME || "-")}`} />
           <Metric label="Designation" value={String(header?.DESG_NAME || header?.DESIGNATION || "-")} />
           <Metric label="Division" value={String(header?.DIV_NAME || "-")} />
           <Metric label="Department" value={String(header?.DEPT_NAME || "-")} />
           <Metric label="Pay Period" value={`${month || "-"} / ${year || "-"}`} />
-          <Metric label="Net Pay" value={formatMoney(totals.net)} />
+          <Metric label="Net Pay" value={formatMoney(totals.net)} highlight />
         </section>
 
-        {loading ? <p className="payslip-loading">Loading payslip...</p> : null}
+        {loading ? <p className="text-center py-6 text-xs text-muted-foreground">Loading payslip...</p> : null}
 
-        <section className="payslip-lines-grid">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <PaySection title="Earnings" rows={earnings} total={totals.totalEarnings} />
           <PaySection title="Deductions" rows={deductions} total={totals.totalDeductions} />
         </section>
 
-        <footer className="payslip-total-band">
-          <span>Net Pay</span>
-          <strong>{formatMoney(totals.net)}</strong>
+        <footer className="flex items-center justify-between rounded-xl bg-[#00378C] text-white px-5 py-3 shadow-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider">Net Salary Payable</span>
+          <strong className="text-lg font-bold">{formatMoney(totals.net)}</strong>
         </footer>
       </article>
     </section>
@@ -109,31 +127,37 @@ export function EmployeePayslipViewPage() {
 
 function PaySection({ title, rows, total }: { title: string; rows: Row[]; total: number }) {
   return (
-    <section className="payslip-pay-section">
-      <h3>{title}</h3>
-      <table>
+    <section className="rounded-xl border border-border overflow-hidden bg-card">
+      <div className="bg-muted/60 px-3.5 py-2 border-b border-border">
+        <h4 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">{title}</h4>
+      </div>
+      <table className="w-full text-xs">
         <thead>
-          <tr>
-            <th>Component</th>
-            <th>Amount</th>
+          <tr className="border-b border-border/60 bg-muted/20 text-[11px] text-muted-foreground uppercase">
+            <th className="text-left font-semibold px-3.5 py-1.5">Component</th>
+            <th className="text-right font-semibold px-3.5 py-1.5">Amount</th>
           </tr>
         </thead>
-        <tbody>
-          {rows.length ? rows.map((row, index) => (
-            <tr key={`${title}-${String(row.PAY_COMP_DESC || index)}`}>
-              <td>{String(row.PAY_COMP_DESC || "-")}</td>
-              <td>{formatMoney(row.PAY_COMP_AMT)}</td>
-            </tr>
-          )) : (
+        <tbody className="divide-y divide-border/40">
+          {rows.length ? (
+            rows.map((row, index) => (
+              <tr key={`${title}-${String(row.PAY_COMP_DESC || index)}`} className="hover:bg-muted/10">
+                <td className="px-3.5 py-1.5 text-foreground">{String(row.PAY_COMP_DESC || "-")}</td>
+                <td className="px-3.5 py-1.5 text-right font-medium text-foreground">{formatMoney(row.PAY_COMP_AMT)}</td>
+              </tr>
+            ))
+          ) : (
             <tr>
-              <td colSpan={2}>No {title.toLowerCase()} found</td>
+              <td colSpan={2} className="px-3.5 py-3 text-center text-muted-foreground text-xs">
+                No {title.toLowerCase()} found
+              </td>
             </tr>
           )}
         </tbody>
         <tfoot>
-          <tr>
-            <td>Total {title}</td>
-            <td>{formatMoney(total)}</td>
+          <tr className="border-t border-border bg-muted/30 font-semibold">
+            <td className="px-3.5 py-2 text-foreground">Total {title}</td>
+            <td className="px-3.5 py-2 text-right text-foreground">{formatMoney(total)}</td>
           </tr>
         </tfoot>
       </table>
@@ -141,11 +165,11 @@ function PaySection({ title, rows, total }: { title: string; rows: Row[]; total:
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="payslip-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <div className={`p-2.5 rounded-xl border ${highlight ? "border-[#00378C]/30 bg-[#00378C]/5" : "border-border/70 bg-card"} flex flex-col gap-0.5`}>
+      <span className="text-[10.5px] uppercase font-semibold text-muted-foreground">{label}</span>
+      <strong className={`text-xs font-semibold truncate ${highlight ? "text-[#00378C]" : "text-foreground"}`} title={value}>{value}</strong>
     </div>
   );
 }

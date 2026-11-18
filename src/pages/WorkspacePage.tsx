@@ -1,3 +1,7 @@
+import { FreightReportPreview } from "../components/freight/FreightReportPreview";
+import { FinanceReportPreview } from "../components/finance/reports/FinanceReportPreview";
+import { WmsReportPreview } from "../components/wms/reports/WmsReportPreview";
+import { PsReportPreview } from "../components/purchase-sales/reports/PsReportPreview";
 import {
   Activity,
   Anchor,
@@ -16,6 +20,8 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileBarChart,
+  FileCheck2,
+  FileQuestion,
   FileText,
   FolderCog,
   Globe2,
@@ -24,7 +30,9 @@ import {
   Landmark,
   Layers,
   Languages,
+  LayoutDashboard,
   LayoutGrid,
+  KeyRound,
   LogOut,
   Map,
   MapPin,
@@ -48,19 +56,21 @@ import {
   UserCog,
   Users,
   Warehouse,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
-import { HeaderProfile } from "../components/HeaderProfile";
+import { getCompanyLogoRequest } from "../api/auth";
 import type { MenuNode } from "../types/auth";
 import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
 import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
 import { getModuleMeta } from "./AppSelectionPage";
+import { ResetPasswordModal } from "../components/ResetPasswordModal";
 
 export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { appCode } = useParams();
@@ -71,6 +81,35 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Global Ctrl+K shortcut to focus search
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        menuSearchRef.current?.focus();
+        setSearchFocused(true);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
+
+  // Dismiss live search dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
 
   const activeApp = useMemo(() => {
@@ -81,10 +120,64 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const activeMenu = activeMenuPath[activeMenuPath.length - 1];
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
 
+  const isFinanceApp = (appCode || "").toLowerCase() === "finance" || cleanAppCode(activeApp?.title) === "finance";
+  const isFinanceDashboardActive =
+    isFinanceApp &&
+    (location.pathname === "/workspace/finance" ||
+      location.pathname === "/workspace/finance/" ||
+      location.pathname === "/workspace/finance/finance" ||
+      location.pathname === "/workspace/finance/finance/" ||
+      location.pathname === "/workspace/finance/dashboard" ||
+      location.pathname === "/workspace/finance/finance/dashboard");
+
+  const menuSearchRef = useRef<HTMLInputElement>(null);
+  const focusMenuSearch = useRef(false);
+  const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const [selectedSearchIndex, setSelectedSearchIndex] = useState(0);
+
+  const allScreens = useMemo(() => {
+    if (!activeApp?.children?.length) return [];
+    return collectSearchableMenuItems(activeApp.children, appCode || "");
+  }, [activeApp, appCode]);
+
+  const filteredScreens = useMemo(() => {
+    const q = menuSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return allScreens.filter((item) => {
+      const titleMatch = item.title.toLowerCase().includes(q);
+      const trailMatch = item.pathTrail.some((t) => t.toLowerCase().includes(q));
+      return titleMatch || trailMatch;
+    });
+  }, [allScreens, menuSearchQuery]);
+
+  useEffect(() => {
+    setSelectedSearchIndex(0);
+  }, [filteredScreens]);
+
+
+
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
   };
+
+  useEffect(() => {
+    if (!profileDropdownOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!profileRef.current?.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProfileDropdownOpen(false);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [profileDropdownOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -112,29 +205,63 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp, activeMenu });
   const displayCollapsed = isMobile ? false : collapsed;
-  const userDisplayName = user?.username || user?.loginid || "User";
-  const companyName = user?.company_name || user?.company_code || "Company";
-  const isFreightLandingRoute = useMemo(() => {
-    const normalizedPath = location.pathname.toLowerCase().replace(/\/+$/, "");
-    return (appCode || "").toLowerCase() === "fms" && (normalizedPath === "/workspace/fms" || normalizedPath === "/workspace/fms/fms");
-  }, [appCode, location.pathname]);
-
-  // useEffect(() => {
-  //   setExpanded(collectExpandedPath(activeMenuPath));
-  // }, [activeApp?.id, activeApp?.title, location.pathname]);
+  useEffect(() => {
+    if (!displayCollapsed && focusMenuSearch.current) {
+      menuSearchRef.current?.focus();
+      focusMenuSearch.current = false;
+    }
+  }, [displayCollapsed]);
+  const companyName = user?.company_name || user?.COMPANY_NAME || (user?.tenant_name && user.tenant_name !== "WMSDEV_TENANT" ? user.tenant_name : "Bayanat India");
+  const companyCode = user?.company_code || user?.COMPANY_CODE || "01";
+  const userLogo = user?.company_logo || user?.COMPANY_LOGO || "";
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string>(userLogo);
+  const [logoLoadFailed, setLogoLoadFailed] = useState<boolean>(false);
 
   useEffect(() => {
-    setExpanded({
-      ...collectDefaultExpanded(activeApp?.children || [], 1),
-      ...collectExpandedPath(activeMenuPath),
-    });
+    let isCancelled = false;
+    const initialLogo = user?.company_logo || user?.COMPANY_LOGO;
+    if (initialLogo) {
+      setCompanyLogoUrl(initialLogo);
+      setLogoLoadFailed(false);
+    } else if (companyCode) {
+      getCompanyLogoRequest(companyCode)
+        .then((logo) => {
+          if (!isCancelled && logo) {
+            setCompanyLogoUrl(logo);
+            setLogoLoadFailed(false);
+          }
+        })
+        .catch(() => {
+          // keep fallback
+        });
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [user?.company_logo, user?.COMPANY_LOGO, companyCode]);
+
+  const fallbackUserName = (user as { name?: string } | null)?.name;
+  const displayName = user?.username || user?.loginid || fallbackUserName || "User";
+  const userInitials = (displayName || "U").slice(0, 3).toUpperCase();
+  const isFreightModule = (appCode || "").toLowerCase() === "fms";
+  const isFinanceModule = /^(finance|accounts?|fin|fas|f&a)$/i.test(appCode || "") || /\/finance(?:\/|$)/i.test(location.pathname);
+  // Keep sidebar open consistently across all modules (WMS, HR, Masters, Freight, Finance, etc.)
+  const keepSidebarOpen = true;
+  const moduleMeta = activeApp ? getModuleMeta(activeApp, 0) : null;
+  const moduleSubtitle = moduleMeta?.fullForm || "Transactions";
+  const searchModuleName = moduleMeta?.fullForm
+    ? moduleMeta.fullForm.replace(/Management System/i, "").trim()
+    : (activeApp?.title ? titleCase(activeApp.title) : "Module");
+
+  useEffect(() => {
+    setExpanded(collectExpandedPath(activeMenuPath));
   }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   useEffect(() => {
-    if (!isMobile && isFreightLandingRoute) {
-      setCollapsed(true);
+    if (!isMobile && keepSidebarOpen) {
+      setCollapsed(false);
     }
-  }, [isFreightLandingRoute, isMobile]);
+  }, [keepSidebarOpen, isMobile]);
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -144,11 +271,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     setCollapsed((value) => {
       const nextCollapsed = !value;
       if (!nextCollapsed) {
-        // setExpanded(collectExpandedPath(activeMenuPath));
-         setExpanded({
-          ...collectDefaultExpanded(activeApp?.children || [], 1),
-          ...collectExpandedPath(activeMenuPath),
-        });
+        setExpanded(collectExpandedPath(activeMenuPath));
       }
       return nextCollapsed;
     });
@@ -159,131 +282,474 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       setMobileMenuOpen(false);
       return;
     }
-    setCollapsed(true);
+    if (!keepSidebarOpen) setCollapsed(true);
   };
 
   return (
-    <div className="workspace">
-      <aside className={cn("sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
-        <div className="sidebar-top">
-          <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title="Bayanat Technology">
-            <span className="sidebar-logo-wrap">
-              <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
-            </span>
-            {!displayCollapsed && (
-              <span className="sidebar-brand-copy">
-                <strong>Bayanat</strong>
-                <small>Technology</small>
-              </span>
-            )}
-          </Link>
-          <button
-            className="icon-button sidebar-toggle"
-            onClick={toggleSidebar}
-            title={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
-            aria-label={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
-          >
-            {isMobile ? mobileMenuOpen ? <PanelLeftClose size={17} /> : <Menu size={17} /> : displayCollapsed ? <Menu size={17} /> : <PanelLeftClose size={17} />}
-          </button>
-        </div>
-
-         {!displayCollapsed && (
-            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
-             {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
-            </p>
-         )}
-
-        <nav className="sidebar-nav">
-          {(activeApp?.children || []).map((item) => (
-            <MenuItem
-              key={item.id || item.title}
-              item={item}
-              collapsed={displayCollapsed}
-              expanded={expanded}
-              setExpanded={setExpanded}
-              appCode={appCode || ""}
-              pathname={location.pathname}
-              level={1}
-              onNavigate={handleMenuNavigate}
-            />
-          ))}
-        </nav>
-
-        <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
-          {!displayCollapsed && (
-            <div className="sidebar-company-card">
-              <span>Company</span>
-              <strong>{companyName}</strong>
-            </div>
-          )}
-          <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
-            <ArrowLeft size={15} />
-            {!displayCollapsed && "Switch Module"}
-          </Link>
-        </div>
-      </aside>
-      {isMobile && mobileMenuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
-
-      <section className="workspace-main">
-        <div className="mobile-appbar">
-          <Link to="/apps" className="mobile-brand" aria-label="Bayanat Technology">
-            <span className="sidebar-logo-wrap">
-              <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
-            </span>
-          </Link>
-          <button className="icon-button" type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open menu" title="Open menu">
-            <Menu size={19} />
-          </button>
-        </div>
-        <header className="workspace-header">
-          <div className="workspace-search">
-            <Search size={16} />
-            <input placeholder="Search menu, reports, forms..." />
-          </div>
-          <div className="workspace-header-actions">
-            <HeaderProfile
-              user={user}
-              dark={dark}
-              onToggleTheme={onToggleTheme}
-              onLogout={handleLogout}
-            />
-          </div>
-        </header>
-
-        <main className="workspace-content">
-          <nav className="breadcrumb">
-            <Link to="/apps">
-              <Home size={14} /> Home
-            </Link>
-            {activeApp && (
+    <div className={cn("workspace h-screen flex flex-col overflow-hidden bg-background", isFinanceApp && "finance-workspace")} style={{ fontFamily: "Inter, sans-serif" }}>
+      {/* Top Header - BISC style: clean white/card, logo + company left, dark mode + profile right */}
+      <header className="workspace-top-header h-[45px] bg-card border-b border-border flex items-center justify-between px-5 shrink-0 z-20">
+        {/* Left: Company Logo */}
+        {/* Left: Company Logo */}
+        <div className="flex items-center gap-3 min-w-[200px] shrink-0">
+          <Link to="/apps" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity" title={companyName}>
+            {companyLogoUrl && !logoLoadFailed ? (
+              <img
+                src={companyLogoUrl}
+                alt={companyName}
+                onError={() => setLogoLoadFailed(true)}
+                className="h-8 max-h-8 max-w-[220px] object-contain shrink-0"
+              />
+            ) : (
               <>
-                <ChevronRight size={14} />
-                {appRouteTarget ? (
-                  <Link to={appRouteTarget}>{titleCase(activeApp.title)}</Link>
-                ) : (
-                  <span>{titleCase(activeApp.title)}</span>
-                )}
+                <Building2 className="h-5 w-5 text-primary shrink-0" />
+                <span className="text-foreground font-semibold text-sm tracking-tight">{companyName}</span>
               </>
             )}
-            {activeMenuPath.map((node, index) => {
-              const isLast = index === activeMenuPath.length - 1;
-              const target = getMenuNodeTarget(node, appCode || "");
-              return (
-                <span className="breadcrumb-segment" key={node.id || `${node.title}-${index}`}>
-                  <ChevronRight size={14} />
-                  {isLast || !target ? (
-                    <span className={isLast ? "breadcrumb-current" : undefined}>{titleCase(node.title)}</span>
-                  ) : (
-                    <Link to={target}>{titleCase(node.title)}</Link>
-                  )}
+          </Link>
+        </div>
+
+        {/* Center: Attractive Menu Search with solid border */}
+        <div className="flex-1 min-w-0 px-3 lg:px-4 relative w-full" ref={searchDropdownRef} style={{ flex: "1 1 auto", width: "100%" }}>
+          <div
+            className={cn(
+              "top-menu-search-box group flex items-center gap-2.5 px-3.5 h-[36px] w-full rounded-xl transition-all duration-150",
+              "bg-white dark:bg-slate-900",
+              "border-[1.5px] border-slate-400 hover:border-[#00378C] dark:border-slate-600 dark:hover:border-sky-400",
+              "focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/15 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-400/20",
+              "shadow-xs"
+            )}
+            style={{ width: "100%", maxWidth: "100%" }}
+            role="search"
+          >
+            <Search size={15} className="text-[#00378C] dark:text-sky-400 shrink-0 group-hover:scale-105 transition-transform" />
+            <input
+              ref={menuSearchRef}
+              aria-label="Search menu"
+              autoComplete="off"
+              type="text"
+              value={menuSearchQuery}
+              onFocus={() => setSearchFocused(true)}
+              onChange={(e) => {
+                setMenuSearchQuery(e.target.value);
+                setSelectedSearchIndex(0);
+                setSearchFocused(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev + 1) % filteredScreens.length : 0));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev - 1 + filteredScreens.length) % filteredScreens.length : 0));
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (filteredScreens[selectedSearchIndex]) {
+                    navigate(filteredScreens[selectedSearchIndex].target);
+                    setMenuSearchQuery("");
+                    setSearchFocused(false);
+                    handleMenuNavigate();
+                  }
+                } else if (e.key === "Escape") {
+                  setMenuSearchQuery("");
+                  setSearchFocused(false);
+                }
+              }}
+              placeholder="Search menu screens, reports, vouchers... (Ctrl + K)"
+              className="flex-1 bg-transparent border-none outline-none text-xs text-foreground placeholder:text-slate-400 dark:placeholder:text-slate-500 font-normal min-w-0"
+            />
+            {menuSearchQuery ? (
+              <button
+                type="button"
+                onClick={() => { setMenuSearchQuery(""); menuSearchRef.current?.focus(); }}
+                className="cursor-pointer shrink-0 w-5 h-5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center transition-colors"
+                title="Clear search"
+                aria-label="Clear menu search"
+              >
+                <X size={12} strokeWidth={2.5} />
+              </button>
+            ) : (
+              <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded shadow-2xs pointer-events-none select-none">
+                Ctrl K
+              </kbd>
+            )}
+          </div>
+
+          {/* Floating Live Search Dropdown directly under the top search bar */}
+          {searchFocused && menuSearchQuery.trim() && (
+            <div className="absolute left-4 right-4 top-full mt-1.5 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50 max-h-[380px] flex flex-col animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="px-3.5 py-2 bg-secondary/50 border-b border-border flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <Search size={13} className="text-[#00378C] dark:text-sky-400" />
+                  <span>Matching Screens</span>
                 </span>
-              );
-            })}
+                {/* <span className="text-[11px] font-medium text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  {filteredScreens.length} found
+                </span> */}
+                <span className="text-[11px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  {filteredScreens.length} found
+                </span>
+              </div>
+
+              {filteredScreens.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  <Search size={22} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-xs font-medium">No matching menu screens found</p>
+                  <p className="text-[11px] opacity-75 mt-0.5">Try searching with a different keyword</p>
+                </div>
+              ) : (
+                <div className="overflow-y-auto p-1.5 divide-y divide-border/40">
+                  {filteredScreens.map((item, index) => {
+                    const isSelected = index === selectedSearchIndex;
+                    return (
+                      <Link
+                        key={item.id}
+                        to={item.target}
+                        onClick={() => {
+                          setMenuSearchQuery("");
+                          setSearchFocused(false);
+                          handleMenuNavigate();
+                        }}
+                        onMouseEnter={() => setSelectedSearchIndex(index)}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer",
+                          isSelected ? "bg-primary text-primary-foreground font-semibold" : "hover:bg-secondary text-foreground"
+                        )}
+                      >
+                        <span className={cn(
+                          "w-7 h-7 rounded-md flex items-center justify-center shrink-0",
+                          isSelected ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
+                        )}>
+                          <MenuIcon item={item.node} level={1} className={isSelected ? "text-white" : "text-[#00378C] dark:text-sky-400"} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs leading-tight">{item.title}</p>
+                          {item.pathTrail.length > 0 && (
+                            <p className={cn(
+                              "truncate text-[10px] mt-0.5 leading-tight",
+                              isSelected ? "text-white/80" : "text-muted-foreground"
+                            )}>
+                              {item.pathTrail.join(" › ")}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Dark mode + User profile */}
+        <div className="flex items-center gap-2 min-w-[200px] justify-end">
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="cursor-pointer w-8 h-8 rounded-full flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+            title={dark ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+
+          <div className="w-px h-6 bg-border mx-1" />
+
+          {/* Profile chip & dropdown */}
+          <div className="relative" ref={profileRef}>
+            <button
+              type="button"
+              onClick={() => setProfileDropdownOpen((prev) => !prev)}
+              className="cursor-pointer flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-secondary transition-colors"
+              title="User profile"
+              aria-label="User profile"
+              aria-expanded={profileDropdownOpen}
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00378C] to-blue-500 flex items-center justify-center shadow-sm">
+                <span className="text-white text-xs font-semibold">{userInitials}</span>
+              </div>
+              <div className="hidden md:block text-left">
+                <p className="text-foreground text-xs font-semibold leading-tight">{displayName}</p>
+                <p className="text-muted-foreground text-[10.5px] leading-tight truncate max-w-[180px]" title={companyName}>
+                  {companyName}
+                </p>
+              </div>
+              <ChevronDown
+                className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform hidden md:block", profileDropdownOpen && "rotate-180")}
+              />
+            </button>
+            {profileDropdownOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50 py-1">
+                <div className="px-3 py-2 border-b border-border/60 md:hidden">
+                  <p className="text-foreground text-xs font-semibold truncate">{displayName}</p>
+                  <p className="text-muted-foreground text-[10.5px] truncate" title={companyName}>{companyName}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setProfileDropdownOpen(false); handleLogout(); }}
+                  className="cursor-pointer w-full flex items-center gap-2.5 px-4 py-2.5 text-destructive hover:bg-destructive/10 transition-colors text-xs font-medium"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Layout Body (Sidebar + Content) */}
+      <div className="workspace-body flex flex-1 overflow-hidden min-h-0 w-full">
+        <aside className={cn("sidebar", isFreightModule && "freight-sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
+          <div className={cn("sidebar-section-heading", displayCollapsed && "collapsed")}>
+            {!displayCollapsed && (
+              <div
+                className="sidebar-module-heading"
+                style={{
+                  "--module-accent": moduleMeta?.accent.icon || "#00378c",
+                  "--module-accent-light": moduleMeta?.accent.light || "#eff6ff",
+                } as CSSProperties}
+                title={moduleMeta?.fullForm || "Workspace"}
+              >
+                <span className="sidebar-module-name">{moduleMeta?.fullForm || "Workspace"}</span>
+              </div>
+            )}
+            <button
+              className="icon-button sidebar-toggle"
+              onClick={toggleSidebar}
+              title={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
+              aria-label={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
+            >
+              {isMobile ? mobileMenuOpen ? <PanelLeftClose size={17} /> : <Menu size={17} /> : displayCollapsed ? <Menu size={17} /> : <PanelLeftClose size={17} />}
+            </button>
+          </div>
+
+          {/* {!displayCollapsed ? (
+              <div className="bisc-sidebar-search-container">
+                <div className="bisc-sidebar-search-box" role="search">
+                  <Search size={14} className="bisc-sidebar-search-icon" />
+                  <input
+                    ref={menuSearchRef}
+                    aria-label="Search menu"
+                    autoComplete="off"
+                    type="text"
+                    value={menuSearchQuery}
+                    onChange={(e) => {
+                      setMenuSearchQuery(e.target.value);
+                      setSelectedSearchIndex(0);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev + 1) % filteredScreens.length : 0));
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev - 1 + filteredScreens.length) % filteredScreens.length : 0));
+                      } else if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (filteredScreens[selectedSearchIndex]) {
+                          navigate(filteredScreens[selectedSearchIndex].target);
+                          setMenuSearchQuery("");
+                          handleMenuNavigate();
+                        }
+                      } else if (e.key === "Escape") {
+                        setMenuSearchQuery("");
+                      }
+                    }}
+                    placeholder="Search menu..."
+                    className="bisc-sidebar-search-input"
+                  />
+                  {menuSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => { setMenuSearchQuery(""); menuSearchRef.current?.focus(); }}
+                      className="bisc-sidebar-search-clear"
+                      title="Clear search"
+                      aria-label="Clear menu search"
+                    >
+                      <X size={11} strokeWidth={2.5} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="sidebar-search-collapsed-btn"
+                title="Search screens in this module"
+                aria-label="Expand menu and search"
+                onClick={() => { focusMenuSearch.current = true; setCollapsed(false); }}
+              >
+                <Search size={15} />
+              </button>
+            )} */}
+
+          <nav className="sidebar-nav">
+            {menuSearchQuery.trim() ? (
+              <div className="sidebar-search-results-panel">
+                <div className="bisc-search-results-header">
+                  <span className="bisc-search-results-title">{searchModuleName} Screens</span>
+                  <span className="bisc-search-results-badge">
+                    {filteredScreens.length} found
+                  </span>
+                </div>
+
+                {filteredScreens.length === 0 ? (
+                  <div className="bisc-search-empty-state">
+                    <Search size={22} className="bisc-search-empty-icon" />
+                    <p className="bisc-search-empty-title">No matching screens found</p>
+                    <p className="bisc-search-empty-desc">for &quot;{menuSearchQuery}&quot;</p>
+                    <button
+                      type="button"
+                      onClick={() => setMenuSearchQuery("")}
+                      className="bisc-search-clear-btn"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bisc-search-results-list">
+                    {filteredScreens.map((item, index) => {
+                      const isSelected = index === selectedSearchIndex;
+                      return (
+                        <Link
+                          key={item.id}
+                          to={item.target}
+                          onClick={() => {
+                            setMenuSearchQuery("");
+                            handleMenuNavigate();
+                          }}
+                          onMouseEnter={() => setSelectedSearchIndex(index)}
+                          className={cn("bisc-search-result-item", isSelected && "selected")}
+                        >
+                          <span className="bisc-search-result-icon">
+                            <MenuIcon item={item.node} level={1} className={isSelected ? "text-white" : "text-[#00378C]"} />
+                          </span>
+                          <div className="bisc-search-result-text">
+                            <p className="bisc-search-result-title">
+                              {item.title}
+                            </p>
+                            {item.pathTrail.length > 0 && (
+                              <p className="bisc-search-result-trail">
+                                {item.pathTrail.join(" › ")}
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {isFinanceApp && (
+                  <Link
+                    className={cn(
+                      "nav-item nav-level-1 mb-1",
+                      isFinanceDashboardActive && "active",
+                      displayCollapsed && "icon-only"
+                    )}
+                    to="/workspace/finance"
+                    aria-current={isFinanceDashboardActive ? "page" : undefined}
+                    title="Finance Dashboard"
+                    aria-label="Finance Dashboard"
+                    onClick={handleMenuNavigate}
+                  >
+                    <span className="nav-link-copy">
+                      <LayoutDashboard size={17} className="nav-leading-icon" />
+                      {!displayCollapsed && <span>Dashboard</span>}
+                    </span>
+                  </Link>
+                )}
+                {(activeApp?.children || []).map((item, index) => (
+                  <MenuItem
+                    key={item.id || item.title}
+                    item={item}
+                    collapsed={displayCollapsed}
+                    expanded={expanded}
+                    setExpanded={setExpanded}
+                    appCode={appCode || ""}
+                    pathname={location.pathname}
+                    selectedMenu={activeMenu}
+                    level={1}
+                    siblingIndex={index + 1}
+                    onNavigate={handleMenuNavigate}
+                  />
+                ))}
+              </>
+            )}
           </nav>
 
-          {workspaceRoute}
-        </main>
-      </section>
+          <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
+            <div className={cn("sidebar-company-card p-2.5 rounded-lg border border-border bg-muted/40", displayCollapsed && "p-2 flex items-center justify-center")} title={companyName}>
+              {!displayCollapsed ? (
+                <>
+                  <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] font-bold tracking-wider uppercase mb-1">
+                    <Building2 size={12} className="shrink-0" />
+                    <span>Company</span>
+                  </div>
+                  <p className="text-foreground text-xs font-semibold truncate leading-tight">{companyName}</p>
+                </>
+              ) : (
+                <Building2 size={16} className="text-muted-foreground" />
+              )}
+            </div>
+            <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
+              <ArrowLeft size={16} />
+              {!displayCollapsed && <span>Switch Module</span>}
+            </Link>
+          </div>
+        </aside>
+        {isMobile && mobileMenuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
+
+        <section className={cn("workspace-main", isFreightModule && "bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
+          <div className="mobile-appbar">
+            <button className="icon-button" type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open menu" title="Open menu">
+              <Menu size={19} />
+            </button>
+          </div>
+
+          <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
+            <nav className="breadcrumb flex items-center gap-1.5 py-1 px-0 mb-3 text-xs text-muted-foreground border-b border-border/60 shrink-0" aria-label="Breadcrumb">
+              <Link to="/apps" className="hover:text-foreground flex items-center gap-1 transition-colors">
+                <Home size={13} /> Home
+              </Link>
+              {activeApp && (
+                <>
+                  <ChevronRight size={13} className="text-muted-foreground/60 shrink-0" />
+                  {appRouteTarget ? (
+                    <Link to={appRouteTarget} className="hover:text-foreground transition-colors">{titleCase(activeApp.title)}</Link>
+                  ) : (
+                    <span>{titleCase(activeApp.title)}</span>
+                  )}
+                </>
+              )}
+              {activeMenuPath.map((node, index) => {
+                const isLast = index === activeMenuPath.length - 1;
+                const target = getMenuNodeTarget(node, appCode || "");
+                return (
+                  <span className="inline-flex items-center gap-1.5" key={node.id || `${node.title}-${index}`}>
+                    <ChevronRight size={13} className="text-muted-foreground/60 shrink-0" />
+                    {isLast || !target ? (
+                      <span aria-current={isLast ? "page" : undefined} className={isLast ? "font-semibold text-foreground" : undefined}>{titleCase(node.title)}</span>
+                    ) : (
+                      <Link to={target} className="hover:text-foreground transition-colors">{titleCase(node.title)}</Link>
+                    )}
+                  </span>
+                );
+              })}
+            </nav>
+
+            {workspaceRoute}
+            <FinanceReportPreview />
+            <FreightReportPreview />
+            <WmsReportPreview />
+            <PsReportPreview />
+          </main>
+        </section>
+      </div>
     </div>
   );
 }
@@ -298,17 +764,6 @@ function collectExpandedPath(nodes: MenuNode[]): Record<string, boolean> {
   return expanded;
 }
 
-function collectDefaultExpanded(nodes: MenuNode[], maxLevel: number, level = 1): Record<string, boolean> {
-  const expanded: Record<string, boolean> = {};
-  nodes.forEach((node) => {
-    if (node.children?.length && level <= maxLevel) {
-      expanded[node.id || node.title] = true;
-      Object.assign(expanded, collectDefaultExpanded(node.children, maxLevel, level + 1));
-    }
-  });
-  return expanded;
-}
-
 function MenuItem({
   item,
   collapsed,
@@ -317,6 +772,8 @@ function MenuItem({
   appCode,
   pathname,
   level,
+  siblingIndex,
+  selectedMenu,
   onNavigate,
 }: {
   item: MenuNode;
@@ -326,6 +783,8 @@ function MenuItem({
   appCode: string;
   pathname: string;
   level: number;
+  siblingIndex?: number;
+  selectedMenu?: MenuNode;
   onNavigate: () => void;
 }) {
   const key = item.id || item.title;
@@ -333,7 +792,8 @@ function MenuItem({
   const hasChildren = children.length > 0;
   const path = cleanPath(item.url_path);
   const to = path ? `/workspace/${appCode}/${path}` : "#";
-  const active = isMenuNodeActive(item, pathname);
+  const directActive = item === selectedMenu;
+  const branchActive = !directActive && Boolean(children.some((child) => isMenuNodeActive(child, pathname)));
   const shouldRenderChildren = !collapsed && expanded[key];
   const displayTitle = titleCase(item.title);
 
@@ -341,20 +801,21 @@ function MenuItem({
     return (
       <div className={cn("nav-group", collapsed && "collapsed", `nav-level-${level}`)}>
         <button
-          className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)}
+          className={cn("nav-item", directActive && "active", branchActive && "branch-active", collapsed && "icon-only", `nav-level-${level}`)}
           onClick={() => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))}
           title={displayTitle}
           aria-label={displayTitle}
+          aria-expanded={Boolean(shouldRenderChildren)}
         >
           <span className="nav-link-copy">
-            <MenuIcon item={item} level={level} className="nav-leading-icon" />
+            <MenuIcon item={item} level={level} siblingIndex={siblingIndex} className="nav-leading-icon" />
             {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
           </span>
           {!collapsed && (expanded[key] ? <ChevronDown size={15} /> : <ChevronRight size={15} />)}
         </button>
         {shouldRenderChildren && (
           <div className={cn("nav-children", collapsed && "collapsed")}>
-            {children.map((child) => (
+            {children.map((child, index) => (
               <MenuItem
                 key={child.id || child.title}
                 item={child}
@@ -363,7 +824,9 @@ function MenuItem({
                 setExpanded={setExpanded}
                 appCode={appCode}
                 pathname={pathname}
+                selectedMenu={selectedMenu}
                 level={level + 1}
+                siblingIndex={index + 1}
                 onNavigate={onNavigate}
               />
             ))}
@@ -374,27 +837,38 @@ function MenuItem({
   }
 
   return (
-    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
+    <Link className={cn("nav-item", directActive && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} aria-current={directActive ? "page" : undefined} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
       <span className="nav-link-copy">
-        <MenuIcon item={item} level={level} className="nav-leading-icon" />
+        <MenuIcon item={item} level={level} siblingIndex={siblingIndex} className="nav-leading-icon" />
         {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
       </span>
     </Link>
   );
 }
 
-function MenuIcon({ item, level, className }: { item: MenuNode; level: number; className?: string }) {
-  if (level >= 3) return <span className={cn("nav-dot", className)} aria-hidden="true" />;
+function MenuIcon({ item, level, className }: { item: MenuNode; level: number; siblingIndex?: number; className?: string }) {
+  if (level >= 2) {
+    return (
+      <span className={cn("nav-dot-wrap grid place-items-center w-4 h-4 shrink-0 mr-1", className)} aria-hidden="true">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 nav-bullet transition-all" />
+      </span>
+    );
+  }
   const Icon = getMenuIcon(item);
-  return <Icon className={className} size={level === 1 ? 15 : 13} aria-hidden="true" />;
+  return <Icon className={className} size={level === 1 ? 17 : 14} aria-hidden="true" />;
 }
 
 function getMenuIcon(item: MenuNode): LucideIcon {
   const text = `${item.title || ""} ${item.url_path || ""}`.toLowerCase();
+  // Match specific freight operations before the generic "freight" rule so
+  // neighbouring menu entries do not all receive the same ship icon.
   if (text.includes("freight report")) return FileBarChart;
-  if (text.includes("freight air") || text.includes("airline") || text.includes("tariff")) return Plane;
-  if (text.includes("freight sea") || text.includes("vessel")) return Ship;
-  if (text.includes("freight road")) return Truck;
+  if (text.includes("request for quotation") || text.includes("request quotation") || text.includes("request_quote") || text.includes("rfq")) return FileQuestion;
+  if (text.includes("quotation")) return FileCheck2;
+  if (text.includes("enquiry") || text.includes("inquiry")) return ClipboardList;
+  if (text.includes("freight air") || text.includes("airline") || text.includes("tariff") || /^air\b/.test(text)) return Plane;
+  if (text.includes("freight sea") || text.includes("vessel") || /^sea\b/.test(text)) return Ship;
+  if (text.includes("freight road") || /^road\b/.test(text)) return Truck;
   if (text.includes("freight") || text.includes("rfq") || text.includes("quotation")) return Ship;
   if (text.includes("country")) return Globe2;
   if (text.includes("division")) return Building2;
@@ -457,9 +931,9 @@ function isMenuNodeActive(item: MenuNode, pathname: string): boolean {
 function findActiveMenuPath(items: MenuNode[], pathname: string): MenuNode[] {
   for (const item of items) {
     const path = cleanPath(item.url_path);
-    if (isPathActive(path, pathname)) return [item];
     const childPath = findActiveMenuPath(item.children || [], pathname);
     if (childPath.length) return [item, ...childPath];
+    if (isPathActive(path, pathname)) return [item];
   }
   return [];
 }
@@ -477,7 +951,22 @@ function isPathActive(menuPath: string, pathname: string): boolean {
   if (!menuPath) return false;
   const path = normalizeRoutePath(menuPath);
   const current = normalizeRoutePath(pathname);
-  return current === path || current.endsWith(`/${path}`);
+  if (current === path || current.endsWith(`/${path}`)) return true;
+
+  // Backend menu paths and React routes sometimes use different separators
+  // (for example import_for_reexport vs import-for-reexport). Compare the
+  // canonical path segments as a fallback while retaining the mode/section
+  // segments, so identical leaf names under Air, Sea and Road do not collide.
+  const canonicalSegments = (value: string) => value
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment).replace(/[^a-z0-9]/gi, "").toLowerCase());
+  const menuSegments = canonicalSegments(path);
+  const currentSegments = canonicalSegments(current);
+  if (!menuSegments.length || currentSegments.length < menuSegments.length) return false;
+  return menuSegments.every(
+    (segment, index) => segment === currentSegments[currentSegments.length - menuSegments.length + index],
+  );
 }
 
 function normalizeRoutePath(path: string) {
@@ -485,4 +974,58 @@ function normalizeRoutePath(path: string) {
     .replace(/^\/+|\/+$/g, "")
     .replace(/^workspace\/[^/]+\//i, "")
     .toLowerCase();
+}
+
+interface SearchableMenuItem {
+  id: string;
+  title: string;
+  target: string;
+  pathTrail: string[];
+  node: MenuNode;
+}
+
+function collectSearchableMenuItems(
+  nodes: MenuNode[],
+  appCode: string,
+  trail: string[] = []
+): SearchableMenuItem[] {
+  const list: SearchableMenuItem[] = [];
+
+  const traverse = (items: MenuNode[], currentTrail: string[]) => {
+    for (const item of items) {
+      const hasChildren = Boolean(item.children && item.children.length > 0);
+      const title = titleCase(item.title || "");
+      const directPath = cleanPath(item.url_path);
+
+      if (!hasChildren || item.type === "item" || directPath) {
+        const target = getMenuNodeTarget(item, appCode);
+        if (target) {
+          list.push({
+            id: item.id || `${appCode}-${target}-${title}`,
+            title,
+            target,
+            pathTrail: currentTrail,
+            node: item,
+          });
+        }
+      }
+
+      if (hasChildren && item.children) {
+        traverse(item.children, [...currentTrail, title]);
+      }
+    }
+  };
+
+  traverse(nodes, trail);
+
+  // Deduplicate by target so the same screen does not appear multiple times
+  const seen = new Set<string>();
+  const unique: SearchableMenuItem[] = [];
+  for (const item of list) {
+    if (!seen.has(item.target)) {
+      seen.add(item.target);
+      unique.push(item);
+    }
+  }
+  return unique;
 }

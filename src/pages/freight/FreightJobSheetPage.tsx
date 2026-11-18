@@ -9,7 +9,7 @@ import { Input } from "../../components/ui/Input";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
-import { Field } from "../vendor/components";
+import { Field } from "../../components/commonComponents";
 
 const modeMap = {
   air: { code: "A", label: "Air", icon: Plane },
@@ -31,7 +31,7 @@ type SheetState = {
 export function FreightJobSheetPage({
   target,
   initialJob = null,
-  readOnly = false,
+  readOnly: _readOnly = false,
   onEmbeddedActionsChange,
   onEmbeddedList,
 }: {
@@ -41,6 +41,7 @@ export function FreightJobSheetPage({
   onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
   onEmbeddedList?: () => void;
 }) {
+  const readOnly = true;
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
@@ -53,6 +54,7 @@ export function FreightJobSheetPage({
   const [selectedJob, setSelectedJob] = useState<LookupRow | null>(initialJob ? normalizeRow(initialJob) : null);
   const [sheet, setSheet] = useState<SheetState>({ header: null, packlist: null });
   const [rows, setRows] = useState<LookupRow[]>([]);
+  const [activeListTab, setActiveListTab] = useState<"active" | "invoiced" | "all">("active");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(false);
@@ -61,6 +63,15 @@ export function FreightJobSheetPage({
   const [saving, setSaving] = useState(false);
   const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
   const activeJob = sheet.header || selectedJob;
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      const isInv = Boolean(text(r, "invoice_date"));
+      if (activeListTab === "active") return !isInv;
+      if (activeListTab === "invoiced") return isInv;
+      return true;
+    });
+  }, [rows, activeListTab]);
 
   const loadRows = useCallback(async () => {
     setListLoading(true);
@@ -152,9 +163,7 @@ async function saveHeader() {
 
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
-        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setSelectedJob(null))}>
-          <ArrowLeft size={14} /> List
-        </Button>
+        {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={() => setSelectedJob(null)} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
         <Button type="button" size="sm" variant="outline" onClick={() => void loadSheet(activeJob || selectedJob)} disabled={loading}>
           <RefreshCw size={14} /> Refresh
         </Button>
@@ -227,7 +236,7 @@ async function saveHeader() {
 
   if (!selectedJob) {
     return (
-      <section className="grid gap-2">
+      <section className="freight-list-screen grid gap-2">
         <div className="freight-form-header">
           <div className="flex min-w-0 items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={18} /></span>
@@ -238,18 +247,43 @@ async function saveHeader() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative w-72 max-w-full">
-              <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
-              <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job..." />
-            </div>
             <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={listLoading}><RefreshCw size={14} /> Refresh</Button>
           </div>
         </div>
+        {/* Filter Tabs Bar */}
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          {(
+            [
+              { id: "active", label: "Active", count: rows.filter((r) => !text(r, "invoice_date")).length },
+              { id: "invoiced", label: "Invoiced", count: rows.filter((r) => Boolean(text(r, "invoice_date"))).length },
+              { id: "all", label: "All", count: rows.length },
+            ] as const
+          ).map((tab) => {
+            const active = activeListTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveListTab(tab.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-xs font-semibold ring-2 ring-[#00378C]/20"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <DataTable
           columns={columns}
-          data={rows}
+          data={filteredRows}
           loading={listLoading}
-          title={`${rows.length} Jobs`}
+          title={`${filteredRows.length} Jobs`}
           subtitle={`${mode.label} / ${direction.label}`}
           searchValue={query}
           onSearchChange={setQuery}
@@ -258,7 +292,7 @@ async function saveHeader() {
           minWidth={1160}
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           onRowClick={(row) => setSelectedJob(normalizeRow(row))}
         />
       </section>
@@ -274,13 +308,26 @@ async function saveHeader() {
   return (
     <section className="freight-document-form">
       {!embeddedInWorkspace && (
-        <div className="freight-job-focus-bar freight-job-focus-compact">
-          <div>
-            <p className="m-0 text-xs font-semibold text-primary">Freight Job Sheet / {titleRef}</p>
-            <h2 className="m-0 text-lg font-semibold text-foreground">{mode.label} {direction.label} Operational Sheet</h2>
-            <p className="m-0 text-xs font-semibold text-muted-foreground">{text(job, "prin_name") || text(job, "prin_code") || "Principal pending"} | {houseRef}</p>
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="min-w-0">
+              <p className="eyebrow mb-0 text-[10px] font-bold uppercase tracking-wider text-primary">
+                Freight Job Sheet &bull; {mode.label} {direction.label}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-3 py-1 font-mono text-base font-bold text-[#78350f] shadow-xs">
+                  {titleRef}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-2.5 py-0.5 font-mono text-sm font-bold text-[#78350f] shadow-xs">
+                  {jobDate || "NEW"}
+                </span>
+                <span className="text-sm font-semibold text-foreground">
+                  {text(job, "prin_name") || text(job, "prin_code") || "Principal pending"}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="freight-job-inline-actions">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
             <Button type="button" size="sm" variant="outline" onClick={() => setSelectedJob(null)}><ArrowLeft size={14} /> Select Job</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => void loadSheet(job)} disabled={loading}><RefreshCw size={14} /> Refresh</Button>
             {!isEditing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={startEditing}><Edit2 size={14} /> Edit</Button>}
@@ -290,7 +337,7 @@ async function saveHeader() {
         </div>
       )}
 
-      <div className={`freight-document-paper freight-shipment-paper ${isEditing && !readOnly ? "is-editing" : "is-viewing"}`}>
+      <div className={`freight-ui-standard freight-document-paper freight-shipment-paper ${isEditing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <div className="freight-shipment-hero">
           <div className="freight-shipment-hero-item">
             <span>Booking Ref / Job No</span>
@@ -413,7 +460,7 @@ function SheetSection({ title, meta, children, className = "" }: { title: string
     <section className={`freight-info-section ${className}`}>
       <div className="freight-info-title">
         <h2>{title}</h2>
-        {meta && <span>{meta}</span>}
+
       </div>
       <div className="freight-info-body">{children}</div>
     </section>

@@ -1,21 +1,23 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowRight, TrendingUp, Ban, Bell,  CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 import { FreightJobPage } from "./FreightJobPage";
 import { FreightPacklistPage } from "./FreightPacklistPage";
-import { FreightJobSheetPage } from "./FreightJobSheetPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
+import { FreightJobFinancialAuditDialog } from "../../components/freight/FreightJobFinancialAuditDialog";
 
-type JobTab = "job" | "packlist" | "jobsheet" | "alerts" | "instructions" | "documents" | "deposits" | "activities";
+type JobTab = "job" | "packlist" | "alerts" | "instructions" | "documents" | "deposits" | "activities";
 type WorkspaceMode = "list" | "steps";
 
 const modeLabel = {
@@ -51,11 +53,10 @@ const modeIcon = {
 const tabs: { key: JobTab; label: string; icon: typeof ClipboardList; ready: boolean }[] = [
   { key: "job", label: "Job / File", icon: ClipboardList, ready: true },
   { key: "packlist", label: "Pack List", icon: PackageCheck, ready: true },
-  { key: "jobsheet", label: "JOB Sheet", icon: FileText, ready: true },
   { key: "alerts", label: "Alerts", icon: Bell, ready: true },
   { key: "instructions", label: "Instructions", icon: Info, ready: true },
   { key: "documents", label: "Documents", icon: FileText, ready: true },
-  { key: "deposits", label: "Deposits", icon: WalletCards, ready: true },
+  // { key: "deposits", label: "Deposits", icon: WalletCards, ready: true },
   { key: "activities", label: "Service & Activities", icon: ReceiptText, ready: true },
 ];
 
@@ -72,8 +73,9 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const location = useLocation();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
-  const [activeTab, setActiveTab] = useState<JobTab>(initialTab);
-  const [mode, setMode] = useState<WorkspaceMode>(initialTab === "job" ? "list" : "steps");
+  const [activeTab, setActiveTab] = useState<JobTab>("job");
+  const [mode, setMode] = useState<WorkspaceMode>("list");
+  const returnToList = useCallback(() => setMode("list"), []);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
   const [selectedJob, setSelectedJob] = useState<LookupRow | null>(null);
@@ -81,16 +83,17 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [workspaceActions, setWorkspaceActions] = useState<ReactNode>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [auditJob, setAuditJob] = useState<LookupRow | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
+
+  const openFinancialAudit = (row: LookupRow) => {
+    setAuditJob(row);
+    setAuditOpen(true);
+  };
   const targetMode = (target?.mode || "air") as keyof typeof modeLabel;
   const targetDirection = (target?.direction || "import") as keyof typeof directionLabel;
   const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
-  const title = useMemo(() => {
-    const modeText = modeLabel[targetMode];
-    const direction = directionLabel[targetDirection];
-    return `${modeText} ${direction} Job Workspace`;
-  }, [targetDirection, targetMode]);
-
   const loadRows = useCallback(async () => {
     setLoading(true);
     setMessage("");
@@ -115,8 +118,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   }, [loadRows, mode]);
 
   useEffect(() => {
-    setActiveTab(initialTab);
-    setMode(initialTab === "job" ? "list" : "steps");
+    setActiveTab("job");
+    setMode("list");
     setSelectedJob(null);
   }, [initialTab, targetDirection, targetMode]);
 
@@ -138,7 +141,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       header: "Job No",
       size: 130,
       cell: ({ row }) => (
-        <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openSteps(row.original, "job")}>
+        <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => openSteps(row.original, "job")}>
           {text(row.original, "job_no")}
         </button>
       ),
@@ -148,20 +151,54 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     { accessorKey: "prin_name", header: "Principal Name", size: 240 },
     { accessorKey: "doc_ref", header: targetMode === "air" ? "MAWB" : "BL / Doc Ref", size: 145 },
     { accessorKey: "hawb", header: targetMode === "air" ? "HAWB" : "House Ref", size: 130 },
-    { accessorKey: "port_code", header: "Origin", size: 90 },
-    { accessorKey: "destination_port", header: "Destination", size: 115 },
+    { accessorKey: "port_code_name", header: "Origin", size: 90, cell: ({ row }) => text(row.original, "port_code_name") || text(row.original, "port_code") },
+    { accessorKey: "destination_name", header: "Destination", size: 115, cell: ({ row }) => text(row.original, "destination_port_name") || text(row.original, "destination_port") },
     { accessorKey: "invoice_date", header: "Invoice", size: 110, cell: ({ row }) => text(row.original, "invoice_date") ? <StatusChip tone="green" label="Invoiced" /> : <StatusChip tone="slate" label="Pending" /> },
     { accessorKey: "canceled", header: "Status", size: 95, cell: ({ row }) => text(row.original, "canceled") === "Y" ? <StatusChip tone="red" label="Cancelled" /> : <StatusChip tone="green" label="Open" /> },
     {
       id: "actions",
-      header: "Open",
-      size: 90,
+      header: "Actions",
+      size: 180,
       enableColumnFilter: false,
-      cell: ({ row }) => (
-        <Button type="button" size="sm" variant="ghost" onClick={() => openSteps(row.original, "job")}>
-          Steps <ArrowRight size={13} />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const isConfirmed =
+          text(row.original, "confirmed") === "Y" ||
+          Boolean(text(row.original, "confirm_date")) ||
+          Boolean(text(row.original, "invoice_date")) ||
+          text(row.original, "completed") === "Y";
+
+        return (
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              disabled={!isConfirmed}
+              onClick={() => openFinancialAudit(row.original)}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all shadow-2xs border ${
+                isConfirmed
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                  : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+              }`}
+              title={
+                isConfirmed
+                  ? "Open Financial Audit 360°"
+                  : "Job must be Confirmed to view Financial 360°"
+              }
+            >
+              <TrendingUp size={11} className={isConfirmed ? "text-emerald-700" : "text-slate-400"} />
+              <span>Financial 360°</span>
+            </button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="freight-table-text-action h-6 px-1.5 text-xs text-slate-600 hover:text-slate-900"
+              onClick={() => openSteps(row.original, "job")}
+            >
+              Steps <ArrowRight size={13} />
+            </Button>
+          </div>
+        );
+      },
     },
   ], [targetMode]);
 
@@ -181,84 +218,132 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   if (mode === "list") {
     return (
-      <section className="grid gap-2">
-        <div className="freight-job-list-hero">
-          <div>
-            <p className="eyebrow">Freight Operations</p>
-            <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
-            <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
-              <RefreshCw size={15} /> Refresh
-            </Button>
-            <Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
-              <Plus size={15} /> Add Job
-            </Button>
-          </div>
-        </div>
-
-        <div className="freight-job-list-filterbar">
-          <div className="flex flex-wrap gap-2">
-            {listingTabs.map((tab) => (
-              <Button key={tab.value} size="sm" variant={activeStatus === tab.value ? "default" : "outline"} onClick={() => setActiveStatus(tab.value)}>
-                {tab.label}
-              </Button>
-            ))}
-          </div>
-          <div className="flex min-w-[280px] flex-1 items-center justify-end gap-2">
-            <div className="freight-job-smart-note">
-              <BrainCircuit size={14} className="text-primary" />
-              <span>{message || smartAdvice(health)}</span>
-            </div>
-            <div className="relative w-80 max-w-full">
-              <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
-              <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job, principal, reference..." />
-            </div>
-          </div>
+      <section className="freight-workspace-ui freight-list-screen freight-job-list-screen grid gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          {listingTabs.map((tab) => {
+            const count = rows.filter((row) => filterJobByStatus(row, tab.value)).length;
+            const active = activeStatus === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setActiveStatus(tab.value)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <DataTable
           columns={columns}
           data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Jobs`}
-          subtitle={`${modeLabel[targetMode]} / ${directionLabel[targetDirection]}`}
+          actionButton={
+            <div className="flex items-center gap-2"><button
+              type="button"
+              onClick={() => openSteps(null, "job")}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Job
+            </button><FinanceListActionsMenu onExport={() => exportToCsv(filteredRows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]))), columns, `freight-${targetMode}-${targetDirection}-jobs.csv`)} onRefresh={() => void loadRows()} /></div>
+          }
           loading={loading}
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Filter visible jobs..."
-          height="calc(100vh - 258px)"
+          height="calc(100dvh - 180px)"
           minWidth={1320}
           density="grid"
           enablePagination
-          pageSize={50}
-          enableExport
+          pageSize={25}
+          enableExport={false}
           exportFilename={`freight-${targetMode}-${targetDirection}-jobs.csv`}
           onRowClick={(row) => openSteps(row, "job")}
           rowClassName={(row) =>
-            text(row, "canceled") === "Y" ? "bg-red-50/70"
-            : text(row, "invoice_date") ? "bg-emerald-50/70"
-            : "bg-blue-50/50"
+            text(row, "canceled") === "Y"
+              ? "bg-red-50/70"
+              : text(row, "invoice_date")
+                ? "bg-emerald-50/70"
+                : "bg-blue-50/50"
           }
         />
+
+        {auditJob && (
+          <FreightJobFinancialAuditDialog
+            open={auditOpen}
+            onClose={() => {
+              setAuditOpen(false);
+              setAuditJob(null);
+            }}
+            companyCode={companyCode}
+            prinCode={text(auditJob, "prin_code")}
+            jobNo={text(auditJob, "job_no")}
+            prinName={text(auditJob, "prin_name")}
+            jobDate={text(auditJob, "job_date")}
+            transportMode={targetMode}
+            confirmedDate={text(auditJob, "confirm_date")}
+            invoicedDate={text(auditJob, "invoice_date")}
+          />
+        )}
       </section>
     );
   }
 
+  const WorkspaceModeIcon = modeIcon[targetMode] || Plane;
+
   return (
-    <section className="freight-module-surface">
+    <section className="freight-workspace-ui freight-module-surface">
       <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
         <div className="freight-workspace-header-shell">
-          <div className="freight-workspace-title-block">
-            <p className="m-0 text-xs font-semibold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
-            <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1>
-            <p className="m-0 text-xs font-medium text-muted-foreground">
-              {selectedJob ? `${text(selectedJob, "prin_name") || text(selectedJob, "prin_code")} | ${text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Reference pending"}` : "New shipment operation"}
-            </p>
+          <div className="freight-workspace-title-cluster">
+            <button type="button" onClick={returnToList} aria-label="Back to job list" title="Back to job list" className="freight-back-button"><ArrowLeft size={18} /></button>
+            <div className={`freight-workspace-mode-mark mode-${modeCode[targetMode].toLowerCase()}`} aria-hidden="true">
+              <WorkspaceModeIcon size={30} strokeWidth={1.5} />
+            </div>
+            {/* <div className="freight-workspace-title-block">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-[20px] font-bold leading-tight text-foreground">
+                  {selectedJob ? "Job" : "New Job"}
+                </h1>
+                {selectedJob && (
+                  <>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-3 py-0.5 font-mono text-sm font-bold text-[#78350f] shadow-xs">
+                      {text(selectedJob, "job_no")}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-2.5 py-0.5 font-mono text-xs font-bold text-[#78350f] shadow-xs">
+                      {formatDate(text(selectedJob, "job_date"))}
+                    </span>
+                  </>
+                )}  
+              </div>
+              <p className="m-0 text-xs font-semibold text-slate-600 freight-workspace-mode-subtitle">
+                {modeLabel[targetMode]} Freight &bull; {directionLabel[targetDirection]}
+              </p>
+            </div> */}
+            <div className="flex flex-wrap items-center gap-2">
+  <h1 className="m-0 text-[16px] font-bold leading-tight text-foreground">
+  {modeLabel[targetMode]} {directionLabel[targetDirection]} Job
+</h1>
+  <span className="freight-doc-pill">
+    JOB NO - <b>{selectedJob ? text(selectedJob, "job_no") : "NEW"}</b>
+  </span>
+  <span className="freight-doc-pill">
+    DATE - <b>{formatDate(text(selectedJob, "job_date")) || new Date().toLocaleDateString("en-GB")}</b>
+  </span>
+</div>
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
           <div className="freight-workspace-tabs">
-            {tabs.map((tab) => {
+            {tabs.map((tab, idx) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
               return (
@@ -266,11 +351,14 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                   key={tab.key}
                   type="button"
                   className={`freight-workspace-tab ${active ? "active" : ""}`}
+                  disabled={tab.key !== "job" && !text(selectedJob || {}, "job_no")}
+                  title={tab.key !== "job" && !text(selectedJob || {}, "job_no") ? "Save the job first to continue" : tab.label}
+                  aria-pressed={active}
                   onClick={() => setActiveTab(tab.key)}
                 >
-                  <Icon size={14} />
-                  {tab.label}
-                  {!tab.ready && <span className={`rounded px-1 text-[9px] ${active ? "bg-primary-foreground/20" : "bg-muted"}`}>Next</span>}
+                  <Icon size={14} className={active ? "text-primary" : "text-muted-foreground"} />
+                  <span>{tab.label}</span>
+
                 </button>
               );
             })}
@@ -284,34 +372,26 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           initialJob={selectedJob}
           startMode="editor"
           onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
+          onEmbeddedList={returnToList}
+          onJobSaved={(job) => setSelectedJob(normalizeLookupRow(job))}
         />
       )}
       {activeTab === "packlist" && (
         <FreightPacklistPage
           target={target}
           initialJob={selectedJob}
-          startMode={selectedJob ? "editor" : "list"}
+          startMode="editor"
           screen="packlist"
           readOnly={selectedJobReadOnly}
           onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
+          onEmbeddedList={returnToList}
         />
       )}
-      {activeTab === "jobsheet" && (
-        <FreightJobSheetPage
-          target={target}
-          initialJob={selectedJob}
-          readOnly={selectedJobReadOnly}
-          onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
-        />
-      )}
-      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
 
     </section>
   );
@@ -323,7 +403,7 @@ function StatusChip({ tone, label }: { tone: "green" | "red" | "slate"; label: s
     : tone === "red"
       ? "border-red-200 bg-red-50 text-red-700"
       : "border-slate-200 bg-slate-50 text-slate-700";
-  return <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{label}</span>;
+  return <span className={`rounded border px-2 py-0 text-[10.5px] leading-tight font-medium ${cls}`}>{label}</span>;
 }
 
 function filterJobByStatus(row: LookupRow, tab: string) {
@@ -370,8 +450,17 @@ function smartAdvice(health: ReturnType<typeof buildHealth>) {
   return "No urgent job gaps found for this list.";
 }
 
+// function normalizeLookupRow(row: LookupRow) {
+//   return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key.toUpperCase(), value])) as LookupRow;
+// }
+
 function normalizeLookupRow(row: LookupRow) {
-  return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key.toUpperCase(), value])) as LookupRow;
+  const next: LookupRow = {};
+  Object.entries(row || {}).forEach(([key, value]) => {
+    next[key.toUpperCase()] = value;
+    next[key.toLowerCase()] = value;
+  });
+  return next;
 }
 
 function text(row: LookupRow | null | undefined, key: string) {

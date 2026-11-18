@@ -1023,207 +1023,207 @@ export function PamsDepartmentAssignmentPage() {
   );
 }
 
-export function PamsBulkAppraisalPage() {
-  const { user } = useAuth();
-  const [periods, setPeriods] = useState<Row[]>([]);
-  const [employees, setEmployees] = useState<Row[]>([]);
-  const [selectedPeriod, setSelectedPeriod] = useState("");
-  const [selectedEmployees, setSelectedEmployees] = useState<Record<string, boolean>>({});
-  const [employeeRows, setEmployeeRows] = useState<Row[]>([]);
-  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
-  const [employeeSearch, setEmployeeSearch] = useState("");
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [employeeLoading, setEmployeeLoading] = useState(false);
-  const loginid = user?.loginid || user?.username || "";
-  const companyCode = user?.company_code || "";
+// export function PamsBulkAppraisalPage() {
+//   const { user } = useAuth();
+//   const [periods, setPeriods] = useState<Row[]>([]);
+//   const [employees, setEmployees] = useState<Row[]>([]);
+//   const [selectedPeriod, setSelectedPeriod] = useState("");
+//   const [selectedEmployees, setSelectedEmployees] = useState<Record<string, boolean>>({});
+//   const [employeeRows, setEmployeeRows] = useState<Row[]>([]);
+//   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
+//   const [employeeSearch, setEmployeeSearch] = useState("");
+//   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+//   const [loading, setLoading] = useState(false);
+//   const [employeeLoading, setEmployeeLoading] = useState(false);
+//   const loginid = user?.loginid || user?.username || "";
+//   const companyCode = user?.company_code || "";
 
-  useEffect(() => {
-    pamsSelect({ parameter: "period", loginid, code1: companyCode }).then((rows) => setPeriods(rows.map(normalizeRow))).catch(() => setPeriods([]));
-  }, [loginid, companyCode]);
+//   useEffect(() => {
+//     pamsSelect({ parameter: "period", loginid, code1: companyCode }).then((rows) => setPeriods(rows.map(normalizeRow))).catch(() => setPeriods([]));
+//   }, [loginid, companyCode]);
 
-  const refreshBulkRows = async () => {
-    if (!selectedPeriod) return;
-    const rows = await pamsSelect({ parameter: "bulk_appraisal_employees_with_status", loginid, code1: companyCode, code2: selectedPeriod });
-    setEmployeeRows(rows.map(normalizeRow));
-  };
+//   const refreshBulkRows = async () => {
+//     if (!selectedPeriod) return;
+//     const rows = await pamsSelect({ parameter: "bulk_appraisal_employees_with_status", loginid, code1: companyCode, code2: selectedPeriod });
+//     setEmployeeRows(rows.map(normalizeRow));
+//   };
 
-  useEffect(() => {
-    setEmployeeRows([]);
-    setSelectedEmployees({});
-    if (selectedPeriod) void refreshBulkRows().catch(() => setEmployeeRows([]));
-  }, [selectedPeriod]);
+//   useEffect(() => {
+//     setEmployeeRows([]);
+//     setSelectedEmployees({});
+//     if (selectedPeriod) void refreshBulkRows().catch(() => setEmployeeRows([]));
+//   }, [selectedPeriod]);
 
-  const loadEmployees = async () => {
-    if (!selectedPeriod) {
-      setNotice({ type: "error", message: "Select period before searching employees" });
-      return;
-    }
-    setEmployeeLoading(true);
-    setNotice(null);
-    try {
-      const rows = (await loadBulkEmployees(loginid, companyCode, selectedPeriod)).map(normalizeRow);
-      setEmployees(rows);
-      setEmployeeDialogOpen(true);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load employees" });
-    } finally {
-      setEmployeeLoading(false);
-    }
-  };
+//   const loadEmployees = async () => {
+//     if (!selectedPeriod) {
+//       setNotice({ type: "error", message: "Select period before searching employees" });
+//       return;
+//     }
+//     setEmployeeLoading(true);
+//     setNotice(null);
+//     try {
+//       const rows = (await loadBulkEmployees(loginid, companyCode, selectedPeriod)).map(normalizeRow);
+//       setEmployees(rows);
+//       setEmployeeDialogOpen(true);
+//     } catch (error) {
+//       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load employees" });
+//     } finally {
+//       setEmployeeLoading(false);
+//     }
+//   };
 
-  const addEmployees = async () => {
-    const employeeCodes = Object.keys(selectedEmployees).filter((key) => selectedEmployees[key]);
-    if (!selectedPeriod || !employeeCodes.length) {
-      setNotice({ type: "error", message: "Select period and at least one employee" });
-      return;
-    }
-    setLoading(true);
-    setNotice(null);
-    try {
-      await pamsCommonProcedure({ parameter: "PROC_INSERT_GT_PROCESS_APPRAISAL_DOC_BULK", loginid, val1s1: companyCode, val1s2: selectedPeriod, val1s3: employeeCodes.join(",") });
-      await refreshBulkRows();
-      setNotice({ type: "success", message: "Employees added to appraisal queue" });
-      setEmployeeDialogOpen(false);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to add employees" });
-    } finally {
-      setLoading(false);
-    }
-  };
+//   const addEmployees = async () => {
+//     const employeeCodes = Object.keys(selectedEmployees).filter((key) => selectedEmployees[key]);
+//     if (!selectedPeriod || !employeeCodes.length) {
+//       setNotice({ type: "error", message: "Select period and at least one employee" });
+//       return;
+//     }
+//     setLoading(true);
+//     setNotice(null);
+//     try {
+//       await pamsCommonProcedure({ parameter: "PROC_INSERT_GT_PROCESS_APPRAISAL_DOC_BULK", loginid, val1s1: companyCode, val1s2: selectedPeriod, val1s3: employeeCodes.join(",") });
+//       await refreshBulkRows();
+//       setNotice({ type: "success", message: "Employees added to appraisal queue" });
+//       setEmployeeDialogOpen(false);
+//     } catch (error) {
+//       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to add employees" });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-  const process = async () => {
-    if (!selectedPeriod || !employeeRows.length) {
-      setNotice({ type: "error", message: "Load employees before processing appraisal documents" });
-      return;
-    }
-    setLoading(true);
-    setNotice(null);
-    try {
-      const employeeCodes = employeeRows.map((row) => text(row.EMPLOYEE_CODE || row.employee_code)).filter(Boolean).join(",");
-      await pamsCommonProcedure({ parameter: "PROC_CREATE_APPRAISAL_DOC_BULK", loginid, val1s1: companyCode, val1s2: selectedPeriod, val1s3: employeeCodes });
-      await refreshBulkRows();
-      setNotice({ type: "success", message: "Bulk appraisal documents processed successfully" });
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to process appraisals" });
-    } finally {
-      setLoading(false);
-    }
-  };
+//   const process = async () => {
+//     if (!selectedPeriod || !employeeRows.length) {
+//       setNotice({ type: "error", message: "Load employees before processing appraisal documents" });
+//       return;
+//     }
+//     setLoading(true);
+//     setNotice(null);
+//     try {
+//       const employeeCodes = employeeRows.map((row) => text(row.EMPLOYEE_CODE || row.employee_code)).filter(Boolean).join(",");
+//       await pamsCommonProcedure({ parameter: "PROC_CREATE_APPRAISAL_DOC_BULK", loginid, val1s1: companyCode, val1s2: selectedPeriod, val1s3: employeeCodes });
+//       await refreshBulkRows();
+//       setNotice({ type: "success", message: "Bulk appraisal documents processed successfully" });
+//     } catch (error) {
+//       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to process appraisals" });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-  const columns = useMemo<ColumnDef<Row>[]>(() => bulkAppraisalColumns(), []);
-  const filteredEmployees = employees.filter((employee) => formatEmployeeLabel(employee).toLowerCase().includes(employeeSearch.toLowerCase()));
-  const selectedCount = Object.values(selectedEmployees).filter(Boolean).length;
+//   const columns = useMemo<ColumnDef<Row>[]>(() => bulkAppraisalColumns(), []);
+//   const filteredEmployees = employees.filter((employee) => formatEmployeeLabel(employee).toLowerCase().includes(employeeSearch.toLowerCase()));
+//   const selectedCount = Object.values(selectedEmployees).filter(Boolean).length;
 
-  return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h1 className="m-0 text-2xl font-semibold">Bulk Appraisal</h1><p className="mt-1 text-sm text-muted-foreground">Create appraisal documents for selected employees and period.</p></div>
-      </div>
-      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
-      <Card>
-        <CardContent className="grid gap-3 pt-4 md:grid-cols-[1fr_1fr_auto]">
-          <Field label="Period" required>
-            <SearchableSelect
-              value={selectedPeriod}
-              placeholder="Search period"
-              onChange={setSelectedPeriod}
-              options={periods.map((period, index) => {
-                const value = text(period.PERIOD_NUMBER || period.period_number);
-                return { value, label: formatPeriodQuarter(period), key: `period_${value}_${index}` };
-              })}
-            />
-          </Field>
-          <Field label="Employee" required>
-            <Button type="button" variant="outline" className="h-10 w-full justify-start" disabled={employeeLoading} onClick={loadEmployees}>
-              <Search size={15} /> {selectedCount ? `${selectedCount} employee${selectedCount === 1 ? "" : "s"} selected` : "Search employee"}
-            </Button>
-          </Field>
-          {/* REMOVED: Add button. ADDED: Process button */}
-          <div className="flex items-end">
-            <Button type="button" disabled={loading} onClick={process}>
-              <Users size={15} /> {loading ? "Processing..." : "Process"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      <DataTable columns={columns} data={employeeRows} title={`${employeeRows.length.toLocaleString()} Employees`} subtitle="Bulk Appraisal Status" height={520} minWidth={1300} density="grid" enablePagination pageSize={100} searchPlaceholder="Search employee, division, status..." />
-      <Dialog
-        open={employeeDialogOpen}
-        wide
-        title="Select Employees"
-        onClose={() => setEmployeeDialogOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setEmployeeDialogOpen(false)}>Cancel</Button>
-            <Button disabled={loading || selectedCount === 0} onClick={addEmployees}>
-              <Plus size={15} /> Add Selected
-            </Button>
-          </>
-        }
-      >
-        <div className="grid gap-3">
-          <Input
-            value={employeeSearch}
-            onChange={(event) => setEmployeeSearch(event.target.value)}
-            placeholder="Search employee code or name"
-          />
-          <div className="max-h-[460px] overflow-auto rounded-lg border border-border">
-            <table className="w-full table-fixed border-collapse text-sm">
-              <colgroup>
-                <col className="w-10" />
-                <col className="w-[22%]" />
-                <col className="w-[30%]" />
-                <col className="w-[48%]" />
-              </colgroup>
-              <thead className="sticky top-0 bg-muted text-[11px] uppercase tracking-[0.12em] text-primary">
-                <tr>
-                  <th className="border-b border-border px-3 py-2 text-left">
-                    {/* Select All checkbox */}
-                    <input
-                      type="checkbox"
-                      checked={
-                        filteredEmployees.length > 0 &&
-                        filteredEmployees.every((e) => Boolean(selectedEmployees[text(e.EMPLOYEE_CODE || e.employee_code)]))
-                      }
-                      onChange={(event) => {
-                        const next = { ...selectedEmployees };
-                        filteredEmployees.forEach((e) => {
-                          next[text(e.EMPLOYEE_CODE || e.employee_code)] = event.target.checked;
-                        });
-                        setSelectedEmployees(next);
-                      }}
-                    />
-                  </th>
-                  <th className="border-b border-border px-3 py-2 text-left">Employee ID</th>
-                  <th className="border-b border-border px-3 py-2 text-left">Employee Code</th>
-                  <th className="border-b border-border px-3 py-2 text-left">Employee Name</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEmployees.length === 0 ? (
-                  <tr><td colSpan={4} className="px-3 py-10 text-center text-muted-foreground">No employees found.</td></tr>
-                ) : filteredEmployees.map((employee, index) => {
-                  const code = text(employee.EMPLOYEE_CODE || employee.employee_code);
-                  return (
-                    <tr key={`${code}_${index}`} className="border-b border-border hover:bg-muted/40">
-                      <td className="px-3 py-2">
-                        <input type="checkbox" checked={Boolean(selectedEmployees[code])} onChange={(event) => setSelectedEmployees((current) => ({ ...current, [code]: event.target.checked }))} />
-                      </td>
-                      <td className="truncate px-3 py-2">{formatValue(employee.EMPLOYEE_ID || employee.employee_id)}</td>
-                      <td className="truncate px-3 py-2 font-medium text-foreground">{formatValue(employee.EMPLOYEE_CODE || employee.employee_code)}</td>
-                      <td className="truncate px-3 py-2">{formatValue(employee.RPT_NAME || employee.EMP_NAME || employee.employee_name)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </Dialog>
-    </section>
-  );
-}
+//   return (
+//     <section className="grid gap-4">
+//       <div className="flex flex-wrap items-start justify-between gap-3">
+//         <div><h1 className="m-0 text-2xl font-semibold">Bulk Appraisal</h1><p className="mt-1 text-sm text-muted-foreground">Create appraisal documents for selected employees and period.</p></div>
+//       </div>
+//       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+//       <Card>
+//         <CardContent className="grid gap-3 pt-4 md:grid-cols-[1fr_1fr_auto]">
+//           <Field label="Period" required>
+//             <SearchableSelect
+//               value={selectedPeriod}
+//               placeholder="Search period"
+//               onChange={setSelectedPeriod}
+//               options={periods.map((period, index) => {
+//                 const value = text(period.PERIOD_NUMBER || period.period_number);
+//                 return { value, label: formatPeriodQuarter(period), key: `period_${value}_${index}` };
+//               })}
+//             />
+//           </Field>
+//           <Field label="Employee" required>
+//             <Button type="button" variant="outline" className="h-10 w-full justify-start" disabled={employeeLoading} onClick={loadEmployees}>
+//               <Search size={15} /> {selectedCount ? `${selectedCount} employee${selectedCount === 1 ? "" : "s"} selected` : "Search employee"}
+//             </Button>
+//           </Field>
+//           {/* REMOVED: Add button. ADDED: Process button */}
+//           <div className="flex items-end">
+//             <Button type="button" disabled={loading} onClick={process}>
+//               <Users size={15} /> {loading ? "Processing..." : "Process"}
+//             </Button>
+//           </div>
+//         </CardContent>
+//       </Card>
+//       <DataTable columns={columns} data={employeeRows} title={`${employeeRows.length.toLocaleString()} Employees`} subtitle="Bulk Appraisal Status" height={520} minWidth={1300} density="grid" enablePagination pageSize={100} searchPlaceholder="Search employee, division, status..." />
+//       <Dialog
+//         open={employeeDialogOpen}
+//         wide
+//         title="Select Employees"
+//         onClose={() => setEmployeeDialogOpen(false)}
+//         footer={
+//           <>
+//             <Button variant="outline" onClick={() => setEmployeeDialogOpen(false)}>Cancel</Button>
+//             <Button disabled={loading || selectedCount === 0} onClick={addEmployees}>
+//               <Plus size={15} /> Add Selected
+//             </Button>
+//           </>
+//         }
+//       >
+//         <div className="grid gap-3">
+//           <Input
+//             value={employeeSearch}
+//             onChange={(event) => setEmployeeSearch(event.target.value)}
+//             placeholder="Search employee code or name"
+//           />
+//           <div className="max-h-[460px] overflow-auto rounded-lg border border-border">
+//             <table className="w-full table-fixed border-collapse text-sm">
+//               <colgroup>
+//                 <col className="w-10" />
+//                 <col className="w-[22%]" />
+//                 <col className="w-[30%]" />
+//                 <col className="w-[48%]" />
+//               </colgroup>
+//               <thead className="sticky top-0 bg-muted text-[11px] uppercase tracking-[0.12em] text-primary">
+//                 <tr>
+//                   <th className="border-b border-border px-3 py-2 text-left">
+//                     {/* Select All checkbox */}
+//                     <input
+//                       type="checkbox"
+//                       checked={
+//                         filteredEmployees.length > 0 &&
+//                         filteredEmployees.every((e) => Boolean(selectedEmployees[text(e.EMPLOYEE_CODE || e.employee_code)]))
+//                       }
+//                       onChange={(event) => {
+//                         const next = { ...selectedEmployees };
+//                         filteredEmployees.forEach((e) => {
+//                           next[text(e.EMPLOYEE_CODE || e.employee_code)] = event.target.checked;
+//                         });
+//                         setSelectedEmployees(next);
+//                       }}
+//                     />
+//                   </th>
+//                   <th className="border-b border-border px-3 py-2 text-left">Employee ID</th>
+//                   <th className="border-b border-border px-3 py-2 text-left">Employee Code</th>
+//                   <th className="border-b border-border px-3 py-2 text-left">Employee Name</th>
+//                 </tr>
+//               </thead>
+//               <tbody>
+//                 {filteredEmployees.length === 0 ? (
+//                   <tr><td colSpan={4} className="px-3 py-10 text-center text-muted-foreground">No employees found.</td></tr>
+//                 ) : filteredEmployees.map((employee, index) => {
+//                   const code = text(employee.EMPLOYEE_CODE || employee.employee_code);
+//                   return (
+//                     <tr key={`${code}_${index}`} className="border-b border-border hover:bg-muted/40">
+//                       <td className="px-3 py-2">
+//                         <input type="checkbox" checked={Boolean(selectedEmployees[code])} onChange={(event) => setSelectedEmployees((current) => ({ ...current, [code]: event.target.checked }))} />
+//                       </td>
+//                       <td className="truncate px-3 py-2">{formatValue(employee.EMPLOYEE_ID || employee.employee_id)}</td>
+//                       <td className="truncate px-3 py-2 font-medium text-foreground">{formatValue(employee.EMPLOYEE_CODE || employee.employee_code)}</td>
+//                       <td className="truncate px-3 py-2">{formatValue(employee.RPT_NAME || employee.EMP_NAME || employee.employee_name)}</td>
+//                     </tr>
+//                   );
+//                 })}
+//               </tbody>
+//             </table>
+//           </div>
+//         </div>
+//       </Dialog>
+//     </section>
+//   );
+// }
 
 export function PamsAppraisalViewPage() {
   const { user } = useAuth();
