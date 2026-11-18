@@ -251,6 +251,7 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
 import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
 import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
 import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
+import { AbsentProcessPage } from "../pages/hr/absent_memo_flow/Absentprocesspage";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -659,6 +660,11 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       name: "HR Absent Memo",
       match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/absent_memo"),
       element: () => <AbsentMemoMainPage />,
+    },
+        {
+      name: "HR Absent Process Memo",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/workspace/hcm/hcm/memos/absent_process_memo"),
+      element: () => <AbsentProcessPage />,
     },
     {
       name: "HR Salary Addition Deduction Page",

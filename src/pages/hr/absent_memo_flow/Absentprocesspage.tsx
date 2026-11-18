@@ -117,11 +117,11 @@ export function AbsentProcessPage() {
         value={tab}
         onChange={(value) => setTab(value as RequestTab)}
         tabs={[
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+          { label: "Pending", value: "PENDING" },
+          { label: "In Progress", value: "INPROGRESS" },
+          { label: "Closed", value: "CLOSED" },
+          { label: "Canceled", value: "CANCELED" },
+          { label: "Rejected", value: "REJECTED" },
         ]}
       />
 

@@ -508,6 +508,14 @@ export type TAccrualAcctSetupPayload = {
   user_dt?: string | null;
 };
 
+export interface TGenerateAbsentMemoPayload {
+  company_code?: string;
+  user_id?: string;
+  doc_type?: string;
+  record_date?: string;
+}
+
+
 export async function upsertAccrualAcctSetupApi(paycompAc: TAccrualAcctSetupPayload) {
   const response = await api.post<ApiResponse<unknown>>("/api/hr/insUpdAccrualAcctSetup", {
     paycomp_ac: paycompAc,
@@ -517,23 +525,20 @@ export async function upsertAccrualAcctSetupApi(paycompAc: TAccrualAcctSetupPayl
 }
 
 // api/absentProcess.ts
-export async function generateAbsentMemoDaily(params: {
+export async function generateAbsentMemoDaily(params: TGenerateAbsentMemoPayload) {
+  const response = await api.post<ApiResponse<unknown>>("/api/hr/absentmemo", params);
+  if (!response.data.success) throw new Error(response.data.message || "Failed to generate Absent Memo documents");
+  return response.data;
+}
+
+
+export async function saveAbsentMemo(params: {
   company_code?: string;
   user_id?: string;
-  doc_type?: string;
-  record_date?: string;
+  header: Record<string, unknown>;
+  details: Record<string, unknown>[];
 }) {
-  const response = await fetch("/api/hr/gm/absentmemo", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || "Failed to generate Absent Memo documents");
-  }
-
-  return data;
+  const response = await api.post<ApiResponse<unknown> & { doc_no?: number }>("/api/hr/insUpdAbsentMemo", params);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to save document");
+  return response.data;
 }

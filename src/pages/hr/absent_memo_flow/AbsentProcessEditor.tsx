@@ -1,8 +1,9 @@
-import { ArrowLeft, Copy, RotateCcw, Save } from "lucide-react";
+import { ArrowLeft, CalendarClock, Copy, RotateCcw, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../../components/ui/Button";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
+
 import { useAuth } from "../../../state/AuthContext";
 import { AbsentProcessHeaderForm } from "./AbsentProcessHeaderForm";
 import { AbsentProcessLinesTable } from "./AbsentProcessLinesTable";
@@ -13,6 +14,7 @@ import {
   emptyAbsentHeader,
   emptyAbsentRow,
 } from "./Absentprocesstypes";
+import { generateAbsentMemoDaily, saveAbsentMemo } from "../../../api/hr";
 
 interface AbsentProcessEditorProps {
   editor: AbsentProcessEditorState;
@@ -26,6 +28,7 @@ export function AbsentProcessEditor({ editor, onClose, onSaved }: AbsentProcessE
   const [rows, setRows] = useState<AbsentDetailRow[]>([emptyAbsentRow(1)]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const isEdit = editor?.mode === "edit";
@@ -86,6 +89,23 @@ export function AbsentProcessEditor({ editor, onClose, onSaved }: AbsentProcessE
     // TODO: open the shared employee lookup dialog and populate employee_code / employee_name
   };
 
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      await generateAbsentMemoDaily({
+        company_code: user?.company_code,
+        user_id: user?.loginid || user?.username || "ADMIN",
+        doc_type: "ABM",
+        // record_date omitted: procedure defaults to yesterday
+      });
+      await onSaved("Absent memos generated successfully");
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to generate absent memos" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleReverse = async () => {
     if (!header.doc_no) return;
     try {
@@ -115,13 +135,13 @@ export function AbsentProcessEditor({ editor, onClose, onSaved }: AbsentProcessE
   const handleSave = async () => {
     setSaving(true);
     try {
-      // TODO: replace with the real save endpoint / dynamic lookup parameter for this module.
-      await getDynamicLookup({
-        parameter: header.doc_no ? "PS_ABSENT_PROCESS_UPDATE" : "PS_ABSENT_PROCESS_INSERT",
-        code1: user?.company_code,
-        code2: user?.loginid || user?.username || "ADMIN",
+      const result = await saveAbsentMemo({
+        company_code: user?.company_code,
+        user_id: user?.loginid || user?.username || "ADMIN",
+        header: header as unknown as Record<string, unknown>,
+        details: rows as unknown as Record<string, unknown>[],
       });
-      await onSaved(`Document ${header.doc_no || "(new)"} saved`);
+      await onSaved(`Document ${result.doc_no ?? header.doc_no} saved`);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save document" });
     } finally {
@@ -144,13 +164,18 @@ export function AbsentProcessEditor({ editor, onClose, onSaved }: AbsentProcessE
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!isEdit && (
+            <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating || saving}>
+              <CalendarClock size={14} className="mr-1.5" /> {generating ? "Generating..." : "Generate Daily"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleCopyDoc} disabled={!isEdit}>
             <Copy size={14} className="mr-1.5" /> Copy Doc
           </Button>
           <Button variant="outline" size="sm" onClick={handleReverse} disabled={!isEdit || header.is_reversed}>
             <RotateCcw size={14} className="mr-1.5" /> Reverse
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving || header.is_reversed}>
+          <Button size="sm" onClick={handleSave} disabled={saving || generating || header.is_reversed}>
             <Save size={14} className="mr-1.5" /> {saving ? "Saving..." : "Save"}
           </Button>
         </div>
