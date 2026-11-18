@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { AlertTriangle, Calculator, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { executeCommonProcedure, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { api } from "../../api/client";
@@ -105,6 +105,13 @@ export function AssetDepreciationPage() {
       setNotice({ type: "error", message: "Month and division are required." });
       return;
     }
+    if (hasRows) {
+      setNotice({
+        type: "success",
+        message: `Depreciation document ${docNo} is already generated for ${monthYear} (${rows.length} assets). Click "JV" to post to General Ledger.`,
+      });
+      return;
+    }
     setLoading(true);
     setNotice(null);
     try {
@@ -119,7 +126,7 @@ export function AssetDepreciationPage() {
       });
       const nextDocNo = calculateDocNo(year, month, division);
       setDocNo(nextDocNo);
-      setNotice({ type: "success", message: `Depreciation document ${nextDocNo} generated successfully` });
+      setNotice({ type: "success", message: `Depreciation document ${nextDocNo} generated successfully. Ready for JV Posting.` });
       await retrieve();
       const exc = await checkExceptions(division);
       if (exc.length > 0) {
@@ -129,7 +136,6 @@ export function AssetDepreciationPage() {
         });
       }
     } catch (error) {
-      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
       setNotice({ type: "error", message: friendlyError(error, "Unable to save depreciation") });
     } finally {
       setLoading(false);
@@ -212,11 +218,17 @@ export function AssetDepreciationPage() {
             <RefreshCw size={14} /> Retrieve
           </Button>
           <Button
-            disabled={loading}
+            disabled={loading || hasRows}
             onClick={() => void save()}
-            className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-4 rounded-lg cursor-pointer transition-colors"
+            title={hasRows ? "Depreciation already generated for this month. Click JV to post." : "Generate and save depreciation"}
+            className={`h-8 gap-1.5 shadow-xs text-xs font-semibold px-4 rounded-lg transition-colors ${
+              hasRows
+                ? "bg-emerald-700 text-white opacity-85 cursor-not-allowed"
+                : "bg-[#00378C] text-white hover:bg-[#002d72] cursor-pointer"
+            }`}
           >
-            <Save size={14} /> Save
+            {hasRows ? <CheckCircle2 size={14} /> : <Save size={14} />}
+            {hasRows ? "Calculated" : "Save"}
           </Button>
           <Button
             variant="secondary"
@@ -415,6 +427,8 @@ function friendlyError(error: unknown, fallback: string): string {
     return "Run the depreciation calculation (Save) before posting the JV.";
   if (raw.includes("Please check the Exception register"))
     return "Some assets are in the Exception Register. Fix them before posting the JV.";
+  if (raw.includes("Already calculated for future period") || raw.includes("Depreciation restricted"))
+    return "Depreciation for this period has already been processed (or a subsequent month has already been run). Existing records are loaded below; click 'JV' to post to General Ledger.";
   // Any other ORA-20xxx: show only its message, without the ORA-06512 stack
   const match = raw.match(/ORA-20\d{3}:\s*([\s\S]*?)(?=\s*ORA-\d{5}|$)/);
   if (match?.[1]) return match[1].trim();
