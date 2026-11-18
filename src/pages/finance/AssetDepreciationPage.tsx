@@ -23,7 +23,7 @@ export function AssetDepreciationPage() {
   const [docNo, setDocNo] = useState("");
   const [rows, setRows] = useState<DepRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "info" | "warning"; message: string } | null>(null);
   const [exceptions, setExceptions] = useState<any[]>([]);
   const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
 
@@ -33,25 +33,25 @@ export function AssetDepreciationPage() {
   const calculateDocNo = (y: string, m: string, div: string) => {
     if (!y || !m) return "";
     const base = `${y}${m}`;
-    return `${y}${m}`;
+    return div && div !== "10" ? `${div}${base}` : base;
   };
 
   // JV button is enabled only when the grid has at least one row
   const hasRows = rows.length > 0;
 
   const columns = useMemo<ColumnDef<DepRow>[]>(() => [
-    col("asset_id", "Asset ID", 130),
+    col("asset_id", "Asset ID", 110),
     col("asset_name", "Asset Name", 220),
     col("reg_no", "Reg No", 110),
-    col("purchase_date", "Purchase Date", 120),
-    col("quantity", "Quantity", 100),
-    col("amount", "pur.Amount", 120),
-    col("dprc_percentage", "Dep. %", 90),
-    col("accudprc_amount", "Accu Amount", 120),
-    col("dprc_amount", "Dprc Amount", 130),
-    col("wd_value", "WD Value", 120),
-    col("last_dprc_date", "Last Dep.", 120),
-    col("div_code", "Division", 100),
+    colDate("purchase_date", "Purchase Date", 120),
+    col("quantity", "Quantity", 80),
+    colNumber("amount", "Pur. Amount", 120),
+    colNumber("dprc_percentage", "Dep. %", 90, 2),
+    colNumber("accudprc_amount", "Accu Amount", 120),
+    colNumber("dprc_amount", "Dprc Amount", 120),
+    colNumber("wd_value", "WD Value", 120),
+    colDate("last_dprc_date", "Last Dep.", 120),
+    col("div_code", "Division", 90),
   ], []);
 
   const checkExceptions = async (div: string) => {
@@ -78,8 +78,18 @@ export function AssetDepreciationPage() {
         loginid: loginId,
         code1: companyCode,
         code2: division,
+        code3: "", code4: "",
+        number1: 0, number2: 0, number3: 0, number4: 0,
+        date1: null, date2: null, date3: null, date4: null,
       });
-      setRows(data.map(normalize));
+      const norm = data.map(normalize);
+      setRows(norm);
+      if (norm.length === 0) {
+        setNotice({
+          type: "info",
+          message: "No saved depreciation records found for this period. Click 'Save' to calculate and generate depreciation.",
+        });
+      }
       if (division) {
         await checkExceptions(division);
       }
@@ -349,6 +359,44 @@ export function AssetDepreciationPage() {
 
 function col(key: string, header: string, size: number): ColumnDef<DepRow> {
   return { accessorKey: key, header, size, cell: ({ getValue }) => <span>{String(getValue() ?? "")}</span> };
+}
+
+function colDate(key: string, header: string, size: number): ColumnDef<DepRow> {
+  return {
+    accessorKey: key,
+    header,
+    size,
+    cell: ({ getValue }) => {
+      const v = getValue();
+      if (!v) return <span className="text-slate-400">—</span>;
+      const s = String(v);
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return <span>{s.slice(0, 10)}</span>;
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const yr = d.getFullYear();
+      return <span className="font-mono text-xs">{`${day}-${month}-${yr}`}</span>;
+    },
+  };
+}
+
+function colNumber(key: string, header: string, size: number, decimals: number = 3): ColumnDef<DepRow> {
+  return {
+    accessorKey: key,
+    header,
+    size,
+    cell: ({ getValue }) => {
+      const v = getValue();
+      if (v === null || v === undefined || v === "") return <span className="text-slate-400">—</span>;
+      const num = Number(v);
+      if (isNaN(num)) return <span>{String(v)}</span>;
+      return (
+        <span className="font-mono text-xs tabular-nums text-right block">
+          {num.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+        </span>
+      );
+    },
+  };
 }
 
 function normalize(row: LookupRow): DepRow {
