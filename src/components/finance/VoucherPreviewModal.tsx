@@ -43,12 +43,12 @@ export function openTransactionScreen(docType: string, docNo: string) {
     : `/api/finance/transactions/report/${encodeURIComponent(upper)}/${encodeURIComponent(cleanNo)}`;
 
   try {
-    const win = window.open(url, "_blank", "noopener,noreferrer");
-    if (!win || win.closed || typeof win.closed === "undefined") {
-      window.location.href = url;
+    const newTab = window.open(url, "_blank");
+    if (newTab) {
+      newTab.focus();
     }
-  } catch {
-    window.location.href = url;
+  } catch (err) {
+    console.error("Failed to open voucher window in new tab:", err);
   }
 }
 

@@ -16,8 +16,8 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getDynamicLookup, getLookupValue, getLookupText, LookupRow } from "../../api/lookups";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
@@ -109,6 +109,36 @@ export function AllocatedInvoicePage() {
   const [confirmUnallocDocNo, setConfirmUnallocDocNo] = useState<string | null>(null);
 
   const totalAllocated = lines.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  // Auto-default division from user's assigned divisions on load
+  useEffect(() => {
+    if (division) return;
+    let mounted = true;
+    void (async () => {
+      try {
+        const divs = await getDynamicLookup({
+          parameter: "Account_division",
+          loginid: loginId,
+          code1: companyCode,
+          code2: "", code3: "", code4: "",
+          number1: 0, number2: 0, number3: 0, number4: 0,
+          date1: null, date2: null, date3: null, date4: null,
+        });
+        if (!mounted || !divs || !divs.length) return;
+        const divCode = String(getLookupValue(divs[0], "div_code") || "");
+        const divName = getLookupText(divs[0], ["div_name", "DIV_NAME", "division_name"]);
+        if (divCode) {
+          setDivision(divCode);
+          setDivisionName(divName);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [companyCode, loginId]);
 
   // Fetch unallocated receipts/payments and open invoices whenever acCode or division changes
   const fetchOpenBills = async () => {
@@ -251,13 +281,13 @@ export function AllocatedInvoicePage() {
     }
   }, [acCode, division, activeTab]);
 
-  const patchLine = (id: string, patch: Partial<InvoiceLine>) => {
+  const patchLine = useCallback((id: string, patch: Partial<InvoiceLine>) => {
     setLines((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
-  };
+  }, []);
 
-  const removeLine = (id: string) => {
+  const removeLine = useCallback((id: string) => {
     setLines((prev) => prev.filter((row) => row.id !== id).map((row, index) => ({ ...row, sr: index + 1 })));
-  };
+  }, []);
 
   const addCustomLine = () => {
     setLines((prev) => [
@@ -367,8 +397,9 @@ export function AllocatedInvoicePage() {
         size: 170,
         cell: ({ row }) => (
           <Input
-            value={row.original.inv_no}
-            onChange={(e) => patchLine(row.original.id, { inv_no: e.target.value })}
+            defaultValue={row.original.inv_no}
+            key={`inv_${row.original.id}`}
+            onBlur={(e) => patchLine(row.original.id, { inv_no: e.target.value })}
             className="h-8 font-mono text-xs uppercase"
             placeholder="INV-XXXX"
           />
@@ -381,8 +412,9 @@ export function AllocatedInvoicePage() {
         cell: ({ row }) => (
           <Input
             type="date"
-            value={row.original.inv_date ? row.original.inv_date.slice(0, 10) : ""}
-            onChange={(e) => patchLine(row.original.id, { inv_date: e.target.value })}
+            defaultValue={row.original.inv_date ? row.original.inv_date.slice(0, 10) : ""}
+            key={`date_${row.original.id}`}
+            onBlur={(e) => patchLine(row.original.id, { inv_date: e.target.value })}
             className="h-8 text-xs"
           />
         ),
@@ -405,17 +437,28 @@ export function AllocatedInvoicePage() {
         header: "Allocated Amount",
         size: 140,
         cell: ({ row }) => (
-          <Input
-            type="number"
-            step="0.001"
-            min="0"
-            max={row.original.balance_amount || undefined}
-            value={row.original.amount || ""}
-            onChange={(e) => patchLine(row.original.id, { amount: Number(e.target.value || 0) })}
-            className={`h-8 font-mono text-xs font-semibold ${
-              row.original.amount > 0 ? "border-emerald-500 bg-emerald-50 text-emerald-800" : ""
-            }`}
+          <input
+            type="text"
+            inputMode="decimal"
+            defaultValue={row.original.amount > 0 ? String(row.original.amount) : ""}
+            key={`amt_${row.original.id}`}
             placeholder="0.000"
+            onChange={(e) => {
+              const text = e.target.value.replace(/[^0-9.]/g, "");
+              const num = parseFloat(text);
+              patchLine(row.original.id, { amount: isNaN(num) ? 0 : num });
+            }}
+            onBlur={(e) => {
+              const num = parseFloat(e.target.value);
+              if (!isNaN(num) && num > 0) {
+                e.target.value = num.toFixed(3);
+                patchLine(row.original.id, { amount: num });
+              } else {
+                e.target.value = "";
+                patchLine(row.original.id, { amount: 0 });
+              }
+            }}
+            className="h-8 w-full rounded border border-slate-300 px-2 text-right font-mono text-xs font-semibold tabular-nums text-slate-800 outline-none transition-colors focus:border-blue-500 focus:bg-emerald-50/50"
           />
         ),
       },
@@ -438,7 +481,7 @@ export function AllocatedInvoicePage() {
         ),
       },
     ],
-    [lines]
+    [patchLine, removeLine]
   );
 
   return (
@@ -508,9 +551,12 @@ export function AllocatedInvoicePage() {
                 displayFields={["div_code", "div_name"]}
                 loadOptions={() =>
                   getDynamicLookup({
-                    parameter: "GLOBAL_DIVISION_SEARCH",
+                    parameter: "Account_division",
                     loginid: loginId,
                     code1: companyCode,
+                    code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
                   })
                 }
                 onChange={(code, row) => {
@@ -535,9 +581,12 @@ export function AllocatedInvoicePage() {
                 displayFields={["ac_code", "ac_name"]}
                 loadOptions={() =>
                   getDynamicLookup({
-                    parameter: "Account_AC_CODE_Serach_HDR",
+                    parameter: "Account_AC_CODE_Serach",
                     loginid: loginId,
                     code1: companyCode,
+                    code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
                   })
                 }
                 onChange={(code, row) => {

@@ -23,6 +23,7 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  ArrowLeft,
 } from "lucide-react";
 import type { NewReportDialogProps } from "./types";
 import { openTransactionScreen } from "../finance/VoucherPreviewModal";
@@ -208,6 +209,8 @@ export function NewReportDialog({
   exportingExcel = false,
   onOpenInNewWindow,
   headerSlot,
+  onBack,
+  canGoBack = false,
   zIndex,
 }: NewReportDialogProps) {
   const bp = useBreakpoint();
@@ -244,7 +247,7 @@ export function NewReportDialog({
     if (!open) return;
     const handleDrillMessage = (ev: MessageEvent) => {
       if (!ev.data) return;
-      if (ev.data.type === "OPEN_DOCUMENT" || ev.data.type === "OPEN_DOCUMENT_SCREEN") {
+      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
         const { docType, docNo } = ev.data as { docType: string; docNo: string };
         if (docType && docNo) {
           openTransactionScreen(String(docType), String(docNo));
@@ -1238,8 +1241,8 @@ export function NewReportDialog({
             display: "block",
             background: "#fff",
             transform: `translateY(${-top}px)`,
-            // While busy, disable pointer events so the parent's wait cursor shows over the sheet
-            pointerEvents: live && !busy ? "auto" : "none",
+            // Allow pointer events on the live page as long as data isn't actively fetching
+            pointerEvents: live && !loading ? "auto" : "none",
           }}
         />
       </div>
@@ -1276,7 +1279,7 @@ export function NewReportDialog({
       ref={rootRef}
       role="dialog"
       aria-modal="true"
-      className={busy ? "nr-busy" : undefined}
+      className={loading ? "nr-busy" : undefined}
       style={{
         position: "fixed",
         inset: 0,
@@ -1332,31 +1335,59 @@ export function NewReportDialog({
               flex: 1,
             }}
           >
-            <div style={{ minWidth: 0, flex: isMobile ? "1 1 100%" : undefined }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  color: "#64748b",
-                  textTransform: "uppercase",
-                  marginBottom: 2,
-                }}
-              >
-                Report Preview
-              </div>
-              <div
-                style={{
-                  fontSize: 16,
-                  fontWeight: 600,
-                  color: "#0f172a",
-                  lineHeight: 1.25,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {title}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: isMobile ? "1 1 100%" : undefined }}>
+              {canGoBack && onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    border: "1px solid #1e3a8a",
+                    background: "#1e3a8a",
+                    color: "#ffffff",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 1px 3px rgba(30,58,138,0.3)",
+                    transition: "all 0.15s ease",
+                    flexShrink: 0,
+                  }}
+                  title="Back to previous report level"
+                >
+                  <ArrowLeft size={15} strokeWidth={2.5} />
+                  <span>Back</span>
+                </button>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    marginBottom: 2,
+                  }}
+                >
+                  Report Preview
+                </div>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    lineHeight: 1.25,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {title}
+                </div>
               </div>
             </div>
 
@@ -1503,6 +1534,27 @@ export function NewReportDialog({
           >
             <Menu size={15} />
           </button>
+          {canGoBack && onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                ...toolIconBtn,
+                background: "#2563eb",
+                color: "#ffffff",
+                padding: "4px 10px",
+                gap: 5,
+                width: "auto",
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+              title="Back to previous report level"
+            >
+              <ArrowLeft size={14} strokeWidth={2.5} />
+              <span>Back</span>
+            </button>
+          )}
           {!isCompact && (
             <span
               style={{

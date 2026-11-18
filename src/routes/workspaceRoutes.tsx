@@ -46,7 +46,7 @@
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
   import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
-
+import EmployeeWorkspacePage from "../pages/hr/Employee/EmployeeWorkspacePage";
   import { PamsAppraisalViewPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton } from "../pages/pams/PamsPages";
   import { HrMasterPage } from "../pages/hr/HrMasterPage";
   import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
@@ -248,6 +248,9 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
 import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listing_Report";
 import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
 import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
+import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
+import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
+import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -293,6 +296,12 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
 
   export const workspaceRoutes: WorkspaceRoute[] = [
 
+    {
+      name: "HR Visa and Labour Card Cancel",
+      match: (context) => isHrRoute(context) && isHrVisaLabourCardCancelRoute(context),
+      element: () => <VisaLabourCardCancelPage />,
+    },
+
     // ── PAMS Dashboard on /workspace/ems/ems ──
     {
       name: "PAMS Dashboard",
@@ -300,7 +309,6 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
       element: () => <PamsDashboard />,
     },
 
-    
       {
       name: "HR Dashboard",
       // Matches exactly /workspace/hcm/hcm (ignoring trailing slashes)
@@ -414,6 +422,16 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
       element: () => <LeaveSlapPage />,
     },
 
+    {
+      name: 'Payroll Closing',
+      match: ({pathname}) => pathname.toLowerCase().includes("/hcm/payroll_closing"),
+      element: () => <PayrollClosing />,
+    },
+
+    {  name: 'Payroll Lock',
+      match: ({pathname}) => pathname.toLowerCase().includes("/hcm/payroll_lock"),
+      element: () => <PayrollLock />,
+    },
 
     {
       name : 'Post Date Cheque',
@@ -610,23 +628,28 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
       match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/employee/employee_details"),
       element: () => <EmployeeDetailsPage />
     },
-
-    {
-      name: "Employee Master",
-      match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
-      element: () => <EmployeeMasterPage />
-    },
+{
+  name: "Employee Master Workspace",
+  match: ({ pathname }) => isEmployeeWorkspaceRoute(pathname),
+  element: () => <EmployeeWorkspacePage />,
+},
+{
+  name: "Employee Master",
+  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
+  element: () => <EmployeeMasterListPage />,
+},
+    // {
+    //   name: "Employee Master",
+    //   match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
+    //   element: () => <EmployeeMasterPage />
+    // },
 
     {
       name: "Employee Transfer",
       match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
       element: () => <EmployeeTransferPage />
     },
-    // {
-    //   name: "HR Visa and Labour Card Cancel",
-    //   match: (context) => isHrRoute(context) && isHrVisaLabourCardCancelRoute(context),
-    //   element: () => <VisaLabourCardCancelPage />,
-    // },
+
     {
       name: "HR Employee Profile",
       match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -3522,6 +3545,10 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
     return compact.includes("leaveresumption") || compact.includes("hrleaveresumptionmainpage");
   }
 
+  function isEmployeeWorkspaceRoute(pathname: string) {
+  return /\/hcm\/hr\/employee\/employee_master\/[^/]+/i.test(decodeRouteText(pathname));
+}
+
   function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
     const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
     return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
@@ -3536,7 +3563,8 @@ import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
     return (
       compact.includes("visaandlabourcardcancel") ||
       compact.includes("visalabourcardcancel") ||
-      compact.includes("labourcardcancel")
+      compact.includes("labourcardcancel") ||
+      compact.includes("labourvisacancel") 
     );
   }
   function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
