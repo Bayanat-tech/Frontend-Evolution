@@ -197,7 +197,6 @@ export function OxSimpleMasterPage({ config }: { config: SimpleConfig }) {
   return (
     <section className="grid gap-4">
       <PageHeader title={config.title} eyebrow="Oxmaint Master">
-        <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
         <Button onClick={() => setEditor({ mode: "create" })}><Plus size={15} /> Add {config.noun}</Button>
       </PageHeader>
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />

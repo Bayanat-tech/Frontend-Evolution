@@ -1,9 +1,8 @@
 // AddHrManpower.tsx
 //
-// Confirmation Review form — Freight-style:
+// Confirmation Review form — single-page layout (no stepper/tabs)
 //  • forwardRef + useImperativeHandle → parent header "Save" button calls save()
-//  • Freight tabs replace the Back / Next stepper (Save works from any tab)
-//  • SectionPanel / Field from shared Formblocks
+//  • All sections stacked vertically with SectionPanel / Field from shared Formblocks
 //  • toast for validation / API feedback (no inline alert banners)
 //  • No bottom button row — Close / Save live in the page header
 
@@ -40,8 +39,6 @@ const DEFAULT_AREAS = [
   "Learning Ability",
   "Communication Skills",
 ];
-
-const TABS = ["Document & Employee", "Key Responsibilities", "Performance", "Decision & Signatories"];
 
 type Key = keyof TManpowerTransaction;
 
@@ -131,7 +128,6 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
 
-  const [tab, setTab] = useState(0);
   const [form, setForm] = useState<TManpowerTransaction>(() =>
     mode !== "add" && existingData ? normalizeDates(existingData) : { ...EMPTY },
   );
@@ -222,9 +218,7 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
     if (!form.conf_due_dt) next.conf_due_dt = "Confirmation Due Date is required";
     setErrors(next);
 
-    const first = Object.values(next)[0];
-    if (first) setTab(0); // all required fields live on the first tab
-    return first ?? null;
+    return Object.values(next)[0] ?? null;
   };
 
   // ── Save (called by the page header Save button) ─────────────────────────
@@ -341,193 +335,165 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
     </Field>
   );
 
-  // ── UI ───────────────────────────────────────────────────────────────────
+  // ── UI (single page — all sections stacked) ──────────────────────────────
   return (
-    <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-      <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
-        <div className="freight-tabs-list flex overflow-x-auto">
-          {TABS.map((label, index) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => setTab(index)}
-              aria-pressed={tab === index}
-              className={`freight-workspace-tab ${tab === index ? "active" : ""}`}
+    <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-3">
+      {loadingRecord && (
+        <p className="m-0 text-xs text-muted-foreground">Loading full record...</p>
+      )}
+
+      {/* ══ Document Information ══ */}
+      <SectionPanel title="Document Information" icon={FileText}>
+        <div className="grid gap-3 md:grid-cols-3">
+          {dateField("Doc Date", "doc_date")}
+          {field("Reference No", "doc_ref_no")}
+        </div>
+      </SectionPanel>
+
+      {/* ══ Employee Details ══ */}
+      <SectionPanel title="Employee Details" icon={UserRound}>
+        <div className="grid gap-3 md:grid-cols-3">
+          {field("Candidate No", "cand_no")}
+          {field("Candidate Name", "cand_name", true)}
+          {lookupField(
+            "Designation",
+            "desig",
+            "MST_HR_MS_HR_DESIGNATION_LIST",
+            "desg_code",
+            ["desg_name"],
+            [
+              { field: "desg_code", header: "Code" },
+              { field: "desg_name", header: "Name" },
+            ],
+            true,
+          )}
+          {lookupField(
+            "Division",
+            "division",
+            "AC_ASSETS_DEPRECIATION_DIVISION_LIST",
+            "div_code",
+            ["div_name"],
+            [
+              { field: "div_code", header: "Code" },
+              { field: "div_name", header: "Name" },
+            ],
+          )}
+          {lookupField(
+            "Reviewer",
+            "reviewer",
+            "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_RPT_NAME_LIST",
+            "employee_id",
+            ["rpt_name"],
+            [
+              { field: "employee_id", header: "Employee ID" },
+              { field: "rpt_name", header: "Name" },
+            ],
+          )}
+          {lookupField(
+            "Grade",
+            "grade",
+            "EDUCATION_QUALIFICATION_TICKET_ELIG_GRADE",
+            "grade_code",
+            ["grade_name"],
+            [
+              { field: "grade_code", header: "Code" },
+              { field: "grade_name", header: "Name" },
+            ],
+          )}
+          {dateField("Date of Joining", "doj", true)}
+          {dateField("Confirmation Due Date", "conf_due_dt", true)}
+        </div>
+      </SectionPanel>
+
+      {/* ══ Key Responsibilities ══ */}
+      <SectionPanel title="Key Responsibilities" icon={ClipboardList}>
+        <div className="grid gap-3 md:grid-cols-2">
+          {field("Responsibility 1", "kr_1")}
+          {field("Responsibility 2", "kr_2")}
+          {field("Responsibility 3", "kr_3")}
+          {field("Responsibility 4", "kr_4")}
+          {field("Responsibility 5", "kr_5")}
+        </div>
+      </SectionPanel>
+
+      {/* ══ Performance Assessment ══ */}
+      <SectionPanel title="Performance Assessment" icon={ListChecks}>
+        <div className="grid gap-2">
+          <div className="grid grid-cols-[2.5fr_0.6fr_3fr] gap-2 text-[11px] font-medium text-muted-foreground">
+            <span>Assessment Area</span>
+            <span>Rating</span>
+            <span>Comments</span>
+          </div>
+          {DEFAULT_AREAS.map((area, i) => {
+            const num = i + 1;
+            const areaKey = `assesmnt_area${num}` as Key;
+            const ratingKey = `rating_${num}` as Key;
+            const commentKey = `comment${num}` as Key;
+            const displayArea = String(form[areaKey] ?? area);
+            return (
+              <div key={num} className="grid grid-cols-[2.5fr_0.6fr_3fr] items-center gap-2">
+                <span
+                  className="truncate rounded-md border bg-muted/40 px-2 py-1.5 text-[12px]"
+                  title={displayArea}
+                >
+                  {displayArea}
+                </span>
+                <Select
+                  disabled={readonly}
+                  value={String(form[ratingKey] ?? "")}
+                  onChange={(e) => set(ratingKey, e.target.value)}
+                >
+                  <option value="">-</option>
+                  {[1, 2, 3, 4, 5].map((v) => (
+                    <option key={v} value={String(v)}>
+                      {v}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  placeholder="Comments"
+                  disabled={readonly}
+                  value={String(form[commentKey] ?? "")}
+                  onChange={(e) => set(commentKey, e.target.value)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </SectionPanel>
+
+      {/* ══ Confirmation Decision ══ */}
+      <SectionPanel title="Confirmation Decision" icon={ShieldCheck}>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Field label="Confirmed">
+            <Select
+              disabled={readonly}
+              value={form.confirmed ?? ""}
+              onChange={(e) => set("confirmed", e.target.value)}
             >
-              {index + 1}. {label}
-            </button>
-          ))}
+              <option value="">-</option>
+              <option value="Y">Yes</option>
+              <option value="N">No</option>
+            </Select>
+          </Field>
+          {field("Extended", "extended")}
+          {dateField("Extended Till", "extended_till")}
         </div>
+      </SectionPanel>
 
-        <div className="freight-tabs-panel border-t p-3 grid gap-3">
-          {loadingRecord && (
-            <p className="m-0 text-xs text-muted-foreground">Loading full record...</p>
-          )}
-
-          {/* ══ TAB 0 — Document & Employee ══ */}
-          {tab === 0 && (
-            <>
-              <SectionPanel title="Document Information" icon={FileText}>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {dateField("Doc Date", "doc_date")}
-                  {field("Reference No", "doc_ref_no")}
-                </div>
-              </SectionPanel>
-
-              <SectionPanel title="Employee Details" icon={UserRound}>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {field("Candidate No", "cand_no")}
-                  {field("Candidate Name", "cand_name", true)}
-                  {lookupField(
-                    "Designation",
-                    "desig",
-                    "MST_HR_MS_HR_DESIGNATION_LIST",
-                    "desg_code",
-                    ["desg_name"],
-                    [
-                      { field: "desg_code", header: "Code" },
-                      { field: "desg_name", header: "Name" },
-                    ],
-                    true,
-                  )}
-                  {lookupField(
-                    "Division",
-                    "division",
-                    "AC_ASSETS_DEPRECIATION_DIVISION_LIST",
-                    "div_code",
-                    ["div_name"],
-                    [
-                      { field: "div_code", header: "Code" },
-                      { field: "div_name", header: "Name" },
-                    ],
-                  )}
-                  {lookupField(
-                    "Reviewer",
-                    "reviewer",
-                    "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_RPT_NAME_LIST",
-                    "employee_id",
-                    ["rpt_name"],
-                    [
-                      { field: "employee_id", header: "Employee ID" },
-                      { field: "rpt_name", header: "Name" },
-                    ],
-                  )}
-                  {lookupField(
-                    "Grade",
-                    "grade",
-                    "EDUCATION_QUALIFICATION_TICKET_ELIG_GRADE",
-                    "grade_code",
-                    ["grade_name"],
-                    [
-                      { field: "grade_code", header: "Code" },
-                      { field: "grade_name", header: "Name" },
-                    ],
-                  )}
-                  {dateField("Date of Joining", "doj", true)}
-                  {dateField("Confirmation Due Date", "conf_due_dt", true)}
-                </div>
-              </SectionPanel>
-            </>
-          )}
-
-          {/* ══ TAB 1 — Key Responsibilities ══ */}
-          {tab === 1 && (
-            <SectionPanel title="Key Responsibilities" icon={ClipboardList}>
-              <div className="grid gap-3 md:grid-cols-2">
-                {field("Responsibility 1", "kr_1")}
-                {field("Responsibility 2", "kr_2")}
-                {field("Responsibility 3", "kr_3")}
-                {field("Responsibility 4", "kr_4")}
-                {field("Responsibility 5", "kr_5")}
-              </div>
-            </SectionPanel>
-          )}
-
-          {/* ══ TAB 2 — Performance ══ */}
-          {tab === 2 && (
-            <SectionPanel title="Performance Assessment" icon={ListChecks}>
-              <div className="grid gap-2">
-                <div className="grid grid-cols-[2.5fr_0.6fr_3fr] gap-2 text-[11px] font-medium text-muted-foreground">
-                  <span>Assessment Area</span>
-                  <span>Rating</span>
-                  <span>Comments</span>
-                </div>
-                {DEFAULT_AREAS.map((area, i) => {
-                  const num = i + 1;
-                  const areaKey = `assesmnt_area${num}` as Key;
-                  const ratingKey = `rating_${num}` as Key;
-                  const commentKey = `comment${num}` as Key;
-                  const displayArea = String(form[areaKey] ?? area);
-                  return (
-                    <div key={num} className="grid grid-cols-[2.5fr_0.6fr_3fr] items-center gap-2">
-                      <span
-                        className="truncate rounded-md border bg-muted/40 px-2 py-1.5 text-[12px]"
-                        title={displayArea}
-                      >
-                        {displayArea}
-                      </span>
-                      <Select
-                        disabled={readonly}
-                        value={String(form[ratingKey] ?? "")}
-                        onChange={(e) => set(ratingKey, e.target.value)}
-                      >
-                        <option value="">-</option>
-                        {[1, 2, 3, 4, 5].map((v) => (
-                          <option key={v} value={String(v)}>
-                            {v}
-                          </option>
-                        ))}
-                      </Select>
-                      <Input
-                        placeholder="Comments"
-                        disabled={readonly}
-                        value={String(form[commentKey] ?? "")}
-                        onChange={(e) => set(commentKey, e.target.value)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </SectionPanel>
-          )}
-
-          {/* ══ TAB 3 — Decision & Signatories ══ */}
-          {tab === 3 && (
-            <>
-              <SectionPanel title="Confirmation Decision" icon={ShieldCheck}>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Field label="Confirmed">
-                    <Select
-                      disabled={readonly}
-                      value={form.confirmed ?? ""}
-                      onChange={(e) => set("confirmed", e.target.value)}
-                    >
-                      <option value="">-</option>
-                      <option value="Y">Yes</option>
-                      <option value="N">No</option>
-                    </Select>
-                  </Field>
-                  {field("Extended", "extended")}
-                  {dateField("Extended Till", "extended_till")}
-                </div>
-              </SectionPanel>
-
-              <SectionPanel title="Signatories" icon={PenLine}>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {field("Signatory 1", "sign_1")}
-                  {dateField("Date 1", "date_1")}
-                  <div className="hidden md:block" />
-                  {field("Signatory 2", "sign_2")}
-                  {dateField("Date 2", "date_2")}
-                  <div className="hidden md:block" />
-                  {field("Signatory 3", "sign_3")}
-                  {dateField("Date 3", "date_3")}
-                </div>
-              </SectionPanel>
-            </>
-          )}
+      {/* ══ Signatories ══ */}
+      <SectionPanel title="Signatories" icon={PenLine}>
+        <div className="grid gap-3 md:grid-cols-3">
+          {field("Signatory 1", "sign_1")}
+          {dateField("Date 1", "date_1")}
+          <div className="hidden md:block" />
+          {field("Signatory 2", "sign_2")}
+          {dateField("Date 2", "date_2")}
+          <div className="hidden md:block" />
+          {field("Signatory 3", "sign_3")}
+          {dateField("Date 3", "date_3")}
         </div>
-      </div>
+      </SectionPanel>
     </div>
   );
 });

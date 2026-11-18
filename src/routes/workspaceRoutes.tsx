@@ -46,7 +46,7 @@
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
   import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
-
+import EmployeeWorkspacePage from "../pages/hr/Employee/EmployeeWorkspacePage";
   import { PamsAppraisalViewPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton } from "../pages/pams/PamsPages";
   import { HrMasterPage } from "../pages/hr/HrMasterPage";
   import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
@@ -150,7 +150,7 @@
   import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
   import ProductPurchaseSales from "../pages/purchase_sales/PS_Productmaster";
 
-  import { ProductTypePage } from "../pages/purchase_sales/PS_ProductTypePage";
+  // import { ProductTypePage } from "../pages/purchase_sales/PS_ProductTypePage";
 
   import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
 
@@ -250,6 +250,9 @@ import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
 import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
 import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQuotationListing";
 
+import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
+import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
+import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -295,6 +298,12 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
 
   export const workspaceRoutes: WorkspaceRoute[] = [
 
+    {
+      name: "HR Visa and Labour Card Cancel",
+      match: (context) => isHrRoute(context) && isHrVisaLabourCardCancelRoute(context),
+      element: () => <VisaLabourCardCancelPage />,
+    },
+
     // ── PAMS Dashboard on /workspace/ems/ems ──
     {
       name: "PAMS Dashboard",
@@ -302,7 +311,6 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
       element: () => <PamsDashboard />,
     },
 
-    
       {
       name: "HR Dashboard",
       // Matches exactly /workspace/hcm/hcm (ignoring trailing slashes)
@@ -416,6 +424,16 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
       element: () => <LeaveSlapPage />,
     },
 
+    {
+      name: 'Payroll Closing',
+      match: ({pathname}) => pathname.toLowerCase().includes("/hcm/payroll_closing"),
+      element: () => <PayrollClosing />,
+    },
+
+    {  name: 'Payroll Lock',
+      match: ({pathname}) => pathname.toLowerCase().includes("/hcm/payroll_lock"),
+      element: () => <PayrollLock />,
+    },
 
     {
       name : 'Post Date Cheque',
@@ -503,11 +521,11 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
     element: () => <ProductPurchaseSales />
   },
 
-    {
-    name: "Purchase Sales Product Type",
-    match: ({ pathname }) => isProductTypeRoute(pathname),
-    element: () => <ProductTypePage />,
-    },
+    // {
+    // name: "Purchase Sales Product Type",
+    // match: ({ pathname }) => isProductTypeRoute(pathname),
+    // element: () => <ProductTypePage />,
+    // },
 
 
 
@@ -612,23 +630,28 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
       match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/employee/employee_details"),
       element: () => <EmployeeDetailsPage />
     },
-
-    {
-      name: "Employee Master",
-      match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
-      element: () => <EmployeeMasterPage />
-    },
+{
+  name: "Employee Master Workspace",
+  match: ({ pathname }) => isEmployeeWorkspaceRoute(pathname),
+  element: () => <EmployeeWorkspacePage />,
+},
+{
+  name: "Employee Master",
+  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
+  element: () => <EmployeeMasterListPage />,
+},
+    // {
+    //   name: "Employee Master",
+    //   match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
+    //   element: () => <EmployeeMasterPage />
+    // },
 
     {
       name: "Employee Transfer",
       match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
       element: () => <EmployeeTransferPage />
     },
-    // {
-    //   name: "HR Visa and Labour Card Cancel",
-    //   match: (context) => isHrRoute(context) && isHrVisaLabourCardCancelRoute(context),
-    //   element: () => <VisaLabourCardCancelPage />,
-    // },
+
     {
       name: "HR Employee Profile",
       match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -915,7 +938,7 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
     {
       name: "Finance Provisional Journal Voucher",
       match: ({ pathname }) => isProvisionalJVRoute(pathname),
-      element: () => <JVDocumentEditor docType={"RJV"} />
+      element: () => <JVDocumentEditor docType={"PJV"} />
     },
     {
       name: "Finance Reverse Journal Voucher",
@@ -2141,7 +2164,7 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
   function isStockReportsRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
-      normalized.includes("/workspace/ims/purchase_sales/reports/stock_report")
+      normalized.includes("/workspace/ims/ims/reports/stock_report")
     );
   }
 
@@ -2758,7 +2781,16 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
 
   function isAllocatedInvoiceRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return normalized.includes("/finance/accounts/transactions/allocated_invoice") || normalized.includes("/finance/accounts/transactions/allocated-invoice");
+    return (
+      normalized.includes("/finance/accounts/transactions/allocated_invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocated-invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocate_and_unallocate_invoice") ||
+      normalized.includes("/finance/accounts/transactions/allocate-and-unallocate-invoice") ||
+      normalized.includes("allocate_and_unallocate_invoice") ||
+      normalized.includes("allocate-and-unallocate-invoice") ||
+      normalized.includes("allocated_invoice") ||
+      normalized.includes("allocated-invoice")
+    );
   }
 
   function isProfitLossRoute(pathname: string) {
@@ -3527,6 +3559,10 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
     return compact.includes("leaveresumption") || compact.includes("hrleaveresumptionmainpage");
   }
 
+  function isEmployeeWorkspaceRoute(pathname: string) {
+  return /\/hcm\/hr\/employee\/employee_master\/[^/]+/i.test(decodeRouteText(pathname));
+}
+
   function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
     const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
     return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
@@ -3541,7 +3577,8 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
     return (
       compact.includes("visaandlabourcardcancel") ||
       compact.includes("visalabourcardcancel") ||
-      compact.includes("labourcardcancel")
+      compact.includes("labourcardcancel") ||
+      compact.includes("labourvisacancel") 
     );
   }
   function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {

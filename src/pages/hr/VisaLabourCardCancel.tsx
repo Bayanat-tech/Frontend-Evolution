@@ -1,7 +1,7 @@
 import {
-  forwardRef, useImperativeHandle, useState, type ChangeEvent, type ReactNode,
+  forwardRef, useImperativeHandle, useRef, useState, type ChangeEvent, type ReactNode,
 } from "react";
-import { FileText, IdCard, Receipt, User } from "lucide-react";
+import { FileText, FileX2, IdCard, Receipt, Save, User } from "lucide-react";
 import { Input } from "../../components/ui/Input";
 import { ParamLookup } from "../../components/ui/HrLookups";
 import { useToast } from "../../components/ui/AlertToast";
@@ -17,7 +17,7 @@ export type VisaLabourCancelFormHandle = {
 };
 
 type Props = {
-  onSaved: () => void;
+  onSaved?: () => void;
 };
 
 export type TSettlementRow = {
@@ -222,7 +222,8 @@ export const VisaLabourCardCancelForm = forwardRef<VisaLabourCancelFormHandle, P
       }
       try {
         // const res = await getVisaLabourCancelDetails(code);
-         const res:any = console.log("API call to getVisaLabourCancelDetails would be made here for employee code:", code);
+        const res: any = null; // TODO: replace with the API call above
+        console.log("getVisaLabourCancelDetails would be called for employee:", code);
         if (res) {
           const { settlements: rows, ...details } = res as Partial<TVisaLabourCancel> & {
             settlements?: TSettlementRow[];
@@ -244,10 +245,11 @@ export const VisaLabourCardCancelForm = forwardRef<VisaLabourCancelFormHandle, P
       }
       try {
         // const response = await insUpdVisaLabourCancel(form);
-    const res:any = console.log("API call to getVisaLabourCancelDetails would be made here for employee code:",);
-        if (res) {
+        const response: any = true; // TODO: replace with the API call above
+        console.log("insUpdVisaLabourCancel payload", form);
+        if (response) {
           toast.success("Visa and labour card cancelled successfully");
-          onSaved();
+          onSaved?.();
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Unable to save cancellation");
@@ -275,7 +277,7 @@ export const VisaLabourCardCancelForm = forwardRef<VisaLabourCancelFormHandle, P
             <ParamLookup
               parameter="HR_DROPDOWN_MS_DIVISION" valueField="div_code" descField="div_name" descHeader="Division"
               value={form.div_code}
-              onChange={(v:any) => patch({ div_code: v, dept_code: "", section_code: "", employee_code: "" })}
+              onChange={(v: any) => patch({ div_code: v, dept_code: "", section_code: "", employee_code: "" })}
             />
           </CField>
           <CField label="Department" required error={errors.dept_code}>
@@ -283,7 +285,7 @@ export const VisaLabourCardCancelForm = forwardRef<VisaLabourCancelFormHandle, P
               key={form.div_code} parameter="HR_DROPDOWN_MS_DEPARTMENT" code2={form.div_code ?? ""}
               valueField="dept_code" descField="dept_name" descHeader="Department"
               value={form.dept_code} disabled={!form.div_code}
-              onChange={(v:any) => patch({ dept_code: v, section_code: "", employee_code: "" })}
+              onChange={(v: any) => patch({ dept_code: v, section_code: "", employee_code: "" })}
             />
           </CField>
           <CField label="Section" required error={errors.section_code}>
@@ -291,7 +293,7 @@ export const VisaLabourCardCancelForm = forwardRef<VisaLabourCancelFormHandle, P
               key={form.dept_code} parameter="HR_DROPDOWN_MS_SECTION" code2={form.div_code ?? ""} code3={form.dept_code ?? ""}
               valueField="section_code" descField="section_name" descHeader="Section"
               value={form.section_code} disabled={!form.dept_code}
-              onChange={(v:any) => patch({ section_code: v, employee_code: "" })}
+              onChange={(v: any) => patch({ section_code: v, employee_code: "" })}
             />
           </CField>
           <CField label="Employee" required error={errors.employee_code} className="sm:col-span-2">
@@ -449,4 +451,49 @@ export const VisaLabourCardCancelForm = forwardRef<VisaLabourCancelFormHandle, P
   },
 );
 
-export default VisaLabourCardCancelForm;
+/* ================= PAGE (default export — used by workspaceRoutes) ================= */
+
+export default function VisaLabourCardCancelPage() {
+  const formRef = useRef<VisaLabourCancelFormHandle>(null);
+  const [saving, setSaving] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await formRef.current?.save();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-2 p-2">
+      <div className="flex items-center justify-between rounded-md border border-[#cbd5e1] bg-card px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded bg-[#00378C] text-white">
+            <FileX2 size={15} />
+          </span>
+          <h1 className="text-base font-bold text-foreground">Visa and Labour Card Cancel</h1>
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="inline-flex h-9 items-center gap-2 rounded-md bg-[#00378C] px-4 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Save size={15} />
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+
+      {/* key remount clears the form after a successful save */}
+      <VisaLabourCardCancelForm
+        key={formKey}
+        ref={formRef}
+        onSaved={() => setFormKey((k) => k + 1)}
+      />
+    </div>
+  );
+}

@@ -974,9 +974,6 @@ export default function SalaryAdvanceRecoveryPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Button type="button" size="sm" variant="outline" onClick={() => void fetchMain()} disabled={loading}>
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-            </Button>
             <Button type="button" size="sm" onClick={openAdd}>
               <Plus size={14} /> Add
             </Button>

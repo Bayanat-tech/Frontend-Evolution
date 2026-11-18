@@ -688,9 +688,6 @@ export function HrEmpEducationPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={handleRefresh}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
           <Button type="button" size="sm" disabled={!canSave} onClick={() => mutation.mutate()}>
             <Save size={14} /> {mutation.isPending ? "Saving" : "Save"}
           </Button>

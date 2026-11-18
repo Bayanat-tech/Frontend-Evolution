@@ -9,7 +9,7 @@ export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | 
 
 export interface SalesOrderLineRow {
   id: string;
-
+tx_compntcat_name?:string;
   div_code: string;
   prod_code: string;
   prod_name: string;
@@ -100,6 +100,9 @@ export interface SalesOrderLineRow {
 export interface PurchaseOrderForm {
   doc_no: string;
   job_card_no?:string;
+  so_tx_compnt_1_expmt?:string;
+  so_discount_scoope?:string;
+  so_tx_compntcat_name_1?:string;
     // doc_no: string;
   doc_type?: string;
   doc_date: string;

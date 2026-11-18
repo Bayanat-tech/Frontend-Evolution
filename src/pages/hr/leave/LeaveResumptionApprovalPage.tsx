@@ -27,17 +27,12 @@ export function LeaveResumptionApprovalPage() {
 
   const buildSql = (login: string, comp: string) => `
     SELECT *
-    FROM VW_LEAVE_REQUEST_FLOW_CLOSE
+    FROM VW_LEAVE_REQUEST_FLOW
     WHERE (COMPANY_CODE = '${comp}' OR '${comp}' = '')
-    AND (
-      (ACTUAL_RESUME_DATE IS NULL
-        AND RESUME_DATE_APPROVED IS NULL
+    AND (ACTUAL_RESUME_DATE IS NULL
+        AND NVL(RESUME_DATE_APPROVED, 'NO')='NO'
         AND FINAL_APPROVED = 'YES'
         AND CREATED_BY = '${login}')
-      OR (ACTUAL_RESUME_DATE IS NOT NULL
-        AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO'
-        AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
-    )
   `;
 
   const loadRows = async () => {
