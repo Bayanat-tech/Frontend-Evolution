@@ -76,6 +76,16 @@ type AllocationDetailLine = {
   DIV_CODE: string;
 };
 
+function colDate(isoOrDate: unknown): string {
+  if (!isoOrDate) return "—";
+  const str = String(isoOrDate).trim();
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    return `${m[3]}-${m[2]}-${m[1]}`;
+  }
+  return str.slice(0, 10);
+}
+
 export function AllocatedInvoicePage() {
   const { user } = useAuth();
   const companyCode = user?.company_code || "";
@@ -108,7 +118,24 @@ export function AllocatedInvoicePage() {
   const [unallocatingDocNo, setUnallocatingDocNo] = useState<string | null>(null);
   const [confirmUnallocDocNo, setConfirmUnallocDocNo] = useState<string | null>(null);
 
+  const totalDrAllocated = lines
+    .filter((l) => Number(l.sign_ind) >= 0)
+    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  const totalCrAllocated = lines
+    .filter((l) => Number(l.sign_ind) < 0)
+    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
   const totalAllocated = lines.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  const selectedUnallocItem = unallocatedBills.find(
+    (b) => b.inv_no === selectedUnallocBill || b.doc_no === selectedUnallocBill
+  );
+  const unallocTarget = selectedUnallocItem ? selectedUnallocItem.amount : null;
+  const isBalanced =
+    unallocTarget !== null
+      ? Math.abs(totalAllocated - unallocTarget) < 0.001
+      : totalAllocated > 0 && Math.abs(totalDrAllocated - totalCrAllocated) < 0.001;
 
   // Auto-default division from user's assigned divisions on load
   useEffect(() => {
@@ -171,17 +198,21 @@ export function AllocatedInvoicePage() {
 
         const rawInvoices = resp.data.data.open_invoices || [];
         setLines(
-          rawInvoices.map((inv, idx) => ({
-            id: `line_${idx}_${inv.INV_NO || inv.inv_no}`,
-            sr: idx + 1,
-            inv_no: String(inv.INV_NO || inv.inv_no || ""),
-            inv_date: String(inv.INV_DATE || inv.inv_date || ""),
-            balance_amount: Math.abs(Number(inv.BALANCE_AMOUNT ?? inv.balance_amount ?? 0)),
-            amount: 0,
-            sign_ind: Number(inv.SIGN_IND ?? inv.sign_ind ?? 1),
-            org_curr_code: String(inv.ORG_CURR_CODE || inv.org_curr_code || "INR"),
-            ex_rate: Number(inv.EX_RATE ?? inv.ex_rate ?? 1),
-          }))
+          rawInvoices.map((inv, idx) => {
+            const rawBal = Number(inv.RAW_BALANCE ?? inv.raw_balance ?? inv.BALANCE_AMOUNT ?? inv.balance_amount ?? 0);
+            const sign = Number(inv.SIGN_IND ?? inv.sign_ind ?? (rawBal >= 0 ? 1 : -1));
+            return {
+              id: `line_${idx}_${inv.INV_NO || inv.inv_no}`,
+              sr: idx + 1,
+              inv_no: String(inv.INV_NO || inv.inv_no || ""),
+              inv_date: String(inv.INV_DATE || inv.inv_date || ""),
+              balance_amount: Math.abs(rawBal),
+              amount: 0,
+              sign_ind: sign,
+              org_curr_code: String(inv.ORG_CURR_CODE || inv.org_curr_code || "INR"),
+              ex_rate: Number(inv.EX_RATE ?? inv.ex_rate ?? 1),
+            };
+          })
         );
 
         if (rawInvoices.length === 0 && rawUnalloc.length === 0) {
@@ -345,6 +376,22 @@ export function AllocatedInvoicePage() {
       return;
     }
 
+    if (selectedUnallocBill && unallocTarget !== null && Math.abs(totalAllocated - unallocTarget) > 0.001) {
+      setNotice({
+        type: "error",
+        message: `Total allocated (${totalAllocated.toFixed(3)}) does not match selected unallocated document amount (${unallocTarget.toFixed(3)}).`,
+      });
+      return;
+    }
+
+    if (!selectedUnallocBill && Math.abs(totalDrAllocated - totalCrAllocated) > 0.001) {
+      setNotice({
+        type: "error",
+        message: `Allocation is not proper! Total Debit (${totalDrAllocated.toFixed(3)}) must equal Total Credit (${totalCrAllocated.toFixed(3)}) to balance to zero as per PowerBuilder rules.`,
+      });
+      return;
+    }
+
     setSubmitting(true);
     setNotice(null);
     try {
@@ -390,47 +437,66 @@ export function AllocatedInvoicePage() {
 
   const columns = useMemo<ColumnDef<InvoiceLine>[]>(
     () => [
-      { accessorKey: "sr", header: "Sr.", size: 50 },
+      { accessorKey: "sr", header: "Sr.", size: 45 },
       {
         accessorKey: "inv_no",
         header: "Invoice No",
-        size: 170,
+        size: 160,
         cell: ({ row }) => (
-          <Input
-            defaultValue={row.original.inv_no}
-            key={`inv_${row.original.id}`}
-            onBlur={(e) => patchLine(row.original.id, { inv_no: e.target.value })}
-            className="h-8 font-mono text-xs uppercase"
-            placeholder="INV-XXXX"
-          />
+          <span className="font-mono text-xs font-semibold text-slate-800">
+            {row.original.inv_no}
+          </span>
         ),
       },
       {
         accessorKey: "inv_date",
         header: "Invoice Date",
-        size: 130,
+        size: 110,
         cell: ({ row }) => (
-          <Input
-            type="date"
-            defaultValue={row.original.inv_date ? row.original.inv_date.slice(0, 10) : ""}
-            key={`date_${row.original.id}`}
-            onBlur={(e) => patchLine(row.original.id, { inv_date: e.target.value })}
-            className="h-8 text-xs"
-          />
+          <span className="font-mono text-xs text-slate-600">
+            {colDate(row.original.inv_date)}
+          </span>
         ),
+      },
+      {
+        accessorKey: "sign_ind",
+        header: "Type",
+        size: 80,
+        cell: ({ row }) => {
+          const isDr = Number(row.original.sign_ind) >= 0;
+          return (
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${
+                isDr
+                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                  : "bg-purple-50 text-purple-700 border border-purple-200"
+              }`}
+            >
+              {isDr ? "Dr (+)" : "Cr (-)"}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "balance_amount",
         header: "Open Balance",
-        size: 130,
-        cell: ({ row }) => (
-          <span className="font-mono text-xs font-semibold text-slate-700">
-            {Number(row.original.balance_amount || 0).toLocaleString("en-US", {
-              minimumFractionDigits: 3,
-              maximumFractionDigits: 3,
-            })}
-          </span>
-        ),
+        size: 135,
+        cell: ({ row }) => {
+          const isDr = Number(row.original.sign_ind) >= 0;
+          return (
+            <div className="flex items-center justify-end gap-1 font-mono text-xs font-semibold">
+              <span className={isDr ? "text-slate-800" : "text-purple-700"}>
+                {Number(row.original.balance_amount || 0).toLocaleString("en-US", {
+                  minimumFractionDigits: 3,
+                  maximumFractionDigits: 3,
+                })}
+              </span>
+              <span className={`text-[10px] font-bold ${isDr ? "text-blue-600" : "text-purple-600"}`}>
+                {isDr ? "Dr" : "Cr"}
+              </span>
+            </div>
+          );
+        },
       },
       {
         accessorKey: "amount",
@@ -445,12 +511,18 @@ export function AllocatedInvoicePage() {
             placeholder="0.000"
             onChange={(e) => {
               const text = e.target.value.replace(/[^0-9.]/g, "");
-              const num = parseFloat(text);
-              patchLine(row.original.id, { amount: isNaN(num) ? 0 : num });
+              let num = parseFloat(text);
+              if (isNaN(num)) num = 0;
+              if (num > row.original.balance_amount) {
+                num = row.original.balance_amount;
+                e.target.value = num.toFixed(3);
+              }
+              patchLine(row.original.id, { amount: num });
             }}
             onBlur={(e) => {
-              const num = parseFloat(e.target.value);
+              let num = parseFloat(e.target.value);
               if (!isNaN(num) && num > 0) {
+                if (num > row.original.balance_amount) num = row.original.balance_amount;
                 e.target.value = num.toFixed(3);
                 patchLine(row.original.id, { amount: num });
               } else {
@@ -465,7 +537,7 @@ export function AllocatedInvoicePage() {
       {
         accessorKey: "org_curr_code",
         header: "Currency",
-        size: 90,
+        size: 85,
         cell: ({ row }) => (
           <span className="text-xs font-mono px-2 text-slate-500">{row.original.org_curr_code || "INR"}</span>
         ),
@@ -473,7 +545,7 @@ export function AllocatedInvoicePage() {
       {
         id: "actions",
         header: "",
-        size: 44,
+        size: 40,
         cell: ({ row }) => (
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeLine(row.original.id)}>
             <Trash2 size={13} className="text-slate-400 hover:text-rose-500" />
@@ -687,9 +759,35 @@ export function AllocatedInvoicePage() {
                     {totalAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })} INR
                   </span>
                 </div>
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Total Dr:</span>
+                    <span className="font-mono font-semibold text-blue-700">
+                      {totalDrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Total Cr:</span>
+                    <span className="font-mono font-semibold text-purple-700">
+                      {totalCrAllocated.toLocaleString("en-US", { minimumFractionDigits: 3 })}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500">Net Status:</span>
+                  <span
+                    className={`font-mono text-xs font-bold px-2 py-0.5 rounded ${
+                      isBalanced
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-amber-50 text-amber-700 border border-amber-200"
+                    }`}
+                  >
+                    {isBalanced ? "✓ Balanced (0.000)" : `Diff: ${Math.abs(totalDrAllocated - totalCrAllocated).toFixed(3)}`}
+                  </span>
+                </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-slate-500">Selected Unalloc Bill:</span>
-                  <span className="font-mono font-semibold text-slate-700">{selectedUnallocBill || "None"}</span>
+                  <span className="font-mono font-semibold text-slate-700">{selectedUnallocBill || "None (Invoice-to-Invoice)"}</span>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Remarks</label>
