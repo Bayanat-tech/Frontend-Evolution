@@ -1,6 +1,10 @@
 // Employee Dependants tab — rendered inside EmployeeWorkspacePage.
-// Employee comes from the workspace route. The tab keeps its own list ⇄ editor switch;
-// the header Save saves the open dependant (and does nothing from the list view).
+// Employee comes from the workspace route. The tab keeps its own list ⇄ editor switch.
+//
+// Header Save behaviour (save() returns true = "go to the next tab", false = "stay here"):
+//  • editor open (add / edit) → saves that dependant, returns to the list, stays on this tab (false)
+//    so more dependants can be added
+//  • list view → nothing pending, so the workspace moves to the next tab (true)
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, CreditCard, Edit2, Eye, FileText, HeartPulse, IdCard, Plane, Plus, Trash2 } from "lucide-react";
@@ -386,18 +390,19 @@ export const HrEmpDependantsTab = forwardRef<TabHandle, TabProps>(function HrEmp
     });
   };
 
-  /* ── Save (called by the header Save button) ── */
-  const save = async () => {
-    if (view !== "editor") {
-      toast.warning("Open or add a dependant to save");
-      return;
-    }
-    if (editorMode === "view") return;
+  /* ── Save (called by the header Save button) ──
+     Returns true  → the workspace moves to the next tab
+             false → stay on this tab */
+  const save = async (): Promise<boolean> => {
+    // List view: nothing is being edited, so there is nothing to save — continue to the next tab
+    if (view !== "editor") return true;
+    // Read-only view of a dependant: stay where we are
+    if (editorMode === "view") return false;
 
     const error = validateForm();
     if (error) {
       toast.warning(error);
-      return;
+      return false;
     }
 
     try {
@@ -425,8 +430,11 @@ export const HrEmpDependantsTab = forwardRef<TabHandle, TabProps>(function HrEmp
       toast.success(editorMode === "edit" ? "Dependant updated successfully" : "Dependant saved successfully");
       closeEditor();
       await loadDependants();
+      // Back on the list so more dependants can be added; press Save again to continue.
+      return false;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Unable to save dependant");
+      return false;
     }
   };
 

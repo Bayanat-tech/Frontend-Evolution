@@ -18,14 +18,17 @@ import type { ReactNode } from "react";
 /* ================= TYPES ================= */
 
 export type EmployeeFormHandle = {
-  save: () => Promise<void>;
+  save: () => Promise<boolean | void>;
 };
 
 type Props = {
   isEditMode: boolean;
   existingData?: TEmployeeHr;
-  onSaved: () => void;
+  /** Called after a successful save. Carries the employee code / id when the save response includes them. */
+  onSaved: (saved: SavedEmployee) => void;
 };
+
+export type SavedEmployee = { employee_code?: string; employee_id?: string };
 
 type TEmployeeForm = TPersnolHr & TPayrollHr & TPassportHr & TContractHr &
   TSponsorHr & TIsuranceHr & TILPHr & TAirfareHr;
@@ -82,6 +85,23 @@ const DATE_RANGES: [K, K][] = [
   ["ins_card_issue_dt", "ins_card_exp_dt"],
   ["labourcard_valid_from", "labourcard_valid_to"],
 ];
+
+/** Reads employee_code / employee_id out of whatever shape the save API returns (object, {data}, array...). */
+const extractSaved = (res: unknown): SavedEmployee => {
+  const r = res as any;
+  const candidates = [r, r?.data, r?.data?.[0], r?.data?.data, r?.[0], r?.result, r?.result?.[0]];
+  const out: SavedEmployee = {};
+  for (const c of candidates) {
+    if (!c || typeof c !== "object") continue;
+    for (const [key, val] of Object.entries(c as Record<string, unknown>)) {
+      if (val === null || val === undefined || val === "" || typeof val === "object") continue;
+      const k = key.toLowerCase();
+      if (!out.employee_code && (k === "employee_code" || k === "emp_code" || k === "empcode")) out.employee_code = String(val);
+      if (!out.employee_id && (k === "employee_id" || k === "emp_id" || k === "empid")) out.employee_id = String(val);
+    }
+  }
+  return out;
+};
 
 const validate = (v: TEmployeeForm): Partial<Record<K, string>> => {
   const errors: Partial<Record<K, string>> = {};
@@ -210,7 +230,7 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
         const response = await insUpdHrEmployee(form);
         if (response) {
           toast.success(isEditMode ? "Employee updated successfully" : "Employee added successfully");
-          onSaved();
+          onSaved(extractSaved(response));
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Unable to save employee");
@@ -229,37 +249,53 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
             <HeaderBlock
               label="Personal Information"
               icon={<User size={11} />}
-              bodyClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_150px] gap-x-3 gap-y-2 p-2"
+              bodyClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[150px_repeat(4,minmax(0,1fr))] gap-x-3 gap-y-2 p-2"
             >
-              {/* Row 1 */}
+              {/* Photo — left column, top-aligned with the first field row, fixed height */}
+              <div className="flex items-start justify-center sm:col-span-2 lg:col-span-1 lg:col-start-1 lg:row-start-1 lg:row-span-4">
+                <button
+                  type="button"
+                  onClick={() => setPhotoDialog(true)}
+                  title={form.emp_photo ? "Change Picture" : "Upload Profile Picture"}
+                  className="flex h-[170px] w-[140px] shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-border hover:border-primary"
+                >
+                  {form.emp_photo ? (
+                    <img src={form.emp_photo} alt="Profile" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-center text-xs leading-tight text-muted-foreground">Upload</span>
+                  )}
+                </button>
+              </div>
+
+              {/* Row 1 (beside photo): Name, Division, Department, Designation */}
+              <CField label="Name" required error={errors.rpt_name}>
+                <Input className={CTL} {...text("rpt_name")} />
+              </CField>
               <CField label="Division" required error={errors.div_code}>
                 <ParamLookup parameter="HR_DROPDOWN_MS_DIVISION" valueField="div_code" descField="div_name" descHeader="Division" value={form.div_code} onChange={(v) => patch({ div_code: v, dept_code: "", section_code: "" })} />
               </CField>
               <CField label="Department" required error={errors.dept_code}>
                 <ParamLookup key={form.div_code} parameter="HR_DROPDOWN_MS_DEPARTMENT" code2={form.div_code ?? ""} valueField="dept_code" descField="dept_name" descHeader="Department" value={form.dept_code} disabled={!form.div_code} onChange={(v) => patch({ dept_code: v, section_code: "" })} />
               </CField>
+              <CField label="Designation" required error={errors.desg_code}>
+                <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_DESIGNATION" valueField="desg_code" descField="desg_name" descHeader="Designation" value={form.desg_code} onChange={pick("desg_code")} />
+              </CField>
+
+              {/* Row 2 */}
               <CField label="Section" required error={errors.section_code}>
                 <ParamLookup key={form.dept_code} parameter="HR_DROPDOWN_MS_SECTION" code2={form.div_code ?? ""}  code3={form.dept_code ?? ""} valueField="section_code" descField="section_name" descHeader="Section" value={form.section_code} disabled={!form.dept_code} onChange={pick("section_code")} />
               </CField>
               <CField label="Employee Code">
                 <Input className={CTL} value={form.employee_code || (isEditMode ? "" : "Auto")} disabled readOnly />
               </CField>
-
-              {/* Row 2 */}
               <CField label="Alternate Id" required error={errors.alternate_id}>
                 <Input className={CTL} {...text("alternate_id")} disabled={isEditMode} />
-              </CField>
-              <CField label="Name" required error={errors.rpt_name}>
-                <Input className={CTL} {...text("rpt_name")} />
               </CField>
               <CField label="Grade" required error={errors.grade_code}>
                 <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_GRADE" valueField="grade_code" descField="grade_name" descHeader="Grade" value={form.grade_code} onChange={pick("grade_code")} />
               </CField>
-              <CField label="Designation" required error={errors.desg_code}>
-                <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_DESIGNATION" valueField="desg_code" descField="desg_name" descHeader="Designation" value={form.desg_code} onChange={pick("desg_code")} />
-              </CField>
 
-              {/* Row 3 */}
+              {/* Rows 3–4 */}
               <CField label="Formal Designation" required error={errors.labour_desg_code}>
                 <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_LABOUR_DESG" valueField="labour_desg_code" descField="labour_desg_name" descHeader="Formal Designation" value={form.labour_desg_code} onChange={pick("labour_desg_code")} />
               </CField>
@@ -269,11 +305,10 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
               <CField label="Date Of Birth" required error={errors.birth_date}>
                 <Input className={CTL} {...date("birth_date")} />
               </CField>
+
               <CField label="Date Of Joining" required error={errors.join_date}>
                 <Input className={CTL} {...date("join_date")} max={toInputDatenull(form.probation_end_date)} />
               </CField>
-
-              {/* Row 4 */}
               <CField label="Probation End Date" required error={errors.probation_end_date}>
                 <Input className={CTL} {...date("probation_end_date")} min={toInputDatenull(form.join_date)} />
               </CField>
@@ -283,25 +318,10 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
               <CField label="Employment Status" required error={errors.emp_status}>
                 <ParamLookup parameter="MS_EMP_HR_EMPLOYEE_STATUS" valueField="VALUE_CODE" descField="VALUE_DESC" descHeader="Status" value={form.emp_status} onChange={pick("emp_status")} />
               </CField>
+
               <CField label="Country" required error={errors.country_code}>
                 <MasterLookup master="country" value={form.country_code} onChange={pick("country_code")} />
               </CField>
-
-              {/* Photo - 5th Column */}
-              <div className="flex justify-center items-center sm:col-span-2 lg:col-span-1 lg:col-start-5 lg:row-start-1 lg:row-span-4 py-2">
-                <button
-                  type="button"
-                  onClick={() => setPhotoDialog(true)}
-                  title={form.emp_photo ? "Change Picture" : "Upload Profile Picture"}
-                  className="flex h-[190px] w-[140px] shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-border hover:border-primary"
-                >
-                  {form.emp_photo ? (
-                    <img src={form.emp_photo} alt="Profile" className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-center text-xs leading-tight text-muted-foreground">Upload</span>
-                  )}
-                </button>
-              </div>
             </HeaderBlock>
           </div>
 

@@ -1,6 +1,7 @@
 // Language Skills tab — rendered inside EmployeeWorkspacePage.
 // No header / employee selection here: the employee comes from the workspace route.
-// The header Save calls save() through the ref.
+// The header Save calls save() through the ref. save() returns true when the data was saved
+// (the workspace then moves to the next tab) and false when it should stay on this tab.
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { Edit2, Languages, Plus, Trash2 } from "lucide-react";
@@ -196,15 +197,21 @@ export const HrEmpLanguageTab = forwardRef<TabHandle, TabProps>(function HrEmpLa
     setDraft((d) => (d?.id === row.id ? null : d));
   };
 
-  /* ── Save (called by the header Save button) ── */
-  const save = async () => {
+  /* ── Save (called by the header Save button) ──
+     Returns true  → saved, the workspace moves to the next tab
+             false → nothing saved, stay on this tab */
+  const save = async (): Promise<boolean> => {
     if (!employeeId) {
       toast.warning("No employee selected");
-      return;
+      return false;
+    }
+    if (draft) {
+      toast.warning("Finish the open language row (Add Row / Update Row) or cancel it before saving");
+      return false;
     }
     if (rows.length === 0) {
       toast.warning("Add at least one language record");
-      return;
+      return false;
     }
     try {
       const language_details = rows.map((r) => ({
@@ -234,10 +241,11 @@ export const HrEmpLanguageTab = forwardRef<TabHandle, TabProps>(function HrEmpLa
       }
 
       toast.success("Language details saved successfully");
-      setDraft(null);
       await loadRows(); // refresh so rows are persisted and deletions applied
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save language details");
+      return false;
     }
   };
 
