@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { AlertTriangle, Calculator, CheckCircle2, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { executeCommonProcedure, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
@@ -75,12 +75,14 @@ export function AssetDepreciationPage() {
     setLoading(true);
     setNotice(null);
     try {
+      const targetDocNo = calculateDocNo(year, month, division) || docNo;
       const data = await getDynamicLookup({
         parameter: "AC_ASSETS_RETRIEVE_BUTTON",
         loginid: loginId,
         code1: companyCode,
         code2: division,
-        code3: "", code4: "",
+        code3: targetDocNo,
+        code4: "",
         number1: 0, number2: 0, number3: 0, number4: 0,
         date1: null, date2: null, date3: null, date4: null,
       });
@@ -114,6 +116,16 @@ export function AssetDepreciationPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (year && month && division) {
+      const nextDoc = calculateDocNo(year, month, division);
+      setDocNo(nextDoc);
+      void retrieve();
+    } else {
+      setRows([]);
+    }
+  }, [year, month, division]);
 
   const save = async () => {
     if (!year || !month || !division) {
@@ -393,6 +405,32 @@ function col(key: string, header: string, size: number): ColumnDef<DepRow> {
   return { accessorKey: key, header, size, cell: ({ getValue }) => <span>{String(getValue() ?? "")}</span> };
 }
 
+function formatDisplayDate(val: unknown): string {
+  if (!val) return "";
+  const s = String(val).trim();
+  if (!s) return "";
+  // Check if ISO format YYYY-MM-DD...
+  const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymd) {
+    const [, y, m, d] = ymd;
+    return `${d.padStart(2, "0")}-${m.padStart(2, "0")}-${y}`;
+  }
+  // Check if DD-MM-YYYY or DD/MM/YYYY
+  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${d.padStart(2, "0")}-${m.padStart(2, "0")}-${y}`;
+  }
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const yr = d.getFullYear();
+    return `${day}-${month}-${yr}`;
+  }
+  return s.split("T")[0];
+}
+
 function colDate(key: string, header: string, size: number): ColumnDef<DepRow> {
   return {
     accessorKey: key,
@@ -401,13 +439,8 @@ function colDate(key: string, header: string, size: number): ColumnDef<DepRow> {
     cell: ({ getValue }) => {
       const v = getValue();
       if (!v) return <span className="text-slate-400">—</span>;
-      const s = String(v);
-      const d = new Date(s);
-      if (isNaN(d.getTime())) return <span>{s.slice(0, 10)}</span>;
-      const day = String(d.getDate()).padStart(2, "0");
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const yr = d.getFullYear();
-      return <span className="font-mono text-xs">{`${day}-${month}-${yr}`}</span>;
+      const formatted = formatDisplayDate(v);
+      return <span className="font-mono text-xs">{formatted || "—"}</span>;
     },
   };
 }
@@ -448,7 +481,7 @@ function friendlyError(error: unknown, fallback: string): string {
   if (raw.includes("Please check the Exception register"))
     return "Some assets are in the Exception Register. Fix them before posting the JV.";
   if (raw.includes("Already calculated for future period") || raw.includes("Depreciation restricted"))
-    return "Depreciation for this period has already been processed (or a subsequent month has already been run). Existing records are loaded below; click 'JV' to post to General Ledger.";
+    return "Depreciation restricted! A subsequent period has already been calculated. In accordance with PowerBuilder ERP rules, prior months cannot be recalculated once future periods are run. Existing records for this month are loaded below.";
   // Any other ORA-20xxx: show only its message, without the ORA-06512 stack
   const match = raw.match(/ORA-20\d{3}:\s*([\s\S]*?)(?=\s*ORA-\d{5}|$)/);
   if (match?.[1]) return match[1].trim();
