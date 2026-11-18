@@ -387,7 +387,7 @@ export function AllocatedInvoicePage() {
     if (!selectedUnallocBill && Math.abs(totalDrAllocated - totalCrAllocated) > 0.001) {
       setNotice({
         type: "error",
-        message: `Allocation is not proper! Total Debit (${totalDrAllocated.toFixed(3)}) must equal Total Credit (${totalCrAllocated.toFixed(3)}) to balance to zero as per PowerBuilder rules.`,
+        message: `Allocation is not proper! Total Debit (${totalDrAllocated.toFixed(3)}) must equal Total Credit (${totalCrAllocated.toFixed(3)}) to balance to zero.`,
       });
       return;
     }
@@ -594,9 +594,6 @@ export function AllocatedInvoicePage() {
             <h1 className="truncate text-xl font-bold leading-tight text-slate-900">
               Allocate and Unallocate Invoice
             </h1>
-            <p className="m-0 text-xs text-slate-500">
-              PowerBuilder UJV module: Match open invoices against unallocated receipts/payments or reverse previous allocations
-            </p>
           </div>
         </div>
 
