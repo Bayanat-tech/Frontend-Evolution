@@ -683,7 +683,7 @@ const AddCRRequestPage = ({
     setApprovalFlowData([]);
 
     try {
-      // 1. History आणि Flow दोन्हीचा डेटा मागवा
+
       const historyRows = await getCreditRequestHistory({
         loginid,
         company_code: companyCode,
@@ -700,26 +700,25 @@ const AddCRRequestPage = ({
 
       const mergedMap = new Map();
 
-      // 2. प्रथम Flow (सर्व ५ Levels) मॅप मध्ये टाका
       (nextLevels || []).forEach((row: any) => {
         const level = Number(row.LEVEL_NO ?? row.level_no);
         if (!level) return;
-        
+
         mergedMap.set(level, {
           LEVEL_NO: level,
           RPT_NAME: row.RPT_NAME || row.rpt_name || row.EMPLOYEE_CODE_ID || "Approver",
           EMPLOYEE_CODE_ID: String(row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""),
-          STATUS: "PENDING", // डिफॉल्ट स्टेटस
+          STATUS: "PENDING",
           REMARKS: "",
           DATE: null,
         });
       });
 
-      // ⚡ सध्याचं रनिंग लेव्हल शोधा (उदा. 3)
-        
+
+
       const currentRunningLevel = Number(header.FLOW_LEVEL_RUNNING || 1);
 
-  
+
       (historyRows || []).forEach((h: any) => {
         const level = Number(h.flow_level_running);
         if (!level) return;
@@ -728,29 +727,29 @@ const AddCRRequestPage = ({
         let actualStatus = (h.last_action || "PENDING").toUpperCase();
         let actualDate = h.user_dt || null;
 
-      
+
         if (level > currentRunningLevel) {
           actualStatus = "PENDING";
           actualDate = null;
-        } 
-        
-        
+        }
+
+
         else if (level === currentRunningLevel) {
           actualStatus = "PENDING";
           actualDate = null;
         }
-        
-  
+
+
         else if (level < currentRunningLevel) {
           actualStatus = "SUBMITTED";
-     
+
         }
 
         mergedMap.set(level, {
           LEVEL_NO: level,
           RPT_NAME: existing?.RPT_NAME || h.next_action_by || h.user_id || "Approver",
           EMPLOYEE_CODE_ID: existing?.EMPLOYEE_CODE_ID || h.user_id || "",
-          STATUS: actualStatus, 
+          STATUS: actualStatus,
           REMARKS: h.reject_reason || h.sentback_reason || h.cancel_remark || "",
           DATE: actualDate,
         });
@@ -758,10 +757,10 @@ const AddCRRequestPage = ({
 
       const level1Data = mergedMap.get(1);
       if (level1Data) {
-        level1Data.STATUS = "SUBMITTED"; 
+        level1Data.STATUS = "SUBMITTED";
         level1Data.DATE = header.CREATE_DATE || header.REQUEST_DATE || new Date().toISOString();
       }
-      
+
       const finalData = Array.from(mergedMap.values()).sort((a, b) => a.LEVEL_NO - b.LEVEL_NO);
       setApprovalFlowData(finalData);
 
@@ -1391,86 +1390,86 @@ const AddCRRequestPage = ({
 
               {/* Main Vertical Line (Tree Trunk) */}
               <div className="absolute left-[26px] top-6 bottom-8 w-0.5 bg-gray-200 z-0" />
-{approvalFlowData.map((item, idx) => {
-  // ✅ नवीन Smart Status Logic
-  const statusStr = String(item.STATUS).toUpperCase();
-  const isApproved = statusStr.includes("APPROV") || statusStr.includes("SUBMIT");
-  const isSentBack = statusStr.includes("BACK") || statusStr.includes("REJECT") || statusStr.includes("CANCEL");
-  const isPending = statusStr.includes("PEND") || statusStr === "" || statusStr === "UNKNOWN";
+              {approvalFlowData.map((item, idx) => {
+                // ✅ नवीन Smart Status Logic
+                const statusStr = String(item.STATUS).toUpperCase();
+                const isApproved = statusStr.includes("APPROV") || statusStr.includes("SUBMIT");
+                const isSentBack = statusStr.includes("BACK") || statusStr.includes("REJECT") || statusStr.includes("CANCEL");
+                const isPending = statusStr.includes("PEND") || statusStr === "" || statusStr === "UNKNOWN";
 
-  return (
-    <div key={idx} className="relative z-10 flex gap-4 pb-6 group">
-      
-      {/* Tree Node Icon */}
-      <div className="relative flex flex-col items-center mt-1">
-        <div className="absolute top-4 -left-4 w-4 h-px bg-gray-200" />
-        
-        {/* Node Box */}
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-white shadow-sm
+                return (
+                  <div key={idx} className="relative z-10 flex gap-4 pb-6 group">
+
+                    {/* Tree Node Icon */}
+                    <div className="relative flex flex-col items-center mt-1">
+                      <div className="absolute top-4 -left-4 w-4 h-px bg-gray-200" />
+
+                      {/* Node Box */}
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-white shadow-sm
           ${isApproved ? 'border-green-500' : isSentBack ? 'border-red-500' : 'border-gray-300'}`}>
-          {isApproved ? <CheckCircle2 size={16} className="text-green-500" /> :
-           isSentBack ? <X size={16} className="text-red-500" /> :
-           <span className="text-xs font-bold text-gray-400">{item.LEVEL_NO}</span>}
-        </div>
-      </div>
+                        {isApproved ? <CheckCircle2 size={16} className="text-green-500" /> :
+                          isSentBack ? <X size={16} className="text-red-500" /> :
+                            <span className="text-xs font-bold text-gray-400">{item.LEVEL_NO}</span>}
+                      </div>
+                    </div>
 
-      {/* Row Content */}
-      <div className="flex-1 pb-4 border-b border-dashed border-gray-100 last:border-0">
-        <div className="grid grid-cols-12 gap-4 items-center">
-          
-          {/* Left: Level & Role Name (col-span-6) */}
-          <div className="col-span-6 flex flex-col gap-1">
-            <div className="flex items-baseline gap-2">
-              <span className="font-bold text-gray-700 text-xs uppercase">LEVEL {item.LEVEL_NO}</span>
-              <span className="font-semibold text-gray-900 text-sm">{item.RPT_NAME}</span>
-            </div>
-            
-            {item.EMPLOYEE_CODE_ID && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium pl-1">
-                <User size={12} className="text-gray-400" /> {item.EMPLOYEE_CODE_ID}
-              </div>
-            )}
+                    {/* Row Content */}
+                    <div className="flex-1 pb-4 border-b border-dashed border-gray-100 last:border-0">
+                      <div className="grid grid-cols-12 gap-4 items-center">
 
-            {/* ✅ नवीन: तारीख आणि वेळ दाखवण्यासाठी */}
-            {item.DATE && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-400 pl-1 mt-0.5">
-                <Clock size={12} /> 
-                {new Date(item.DATE).toLocaleString("en-GB", {
-                  day: "2-digit", month: "2-digit", year: "numeric",
-                  hour: "2-digit", minute: "2-digit",
-                })}
-              </div>
-            )}
-          </div>
+                        {/* Left: Level & Role Name (col-span-6) */}
+                        <div className="col-span-6 flex flex-col gap-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-bold text-gray-700 text-xs uppercase">LEVEL {item.LEVEL_NO}</span>
+                            <span className="font-semibold text-gray-900 text-sm">{item.RPT_NAME}</span>
+                          </div>
 
-          {/* Middle: Status Badge (col-span-3) */}
-          <div className="col-span-3 flex justify-center">
-            <span className={`px-3 py-1 text-[11px] font-bold rounded-md tracking-wide text-center min-w-[90px]
+                          {item.EMPLOYEE_CODE_ID && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium pl-1">
+                              <User size={12} className="text-gray-400" /> {item.EMPLOYEE_CODE_ID}
+                            </div>
+                          )}
+
+                          {/* ✅ नवीन: तारीख आणि वेळ दाखवण्यासाठी */}
+                          {item.DATE && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-400 pl-1 mt-0.5">
+                              <Clock size={12} />
+                              {new Date(item.DATE).toLocaleString("en-GB", {
+                                day: "2-digit", month: "2-digit", year: "numeric",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Middle: Status Badge (col-span-3) */}
+                        <div className="col-span-3 flex justify-center">
+                          <span className={`px-3 py-1 text-[11px] font-bold rounded-md tracking-wide text-center min-w-[90px]
               ${isApproved ? 'bg-green-100 text-green-700 border border-green-200' :
-                isSentBack ? 'bg-red-100 text-red-700 border border-red-200' :
-                'bg-blue-50 text-blue-700 border border-blue-200'}`}>
-              {item.STATUS ? item.STATUS : "PENDING"}
-            </span>
-          </div>
+                              isSentBack ? 'bg-red-100 text-red-700 border border-red-200' :
+                                'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+                            {item.STATUS ? item.STATUS : "PENDING"}
+                          </span>
+                        </div>
 
-          {/* Right: Remarks (col-span-3) */}
-          <div className="col-span-3 flex justify-end pr-2">
-            {item.REMARKS ? (
-              <span className="text-xs text-gray-600 text-right italic line-clamp-2" title={item.REMARKS}>
-                "{item.REMARKS}"
-              </span>
-            ) : (
-              <span className="text-xs text-gray-400">-</span>
-            )}
-          </div>
+                        {/* Right: Remarks (col-span-3) */}
+                        <div className="col-span-3 flex justify-end pr-2">
+                          {item.REMARKS ? (
+                            <span className="text-xs text-gray-600 text-right italic line-clamp-2" title={item.REMARKS}>
+                              "{item.REMARKS}"
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
+                        </div>
 
-        </div>
-      </div>
-    </div>
-  );
-})}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
 
-              
+
             </div>
           )}
         </div>

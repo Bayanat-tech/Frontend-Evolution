@@ -1,4 +1,4 @@
-// src/pages/almswf/Credit_Request_page.tsx
+
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { Plus, Eye, Edit2, Printer, FileSpreadsheet } from "lucide-react";
@@ -13,8 +13,7 @@ import AutoDismissAlert from "../../components/ui/AutoDismissAlert";
 import { getCreditRequestReportExcel, getCreditRequestReportHtml } from "../../api/transactions";
 import { openPurchaseReport } from "../purchase_sales/Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../purchase_sales/Reports/Purchasereportpreview";
-// TODO: change this path to the file where you created these two functions
-// import { getCreditRequestReportHtml, getCreditRequestReportExcel } from "../api/creditRequestReport";
+
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TAB_STATUS = ["PENDING", "INPROGRESS", "CLOSED", "CANCELED", "REJECTED", "SENDBACK"] as const;
@@ -43,8 +42,6 @@ function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   return out as T;
 }
 
-// The backend answers "no data" / errors with a JSON body and status 200.
-// Returns the message when `body` is such a JSON string, otherwise null.
 function jsonErrorMessage(body: string): string | null {
   const trimmed = body.trimStart();
   if (!trimmed.startsWith("{")) return null;
@@ -84,11 +81,9 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [tab, setTab] = useState<CRTab>(TAB_STATUS[initialTab] ?? "PENDING");
   const [query, setQuery] = useState("");
-  // Levels allowed to create a Credit Request (set from the SQL result below)
   const [userLevel, setUserLevel] = useState<number | null>(null);
   const canAdd = userLevel === 1;
 
-  // Request number whose report is being generated (disables that row's buttons)
   const [printingNo, setPrintingNo] = useState<string | null>(null);
   const [exportingNo, setExportingNo] = useState<string | null>(null);
 
@@ -97,7 +92,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   });
   const isInProgressTab = tab === "INPROGRESS";
 
-    const isClosedTab = tab === "CLOSED";
+  const isClosedTab = tab === "CLOSED";
   // Edit icon is hidden on these tabs (view only)
   const hideEdit = isInProgressTab || isClosedTab;
 
@@ -187,7 +182,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
           : 0;
         setUserLevel(Number.isFinite(level) ? level : 0);
       } catch {
-        // If the level can't be read, hide the Add button instead of showing it to everyone
+     
         if (mounted) setUserLevel(null);
       }
     })();
@@ -238,7 +233,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   };
 
   // ── Report: Print / PDF (HTML opens in a new tab) ───────────────────────────
-    const handlePrint = async (row: TPurchaseSummaryTxn) => {
+  const handlePrint = async (row: TPurchaseSummaryTxn) => {
     const requestNumber = String(row.REQUEST_NUMBER || "");
     if (!requestNumber) return;
 
@@ -334,7 +329,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
             <Button size="icon" variant="ghost" onClick={() => handleActions("view", row.original)} title="View">
               <Eye size={15} />
             </Button>
-                       {!hideEdit && (
+            {!hideEdit && (
               <Button size="icon" variant="ghost" onClick={() => handleActions("edit", row.original)} title="Edit">
                 <Edit2 size={15} />
               </Button>
@@ -348,12 +343,12 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
             >
               <Printer size={15} />
             </Button>
-            
+
           </div>
         ),
       },
     ],
-        [hideEdit, printingNo, exportingNo, user?.company_code]
+    [hideEdit, printingNo, exportingNo, user?.company_code]
   );
 
   if (taskPopup.open) {
@@ -379,38 +374,11 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-        
-
-{/* 
-      <div className="flex flex-wrap items-center gap-1.5 pb-1">
-        {TAB_STATUS.map((value, index) => {
-          const active = tab === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTab(value)}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-                active
-                  ? "bg-[#00378C] font-semibold text-white shadow-sm"
-                  : "border border-border bg-card text-foreground hover:bg-secondary"
-              }`}
-            >
-              <span>{TAB_LABELS[index]}</span>
-              <span
-                className={`rounded-full px-1.5 text-[10px] font-bold ${
-                  active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {tabCounts[value] ?? 0}
-              </span>
-            </button>
-          );
-        })}
-      </div> */}
 
 
-            <div
+
+
+      <div
         style={{
           display: "flex", alignItems: "flex-end", gap: "4px",
           padding: "3px 7px 0 8px", overflowX: "auto",
@@ -491,7 +459,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
           getRowId={(row, index) => `${row.REQUEST_NUMBER}_${index}`}
         />
       </div>
-       <PurchaseReportPreview />
+      <PurchaseReportPreview />
     </section>
   );
 };
