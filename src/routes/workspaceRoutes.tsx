@@ -253,6 +253,8 @@ import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
 import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listing_Report";
 import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
 import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
+import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQuotationListing";
+
 import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
 import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
 import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
@@ -1976,6 +1978,13 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
     },
 
     {
+      name: "PQ Register Report",
+      match: ({ pathname }) => isPqOrderRegisterRoute(pathname),
+      element: () => <PurchaseQuotationListing />,
+    },
+
+
+    {
       name: "Purchase Request Register(old) Report",
       match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
       element: () => <PrRegisterOldPage />,
@@ -2168,18 +2177,23 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
   function isProfitLossSummaryRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return normalized.includes(
-      "/workspace/ims/purchase_sales/reports/profit_loss_summary"
+      "/workspace/ims/ims/reports/sales_invoice_listing"
     );
   }
-  // function isProfitLossSummaryRoute(pathname: string) {
-  //   const normalized = pathname.toLowerCase().replace(/[-\s]/g, "_");
-  //   return normalized.includes("/reports/profit_loss_summary");
-  // }
+  
 
   function isPoOrderRegisterRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return normalized.includes(
       "/workspace/ims/purchase_sales/reports/po_order_register"
+    );
+  }
+
+
+  function isPqOrderRegisterRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return normalized.includes(
+      "/workspace/ims/ims/reports/purchase_quotation_listing"
     );
   }
 

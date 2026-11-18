@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { AlertTriangle, Calculator, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { executeCommonProcedure, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { api } from "../../api/client";

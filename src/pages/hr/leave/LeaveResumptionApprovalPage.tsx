@@ -1,5 +1,5 @@
 import { Loader2, Pencil } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useAuth } from "../../../state/AuthContext";
 import { useToast } from "../../../components/ui/AlertToast";
@@ -7,14 +7,61 @@ import { DataTable } from "../../../components/ui/DataTable";
 import { executeHrRawSql } from "../../../api/hr";
 import { TLeaveApproval } from "./leave-approval-types";
 import LeaveResumptionForm from "./LeaveResumptionForm";
+// Same directory as the Leave Request page: reuse its procedure caller.
+// Adjust the file name if your leave request page file is named differently.
+import { getLeaveFlowBucket } from "./LeaveWorkspacePage";
+
+type ResumptionBucketKey = "approval" | "inProgress" | "closed";
+type ResumptionTabKey = ResumptionBucketKey | "all";
+
+type TabDefinition = {
+  key: ResumptionTabKey;
+  label: string;
+};
+
+const statusTabs: TabDefinition[] = [
+  { key: "approval", label: "Approval" },
+  { key: "inProgress", label: "In Progress" },
+  { key: "closed", label: "Closed" },
+  { key: "all", label: "All" },
+];
+
+const bucketKeys: ResumptionBucketKey[] = ["approval", "inProgress", "closed"];
+
+// Procedure parameter for each tab (PROC_BUILD_DYNAMIC_SQL_GET_LEAVE_FLOW)
+const tabEndpoints: Record<ResumptionBucketKey, string> = {
+  approval: "LEAVE_FLOW_RESUMPTION_APPROVAL",
+  inProgress: "LEAVE_FLOW_RESUMPTION_INPROGRESS",
+  closed: "LEAVE_FLOW_RESUMPTION_CLOSED",
+};
+
+type ResumptionRow = TLeaveApproval & { _inferredTab?: ResumptionBucketKey };
+
+const emptyData = (): Record<ResumptionBucketKey, ResumptionRow[]> => ({
+  approval: [],
+  inProgress: [],
+  closed: [],
+});
+
+const emptyCounts = (): Record<ResumptionTabKey, number> => ({
+  approval: 0,
+  inProgress: 0,
+  closed: 0,
+  all: 0,
+});
 
 export function LeaveResumptionApprovalPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
   const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || "");
+  const compCode = String(user?.COMPANY_CODE || user?.company_code || "00001");
+  // Legacy users have letters in their login id (same rule as the Leave Request page)
+  const isMhdl = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || ""));
 
-  const [rows, setRows] = useState<TLeaveApproval[]>([]);
+  const [activeTab, setActiveTab] = useState<ResumptionTabKey>("approval");
+  const [dataByTab, setDataByTab] = useState<Record<ResumptionBucketKey, ResumptionRow[]>>(emptyData());
+  const [counts, setCounts] = useState<Record<ResumptionTabKey, number>>(emptyCounts());
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -23,74 +70,86 @@ export function LeaveResumptionApprovalPage() {
   const [editData, setEditData] = useState<TLeaveApproval | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
-  const compCode = String(user?.COMPANY_CODE || user?.company_code || "00001");
-
-  const buildSql = (login: string, comp: string) => `
-    SELECT *
-    FROM VW_LEAVE_REQUEST_FLOW
-    WHERE (COMPANY_CODE = '${comp}' OR '${comp}' = '')
-    AND (ACTUAL_RESUME_DATE IS NULL
-        AND NVL(RESUME_DATE_APPROVED, 'NO')='NO'
-        AND FINAL_APPROVED = 'YES'
-        AND CREATED_BY = '${login}')
-  `;
-
-  const loadRows = async () => {
-    if (!loginId) {
-      setRows([]);
+  // Load every bucket (one procedure call per tab) and the tab counts
+  const loadRows = useCallback(async () => {
+    if (!loginId || !compCode) {
+      setDataByTab(emptyData());
+      setCounts(emptyCounts());
       return;
     }
 
     setLoading(true);
     try {
-      if (user?.tenantName === "WMSTST") {
-        try {
-          const response = await executeHrRawSql(buildSql(loginId, compCode));
-          setRows((response ?? []) as TLeaveApproval[]);
-        } catch (error) {
-          console.warn("Unable to load leave resumption approvals with company code filter:", error);
-          try {
-            const fallbackSql = `
-              SELECT *
-              FROM VW_LEAVE_REQUEST_FLOW_CLOSE
-              WHERE (ACTUAL_RESUME_DATE IS NULL AND RESUME_DATE_APPROVED IS NULL AND FINAL_APPROVED = 'YES' AND CREATED_BY = '${loginId}')
-                OR (ACTUAL_RESUME_DATE IS NOT NULL AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO' AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
-            `;
-            const fallbackRes = await executeHrRawSql(fallbackSql);
-            setRows((fallbackRes ?? []) as TLeaveApproval[]);
-          } catch (fallbackError) {
-            console.warn("Fallback query also failed:", fallbackError);
-          }
+      const results = await Promise.allSettled(
+        bucketKeys.map((key) =>
+          getLeaveFlowBucket({
+            companyCode: compCode,
+            loginId,
+            parameter: tabEndpoints[key],
+            legacy: isMhdl,
+          })
+        )
+      );
+
+      const nextData = emptyData();
+      const nextCounts = emptyCounts();
+      const uniqueIds = new Set<string>();
+
+      results.forEach((res, index) => {
+        const key = bucketKeys[index];
+        if (res.status === "fulfilled") {
+          const rows = res.value as unknown as ResumptionRow[];
+          nextData[key] = rows;
+          nextCounts[key] = rows.length;
+          rows.forEach((row, i) => uniqueIds.add(String(row.REQUEST_NUMBER ?? `${key}_${i}`)));
+        } else {
+          console.warn(`Unable to load leave resumption ${key}:`, res.reason);
         }
-      } else {
-        // ---- All other tenants: alternate view/query ----
-        const sql_string = `
-          SELECT *
-          FROM VW_HR_LEAVE_REQUEST_FLOW
-          WHERE ( ACTUAL_RESUME_DATE IS NULL
-          AND NVL(RESUME_DATE_APPROVED,'NO') = 'NO'
-            AND FINAL_APPROVED = 'YES'
-            AND LAST_ACTION IN ('SAVEASDRAFT','SUBMITTED')
-            AND CREATED_BY = '${user?.loginid1}')
-        `;
-        const response = await executeHrRawSql(sql_string);
-        setRows((response ?? []) as TLeaveApproval[]);
-      }
+      });
+
+      // "All" counts each request once, even if it appears in several buckets
+      nextCounts.all = uniqueIds.size;
+      setDataByTab(nextData);
+      setCounts(nextCounts);
     } catch (error) {
-      console.warn("Unable to load leave resumption approvals:", error);
+      console.warn("Unable to load leave resumptions:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [loginId, compCode, isMhdl]);
 
   useEffect(() => {
     void loadRows();
-  }, [loginId, compCode]);
+  }, [loadRows]);
+
+  const currentRows = useMemo<ResumptionRow[]>(() => {
+    if (activeTab === "all") {
+      const allRows: ResumptionRow[] = [];
+      const seenIds = new Set<string>();
+      bucketKeys.forEach((k) => {
+        dataByTab[k].forEach((row, i) => {
+          const id = String(row.REQUEST_NUMBER ?? `${k}_${i}`);
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            allRows.push({ ...row, _inferredTab: k });
+          }
+        });
+      });
+      return allRows;
+    }
+    return dataByTab[activeTab] || [];
+  }, [activeTab, dataByTab]);
+
+  const allLoadedRows = useMemo(
+    () => bucketKeys.flatMap((k) => dataByTab[k]),
+    [dataByTab]
+  );
 
   const openEdit = async (requestNumber: string) => {
     setView("editor");
     setEditLoading(true);
     setEditData(null);
+    const fallbackRow = () => allLoadedRows.find((r) => r.REQUEST_NUMBER === requestNumber) ?? null;
     try {
       const editsql = (requestNumber: string) => `
       SELECT *
@@ -102,10 +161,10 @@ export function LeaveResumptionApprovalPage() {
       const res = await executeHrRawSql(editsql(requestNumber));
       const found = (res ?? []) as TLeaveApproval[];
       // Fall back to the grid row if the lookup view returns nothing (e.g. other tenants).
-      setEditData(found[0] ?? rows.find((r) => r.REQUEST_NUMBER === requestNumber) ?? null);
+      setEditData(found[0] ?? fallbackRow());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to load leave request");
-      setEditData(rows.find((r) => r.REQUEST_NUMBER === requestNumber) ?? null);
+      setEditData(fallbackRow());
     } finally {
       setEditLoading(false);
     }
@@ -116,22 +175,30 @@ export function LeaveResumptionApprovalPage() {
     setEditData(null);
   };
 
-  const columns = useMemo<ColumnDef<TLeaveApproval>[]>(
+  const columns = useMemo<ColumnDef<ResumptionRow>[]>(
     () => [
       {
         accessorKey: "REQUEST_NUMBER",
         header: "REQUEST NO",
         size: 130,
-        cell: ({ row }) => (
-          <button
-            className="font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer"
-            type="button"
-            onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
-            title="Open leave resumption"
-          >
-            {row.original.REQUEST_NUMBER || "-"}
-          </button>
-        ),
+        cell: ({ row }) => {
+          const tabKey = row.original._inferredTab || activeTab;
+          const reqNo = row.original.REQUEST_NUMBER || "-";
+          // Only rows in the Approval bucket can be actioned by this user
+          if (tabKey !== "approval") {
+            return <span className="font-semibold text-[#00378C] text-[11.5px]">{reqNo}</span>;
+          }
+          return (
+            <button
+              className="font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer"
+              type="button"
+              onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
+              title="Open leave resumption"
+            >
+              {reqNo}
+            </button>
+          );
+        },
       },
       {
         accessorKey: "REQUEST_DATE",
@@ -202,6 +269,16 @@ export function LeaveResumptionApprovalPage() {
         ),
       },
       {
+        id: "status",
+        header: "STATUS",
+        size: 130,
+        cell: ({ row }) => {
+          const tabKey = row.original._inferredTab || activeTab;
+          const status = resumptionStatus(row.original, tabKey);
+          return <span className={statusBadgeClass(status, tabKey)}>{status}</span>;
+        },
+      },
+      {
         accessorKey: "NEXT_ACTION_BY_NAME",
         header: "NEXT ACTION BY",
         size: 160,
@@ -214,23 +291,27 @@ export function LeaveResumptionApprovalPage() {
         header: "ACTIONS",
         size: 80,
         enableColumnFilter: false,
-        cell: ({ row }) => (
-          <div className="flex items-center justify-center">
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              title="Open leave resumption"
-              aria-label="Open leave resumption"
-              onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
-            >
-              <Pencil size={13} />
-            </button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const tabKey = row.original._inferredTab || activeTab;
+          if (tabKey !== "approval") return <div className="text-center text-[11.5px] text-muted-foreground">-</div>;
+          return (
+            <div className="flex items-center justify-center">
+              <button
+                type="button"
+                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="Open leave resumption"
+                aria-label="Open leave resumption"
+                onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
+              >
+                <Pencil size={13} />
+              </button>
+            </div>
+          );
+        },
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows]
+    [activeTab, allLoadedRows]
   );
 
   return (
@@ -265,20 +346,49 @@ export function LeaveResumptionApprovalPage() {
             </div>
           </div>
 
+          {/* Status pill tabs (same look as the Leave Request page) */}
+          <div className="flex flex-wrap items-center gap-1.5 pb-1">
+            {statusTabs.map((tab) => {
+              const count = counts[tab.key] || 0;
+              const active = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                    active
+                      ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                      : "border border-border bg-card text-foreground hover:bg-secondary"
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <DataTable
             columns={columns}
-            data={rows}
+            data={currentRows}
             searchValue={query}
             onSearchChange={setQuery}
-            searchPlaceholder="Search leave resumption approvals..."
+            searchPlaceholder="Search leave resumption..."
             loading={loading}
-            emptyText="No leave resumption approvals found"
+            emptyText="No leave resumption found"
             density="grid"
             height="calc(100dvh - 180px)"
-            minWidth={1200}
+            minWidth={1300}
             enablePagination
             enableExport
-            exportFilename="Leave_Resumption_Approvals.csv"
+            exportFilename={`Leave_Resumption_${activeTab}.csv`}
             pageSize={25}
             getRowId={(row, index) => `${row.REQUEST_NUMBER ?? index}`}
           />
@@ -286,6 +396,33 @@ export function LeaveResumptionApprovalPage() {
       )}
     </section>
   );
+}
+
+function getStatusText(tabKey: string): string {
+  if (tabKey === "approval") return "Approval";
+  if (tabKey === "inProgress") return "In Progress";
+  if (tabKey === "closed") return "Closed";
+  return "Active";
+}
+
+// Status shown in the grid, derived from the resume date fields returned by the procedure
+function resumptionStatus(row: TLeaveApproval, tabKey: string): string {
+  const approved = String((row as Record<string, unknown>).RESUME_DATE_APPROVED ?? "")
+    .trim()
+    .toUpperCase();
+  if (approved === "YES" || approved === "Y") return "Closed";
+  if (!row.ACTUAL_RESUME_DATE) return "Resume Date Pending";
+  return getStatusText(tabKey);
+}
+
+function statusBadgeClass(status: string, tabKey: string): string {
+  if (status === "Closed" || tabKey === "closed") {
+    return "inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-emerald-700";
+  }
+  if (tabKey === "inProgress") {
+    return "inline-flex items-center rounded border border-sky-200 bg-sky-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-sky-700";
+  }
+  return "inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700";
 }
 
 function formatDate(value: unknown) {

@@ -276,6 +276,15 @@ export function LeaveRequestDialog({
   const isSickLeave = form.leaveType === "002" || (form.leaveTypeDesc || "").toUpperCase().includes("SICK");
   const sickLeaveNeedsAttachment = isCreator && isSickLeave && (attachmentCount ?? 0) === 0;
 
+  // Resumption is waiting for approval: DUTY_RESUME_DATE and ACTUAL_RESUME_DATE are both filled
+  // and RESUME_DATE_APPROVED is "NO". Read from the saved row (not the editable form) so that
+  // unsaved edits in the date pickers do not make the Approve button appear.
+  const resumeRow = { ...(initialRow || {}), ...(workflowRow || {}) };
+  const resumeApprovalPending =
+    Boolean(getRowString(resumeRow, "DUTY_RESUME_DATE", "duty_resume_date").trim()) &&
+    Boolean(getRowString(resumeRow, "ACTUAL_RESUME_DATE", "actual_resume_date").trim()) &&
+    getRowString(resumeRow, "RESUME_DATE_APPROVED", "resume_date_approved").trim().toUpperCase() === "NO";
+
   // Always start on the details tab when the dialog / page opens.
   useEffect(() => {
     if (open) setActiveTab("details");
@@ -866,7 +875,7 @@ export function LeaveRequestDialog({
 
   // All action buttons in one flat group (rendered in the page header, or in the modal footer)
   const actionButtons =
-    readOnly || (!createMode && !canPrimary) ? (
+    readOnly || (!createMode && !canPrimary && !resumeApprovalPending) ? (
       <>
         {!inline && (
           <Button type="button" variant="outline" onClick={onClose} className={actionBtn}>
@@ -894,8 +903,10 @@ export function LeaveRequestDialog({
 
         {/* Before the first save only "Save As Draft" is shown. Once the request number exists,
             Submit/Approve appears for other leave types straight away, and for sick leave only
-            after at least one file is uploaded in the Attachments tab. */}
-        {requestNumber && !sickLeaveNeedsAttachment && (
+            after at least one file is uploaded in the Attachments tab.
+            When a leave resumption is pending approval (duty + actual resume dates filled and
+            RESUME_DATE_APPROVED = NO) the "Approve Resumption" button is always shown. */}
+        {requestNumber && (!sickLeaveNeedsAttachment || resumeApprovalPending) && (
           <Button
             type="button"
             onClick={() => void save("SUBMITTED")}
@@ -903,7 +914,13 @@ export function LeaveRequestDialog({
             className={`${actionBtn} bg-[#00378C] text-white hover:bg-[#002d72]`}
           >
             {savingAction === "SUBMITTED" ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
-            <span>{permissions.mode === "resumption" ? "Approve Resumption" : isCreator ? "Submit" : "Approve"}</span>
+            <span>
+              {resumeApprovalPending || permissions.mode === "resumption"
+                ? "Approve Resumption"
+                : isCreator
+                ? "Submit"
+                : "Approve"}
+            </span>
           </Button>
         )}
 
@@ -961,7 +978,7 @@ export function LeaveRequestDialog({
           Checking the current approver and available actions…
         </p>
       )}
-      {!readOnly && permissions.mode === "resumption" && (
+      {!readOnly && (permissions.mode === "resumption" || resumeApprovalPending) && (
         <p className="m-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
           This request is waiting for your leave-resumption approval.
         </p>
