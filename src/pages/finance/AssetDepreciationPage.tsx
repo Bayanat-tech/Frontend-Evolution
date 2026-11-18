@@ -23,7 +23,7 @@ export function AssetDepreciationPage() {
   const [docNo, setDocNo] = useState("");
   const [rows, setRows] = useState<DepRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "info" | "warning"; message: string } | null>(null);
   const [exceptions, setExceptions] = useState<any[]>([]);
   const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
 
@@ -40,18 +40,18 @@ export function AssetDepreciationPage() {
   const hasRows = rows.length > 0;
 
   const columns = useMemo<ColumnDef<DepRow>[]>(() => [
-    col("asset_id", "Asset ID", 130),
+    col("asset_id", "Asset ID", 110),
     col("asset_name", "Asset Name", 220),
     col("reg_no", "Reg No", 110),
-    col("purchase_date", "Purchase Date", 120),
-    col("quantity", "Quantity", 100),
-    col("amount", "pur.Amount", 120),
-    col("dprc_percentage", "Dep. %", 90),
-    col("accudprc_amount", "Accu Amount", 120),
-    col("dprc_amount", "Dprc Amount", 130),
-    col("wd_value", "WD Value", 120),
-    col("last_dprc_date", "Last Dep.", 120),
-    col("div_code", "Division", 100),
+    colDate("purchase_date", "Purchase Date", 120),
+    col("quantity", "Quantity", 80),
+    colNumber("amount", "Pur. Amount", 120),
+    colNumber("dprc_percentage", "Dep. %", 90, 2),
+    colNumber("accudprc_amount", "Accu Amount", 120),
+    colNumber("dprc_amount", "Dprc Amount", 120),
+    colNumber("wd_value", "WD Value", 120),
+    colDate("last_dprc_date", "Last Dep.", 120),
+    col("div_code", "Division", 90),
   ], []);
 
   const checkExceptions = async (div: string) => {
@@ -78,8 +78,18 @@ export function AssetDepreciationPage() {
         loginid: loginId,
         code1: companyCode,
         code2: division,
+        code3: "", code4: "",
+        number1: 0, number2: 0, number3: 0, number4: 0,
+        date1: null, date2: null, date3: null, date4: null,
       });
-      setRows(data.map(normalize));
+      const norm = data.map(normalize);
+      setRows(norm);
+      if (norm.length === 0) {
+        setNotice({
+          type: "info",
+          message: "No saved depreciation records found for this period. Click 'Save' to calculate and generate depreciation.",
+        });
+      }
       if (division) {
         await checkExceptions(division);
       }
@@ -119,7 +129,8 @@ export function AssetDepreciationPage() {
         });
       }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save depreciation" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to save depreciation") });
     } finally {
       setLoading(false);
     }
@@ -160,7 +171,8 @@ export function AssetDepreciationPage() {
       });
       setNotice({ type: "success", message: `Depreciation JV for document ${computedDocNo} posted successfully to General Ledger` });
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to post JV" });
+      setNotice({ type: "error", message: friendlyError(error, "Unable to post JV") });
     } finally {
       setLoading(false);
     }
@@ -349,10 +361,62 @@ function col(key: string, header: string, size: number): ColumnDef<DepRow> {
   return { accessorKey: key, header, size, cell: ({ getValue }) => <span>{String(getValue() ?? "")}</span> };
 }
 
+function colDate(key: string, header: string, size: number): ColumnDef<DepRow> {
+  return {
+    accessorKey: key,
+    header,
+    size,
+    cell: ({ getValue }) => {
+      const v = getValue();
+      if (!v) return <span className="text-slate-400">—</span>;
+      const s = String(v);
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return <span>{s.slice(0, 10)}</span>;
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const yr = d.getFullYear();
+      return <span className="font-mono text-xs">{`${day}-${month}-${yr}`}</span>;
+    },
+  };
+}
+
+function colNumber(key: string, header: string, size: number, decimals: number = 3): ColumnDef<DepRow> {
+  return {
+    accessorKey: key,
+    header,
+    size,
+    cell: ({ getValue }) => {
+      const v = getValue();
+      if (v === null || v === undefined || v === "") return <span className="text-slate-400">—</span>;
+      const num = Number(v);
+      if (isNaN(num)) return <span>{String(v)}</span>;
+      return (
+        <span className="font-mono text-xs tabular-nums text-right block">
+          {num.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+        </span>
+      );
+    },
+  };
+}
+
 function normalize(row: LookupRow): DepRow {
   const output: DepRow = {};
   Object.keys(row).forEach((key) => {
     output[key.toLowerCase()] = row[key] as string | number;
   });
   return output;
+}
+
+function friendlyError(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (raw.includes("NO DETAILS FOUND"))
+    return "No depreciation has been saved for this month and division. Click Save first, then post the JV.";
+  if (raw.includes("Do Depreciation Calculation"))
+    return "Run the depreciation calculation (Save) before posting the JV.";
+  if (raw.includes("Please check the Exception register"))
+    return "Some assets are in the Exception Register. Fix them before posting the JV.";
+  // Any other ORA-20xxx: show only its message, without the ORA-06512 stack
+  const match = raw.match(/ORA-20\d{3}:\s*([\s\S]*?)(?=\s*ORA-\d{5}|$)/);
+  if (match?.[1]) return match[1].trim();
+  return fallback;
 }
