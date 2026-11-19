@@ -1,4 +1,5 @@
   import { Fragment, type ReactNode } from "react";
+  import { PlatformAdminPage } from "../pages/security/PlatformAdminPage";
   import type { MenuNode } from "../types/auth";
   import { AccountWiseBudgetPage } from "../pages/finance/AccountWiseBudgetPage";
   import { AccountTreePage } from "../pages/finance/AccountTreePage";
@@ -266,6 +267,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
   };
 
   export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
+    if (context.pathname.endsWith("/platform-admin")) return <PlatformAdminPage />;
     const route = workspaceRoutes.find((item) => item.match(context));
     const element = route?.element(context);
     return element ? <Fragment key={getWorkspaceRouteKey(context)}>{element}</Fragment> : null;

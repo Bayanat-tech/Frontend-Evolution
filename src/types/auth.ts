@@ -11,6 +11,7 @@ export type MenuNode = {
 };
 
 export type UserProfile = {
+  isPlatformAdmin?: boolean;
   username?: string;
   USERNAME?: string;
   email_id?: string;
