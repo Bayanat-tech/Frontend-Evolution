@@ -1,6 +1,7 @@
 import {Navigate} from 'react-router-dom';
   import { Fragment, type ReactNode } from "react";
   import { SupportCenter } from "../pages/support/SupportCenter";
+  import { PlatformAdminPage } from "../pages/security/PlatformAdminPage";
   import type { MenuNode } from "../types/auth";
   import { AccountWiseBudgetPage } from "../pages/finance/AccountWiseBudgetPage";
   import { AccountTreePage } from "../pages/finance/AccountTreePage";
@@ -275,6 +276,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
     if(supportLegacy){const target=({admin:'tickets','developer-assignment':'team','developer-workbench':'assigned'} as Record<string,string>)[supportLegacy[1]];return <Navigate to={'/workspace/support/support/'+target} replace/>;}
     if(context.pathname.startsWith('/workspace/bt-support/support/'))return <Navigate to={context.pathname.replace('/workspace/bt-support/','/workspace/support/')} replace/>;
     if (/^\/workspace\/support\/support\/(?:dashboard|tickets|assigned|team|reports|settings|categories)\/?$/.test(context.pathname)) return <SupportCenter />;
+    if (context.pathname.endsWith("/platform-admin")) return <PlatformAdminPage />;
     const route = workspaceRoutes.find((item) => item.match(context));
     const element = route?.element(context);
     return element ? <Fragment key={getWorkspaceRouteKey(context)}>{element}</Fragment> : null;
