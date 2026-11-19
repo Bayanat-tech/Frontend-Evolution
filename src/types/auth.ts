@@ -15,6 +15,8 @@ export type MenuNode = {
 
 export type UserProfile = {
   isPlatformAdmin?: boolean;
+  platformAccess?: { loginid:string;scope:"ALL"|"SCOPED";tenants:string[] };
+  platformPolicyVersion?: number;
   username?: string;
   USERNAME?: string;
   email_id?: string;
