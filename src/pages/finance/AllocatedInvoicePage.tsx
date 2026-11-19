@@ -606,7 +606,7 @@ export function AllocatedInvoicePage() {
       },
       {
         accessorKey: "balance_amount",
-        header: "Open Balance",
+        header: "Open Balance (Local)",
         size: 140,
         cell: ({ row }) => {
           const isDr = Number(row.original.open_sign_ind) >= 0;
@@ -641,43 +641,6 @@ export function AllocatedInvoicePage() {
         },
       },
       {
-        accessorKey: "sign_ind",
-        header: "Type",
-        size: 95,
-        cell: ({ row }) => {
-          const currentSign = Number(row.original.sign_ind) >= 0 ? 1 : -1;
-          return (
-            <select
-              value={currentSign}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                patchLine(row.original.id, { sign_ind: val });
-              }}
-              className={`h-7 w-20 rounded border px-2 py-0.5 text-xs font-bold font-mono outline-none cursor-pointer transition-colors ${
-                currentSign === 1
-                  ? "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
-                  : "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100"
-              }`}
-            >
-              <option value={1} className="text-blue-700 font-bold bg-white">Dr (+)</option>
-              <option value={-1} className="text-purple-700 font-bold bg-white">Cr (-)</option>
-            </select>
-          );
-        },
-      },
-      {
-        accessorKey: "amount",
-        header: "Allocated Amount",
-        size: 140,
-        cell: ({ row }) => (
-          <AllocatedAmountInput
-            line={row.original}
-            onPatch={patchLine}
-            onToggle={handleToggleAllocate}
-          />
-        ),
-      },
-      {
         accessorKey: "balance_amount_origin",
         header: "Balance (Origin)",
         size: 130,
@@ -707,6 +670,66 @@ export function AllocatedInvoicePage() {
         },
       },
       {
+        accessorKey: "amount",
+        header: "Allocated Amount",
+        size: 140,
+        cell: ({ row }) => (
+          <AllocatedAmountInput
+            line={row.original}
+            onPatch={patchLine}
+            onToggle={handleToggleAllocate}
+          />
+        ),
+      },
+      {
+        accessorKey: "sign_ind",
+        header: "Sign Ind",
+        size: 95,
+        cell: ({ row }) => {
+          const currentSign = Number(row.original.sign_ind) >= 0 ? 1 : -1;
+          return (
+            <select
+              value={currentSign}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                patchLine(row.original.id, { sign_ind: val });
+              }}
+              className={`h-7 w-20 rounded border px-2 py-0.5 text-xs font-bold font-mono outline-none cursor-pointer transition-colors ${
+                currentSign === 1
+                  ? "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
+                  : "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100"
+              }`}
+            >
+              <option value={1} className="text-blue-700 font-bold bg-white">Dr (+)</option>
+              <option value={-1} className="text-purple-700 font-bold bg-white">Cr (-)</option>
+            </select>
+          );
+        },
+      },
+      {
+        accessorKey: "org_curr_code",
+        header: "Currency",
+        size: 75,
+        cell: ({ row }) => (
+          <span className="text-xs font-mono px-2 text-slate-600 font-medium">
+            {row.original.curr_code_origin || row.original.org_curr_code || "INR"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "ex_rate",
+        header: "Ex. Rate",
+        size: 80,
+        cell: ({ row }) => {
+          const ex = Number(row.original.ex_rate_origin || row.original.ex_rate || 1);
+          return (
+            <span className="text-xs font-mono text-slate-600 tabular-nums">
+              {ex.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+            </span>
+          );
+        },
+      },
+      {
         accessorKey: "amount_origin",
         header: "Allocated (Origin)",
         size: 120,
@@ -722,14 +745,6 @@ export function AllocatedInvoicePage() {
             </div>
           );
         },
-      },
-      {
-        accessorKey: "org_curr_code",
-        header: "Currency",
-        size: 75,
-        cell: ({ row }) => (
-          <span className="text-xs font-mono px-2 text-slate-500">{row.original.org_curr_code || "INR"}</span>
-        ),
       },
       {
         id: "actions",
@@ -1012,7 +1027,7 @@ export function AllocatedInvoicePage() {
                 columns={columns}
                 data={lines}
                 loading={loading}
-                height={380}
+                height={300}
                 pageSize={100}
                 density="compact"
                 onRowDoubleClick={(row) => handleToggleAllocate(row.id)}
