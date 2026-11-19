@@ -17,6 +17,7 @@ import {
   PackageCheck,
   Settings2,
   ShieldCheck,
+  ShoppingCart,
   Sparkles,
   Truck,
   UserRoundCheck,
@@ -29,10 +30,12 @@ import type { CSSProperties, ElementType } from "react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
+import { SupportLauncher } from "./support/SupportCenter";
 import { useAuth } from "../state/AuthContext";
+import { useSupport } from "../components/SupportProvider";
 import type { MenuNode } from "../types/auth";
 import { firstLeafPath } from "../utils/menu";
-import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isUtilitiesApp } from "../utils/workspaceApps";
+import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isBtSupportApp, isUtilitiesApp } from "../utils/workspaceApps";
 
 type ModuleAccent = {
   gradient: string;
@@ -60,6 +63,17 @@ const defaultAccents: ModuleAccent[] = [
 ];
 
 export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?: { url: string } }> = [
+  {
+    keys: ["bt support", "support"],
+    meta: {
+      Icon: LifeBuoy,
+      accent: { gradient: "linear-gradient(135deg, #0b63ce 0%, #1294d8 100%)", light: "#eaf5ff", border: "#abd3ff", icon: "#0b63ce", text: "#0d356d", glow: "rgba(11, 99, 206, 0.18)" },
+      code: "SUPPORT",
+      fullForm: "Support Ticketing System",
+      description: "Realtime help desk, customer chat, ticket assignment and developer workbench.",
+      status: "completed",
+    },
+  },
   {
     keys: ["wms", "warehouse"],
     meta: {
@@ -160,6 +174,17 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
     },
   },
   {
+    keys: ["purchase_sales", "purchase", "sales"],
+    meta: {
+      Icon: ShoppingCart,
+      accent: { gradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)", light: "#f3e8ff", border: "#d8b4fe", icon: "#6d28d9", text: "#4c1d95", glow: "rgba(139, 92, 246, 0.14)" },
+      code: "PURCHASE_SALES",
+      fullForm: "Purchase Sales Management System",
+      description: "Operational workflows, integrations and reports.",
+      status: "completed",
+    },
+  },
+  {
     keys: ["pams", "performance"],
     meta: {
       Icon: BarChart3,
@@ -181,7 +206,6 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
       status: "completed",
     },
   },
-  
   {
     keys: ["lms"],
     meta: {
@@ -204,19 +228,6 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
       status: "completed",
     },
   },
-  // {
-  //   keys: [],
-  //   meta: {
-  //     Icon: ScanFace,
-  //     accent: { gradient: "linear-gradient(135deg, #ec4899 0%, #f59e0b 100%)", light: "#fff0f6", border: "#f9a8d4", icon: "#be185d", text: "#831843", glow: "rgba(236, 72, 153, 0.18)" },
-  //     code: "AMS",
-  //     fullForm: "Attendance Management System",
-  //     description: "Biometric Attendances with geo location , shifts, OT , Integration , Reports.",
-  //     status: "completed",
-  //   },
-  //   external: { url: "https://ams-new.bayanattechnology.com" },
-  // },
-  
   {
     keys: ["security"],
     meta: {
@@ -245,13 +256,19 @@ const fallbackIcons = [Layers, Package, Boxes, Truck, Building2, ArrowRightLeft,
 
 export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { user, menuTree, logout } = useAuth();
+  const { role } = useSupport();
   const navigate = useNavigate();
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
-  const findApp = (code: string) => workspaceApps.find((app) => getModuleMeta(app, 0).code === code);
+  const findApp = (code: string) =>
+    workspaceApps.find((app) => getModuleMeta(app, 0).code.toUpperCase() === code.toUpperCase());
   const openApp = (app: MenuNode) => {
     const code = cleanAppCode(app.title);
     if (code === "finance") {
       navigate("/workspace/finance");
+      return;
+    }
+    if (code === "support" || code === "bt-support") {
+      navigate(role === "developer" ? "/workspace/support/support/assigned" : "/workspace/support/support/dashboard");
       return;
     }
     const firstPath = firstLeafPath(app);
@@ -261,24 +278,35 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     logout();
     navigate("/login", { replace: true });
   };
-  const catalogMeta = (code: string) => moduleCatalog.find((entry) => entry.meta.code === code)!.meta;
-  const renderedApps = new Set<MenuNode>();
+  const catalogMeta = (code: string) =>
+    (moduleCatalog.find((entry) => entry.meta.code.toUpperCase() === code.toUpperCase()) || moduleCatalog[0]).meta;
   const renderApp = (code: string, overrides: Partial<ModuleMeta> = {}) => {
     const app = findApp(code);
     if (!app) return null;
-    renderedApps.add(app);
     return <ModuleCard key={code} meta={{ ...catalogMeta(code), ...overrides }} onClick={() => openApp(app)} />;
   };
   const mastersApp = workspaceApps.find(isBtMastersApp) || workspaceApps.find(isUtilitiesApp);
   const securityApp = findApp("Security");
-  if (securityApp) renderedApps.add(securityApp);
-  if (mastersApp) renderedApps.add(mastersApp);
+  const supportApp =
+    findApp("SUPPORT") ||
+    findApp("Support") ||
+    findApp("BT SUPPORT") ||
+    workspaceApps.find(isBtSupportApp);
+  const effectiveSupportApp =
+    supportApp ||
+    (role === "admin" || role === "developer"
+      ? {
+          id: "virtual-support",
+          title: "Support",
+          type: "group" as const,
+          children: [],
+        }
+      : null);
   const sections = [
     {
       id: "erp", title: "ERP",
       cards: [
         renderApp("Finance"),
-        renderApp("MMS"),
         renderApp("HCM", { description: "Leave management and attendance management." }),
         renderApp("IMS", { description: "Purchases, sales, stock movements, production, inventory and maintenance management." }),
       ],
@@ -300,21 +328,14 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     },
     {
       id: "utilities", title: "Utilities",
-      cards: securityApp || mastersApp ? [
-        <ModuleCard key="support" meta={{ ...catalogMeta("Security"), code: "Support", fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking.", Icon: LifeBuoy }} />,
+      cards: securityApp || mastersApp || effectiveSupportApp ? [
+        effectiveSupportApp ? <ModuleCard key="support" meta={{ ...catalogMeta("SUPPORT"), fullForm: "Support Ticketing System", description: "Support and development tickets with resolution tracking." }} onClick={() => openApp(effectiveSupportApp)} /> : null,
         securityApp ? <ModuleCard key="security" meta={catalogMeta("Security")} onClick={() => openApp(securityApp)} /> : null,
         mastersApp ? <ModuleCard key="masters" meta={{ ...catalogMeta("Security"), code: "Masters", fullForm: "General Masters", description: "General masters for your permitted applications.", Icon: FolderCog }} onClick={() => openApp(mastersApp)} /> : null,
       ] : [],
     },
   ].map((section) => ({ ...section, cards: section.cards.filter((card) => card !== null) }))
     .filter((section) => section.cards.length > 0);
-  const remainingApps = workspaceApps.filter(app => !renderedApps.has(app));
-  if (remainingApps.length) {
-    sections.push({
-      id: "additional", title: "Other applications",
-      cards: remainingApps.map((app,index) => <ModuleCard key={`assigned-${app.id || app.title}`} meta={getModuleMeta(app,index)} onClick={() => openApp(app)} />),
-    });
-  }
   const launcherStyle = {
     "--hub-section-count": sections.length || 1,
     "--hub-columns": Math.max(1, ...sections.map((section) => section.cards.length)),
@@ -328,7 +349,10 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
           <span className="brand-logo-shell"><img src="/bayanat-logo.png" alt="Bayanat Technology" className="brand-logo" /></span>
           <div className="brand-wordmark"><strong>Bayanat</strong><span>Technology</span></div>
         </div>
-        <HeaderProfile user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <SupportLauncher />
+          <HeaderProfile user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
+        </div>
       </header>
       <main className="selection-main app-launch-main" style={launcherStyle}>
         {sections.length === 0 ? (
