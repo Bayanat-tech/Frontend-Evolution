@@ -20,6 +20,7 @@ import {
 import { api } from "../../api/client";
 import { useAuth } from "../../state/AuthContext";
 import { Button } from "../../components/ui/Button";
+import { PlatformPasswordInput } from "./PlatformPasswordInput";
 import { LookupField } from "../../components/ui/LookupField";
 import {
   primaryFields,
@@ -382,6 +383,7 @@ export function PlatformAdminPage() {
     catalog.tables.find((t) => t.name === table)?.readonly === true;
   const scoped = user?.platformAccess?.scope === "SCOPED";
   const renderField = (c: Column) => {
+    const InputControl = c.secret ? PlatformPasswordInput : "input";
     const locked =
       (["SEC_LOGIN", "SEC_LOGINTEST"].includes(table) &&
         c.name === "LOGINID" &&
@@ -490,7 +492,7 @@ export function PlatformAdminPage() {
             <option value="N">No</option>
           </select>
         ) : (
-          <input
+          <InputControl
             type={
               c.secret
                 ? "password"
@@ -570,6 +572,9 @@ export function PlatformAdminPage() {
     setError("");
     try {
       await request(`${scope}/users${params}`, "post", userDraft);
+      setNotice(
+        `User ${userDraft.loginid} was created with a central sign-in account and linked to ${company}. Assign screens below to finish access setup.`,
+      );
       setNewUser(false);
       setUserDraft({ loginid: "", username: "", email: "", password: "" });
       setLoginid(userDraft.loginid);
@@ -897,8 +902,8 @@ export function PlatformAdminPage() {
             <div>
               <h3>Create user</h3>
               <p>
-                One step creates their login and connects it to {company} in{" "}
-                {catalog.owner}.
+                Creates the central sign-in account, the user in {company}, and
+                the tenant mapping together.
               </p>
             </div>
             <Users size={22} />
@@ -911,22 +916,27 @@ export function PlatformAdminPage() {
                 ["email", "Email", "email"],
                 ["password", "Password (12+ characters)", "password"],
               ] as const
-            ).map(([key, text, type]) => (
-              <label key={key}>
-                {text}
-                <input
-                  type={type}
-                  required
-                  maxLength={key === "loginid" ? 15 : undefined}
-                  minLength={key === "password" ? 12 : undefined}
-                  autoComplete={key === "password" ? "new-password" : "off"}
-                  value={userDraft[key]}
-                  onChange={(e) =>
-                    setUserDraft((d) => ({ ...d, [key]: e.target.value }))
-                  }
-                />
-              </label>
-            ))}
+            ).map(([key, text, type]) => {
+              const InputControl =
+                key === "password" ? PlatformPasswordInput : "input";
+              return (
+                <label key={key}>
+                  {text}
+                  <InputControl
+                    type={type}
+                    disabled={saving}
+                    required
+                    maxLength={key === "loginid" ? 15 : undefined}
+                    minLength={key === "password" ? 12 : undefined}
+                    autoComplete={key === "password" ? "new-password" : "off"}
+                    value={userDraft[key]}
+                    onChange={(e) =>
+                      setUserDraft((d) => ({ ...d, [key]: e.target.value }))
+                    }
+                  />
+                </label>
+              );
+            })}
           </div>
           <div className="platform-editor-actions">
             <Button type="submit" disabled={saving}>
@@ -964,6 +974,13 @@ export function PlatformAdminPage() {
       )}
       {editor && (
         <form onSubmit={save} className="platform-editor">
+          {table === "SEC_LOGIN" && !deleting && (
+            <p className="platform-help">
+              Password, name, email and active-status changes also update the
+              central sign-in account. Passwords are never displayed after
+              saving.
+            </p>
+          )}
           <div className="platform-editor-heading">
             <h3 tabIndex={-1} ref={editorHeading}>
               {deleting
