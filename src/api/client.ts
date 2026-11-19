@@ -20,7 +20,10 @@ export function setAuthToken(token: string | null) {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401) {
+    const requestToken = error?.config?.headers?.Authorization;
+    const activeToken = api.defaults.headers.common.Authorization;
+    // A response from an anonymous or previous session must not clear a newer login.
+    if (error?.response?.status === 401 && requestToken && requestToken === activeToken) {
       localStorage.removeItem("bayanat_service_token");
       setAuthToken(null);
     }

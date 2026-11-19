@@ -24,7 +24,9 @@ export function SupportProvider({ children }: {
     useEffect(() => {
         setUnread(0);
         setState({ role: 'user', ready: false });
-        if (!user)
+        // Central platform accounts have no tenant support identity. Do not start
+        // tenant presence, ticket polling or sockets until that scope exists.
+        if (!user?.loginid || !user.tenantId?.trim() || !user.company_code?.trim())
             return;
         let active = true;
         const load = () => supportApi.context().then(r => { if (active) {
