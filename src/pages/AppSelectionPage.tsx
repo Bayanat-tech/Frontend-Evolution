@@ -280,9 +280,11 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   };
   const catalogMeta = (code: string) =>
     (moduleCatalog.find((entry) => entry.meta.code.toUpperCase() === code.toUpperCase()) || moduleCatalog[0]).meta;
+  const renderedApps = new Set<MenuNode>();
   const renderApp = (code: string, overrides: Partial<ModuleMeta> = {}) => {
     const app = findApp(code);
     if (!app) return null;
+    renderedApps.add(app);
     return <ModuleCard key={code} meta={{ ...catalogMeta(code), ...overrides }} onClick={() => openApp(app)} />;
   };
   const mastersApp = workspaceApps.find(isBtMastersApp) || workspaceApps.find(isUtilitiesApp);
@@ -302,11 +304,15 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
           children: [],
         }
       : null);
+  if (securityApp) renderedApps.add(securityApp);
+  if (mastersApp) renderedApps.add(mastersApp);
+  if (supportApp) renderedApps.add(supportApp);
   const sections = [
     {
       id: "erp", title: "ERP",
       cards: [
         renderApp("Finance"),
+        renderApp("MMS"),
         renderApp("HCM", { description: "Leave management and attendance management." }),
         renderApp("IMS", { description: "Purchases, sales, stock movements, production, inventory and maintenance management." }),
       ],
@@ -336,6 +342,13 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     },
   ].map((section) => ({ ...section, cards: section.cards.filter((card) => card !== null) }))
     .filter((section) => section.cards.length > 0);
+  const remainingApps = workspaceApps.filter(app => !renderedApps.has(app));
+  if (remainingApps.length) {
+    sections.push({
+      id: "additional", title: "Other applications",
+      cards: remainingApps.map((app,index) => <ModuleCard key={`assigned-${app.id || app.title}`} meta={getModuleMeta(app,index)} onClick={() => openApp(app)} />),
+    });
+  }
   const launcherStyle = {
     "--hub-section-count": sections.length || 1,
     "--hub-columns": Math.max(1, ...sections.map((section) => section.cards.length)),
