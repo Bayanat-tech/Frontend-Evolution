@@ -390,6 +390,21 @@
   flex: 1 1 240px;
   max-width: 400px;
 }
+.platform-access-source {
+  display: inline-block;
+  margin-left: 10px;
+  color: var(--pa-muted);
+  font-size: 12px;
+}
+.platform-console .platform-grid tbody tr:hover {
+  background: color-mix(in srgb, var(--pa-accent) 5%, var(--pa-surface));
+}
+.platform-console .platform-access-controls button {
+  min-height: 40px;
+}
+.platform-console input[type="checkbox"] {
+  accent-color: var(--pa-accent);
+}
 .platform-editor {
   border: 1px solid #cbd9eb;
   background: var(--pa-surface);

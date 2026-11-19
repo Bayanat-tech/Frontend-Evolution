@@ -102,6 +102,7 @@ export function PlatformAdminPage() {
     users: Row[];
     screens: Row[];
     access: Row[];
+    inherited?: Row[];
   }>({ users: [], screens: [], access: [] });
   const [loginid, setLoginid] = useState("");
   const [module, setModule] = useState("");
@@ -559,6 +560,7 @@ export function PlatformAdminPage() {
         serials,
         enabled,
       });
+      setNotice(`${enabled ? "Granted" : "Removed"} access for ${serials.length} screen${serials.length === 1 ? "" : "s"}.`);
       setVersion((v) => v + 1);
     } catch (e) {
       setError(errorText(e));
@@ -887,12 +889,22 @@ export function PlatformAdminPage() {
             >
               Grant all shown screens
             </Button>
+            <Button variant="outline"
+              disabled={!loginid || saving || loading || !accessScreens.length}
+              onClick={() => {
+                if (window.confirm(`Remove access to ${accessScreens.length} shown screens for ${loginid}? Other screen permissions will be preserved.`))
+                  void grant(accessScreens.map((s) => Number(s.SERIAL_NO)), false);
+              }}>
+              Remove all shown access
+            </Button>
           </div>
           <p className="platform-help">
+            <strong>{accessScreens.length} screens shown{module ? ` in ${module}` : " across all modules"}.</strong>{" "}
             Create a user once to add their central login, tenant login and
             default tenant mapping together. Granting a screen enables all its
-            actions; use Security records to fine tune individual actions. Role
-            inherited access remains managed in Role screen access.
+            actions; use Security records to fine tune individual actions. Removal
+            covers direct and role access for this user. Other permissions are
+            preserved as direct grants; shared role definitions stay unchanged.
           </p>
         </>
       )}
@@ -1081,29 +1093,33 @@ export function PlatformAdminPage() {
           <table>
             <thead>
               <tr>
-                <th>Direct access</th>
+                <th>Screen access</th>
                 <th>Screen</th>
                 <th>Module</th>
                 <th>Menu</th>
               </tr>
             </thead>
             <tbody>
-              {accessScreens.map((s, i) => (
-                <tr key={`${s.SERIAL_NO}-${i}`}>
+              {accessScreens.map((s) => (
+                <tr key={String(s.SERIAL_NO)}>
                   <td>
                     <input
                       type="checkbox"
                       disabled={!loginid || saving}
-                      checked={access.access.some(
+                      checked={(access.inherited || []).some((a) => Number(a.SERIAL_NO) === Number(s.SERIAL_NO)) || access.access.some(
                         (a) =>
                           Number(a.SERIAL_NO_OR_ROLE_ID) ===
                           Number(s.SERIAL_NO),
                       )}
-                      onChange={(e) =>
-                        grant([Number(s.SERIAL_NO)], e.target.checked)
-                      }
-                      aria-label={`Grant screen ${s.SERIAL_NO}`}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        const fromRole = (access.inherited || []).some((a) => Number(a.SERIAL_NO) === Number(s.SERIAL_NO));
+                        if (!enabled && fromRole && !window.confirm("Remove this user's access to this screen? Their other role permissions will be preserved as direct grants.")) return;
+                        void grant([Number(s.SERIAL_NO)], enabled);
+                      }}
+                      aria-label={`Access to screen ${s.SERIAL_NO}`}
                     />
+                    {(access.inherited || []).some((a) => Number(a.SERIAL_NO) === Number(s.SERIAL_NO)) && <small className="platform-access-source">From role</small>}
                   </td>
                   <td>{s.SERIAL_NO}</td>
                   <td>{s.APP_CODE}</td>
