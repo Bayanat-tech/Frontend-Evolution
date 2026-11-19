@@ -33,6 +33,11 @@ interface Props {
   userFlowLevel?: number;
   weightageConfig?: WeightageConfig;
   showAllComments?: boolean;
+  createdBy?: string;
+  nextActionBy?: string;
+  isSelfRating?: string;
+  finalApproved?: string;
+  hasActedBefore?: boolean;
   onAppraiserCommentChange?: (val: string, level: number) => void;
   onAppraiseeCommentChange?: (val: string, level: number) => void;
 }
@@ -42,6 +47,8 @@ function text(val: unknown): string {
   return String(val);
 }
 
+const norm = (v: unknown) => text(v).trim().toUpperCase();
+
 function calcFinalRating(
   taskTotal: number,
   charTotal: number,
@@ -50,9 +57,9 @@ function calcFinalRating(
   cfg?: WeightageConfig
 ): number | null {
   const parts = [
-    { score: Number(taskTotal || 0),  pct: Number(cfg?.taskPct)  || 0 },
-    { score: Number(charTotal || 0),  pct: Number(cfg?.charPct)  || 0 },
-    { score: Number(goalTotal || 0),  pct: Number(cfg?.goalPct)  || 0 },
+    { score: Number(taskTotal || 0), pct: Number(cfg?.taskPct) || 0 },
+    { score: Number(charTotal || 0), pct: Number(cfg?.charPct) || 0 },
+    { score: Number(goalTotal || 0), pct: Number(cfg?.goalPct) || 0 },
     { score: Number(skillTotal || 0), pct: Number(cfg?.skillPct) || 0 },
   ].filter((p) => p.score > 0);
 
@@ -64,11 +71,10 @@ function calcFinalRating(
       ? parts.reduce((a, p) => a + p.score * p.pct, 0) / totalWt
       : parts.reduce((a, p) => a + p.score, 0) / parts.length;
 
-  return Math.round(raw); // ✅ integer
+  return Math.round(raw); 
 }
 
 const fmtScore = (v: unknown) => (Number(v || 0) > 0 ? Number(v).toFixed(2) : "N/A");
-
 
 const S = {
   scoreRow: {
@@ -133,20 +139,36 @@ const S = {
   meta: { fontSize: "11px", color: "#6b7280", marginTop: "4px" },
   readOnlyTag: { fontSize: "11px", color: "#ef4444", marginTop: "4px" },
   spinner: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
-  prevBlock: { padding: "8px", marginBottom: "8px", borderRadius: "6px", background: "#f9fafb", border: "1px solid #e5e7eb" },
+  prevBlock: {
+    padding: "8px",
+    marginBottom: "8px",
+    borderRadius: "6px",
+    background: "#f9fafb",
+    border: "1px solid #e5e7eb",
+  },
   prevName: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
   prevComment: { fontSize: "13px", color: "#4b5563", whiteSpace: "pre-wrap" as const },
   nameBox: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
-  allCommentsContainer: { maxHeight: "400px", overflowY: "auto" as const },
+  blocksContainer: { maxHeight: "400px", overflowY: "auto" as const },
 };
 
 const AppraiserCommentsTab: React.FC<Props> = ({
-  docNo, employeeCode,
-  taskTotal, characterTotal,
-  goalTotal = 0, skillTotal = 0,
-  flowLevel = 0, userFlowLevel = 0,
-  weightageConfig, showAllComments = false,
-  onAppraiserCommentChange, onAppraiseeCommentChange,
+  docNo,
+  employeeCode,
+  taskTotal,
+  characterTotal,
+  goalTotal = 0,
+  skillTotal = 0,
+  flowLevel = 0,
+  userFlowLevel = 0,
+  weightageConfig,
+  createdBy = "",
+  nextActionBy = "",
+  isSelfRating = "",
+  finalApproved = "",
+  hasActedBefore = false,
+  onAppraiserCommentChange,
+  onAppraiseeCommentChange,
 }) => {
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
@@ -159,23 +181,44 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const [currentActorName, setCurrentActorName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const isEmployee = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
-  const isFinal = flowLevel >= 6;
-  const isCurrentActionUser = userFlowLevel === 0 && !isEmployee && !isFinal;
-  const appraiserReadOnly = isEmployee || isFinal || !isCurrentActionUser;
-  const appraiseeReadOnly = !isEmployee || isFinal;
+  const isEmployee = norm(loginid) === norm(employeeCode);
+  const hasNextActionProp = !!norm(nextActionBy);
+  const isFinal = norm(finalApproved) === "YES" || (!hasNextActionProp && flowLevel >= 6);
+
+  
+  const isNextActor = hasNextActionProp
+    ? norm(loginid) === norm(nextActionBy)
+    : userFlowLevel === 0 && !isEmployee;
+
+  
+  const selfRatingNo = !!norm(isSelfRating) && norm(isSelfRating) !== "YES";
+
+
+  const myAppraiserComments = commentLog.filter(
+    (r) =>
+      norm(r.COMMENT_TYPE) === "APPRAISER" &&
+      norm(r.COMMENT_BY) === norm(loginid) &&
+      text(r.COMMENT_TEXT).trim() !== ""
+  );
+  const alreadyCommented =
+    myAppraiserComments.length > 0 &&
+    (hasActedBefore || myAppraiserComments.some((r) => Number(r.FLOW_LEVEL) < flowLevel));
+
+  const appraiserReadOnly = isFinal || !isNextActor || isEmployee || alreadyCommented;
+
+  const appraiseeReadOnly = !isEmployee || isFinal || selfRatingNo || flowLevel !== 0;
 
   const actingLevelRef = useRef<number | null>(null);
   if (actingLevelRef.current === null && flowLevel !== undefined) {
     actingLevelRef.current = userFlowLevel === 0 ? flowLevel : userFlowLevel;
   }
   const myLevel = actingLevelRef.current ?? (userFlowLevel === 0 ? flowLevel : userFlowLevel);
-  const effectiveLevel = showAllComments ? 0 : myLevel;
-
 
   const loadedKeyRef = useRef<string>("");
 
-  useEffect(() => { actingLevelRef.current = null; }, [docNo, employeeCode]);
+  useEffect(() => {
+    actingLevelRef.current = null;
+  }, [docNo, employeeCode]);
 
   useEffect(() => {
     if (!docNo) return;
@@ -183,7 +226,6 @@ const AppraiserCommentsTab: React.FC<Props> = ({
 
     const docKey = `${docNo}|${employeeCode}`;
     const sameDoc = loadedKeyRef.current === docKey;
-
 
     if (!sameDoc) {
       setAppraiserComment("");
@@ -197,27 +239,39 @@ const AppraiserCommentsTab: React.FC<Props> = ({
       setLoading(true);
       try {
         const rows = await pamsSelect<CommentLogRow>({
-          parameter: "get_appraisal_comments_log", loginid, code1: docNo,
+          parameter: "get_appraisal_comments_log",
+          loginid,
+          code1: docNo,
         });
         if (cancelled) return;
         const safeRows = rows || [];
         setCommentLog(safeRows);
 
+        const byDateDesc = (a: CommentLogRow, b: CommentLogRow) =>
+          new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime();
+
+        // my own appraisee comment (employee, level 0)
         const appraiseeRows = safeRows
-          .filter(r => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISEE" && String(r.FLOW_LEVEL) === "0")
-          .sort((a, b) => new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime());
+          .filter(
+            (r) => norm(r.COMMENT_TYPE) === "APPRAISEE" && String(r.FLOW_LEVEL) === "0"
+          )
+          .sort(byDateDesc);
         const latestAppraisee = appraiseeRows.length > 0 ? text(appraiseeRows[0].COMMENT_TEXT) : "";
 
+        // my own appraiser comment (current level)
         const currentLevel = String(myLevel);
         const appraiserRows = safeRows
-          .filter(r => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER" && String(r.FLOW_LEVEL) === currentLevel)
-          .sort((a, b) => new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime());
+          .filter(
+            (r) =>
+              norm(r.COMMENT_TYPE) === "APPRAISER" &&
+              String(r.FLOW_LEVEL) === currentLevel &&
+              (!norm(r.COMMENT_BY) || norm(r.COMMENT_BY) === norm(loginid))
+          )
+          .sort(byDateDesc);
         const latestAppraiser = appraiserRows.length > 0 ? text(appraiserRows[0].COMMENT_TEXT) : "";
 
-
-        setAppraiseeComment(prev => (sameDoc && prev.trim() ? prev : latestAppraisee));
-        setAppraiserComment(prev => (sameDoc && prev.trim() ? prev : latestAppraiser));
-
+        setAppraiseeComment((prev) => (sameDoc && prev.trim() ? prev : latestAppraisee));
+        setAppraiserComment((prev) => (sameDoc && prev.trim() ? prev : latestAppraiser));
 
         if (!sameDoc) {
           onAppraiseeCommentChange?.(latestAppraisee, 0);
@@ -233,47 +287,106 @@ const AppraiserCommentsTab: React.FC<Props> = ({
             setEmployeeName(text(row.EMPLOYEE_NAME));
             if (flowLevel === 0) {
               setCurrentActorName(text(row.NEXT_REVIEWER_NAME));
+            } else if (hasNextActionProp) {
+              // Box owner = the real NEXT_ACTION_BY of the document
+              if (isNextActor) setCurrentActorName(text(row.CURRENT_USER_NAME) || myName || loginid);
+              else setCurrentActorName(text(row.NEXT_ACTION_BY_NAME) || text(row.CREATED_BY_NAME));
             } else if (userFlowLevel === 0) {
-              if (isCurrentActionUser) setCurrentActorName(text(row.CURRENT_USER_NAME) || myName || loginid);
+              if (isNextActor) setCurrentActorName(text(row.CURRENT_USER_NAME) || myName || loginid);
               else if (isEmployee) setCurrentActorName(text(row.CREATED_BY_NAME) || myName || loginid);
               else setCurrentActorName(text(row.NEXT_ACTION_BY_NAME) || myName || loginid);
             } else {
               setCurrentActorName(text(row[`APPRAISER_NAME${userFlowLevel}`]));
             }
           }
-        } catch { }
-      } catch { }
-      finally { if (!cancelled) setLoading(false); }
+        } catch {
+          /* ignore */
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
 
     void loadComments();
-    return () => { cancelled = true; };
-  }, [docNo, loginid, employeeCode, flowLevel, userFlowLevel, myLevel, isEmployee, isCurrentActionUser, myName, onAppraiserCommentChange, onAppraiseeCommentChange]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    docNo,
+    loginid,
+    employeeCode,
+    flowLevel,
+    userFlowLevel,
+    myLevel,
+    isEmployee,
+    isNextActor,
+    hasNextActionProp,
+    myName,
+    onAppraiserCommentChange,
+    onAppraiseeCommentChange,
+  ]);
 
-  const prevLevelNum = effectiveLevel - 1;
-  const prevLevelRow = commentLog.find(r => String(r.FLOW_LEVEL) === String(prevLevelNum) && String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER");
-  const prevLevelComment = text(prevLevelRow?.COMMENT_TEXT).trim();
-  const showPrevLevel = !showAllComments && effectiveLevel >= 2 && prevLevelComment.length > 0;
-  const prevLevelName = text(prevLevelRow?.COMMENT_BY_NAME) || `Level ${prevLevelNum}`;
+  const latestPerPerson = useMemo(() => {
+    const sorted = [...commentLog].sort(
+      (a, b) =>
+        new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime()
+    );
+    const seenLevel = new Set<string>();
+    const seenText = new Set<string>();
+    const out: CommentLogRow[] = [];
 
-  const myAppraiserRow = commentLog.find(r => String(r.FLOW_LEVEL) === String(myLevel) && String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER");
-  const appraiseeRow = commentLog.find(r => String(r.FLOW_LEVEL) === "0" && String(r.COMMENT_TYPE).toUpperCase() === "APPRAISEE");
+    sorted.forEach((r) => {
+      const body = text(r.COMMENT_TEXT).trim().replace(/\s+/g, " ").toLowerCase();
+      if (!body) return;
 
-  const allAppraiserComments = useMemo(() => {
-    const map = new Map<string, CommentLogRow>();
-    commentLog
-      .filter(r => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER")
-      .forEach(r => {
-        const key = String(r.FLOW_LEVEL);
-        const existing = map.get(key);
-        if (!existing || (r.COMMENT_DATE && r.COMMENT_DATE > existing.COMMENT_DATE)) map.set(key, r);
-      });
-    return Array.from(map.values())
-      .filter(r => String(r.FLOW_LEVEL) !== String(myLevel))
-      .sort((a, b) => Number(a.FLOW_LEVEL) - Number(b.FLOW_LEVEL));
-  }, [commentLog, myLevel]);
+      const levelKey = `${norm(r.COMMENT_BY)}|${norm(r.COMMENT_TYPE)}`;
+      const textKey = `${norm(r.COMMENT_BY)}|${norm(r.COMMENT_TYPE)}|${body}`;
+      if (seenLevel.has(levelKey) || seenText.has(textKey)) return;
 
-  const showNextReviewerPreview = flowLevel === 0 && !myAppraiserRow && allAppraiserComments.length === 0 && !!currentActorName;
+      seenLevel.add(levelKey);
+      seenText.add(textKey);
+      out.push(r);
+    });
+
+    return out.sort((a, b) => Number(a.FLOW_LEVEL) - Number(b.FLOW_LEVEL));
+  }, [commentLog]);
+
+
+  const creatorBlocks = useMemo(
+    () =>
+      latestPerPerson.filter(
+        (r) =>
+          norm(r.COMMENT_TYPE) === "APPRAISER" &&
+          (appraiserReadOnly || norm(r.COMMENT_BY) !== norm(nextActionBy))
+      ),
+    [latestPerPerson, nextActionBy, appraiserReadOnly]
+  );
+
+
+  const appraiseeBlocks = useMemo(
+    () =>
+      isEmployee
+        ? []
+        : latestPerPerson.filter(
+            (r) =>
+              (norm(r.COMMENT_BY) !== norm(createdBy) || norm(createdBy) === norm(employeeCode)) &&
+              (norm(r.COMMENT_BY) === norm(employeeCode) ||
+                (norm(r.COMMENT_TYPE) === "APPRAISEE" && String(r.FLOW_LEVEL) === "0"))
+          ),
+    [latestPerPerson, employeeCode, createdBy, isEmployee]
+  );
+
+  const myAppraiserRow = commentLog.find(
+    (r) =>
+      String(r.FLOW_LEVEL) === String(myLevel) &&
+      norm(r.COMMENT_TYPE) === "APPRAISER" &&
+      norm(r.COMMENT_BY) === norm(loginid)
+  );
+  const appraiseeRow = commentLog.find(
+    (r) => String(r.FLOW_LEVEL) === "0" && norm(r.COMMENT_TYPE) === "APPRAISEE"
+  );
 
   const finalRating = calcFinalRating(
     taskTotal,
@@ -320,90 +433,94 @@ const AppraiserCommentsTab: React.FC<Props> = ({
         <div style={{ ...S.header, borderRight: "1px solid #111" }}>Appraiser Comments</div>
         <div style={S.header}>Appraisee Comments</div>
 
+        {/* LEFT: NEXT_ACTION_BY user writes here */}
         <div style={{ padding: "8px", borderTop: "1px solid #111", borderRight: "1px solid #111" }}>
-          {showPrevLevel && (
-            <div style={S.prevBlock}>
-              <div style={S.prevName}>{prevLevelName}</div>
-              <div style={S.prevComment}>{prevLevelComment}</div>
-            </div>
-          )}
-
-          {showAllComments ? (
-            <div style={S.allCommentsContainer}>
-              {allAppraiserComments.map((row, idx) => (
-                <div key={idx} style={S.prevBlock}>
-                  <div style={S.prevName}>{row.COMMENT_BY_NAME || `Level ${row.FLOW_LEVEL}`}</div>
+          {creatorBlocks.length > 0 && (
+            <div style={S.blocksContainer}>
+              {creatorBlocks.map((row, idx) => (
+                <div key={`c-${idx}`} style={S.prevBlock}>
+                  <div style={S.prevName}>{row.COMMENT_BY_NAME || row.COMMENT_BY}</div>
                   <div style={S.prevComment}>{row.COMMENT_TEXT || "No comment"}</div>
                   {row.COMMENT_DATE && <div style={S.meta}>Saved: {row.COMMENT_DATE}</div>}
                 </div>
               ))}
-
-              {showNextReviewerPreview && (
-                <>
-                  <div style={{ ...S.nameBox, marginTop: allAppraiserComments.length > 0 ? "12px" : 0 }}>
-                    {currentActorName}
-                  </div>
-                  <textarea style={S.textarea(true)} value="" readOnly placeholder="next reviewer will comment here" />
-                  <div style={S.readOnlyTag}>View only</div>
-                </>
-              )}
-
-              {!appraiserReadOnly && (
-                <>
-                  <div style={{ ...S.nameBox, marginTop: "12px" }}>{currentActorName || "You"}</div>
-                  <textarea
-                    style={S.textarea(appraiserReadOnly)}
-                    value={appraiserComment}
-                    readOnly={appraiserReadOnly}
-                    placeholder="Enter appraiser comments..."
-                    onChange={(e) => {
-                      if (appraiserReadOnly) return;
-                      const value = e.target.value;
-                      setAppraiserComment(value);
-                      onAppraiserCommentChange?.(value, myLevel);
-                    }}
-                  />
-                  {myAppraiserRow?.COMMENT_DATE && <div style={S.meta}>Last saved: {myAppraiserRow.COMMENT_DATE}</div>}
-                </>
-              )}
             </div>
-          ) : (
+          )}
+
+          {!isEmployee && !alreadyCommented && (
             <>
-              {currentActorName && <div style={S.nameBox}>{currentActorName}</div>}
-              <textarea
-                style={S.textarea(appraiserReadOnly)}
-                value={appraiserComment}
-                readOnly={appraiserReadOnly}
-                placeholder={appraiserReadOnly ? "" : "Enter appraiser comments..."}
-                onChange={(e) => {
-                  if (appraiserReadOnly) return;
-                  const value = e.target.value;
-                  setAppraiserComment(value);
-                  onAppraiserCommentChange?.(value, myLevel);
-                }}
-              />
-              {myAppraiserRow?.COMMENT_DATE && <div style={S.meta}>Last saved: {myAppraiserRow.COMMENT_DATE}</div>}
-              {appraiserReadOnly && <div style={S.readOnlyTag}>View only</div>}
+          {currentActorName && <div style={S.nameBox}>{currentActorName}</div>}
+          <textarea
+            style={S.textarea(appraiserReadOnly)}
+            value={appraiserComment}
+            readOnly={appraiserReadOnly}
+            placeholder={appraiserReadOnly ? "" : "Enter appraiser comments..."}
+            onChange={(e) => {
+              if (appraiserReadOnly) return;
+              const value = e.target.value;
+              setAppraiserComment(value);
+              onAppraiserCommentChange?.(value, myLevel);
+            }}
+          />
+          {myAppraiserRow?.COMMENT_DATE && (
+            <div style={S.meta}>Last saved: {myAppraiserRow.COMMENT_DATE}</div>
+          )}
+          {appraiserReadOnly && <div style={S.readOnlyTag}>View only</div>}
             </>
           )}
         </div>
-
         <div style={{ padding: "8px", borderTop: "1px solid #111" }}>
-          {employeeName && <div style={S.nameBox}>{employeeName}</div>}
-          <textarea
-            style={S.textarea(appraiseeReadOnly)}
-            value={appraiseeComment}
-            readOnly={appraiseeReadOnly}
-            placeholder={appraiseeReadOnly ? "" : "Enter appraisee comments..."}
-            onChange={(e) => {
-              if (appraiseeReadOnly) return;
-              const value = e.target.value;
-              setAppraiseeComment(value);
-              onAppraiseeCommentChange?.(value, 0);
-            }}
-          />
-          {appraiseeRow?.COMMENT_DATE && <div style={S.meta}>Last saved: {appraiseeRow.COMMENT_DATE}</div>}
-          {appraiseeReadOnly && <div style={S.readOnlyTag}>View only</div>}
+          {appraiseeBlocks.length > 0 && (
+            <div style={S.blocksContainer}>
+              {appraiseeBlocks.map((row, idx) => (
+                <div key={`a-${idx}`} style={S.prevBlock}>
+                  <div style={S.prevName}>{row.COMMENT_BY_NAME || row.COMMENT_BY}</div>
+                  <div style={S.prevComment}>{row.COMMENT_TEXT || "No comment"}</div>
+                  {row.COMMENT_DATE && <div style={S.meta}>Saved: {row.COMMENT_DATE}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+     
+          {selfRatingNo && (
+            <>
+              {employeeName && <div style={S.nameBox}>{employeeName}</div>}
+              <textarea
+                style={S.textarea(true)}
+                value={appraiseeComment}
+                readOnly
+                placeholder=""
+              />
+              <div style={S.readOnlyTag}>View only</div>
+            </>
+          )}
+
+          {!selfRatingNo && !isEmployee && appraiseeBlocks.length === 0 && employeeName && (
+            <div style={S.nameBox}>{employeeName}</div>
+          )}
+
+          {!selfRatingNo && isEmployee && (
+            <>
+              {employeeName && <div style={S.nameBox}>{employeeName}</div>}
+              <textarea
+                style={S.textarea(appraiseeReadOnly)}
+                value={appraiseeComment}
+                readOnly={appraiseeReadOnly}
+                placeholder={appraiseeReadOnly ? "" : "Enter appraisee comments..."}
+                onChange={(e) => {
+                  if (appraiseeReadOnly) return;
+                  const value = e.target.value;
+                  setAppraiseeComment(value);
+                  onAppraiseeCommentChange?.(value, 0);
+                }}
+              />
+              {appraiseeRow?.COMMENT_DATE && (
+                <div style={S.meta}>Last saved: {appraiseeRow.COMMENT_DATE}</div>
+              )}
+              {appraiseeReadOnly && <div style={S.readOnlyTag}>View only</div>}
+            </>
+          )}
         </div>
       </div>
     </div>
