@@ -459,9 +459,6 @@ export function HrEmpLanguagePage() {
           </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={reset} disabled={saving}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
           <Button type="button" size="sm" onClick={handleHeaderSave} disabled={saving}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
             {saving ? "Saving" : "Save"}

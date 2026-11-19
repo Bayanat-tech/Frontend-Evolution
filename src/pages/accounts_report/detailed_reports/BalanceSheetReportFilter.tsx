@@ -137,13 +137,6 @@ export default function BalanceSheetPage() {
         return;
       }
 
-      if (ev.data.type === "OPEN_DOCUMENT_SCREEN") {
-        const { docType, docNo } = ev.data as { docType: string; docNo: string };
-        if (docType && docNo) {
-          openTransactionScreen(String(docType), String(docNo));
-        }
-        return;
-      }
 
       if (ev.data.type !== "DRILL_DOWN") return;
 
@@ -418,6 +411,8 @@ export default function BalanceSheetPage() {
         error={drillError}
         onExportExcel={topDrill ? handleDrillExcel : handleExcel}
         exportingExcel={exportingExcel}
+        canGoBack={drillStack.length > 0}
+        onBack={() => handleDrillNavigate(drillStack.length - 2)}
         headerSlot={
           (drillLoading || drillError || drillStack.length > 0) ? (
             <div className="flex flex-col gap-0">

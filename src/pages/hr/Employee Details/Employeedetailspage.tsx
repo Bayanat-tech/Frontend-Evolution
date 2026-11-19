@@ -37,7 +37,7 @@ function num(value: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-function mapEmployeeDetails(row: Record<string, unknown>): TEmployeeDetails {
+export function mapEmployeeDetails(row: Record<string, unknown>): TEmployeeDetails {
   const v = (key: string) => row[key] ?? row[key.toUpperCase()];
   return {
     employee_id: text(v("employee_id")),
@@ -321,9 +321,6 @@ export function EmployeeDetailsPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-          </Button>
         </div>
       </div>
 

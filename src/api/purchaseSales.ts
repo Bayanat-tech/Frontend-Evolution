@@ -97,6 +97,7 @@ export async function upsertBulkPurchaseEntryApi(
   payload: {
     header: Record<string, unknown>;
     details: Record<string, unknown>[];
+    expenseDetails?: Record<string, unknown>[];
     company_code: string;
     loginid: string;
   },

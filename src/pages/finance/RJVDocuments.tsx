@@ -65,7 +65,8 @@ import { formatDocNo } from "../../utils/docNo";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 
 type EditorState =
-  | { mode: "create"; divCode?: string; divName?: string }
+  // | { mode: "create"; divCode?: string; divName?: string }
+  | { mode: "create"; divCode?: string; divName?: string; sourceDocNo?: string }
   | { mode: "edit"; row: TransactionDocumentRow }
   | null;
 
@@ -82,8 +83,8 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
   RJV: { title: "Reverse Journal Voucher (RJV)", subtitle: "Reversal of provisional general ledger vouchers", addLabel: "Reverse Provisional JV" },
-   EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
-   PJV: { title: "PDC Journal Voucher", subtitle: "Post dated cheque journal", addLabel: "Add PDC JV" },
+  EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
+  PJV: { title: "Provisional Journal Voucher (PJV)", subtitle: "Provisional accrued general ledger voucher", addLabel: "Add Provisional JV" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -158,13 +159,20 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
           return strVal ? { field: filter.id, values: strVal } : null;
         })
         .filter((f): f is { field: string; values: string } => Boolean(f));
-      const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
-      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
-      const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const params: Record<string, any> = {};
-      if (query.trim()) params.search = query.trim();
-      if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
-      const response = await getTransactionDocuments(docType, nextFy, nextQuery, requestPageIndex + 1, requestPageSize, activeFilters);
+      // const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
+      // const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+      // const requestPageSize = hasSearch ? 100000 : nextPageSize;
+      // const params: Record<string, any> = {};
+      // if (query.trim()) params.search = query.trim();
+      // if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
+      // const response = await getTransactionDocuments(docType, nextFy, nextQuery, requestPageIndex + 1, requestPageSize, activeFilters);
+     
+     const hasSearch = Boolean(nextQuery.trim() || activeFilters.some((f) => f.field !== "canceled"));
+const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+const requestPageSize = hasSearch ? 100000 : nextPageSize;
+// list only RJVs that are not reversals and not already reversed
+activeFilters.push({ field: "unreversed_only", values: "Y" });
+const response = await getTransactionDocuments(docType, nextFy, nextQuery, requestPageIndex + 1, requestPageSize, activeFilters);
       setRows(response.tableData);
       setTotalRows(response.count || response.tableData.length);
     } catch (error) {
@@ -210,6 +218,10 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
   }, [rows, loading, docType, editor]);
 
 
+  const openReverse = (r: TransactionDocumentRow) => {
+  setNotice(null);
+  setEditor({ mode: "create", divCode: r.div_code, divName: r.div_name, sourceDocNo: r.doc_no });
+};
 
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
@@ -265,19 +277,22 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
       id: "actions",
       header: () => <div className="text-center font-bold">Actions</div>,
       enableSorting: false,
-      size: 155,
-      minSize: 155,
+      size: 55,
+      minSize: 55,
       cell: ({ row }) => (
         <FinanceDocumentActionButtons
-          onEdit={() => {
-            setNotice(null);
-            setEditor({ mode: "edit", row: row.original });
-          }}
-          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
-          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
-          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
-          onDelete={() => setDeleteTarget(row.original)}
-          isCancelled={row.original.canceled === "Y"}
+          // onEdit={() => {
+          //   setNotice(null);
+          //   setEditor({ mode: "edit", row: row.original });
+          // }}
+
+          onEdit={() => openReverse(row.original)}
+
+          // onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          // onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          // onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          // onDelete={() => setDeleteTarget(row.original)}
+          // isCancelled={row.original.canceled === "Y"}
         />
       ),
     },
@@ -352,14 +367,14 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
               enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
-                  <Button
+                  {/* <Button
                     type="button"
                     className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
                     title={meta.addLabel}
                     onClick={() => setDivisionPicker(true)}
                   >
                     <Plus size={14} /> Add
-                  </Button>
+                  </Button> */}
                   <FinanceListActionsMenu
                     fyPeriod={fyPeriod}
                     fyPeriods={fyPeriods}
@@ -585,19 +600,18 @@ function JVDocument({
   const loadJvOptions = async (searchQuery?: string) => {
     try {
       const activeFy = (form as any).fy_period || fyPeriod || undefined;
-      // Per audit rules: Reverse JV only displays Provisional JVs (doc_type: RJV) that have not been reversed yet
-      const res = await getTransactionDocuments(
-        "RJV",
-        activeFy,
-        searchQuery?.trim() || undefined,
-        1,
-        100,
-        [
+      // Per audit rules: Reverse JV displays Provisional JVs (doc_type: RJV or PJV) that have not been reversed yet
+      const [resRjv, resPjv] = await Promise.all([
+        getTransactionDocuments("RJV", activeFy, searchQuery?.trim() || undefined, 1, 100, [
           { field: "canceled", values: "N" },
           { field: "unreversed_only", values: "Y" },
-        ]
-      );
-      const tableData = res?.tableData || [];
+        ]),
+        getTransactionDocuments("PJV", activeFy, searchQuery?.trim() || undefined, 1, 100, [
+          { field: "canceled", values: "N" },
+          { field: "unreversed_only", values: "Y" },
+        ]),
+      ]);
+      const tableData = [...(resRjv?.tableData || []), ...(resPjv?.tableData || [])];
       return tableData
         .filter((row: any) => {
           // Strictly exclude any document that is already a reversal voucher or has ref_doc_no
@@ -646,28 +660,27 @@ function JVDocument({
         ]);
       } catch (err1) {
         if (numOnly && numOnly !== cleanDocNo) {
-          [headerRaw, detailRaw] = await Promise.all([
-            getTransactionHeader(numOnly, "RJV"),
-            getTransactionDetail(numOnly, form.div_code, "RJV"),
-          ]);
-        } else {
-          throw err1;
+          try {
+            [headerRaw, detailRaw] = await Promise.all([
+              getTransactionHeader(numOnly, "RJV"),
+              getTransactionDetail(numOnly, form.div_code, "RJV"),
+            ]);
+          } catch {}
         }
       }
 
-      if ((!headerRaw || !headerRaw.doc_no) && numOnly && numOnly !== cleanDocNo) {
+      // If not found in RJV, try PJV (Provisional Journal Voucher)
+      if (!headerRaw || !headerRaw.doc_no) {
         try {
-          const [h2, d2] = await Promise.all([
-            getTransactionHeader(numOnly, "RJV"),
-            getTransactionDetail(numOnly, form.div_code, "RJV"),
+          const [hPjv, dPjv] = await Promise.all([
+            getTransactionHeader(cleanDocNo, "PJV"),
+            getTransactionDetail(cleanDocNo, form.div_code, "PJV"),
           ]);
-          if (h2 && (h2.doc_no || (Array.isArray(d2) && d2.length))) {
-            headerRaw = h2;
-            detailRaw = d2;
+          if (hPjv && (hPjv.doc_no || (Array.isArray(dPjv) && dPjv.length))) {
+            headerRaw = hPjv;
+            detailRaw = dPjv;
           }
-        } catch {
-          // ignore fallback error
-        }
+        } catch {}
       }
 
       if (!headerRaw) {
@@ -736,10 +749,11 @@ function JVDocument({
       setError("");
       try {
         if (editMode && editor?.mode === "edit") {
-          const [headerRaw, detailRaw, childrenRaw] = await Promise.all([
-            getTransactionHeader(editor.row.doc_no, docType),
-            getTransactionDetail(editor.row.doc_no, editor.row.div_code, docType),
-            getTransactionChildren(editor.row.doc_no, editor.row.div_code, docType),
+          const headerRaw = await getTransactionHeader(editor.row.doc_no, docType);
+          const effectiveDivCode = String(editor.row.div_code || (headerRaw as any)?.div_code || "");
+          const [detailRaw, childrenRaw] = await Promise.all([
+            getTransactionDetail(editor.row.doc_no, effectiveDivCode, docType),
+            getTransactionChildren(editor.row.doc_no, effectiveDivCode, docType),
           ]);
           if (!mounted) return;
           // map existing document first
@@ -815,6 +829,11 @@ function JVDocument({
             bank_ac_code: text(defaults.bank_ac_code ?? defaults.MS_AC_BANKCODE?.ac_code ?? current.bank_ac_code),
             bank_ac_name: text(defaults.bank_ac_name ?? defaults.MS_AC_BANKCODE?.Account?.ac_name ?? defaults.MS_AC_BANKCODE?.ac_name ?? current.bank_ac_name),
           }));
+
+          if (editor?.mode === "create" && editor.sourceDocNo) {
+            await handleReverseJV(editor.sourceDocNo);
+          }
+          
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load form");
@@ -1465,18 +1484,24 @@ function JVDocument({
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
-                {/* Card 1: Reversal & Document Details */}
+              // <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(280px,0.85fr)] gap-2 mb-3">
+              {/* Card 1: Reversal & Document Details */}
                 <div className="finance-payment-header-block flex flex-col h-full">
+                  
+              {/* <div className="grid grid-cols-1 gap-2 mb-3"> */}
+               {/* Card 1: Reversal & Document Details */}
+              {/* <div className="finance-payment-header-block flex flex-col h-full"> */}
                   <div className="finance-section-title flex items-center">
                     <span className="finance-section-icon"><FileText size={11} /></span>
                     <span>Reversal & Document Details</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-1.5">
+                  {/* <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-1.5"> */}
+                  <div className="grid grid-cols-[160px_200px_minmax(0,1fr)] gap-x-2 gap-y-1.5 px-2.5 py-1.5">
                     <Field label="Doc Date" required>
                       <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
                     </Field>
-                    <Field label="Source Provisional JV (To Reverse)">
+                    {/* <Field label="Source Provisional JV (To Reverse)">
                       <div className="flex gap-1.5 items-center w-full min-w-0">
                         <div className="flex-1 min-w-0">
                           <LookupField
@@ -1522,10 +1547,13 @@ function JVDocument({
                           </Button>
                         )}
                       </div>
+                    </Field> */}
+
+                    <Field label="Reversing Document">
+                    <Input disabled readOnly className="h-7 text-xs font-mono" value={sourceJvDocNo || form.ref_no || ""} />
                     </Field>
                     <Field
                       label="Remarks"
-                      className="col-span-2"
                       error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
                     >
                       <Input
@@ -1541,12 +1569,13 @@ function JVDocument({
                 </div>
 
                 {/* Card 2: Currency & Rate */}
-                <div className="finance-payment-header-block flex flex-col h-full">
+                <div className="finance-payment-header-block flex flex-col h-half">
                   <div className="finance-section-title flex items-center">
                     <span className="finance-section-icon"><Coins size={11} /></span>
                     <span>Currency & Rate</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-1.5">
+                  {/* <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-1.5"> */}
+                   <div className="grid grid-cols-[1.2fr_0.8fr] gap-x-2 gap-y-1.5 px-2.5 py-1.5"> 
                     <div>
                       <LookupField
                         label="Currency *"
@@ -1596,7 +1625,7 @@ function JVDocument({
                       <ExchangeRateInput
                         disabled={disabled}
                         required
-                        className="h-7 text-xs font-mono"
+                        // className="h-7 text-xs font-mono"
                         value={form.ex_rate}
                         onChange={(newRate) => {
                           setForm((current) => ({
