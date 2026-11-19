@@ -1,9 +1,6 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import {
-  ArrowLeft, Edit2, FileText, Plus, RefreshCw, Printer, Save, Trash2, X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChevronDown, Edit2, FileSpreadsheet, MoreVertical, Plus, Printer, RefreshCw, Save, Trash2, Upload, Users, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { deleteHrGm, deleteHrMaster, getHrMaster, getHrReportHtml, saveHrGm } from "../../api/hr";
 import {
   DynamicDeleteParams,
@@ -13,95 +10,23 @@ import {
   executeDynamicMutation,
   executeDynamicMutationColumn90,
   getDynamicLookup,
-  getLookupValue,
-  LookupRow,
   postFinance,
 } from "../../api/lookups";
-import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Input } from "../../components/ui/Input";
-import { LookupField } from "../../components/ui/LookupField";
-import { Select } from "../../components/ui/Select";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
+import { WmsMasterForm } from "../../components/WmsMasterForm";
+import { EdiImportPage } from "../../components/EdiImportPage";
+import type { WmsMasterField } from "../wms/WmsSimpleMasterPage";
 
-// ── Validation helpers ────────────────────────────────────────────────────────
+// ── Types (unchanged public API) ──────────────────────────────────────────────
 
-type FieldErrors = Record<string, string>;
-
-// local@domain.tld (tld kam se kam 2 letters)
-const EMAIL_STRICT = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
-// local@domain (tld ki zaroorat nahi)
-const EMAIL_LOOSE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/;
-
-function isValidEmail(value: string, allowNoTld = false): boolean {
-  const v = value.trim();
-  if (!v || v.includes("..") || v.startsWith(".") || v.includes(".@")) return false;
-  return (allowNoTld ? EMAIL_LOOSE : EMAIL_STRICT).test(v);
-}
-
-/** Required + email format + max length. Har field ka sirf pehla error. */
-function validateFields(
-  fields: HrMasterField[],
-  form: Record<string, unknown>,
-  isEdit: boolean,
-  opts: { allowNoTld?: boolean } = {},
-): FieldErrors {
-  const errors: FieldErrors = {};
-  for (const f of fields) {
-    if (f.hideOnAdd && !isEdit) continue;
-    const value = String(form[f.name] ?? "");
-    const trimmed = value.trim();
-
-    if (f.required && !trimmed) {
-      errors[f.name] = `${f.label} is required.`;
-      continue;
-    }
-    if (!trimmed) continue;
-
-    if (f.type === "email" && !isValidEmail(trimmed, opts.allowNoTld)) {
-      errors[f.name] = "Please enter a valid email address (e.g. name@example.com).";
-      continue;
-    }
-    if (f.limit && value.length > f.limit) {
-      errors[f.name] = `${f.label} cannot exceed ${f.limit} characters (currently ${value.length}).`;
-    }
-  }
-  return errors;
-}
-
-/** DB "value too large" error ko friendly message mein badalta hai. */
-function friendlyDbError(message: string): string {
-  const m = message.match(/\(actual:\s*(\d+),\s*maximum:\s*(\d+)\)/i);
-  if (m) return `A field is too long (entered ${m[1]}, maximum ${m[2]} characters). Please shorten it.`;
-  return message || "Unable to save. Please check the entered values.";
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-export type HrMasterField = {
-  name: string;
-  label: string;
-  required?: boolean;
-  hideOnAdd?: boolean;
-  Placeholder?: string;
-  helperText?: string;
-  disabledOnEdit?: boolean;
-  disabledOnAdd?: boolean;
-  type?: "text" | "number" | "select" | "email" | "date";
-  limit?: number;
-  options?: { label: string; value: string }[];
-  lookup?: {
-    columns: { field: string; header: string }[];
-    valueField: string;
-    displayFields: string[];
-    loadOptions: (context: HrMasterContext) => Promise<LookupRow[]>;
-  };
-  table?: boolean;
-  width?: number;
-};
+/** HR fields use exactly the same field definition as the WMS masters. */
+export type HrMasterField = WmsMasterField;
 
 export type HrMasterConfig = {
   title: string;
@@ -123,6 +48,10 @@ export type HrMasterConfig = {
   financeSaveEndpoint?: string;
   autoGenerateKey?: boolean;
   stripEditKeyOnSave?: boolean;
+  /** When set, an "Import" button appears next to Add and opens the EDI import page for this key (e.g. "BANK"). */
+  ediKey?: string;
+  /** Saves the validated import rows. Without it, the import page validates only. */
+  ediSubmit?: (rows: Record<string, string | null>[], context: HrMasterContext) => Promise<void>;
 };
 
 export type HrMasterContext = {
@@ -133,99 +62,75 @@ export type HrMasterContext = {
   form?: Record<string, unknown>;
 };
 
-// ── Freight building blocks ───────────────────────────────────────────────────
-// (Same as in the Grade / Product forms — worth moving to components/ui later.)
+type Notice = { type: "success" | "error"; message: string } | null;
 
-function SectionPanel({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={16} />
-          </span>
-          <div className="min-w-0">
-            <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="freight-panel-body p-3">{children}</div>
-    </section>
-  );
+const FORM_ID = "hr-master-form";
+
+/** DB "value too large" error -> friendly message. */
+function friendlyDbError(message: string): string {
+  const m = message.match(/\(actual:\s*(\d+),\s*maximum:\s*(\d+)\)/i);
+  if (m) return `A field is too long (entered ${m[1]}, maximum ${m[2]} characters). Please shorten it.`;
+  return message || "Unable to save. Please check the entered values.";
 }
 
-function Field({
-  label,
-  required,
-  helperText,
-  error,
-  children,
-  className,
-}: {
-  label: string;
-  required?: boolean;
-  helperText?: string;
-  error?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <label
-      className={`freight-field-label group flex flex-col gap-0.5 ${
-        error ? "[&_input]:!border-red-500 [&_select]:!border-red-500" : ""
-      } ${className ?? ""}`}
-    >
-      <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
-        {label}
-        {required && <strong className="text-red-600 ml-0.5 font-bold"> *</strong>}
-      </span>
-      {children}
-      {error ? (
-        <span className="text-[10.5px] font-medium text-red-600">{error}</span>
-      ) : (
-        helperText && <span className="text-[10.5px] text-muted-foreground">{helperText}</span>
-      )}
-    </label>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
 
 export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const { user } = useAuth();
-  const { toast } = useToast();
-
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  // view state
+  const [view, setView] = useState<"list" | "editor" | "import">("list");
+  const [editMode, setEditMode] = useState(false);
+  const [original, setOriginal] = useState<Record<string, unknown> | null>(null);
+  const [form, setForm] = useState<Record<string, unknown>>({});
+  const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // report preview
   const [previewOpen, setPreviewOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
-  const [view, setView] = useState<"list" | "editor">("list");
-  const [editMode, setEditMode] = useState(false);
-  const [form, setForm] = useState<Record<string, unknown>>({});
-  const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const tableFields = useMemo(() => config.fields.filter((field) => field.table !== false), [config]);
   const loginid = user?.loginid || "ADMIN";
   const companyCode = user?.company_code || "";
+  const isDynamicSource = config.source === "dynamic" || config.source === "finance";
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 400);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const tableFields = config.fields.filter((field) => field.table !== false);
+  const deleteDisabled = config.deleteMode === "disabled";
 
   const makeEmpty = (): Record<string, unknown> => ({
     ...Object.fromEntries(config.fields.map((field) => [field.name, field.type === "number" ? 0 : ""])),
@@ -233,23 +138,33 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     company_code: companyCode,
   });
 
-  const buildContext = (mode = editMode): HrMasterContext => ({ loginid, companyCode, editMode: mode, rows, form });
+  const buildContext = (mode = editMode, currentForm: Record<string, unknown> | undefined = form): HrMasterContext => ({
+    loginid,
+    companyCode,
+    editMode: mode,
+    rows,
+    form: currentForm,
+  });
 
-  const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+  /** Same field definitions as the WMS masters: passed to WmsMasterForm as-is. */
+  const formFields = config.fields;
+
+  const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize, clearNotice = true) => {
     setLoading(true);
+    setRows([]);
+    if (clearNotice) setNotice(null);
     try {
-      const isDynamic = config.source === "dynamic" || config.source === "finance";
-      const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
-      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
-      const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = columnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
-      if (isDynamic && config.listQuery) {
+      if (isDynamicSource && config.listQuery) {
         const data = await getDynamicLookup(config.listQuery(buildContext()));
         setRows(data.map(normalizeRow));
         setTotalRows(data.length);
       } else {
+        const hasSearch = Boolean(debouncedQuery.trim());
+        const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+        const requestPageSize = hasSearch ? 100000 : nextPageSize;
+        const activeFilters = columnFilters
+          .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+          .filter((filter) => filter.values);
         const response = await getHrMaster(config.master, {
           page: requestPageIndex + 1,
           limit: requestPageSize,
@@ -260,7 +175,8 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         setTotalRows(response.count || response.tableData.length);
       }
     } catch (error) {
-      toast.error(getErrorMessage(error, `Unable to load ${config.title}`));
+      setNotice({ type: "error", message: getErrorMessage(error, `Unable to load ${config.title}`) });
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -269,48 +185,28 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   useEffect(() => {
     void loadRows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.master, pageIndex, pageSize, query, columnFilters]);
+  }, [config.master, pageIndex, pageSize, debouncedQuery, columnFilters]);
 
   // Switching to a different master (route change) always lands on the list
   useEffect(() => {
     setView("list");
     setEditMode(false);
+    setOriginal(null);
     setForm({});
-    setFieldErrors({});
   }, [config.master]);
 
-  /* ── Navigation handlers ── */
-  const openAdd = () => {
-    setFieldErrors({});
-    setEditMode(false);
-    const empty = makeEmpty();
-    if (config.autoGenerateKey) empty[config.keyField] = nextCode(rows, config.keyField);
-    setForm(empty);
-    setView("editor");
-  };
-
-  const openEdit = (row: Record<string, unknown>) => {
-    setFieldErrors({});
-    setEditMode(true);
-    setForm({ ...makeEmpty(), ...row, _edit_key: row[config.keyField], company_code: row.company_code || companyCode });
-    setView("editor");
-  };
-
   /* ── Print ──
-     1) config.reportEndpoint set  -> open the formatted backend report
-     2) otherwise                  -> old simple "record details" print      */
+     1) config.reportEndpoint set -> open the formatted backend report
+     2) otherwise                 -> simple "record details" print */
 
   const openBackendReport = async (extraParams: Record<string, unknown>) => {
     if (!config.reportEndpoint) return;
-
     setReportHtml(null);
     setReportError("");
     setReportLoading(true);
-    setPreviewOpen(true); // dialog turant khulega, andar "Generating report…" dikhega
-
+    setPreviewOpen(true);
     try {
-      // NOTE: print:"true" mat bhejo. Dialog ka apna Print button hai,
-      // aur auto-print script preview me dikkat karta hai.
+      // Do not send print:"true" — the dialog has its own Print button.
       const html = await getHrReportHtml(config.reportEndpoint, {
         company_code: companyCode,
         print: "false",
@@ -336,17 +232,15 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     const url = window.URL.createObjectURL(blob);
     const win = window.open(url, "_blank");
     setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-    if (!win) toast.error("Please allow pop-ups to open the report");
+    if (!win) setNotice({ type: "error", message: "Please allow pop-ups to open the report" });
   };
 
   const printRecordLocal = (record: Record<string, unknown>) => {
     const printWindow = window.open("", "_blank", "width=900,height=700");
-
     if (!printWindow) {
-      toast.error("Please allow pop-ups to print this record");
+      setNotice({ type: "error", message: "Please allow pop-ups to print this record" });
       return;
     }
-
     const escapeHtml = (value: unknown) =>
       String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -361,8 +255,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         <tr>
           <th>${escapeHtml(field.label)}</th>
           <td>${escapeHtml(formatValue(record[field.name]))}</td>
-        </tr>
-      `,
+        </tr>`,
       )
       .join("");
 
@@ -384,22 +277,13 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
       <body>
         <h2>${escapeHtml(config.title)}</h2>
         <p>Record Details</p>
-        <table>
-          <tbody>${fieldsHtml}</tbody>
-        </table>
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        </script>
+        <table><tbody>${fieldsHtml}</tbody></table>
+        <script>window.onload = function() { window.print(); };</script>
       </body>
-    </html>
-  `);
-
+    </html>`);
     printWindow.document.close();
   };
 
-  // Print one record
   const printRecord = (record: Record<string, unknown>) => {
     if (config.reportEndpoint) {
       void openBackendReport({
@@ -411,82 +295,127 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     printRecordLocal(record);
   };
 
-  // Print the whole list
   const printAll = () => {
     void openBackendReport({ code2: "All" });
   };
 
-  const handleCloseEditor = () => {
-    setFieldErrors({});
+  /* ── Navigation ── */
+
+  const openAdd = () => {
+    setEditMode(false);
+    setOriginal(null);
+    const empty = makeEmpty();
+    if (config.autoGenerateKey) empty[config.keyField] = nextCode(rows, config.keyField);
+    setForm(empty);
+    setNotice(null);
+    setView("editor");
+  };
+
+  const openEdit = (row: Record<string, unknown>) => {
+    setEditMode(true);
+    setOriginal(row);
+    setForm({ ...makeEmpty(), ...row, _edit_key: row[config.keyField], company_code: row.company_code || companyCode });
+    setNotice(null);
+    setView("editor");
+  };
+
+  const openImport = () => {
+    setEditMode(false);
+    setOriginal(null);
+    setForm({});
+    setNotice(null);
+    setView("import");
+  };
+
+  const handleCloseForm = () => {
     setView("list");
     setEditMode(false);
+    setOriginal(null);
     setForm({});
+  };
+
+  const handleReset = () => {
+    if (editMode && original) {
+      openEdit(original);
+    } else {
+      setForm(makeEmpty());
+    }
   };
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
-      ...tableFields.map((field) => ({
+      ...tableFields.map((field, index) => ({
         accessorKey: field.name,
         header: field.label,
         size: field.width || 160,
-        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
+        cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
+          const value = formatValue(row.original[field.name]);
+          if (index === 0) {
+            return (
+              <div className="text-left">
+                <button
+                  type="button"
+                  onClick={() => openEdit(row.original)}
+                  className="font-semibold text-[#00378C] hover:underline cursor-pointer text-left bg-transparent border-none p-0"
+                  title="Click to edit"
+                >
+                  {value}
+                </button>
+              </div>
+            );
+          }
+          return <div className="text-left">{value}</div>;
+        },
       })),
       {
         id: "actions",
-        header: "Actions",
-        size: 90,
+        header: () => <div className="text-center">Actions</div>,
+        enableSorting: false,
         enableColumnFilter: false,
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors cursor-pointer"
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-slate-600 hover:text-green-600 hover:bg-green-50 rounded-md"
               onClick={() => printRecord(row.original)}
               title={`Print ${config.title}`}
             >
-              <Printer size={13} />
-            </button>
-
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              <Printer size={15} />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
               onClick={() => openEdit(row.original)}
-              title={`Edit ${config.title}`}
+              title="Edit"
             >
-              <Edit2 size={13} />
-            </button>
-
-            <button
-              type="button"
-              disabled={config.deleteMode === "disabled"}
-              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+              <Edit2 size={15} />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
+              disabled={deleteDisabled}
               onClick={() => setDeleteTarget(row.original)}
-              title={config.deleteMode === "disabled" ? "Delete is not configured" : `Delete ${config.title}`}
+              title={deleteDisabled ? "Delete is not configured" : "Delete"}
             >
-              <Trash2 size={13} />
-            </button>
+              <Trash2 size={15} />
+            </Button>
           </div>
         ),
+        size: 110,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [config, tableFields, companyCode],
+    [config, companyCode, rows],
   );
 
-  /* ── Save (header Save button + Enter key inside the form) ── */
+  /* ── Save (called by WmsMasterForm after its own validation) ── */
   const saveRecord = async (event?: FormEvent) => {
     event?.preventDefault();
 
-    // 1) Required + email + limit validation
-    const errors = validateFields(config.fields, form, editMode);
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);                  // field red + message niche
-      toast.warning(Object.values(errors)[0]); // pehla error toast mein
-      return;                                  // API call nahi hogi
-    }
-    setFieldErrors({});
-
-    // 2) Email fields ko trim karke bhejo
+    // Trim email fields before sending
     const data: Record<string, unknown> = { ...form };
     config.fields
       .filter((f) => f.type === "email")
@@ -507,7 +436,6 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         );
       } else {
         let payload: Record<string, unknown>;
-
         if (config.buildSave) {
           payload = config.buildSave(data, buildContext()) as Record<string, unknown>;
         } else if (config.stripEditKeyOnSave) {
@@ -531,12 +459,12 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
           config.gmEndpoint === "formaldesignation" ? { omitUser: true } : undefined,
         );
       }
-      toast.success(`${config.title} ${editMode ? "updated" : "created"} successfully`);
-      handleCloseEditor();
-      await loadRows(pageIndex, pageSize);
+
+      handleCloseForm();
+      setNotice({ type: "success", message: editMode ? "Successfully updated" : "Successfully created" });
+      await loadRows(pageIndex, pageSize, false);
     } catch (error) {
-      // "Save Failed" ki jagah clear message
-      toast.error(friendlyDbError(getErrorMessage(error, `Unable to save ${config.title}`)));
+      setNotice({ type: "error", message: friendlyDbError(getErrorMessage(error, `Unable to save ${config.title}`)) });
     } finally {
       setSaving(false);
     }
@@ -544,343 +472,355 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
 
   /* ── Delete ── */
   const confirmDelete = async () => {
-    console.log("1. Delete clicked!");
-    if (!deleteTarget || config.deleteMode === "disabled") return;
+    if (!deleteTarget || deleteDisabled) return;
     setSaving(true);
     try {
-      console.log("2. Target row:", deleteTarget);
       const id = deleteTarget[config.keyField];
-      console.log("3. Extracted ID:", id, "KeyField was:", config.keyField);
-      console.log("Delete ID being sent:", config.master, id);
-      if ((config.source === "dynamic" || config.source === "finance") && config.buildDelete) {
+      if (isDynamicSource && config.buildDelete) {
         await executeDynamicDelete(config.buildDelete(deleteTarget, buildContext()));
-      } else if (config.deleteMode === "gm") await deleteHrGm(config.gmEndpoint, [id]);
-      else await deleteHrMaster(config.master, [id]);
+      } else if (config.deleteMode === "gm") {
+        await deleteHrGm(config.gmEndpoint, [id]);
+      } else {
+        await deleteHrMaster(config.master, [id]);
+      }
       setDeleteTarget(null);
-      toast.success(`${config.title} deleted successfully`);
-      await loadRows(pageIndex, pageSize);
+      setNotice({ type: "success", message: "Successfully deleted" });
+      await loadRows(pageIndex, pageSize, false);
     } catch (error) {
-      toast.error(getErrorMessage(error, `Unable to delete ${config.title}`));
+      setNotice({ type: "error", message: getErrorMessage(error, `Unable to delete ${config.title}`) });
     } finally {
       setSaving(false);
     }
   };
 
-  /* Report preview dialog — list aur editor dono views mein same dialog use hota hai */
-  const reportDialog = (
-    <NewReportDialog
-      open={previewOpen}
-      onClose={closeReportPreview}
-      title={config.title}
-      htmlContent={reportHtml}
-      loading={reportLoading}
-      error={reportError || null}
-      meta={{
-        companyName: companyCode,
-        user: loginid,
-        period: "All",
-        generatedAt: new Date().toLocaleString(),
-      }}
-      onOpenInNewWindow={openReportInNewWindow}
-    />
-  );
-
-  /* ─────────────────────────────────────────────────────────
-     EDITOR — Full-page, Freight-style header (with Save button)
-     ───────────────────────────────────────────────────────── */
-  if (view === "editor") {
-    const keyValue = editMode ? String(form[config.keyField] ?? "") : "";
-
-    return (
-      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-        {/* Freight-style transaction header */}
-        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-              <FileText size={15} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                  {editMode ? `Edit ${config.title}` : `New ${config.title}`}
-                </h1>
-                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                  {editMode ? "Editing" : "Draft"}
-                </span>
-                {keyValue && <span className="text-xs text-muted-foreground">{keyValue}</span>}
-              </div>
-            </div>
-          </div>
-
-          {/* Actions: Print / List / Close / Save */}
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {editMode && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => printRecord(form)}
-                disabled={saving}
-              >
-                <Printer size={14} /> Print
-              </Button>
-            )}
-            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
-              <ArrowLeft size={14} /> List
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
-              <X size={14} /> Close
-            </Button>
-            <Button type="button" size="sm" onClick={() => void saveRecord()} disabled={saving}>
-              <Save size={14} /> {saving ? "Saving" : "Save"}
-            </Button>
-          </div>
-        </div>
-
-        {/* Form content — noValidate: browser ka native email popup band */}
-        <form onSubmit={saveRecord} noValidate>
-          <SectionPanel title="Basic Information" icon={FileText}>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {config.fields.map((field) => {
-                if (field.hideOnAdd && !editMode) return null;
-
-                const disabled = Boolean(
-                  (editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd),
-                );
-
-                return (
-                  <Field
-                    key={field.name}
-                    label={field.label}
-                    required={field.required}
-                    helperText={field.helperText}
-                    error={fieldErrors[field.name]}
-                  >
-                    {renderInput(
-                      field,
-                      form[field.name],
-                      form[`${field.name}_name`],
-                      disabled,
-                      buildContext(),
-                      (value, row) => {
-                        // user edit kare to is field ka error hata do
-                        setFieldErrors((prev) => {
-                          if (!prev[field.name]) return prev;
-                          const { [field.name]: _removed, ...rest } = prev;
-                          return rest;
-                        });
-                        setForm((current) => {
-                          const next = {
-                            ...current,
-                            [field.name]: value,
-                            ...(field.lookup
-                              ? row
-                                ? displayPatch(field, row)
-                                : { [`${field.name}_name`]: "" }
-                              : {}),
-                          };
-                          if (field.name === "div_code") {
-                            next.dept_code = "";
-                            next.dept_code_name = "";
-                          }
-                          return next;
-                        });
-                      },
-                    )}
-                  </Field>
-                );
-              })}
-            </div>
-          </SectionPanel>
-          {/* hidden submit so Enter inside a text input saves */}
-          <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
-        </form>
-
-        {reportDialog}
-      </section>
-    );
-  }
-
-  /* ─────────────────────────────────────────────────────────
-     LIST VIEW — Freight style (buttons inside DataTable toolbar)
-     ───────────────────────────────────────────────────────── */
-  const hasActiveSearch = Boolean(
-    query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()),
-  );
+  const editorOpen = view === "editor";
+  const importOpen = view === "import" && Boolean(config.ediKey);
+  const listOpen = !editorOpen && !importOpen;
+  const pageTitle = editorOpen ? (editMode ? `Edit ${config.title}` : `New ${config.title}`) : config.title;
+  const hasActiveSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
 
   return (
-    <section className="freight-enquiry-list-screen grid gap-2">
-      {/* Page title only — buttons live inside the DataTable toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
-        <div className="flex items-center gap-2.5">
-          <h2
-            className="text-foreground m-0"
-            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
-          >
-            {config.title}
-          </h2>
-        </div>
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={rows}
-        title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
-        subtitle={`${config.title} List`}
-        searchValue={query}
-        onSearchChange={(value) => {
-          setQuery(value);
-          setPageIndex(0);
-        }}
-        searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
-        loading={loading}
-        emptyText={`No ${config.title.toLowerCase()} records found`}
-        height={620}
-        minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 170))}
-        density="grid"
-        enablePagination
-        manualPagination={config.source !== "dynamic" && config.source !== "finance" && !hasActiveSearch}
-        manualFiltering={false}
-        pageIndex={pageIndex}
-        pageSize={pageSize}
-        totalRows={totalRows}
-        columnFilters={columnFilters}
-        onColumnFiltersChange={(filters) => {
-          setColumnFilters(filters);
-          setPageIndex(0);
-        }}
-        onPageChange={setPageIndex}
-        onPageSizeChange={(nextPageSize) => {
-          setPageSize(nextPageSize);
-          setPageIndex(0);
-        }}
-        getRowId={(row, index) => String(row[config.keyField] || `${config.master}_${index}`)}
-        enableExport
-        exportFilename={`hr-${config.master}-list.csv`}
-        toolbar={
-          <div className="flex items-center gap-2">
-
-            {config.reportEndpoint && (
-              <button
-                type="button"
-                onClick={printAll}
-                title={`Print all ${config.title}`}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
-              >
-                <Printer size={14} />
-                Print All
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={openAdd}
-              title={`Add ${config.title}`}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              Add
-            </button>
+    <section className="freight-airline-tariff-screen wms-master-screen wms-simple-master-page freight-ui-standard freight-dense-form grid gap-2 p-1">
+      {/* ---------- Top Header (the import page brings its own) ---------- */}
+      {!importOpen && (
+        <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="tariff-page-icon">
+              <Users size={18} />
+            </span>
+            <div className="min-w-0">
+              <h1 className="m-0 truncate text-lg font-bold leading-tight text-slate-900">{pageTitle}</h1>
+            </div>
           </div>
-        }
-      />
 
-      {/* Delete confirmation dialog */}
+          {editorOpen && (
+            <div className="flex items-center gap-2">
+              {editMode && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => printRecord(form)}
+                  disabled={saving}
+                  title="Print"
+                  className="h-8 gap-1.5 text-xs font-semibold px-3 rounded-lg cursor-pointer"
+                >
+                  <Printer size={13} /> Print
+                </Button>
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReset}
+                disabled={saving}
+                title="Reset"
+                className="h-8 gap-1.5 text-xs font-semibold px-3 rounded-lg cursor-pointer"
+              >
+                <RefreshCw size={13} /> Reset
+              </Button>
+
+              <Button
+                type="submit"
+                form={FORM_ID}
+                disabled={saving}
+                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-4 rounded-lg cursor-pointer transition-colors"
+              >
+                <Save size={14} /> {saving ? "Saving..." : editMode ? "Update" : "Save"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleCloseForm}
+                disabled={saving}
+                aria-label="Close"
+                title="Close"
+                className="h-8 w-8 rounded-lg cursor-pointer"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+      {/* ---------- EDITOR ---------- */}
+      {editorOpen && (
+        <WmsMasterForm
+          key={editMode ? `edit-${String(original?.[config.keyField] ?? "")}` : "add"}
+          formId={FORM_ID}
+          title={config.title}
+          fields={formFields}
+          form={form}
+          editMode={editMode}
+          saving={saving}
+          user={user}
+          onChange={(name: string, value: unknown) =>
+            setForm((prev) => {
+              const next: Record<string, unknown> = { ...prev, [name]: value };
+              // changing division resets department
+              if (name === "div_code") {
+                next.dept_code = "";
+                next.dept_code_name = "";
+              }
+              return next;
+            })
+          }
+          onSave={saveRecord}
+          onCancel={handleCloseForm}
+        />
+      )}
+
+      {/* ---------- EDI IMPORT ---------- */}
+      {importOpen && config.ediKey && (
+        <EdiImportPage
+          tableKey={config.ediKey}
+          title={`Import ${config.title}`}
+          onClose={handleCloseForm}
+          onSubmit={
+            config.ediSubmit
+              ? async (importRows) => {
+                  await config.ediSubmit!(importRows, buildContext(false));
+                  handleCloseForm();
+                  setNotice({ type: "success", message: `${importRows.length} records imported` });
+                  await loadRows(pageIndex, pageSize, false);
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {/* ---------- LIST ---------- */}
+      {listOpen && (
+        <DataTable
+          columns={columns}
+          data={rows}
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
+          searchValue={query}
+          onSearchChange={(value: any) => {
+            setQuery(value);
+            setPageIndex(0);
+          }}
+          searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
+          loading={loading}
+          emptyText={`No ${config.title.toLowerCase()} records found`}
+          height="calc(100dvh - 150px)"
+          minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 180))}
+          density="grid"
+          enablePagination
+          enableExport={false}
+          manualPagination={!isDynamicSource && !hasActiveSearch}
+          manualFiltering={false}
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters: any) => {
+            setColumnFilters(filters);
+            setPageIndex(0);
+          }}
+          onPageChange={setPageIndex}
+          onPageSizeChange={(nextPageSize: any) => {
+            setPageSize(nextPageSize);
+            setPageIndex(0);
+          }}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={openAdd}
+                disabled={saving}
+                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
+              >
+                <Plus size={14} strokeWidth={2.5} /> Add
+              </Button>
+
+              {config.ediKey && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={openImport}
+                  disabled={saving}
+                  title="Import from Excel"
+                  className="h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold cursor-pointer"
+                >
+                  <Upload size={14} /> Import
+                </Button>
+              )}
+
+              <div className="relative" ref={menuRef}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  title="Actions"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}
+                  className="h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold cursor-pointer border-0"
+                >
+                  <MoreVertical size={14} />
+                </Button>
+
+                {menuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-10 z-50 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5"
+                  >
+                    <div className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      List actions
+                    </div>
+
+                    {config.reportEndpoint && (
+                      <MenuItem
+                        icon={<Printer size={15} />}
+                        tone="blue"
+                        label="Print"
+                        hint="Open the full report"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          printAll();
+                        }}
+                      />
+                    )}
+                    <MenuItem
+                      icon={<FileSpreadsheet size={15} />}
+                      tone="green"
+                      label="Excel"
+                      hint="Download list as .csv"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        exportToCsv(
+                          rows,
+                          columns,
+                          `hr-${config.master}-list-${new Date().toISOString().slice(0, 10)}.csv`,
+                        );
+                      }}
+                    />
+
+                    <div className="my-1 h-px bg-slate-100" />
+
+                    <MenuItem
+                      icon={<RefreshCw size={15} className={loading ? "animate-spin" : ""} />}
+                      tone="slate"
+                      label="Refresh"
+                      hint="Reload the latest data"
+                      disabled={loading}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void loadRows(pageIndex, pageSize, false);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          }
+          getRowId={(row: any, index: any) => String(row[config.keyField] || `${config.master}_${index}`)}
+        />
+      )}
+
+      {/* ---------- DELETE CONFIRM ---------- */}
       <Dialog
         open={Boolean(deleteTarget)}
         title={`Delete ${config.title}`}
-        description="This will remove the selected HR master record."
+        description="This action cannot be undone."
         compact
         tone="danger"
         onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" disabled={saving} onClick={confirmDelete}>
-              {saving ? "Deleting..." : "Delete"}
-            </Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Close</Button>
+            <Button disabled={saving} variant="destructive" onClick={confirmDelete}>Delete</Button>
           </>
         }
       >
         <p className="m-0 text-sm text-muted-foreground">
-          Confirm delete for <strong>{String(deleteTarget?.[config.keyField] || "")}</strong>.
+          Delete <strong>{String(deleteTarget?.[config.keyField] ?? "")}</strong>?
         </p>
       </Dialog>
 
-      {reportDialog}
+      {/* ---------- REPORT PREVIEW ---------- */}
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closeReportPreview}
+        title={config.title}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError || null}
+        meta={{
+          companyName: companyCode,
+          user: loginid,
+          period: "All",
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onOpenInNewWindow={openReportInNewWindow}
+      />
     </section>
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function renderInput(
-  field: HrMasterField,
-  value: unknown,
-  selectedLabel: unknown,
-  disabled: boolean,
-  context: HrMasterContext,
-  onChange: (value: unknown, row?: LookupRow | null) => void,
-) {
-  if (field.lookup) {
-    const displayValue = String(value ?? "")
-      ? [value, selectedLabel].filter(Boolean).join(" - ") || String(value ?? "")
-      : "";
-    return (
-      <LookupField
-        compact
-        label="" // label is rendered by <Field>
-        value={String(value ?? "")}
-        displayValue={displayValue}
-        columns={field.lookup.columns}
-        valueField={field.lookup.valueField}
-        displayFields={field.lookup.displayFields}
-        loadOptions={() => field.lookup!.loadOptions(context)}
-        disabled={disabled}
-        onChange={(nextValue, row) => onChange(nextValue, row)}
-      />
-    );
-  }
-  if (field.type === "select") {
-    return (
-      <Select value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-        <option value="">Select {field.label}</option>
-        {(field.options || []).map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </Select>
-    );
-  }
-
-  // NOTE: maxLength / slice jaan-bujhkar hata diya hai, taaki user limit se zyada
-  // type kar sake aur Save par proper "limit exceed" error dikhe.
+function MenuItem({
+  icon,
+  label,
+  hint,
+  tone,
+  onClick,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint: string;
+  tone: "blue" | "green" | "slate";
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const chip =
+    tone === "blue"
+      ? "bg-blue-50 text-[#00378C]"
+      : tone === "green"
+        ? "bg-emerald-50 text-emerald-600"
+        : "bg-slate-100 text-slate-600";
   return (
-    <Input
-      type={field.type === "email" ? "text" : field.type || "text"}
-      value={field.type === "date" ? toDateInputValue(value) : String(value ?? "")}
+    <button
+      type="button"
+      role="menuitem"
       disabled={disabled}
-      placeholder={field.Placeholder}
-      onChange={(event) => {
-        const raw = event.target.value;
-        onChange(field.type === "number" ? Number(raw || 0) : raw);
-      }}
-    />
+      onClick={onClick}
+      className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-slate-50 focus:bg-slate-50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+    >
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${chip}`}>{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold text-slate-800">{label}</span>
+        <span className="block truncate text-[10.5px] text-slate-500">{hint}</span>
+      </span>
+    </button>
   );
 }
 
-function displayPatch(field: HrMasterField, row: LookupRow) {
-  if (!field.lookup) return {};
-  const nameField = `${field.name}_name`;
-  const labelValue = field.lookup.displayFields
-    .filter((displayField) => displayField !== field.lookup?.valueField)
-    .map((displayField) => getLookupValue(row, displayField))
-    .find((value) => String(value ?? "").trim());
-  return labelValue ? { [nameField]: labelValue } : {};
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function normalizeRow(row: Record<string, unknown>) {
   const normalized: Record<string, unknown> = { ...row };
@@ -919,13 +859,4 @@ function nextCode(rows: Record<string, unknown>[], keyField: string) {
   const values = rows.map((row) => Number(row[keyField])).filter((value) => Number.isFinite(value));
   const next = (values.length ? Math.max(...values) : 0) + 1;
   return String(next).padStart(3, "0");
-}
-
-function toDateInputValue(input: unknown) {
-  if (!input) return "";
-  const value = String(input);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
 }
