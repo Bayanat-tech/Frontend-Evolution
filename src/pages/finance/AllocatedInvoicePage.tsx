@@ -32,6 +32,7 @@ type InvoiceLine = {
   sr: number;
   inv_no: string;
   inv_date: string;
+  open_sign_ind: number;
   balance_amount: number;
   balance_amount_origin?: number;
   curr_code_origin?: string;
@@ -68,9 +69,11 @@ function AllocatedAmountInput({
     const ex = line.ex_rate_origin || line.ex_rate || 1;
     const numOrig = ex !== 0 ? num / ex : num;
     setVal(num > 0 ? num.toFixed(3) : "");
+    const oppositeSign = line.open_sign_ind === -1 ? 1 : -1;
     onPatch(line.id, {
       amount: num,
       amount_origin: Number(numOrig.toFixed(3)),
+      sign_ind: num > 0 ? oppositeSign : line.sign_ind,
     });
   };
 
@@ -274,19 +277,23 @@ export function AllocatedInvoicePage() {
             const balOrig = Number(inv.BALANCE_AMOUNT_ORIGIN ?? inv.balance_amount_origin ?? Math.abs(rawBal));
             const currOrig = String(inv.CURR_CODE_ORIGIN || inv.curr_code_origin || inv.ORG_CURR_CODE || inv.org_curr_code || "INR");
             const exOrig = Number(inv.EX_RATE_ORIGIN || inv.ex_rate_origin || inv.EX_RATE || inv.ex_rate || 1);
-            const sign = Number(inv.SIGN_IND ?? inv.sign_ind ?? (rawBal >= 0 ? 1 : -1));
+            const openSign = Number(inv.SIGN_IND ?? inv.sign_ind ?? (rawBal >= 0 ? 1 : -1));
+            // In PowerBuilder UJV, allocating a Credit invoice creates a Debit (+1) allocation,
+            // and allocating a Debit invoice creates a Credit (-1) allocation (opposite sign).
+            const allocSign = openSign === -1 ? 1 : -1;
             return {
               id: `line_${idx}_${inv.INV_NO || inv.inv_no}`,
               sr: idx + 1,
               inv_no: String(inv.INV_NO || inv.inv_no || ""),
               inv_date: String(inv.INV_DATE || inv.inv_date || ""),
+              open_sign_ind: openSign,
               balance_amount: Math.abs(rawBal),
               balance_amount_origin: balOrig,
               curr_code_origin: currOrig,
               ex_rate_origin: exOrig,
               amount: 0,
               amount_origin: 0,
-              sign_ind: sign,
+              sign_ind: allocSign,
               org_curr_code: String(inv.ORG_CURR_CODE || inv.org_curr_code || "INR"),
               ex_rate: Number(inv.EX_RATE ?? inv.ex_rate ?? 1),
             };
@@ -398,7 +405,7 @@ export function AllocatedInvoicePage() {
     setLines((prev) => prev.filter((row) => row.id !== id).map((row, index) => ({ ...row, sr: index + 1 })));
   }, []);
 
-  // Double-click toggle: allocate full balance or toggle off to 0
+  // Double-click toggle: allocate full balance with OPPOSITE sign, or toggle off to 0
   const handleToggleAllocate = useCallback((id: string) => {
     setLines((prev) =>
       prev.map((line) => {
@@ -407,10 +414,14 @@ export function AllocatedInvoicePage() {
           const allocAmt = line.balance_amount;
           const ex = line.ex_rate_origin || line.ex_rate || 1;
           const allocAmtOrig = ex !== 0 ? allocAmt / ex : allocAmt;
+          // In double-entry allocation, offsetting a Credit balance (-1) requires a Debit (+1),
+          // and offsetting a Debit balance (+1) requires a Credit (-1).
+          const oppositeSign = line.open_sign_ind === -1 ? 1 : -1;
           return {
             ...line,
             amount: allocAmt,
             amount_origin: Number(allocAmtOrig.toFixed(3)),
+            sign_ind: oppositeSign,
           };
         } else {
           return {
@@ -431,13 +442,14 @@ export function AllocatedInvoicePage() {
         sr: prev.length + 1,
         inv_no: "",
         inv_date: docDate,
+        open_sign_ind: 1,
         balance_amount: 0,
         balance_amount_origin: 0,
         curr_code_origin: "INR",
         ex_rate_origin: 1,
         amount: 0,
         amount_origin: 0,
-        sign_ind: 1,
+        sign_ind: -1,
         org_curr_code: "INR",
         ex_rate: 1,
       },
@@ -453,10 +465,12 @@ export function AllocatedInvoicePage() {
         prev.map((line) => {
           const ex = line.ex_rate_origin || line.ex_rate || 1;
           const orig = ex !== 0 ? line.balance_amount / ex : line.balance_amount;
+          const oppositeSign = line.open_sign_ind === -1 ? 1 : -1;
           return {
             ...line,
             amount: line.balance_amount,
             amount_origin: Number(orig.toFixed(3)),
+            sign_ind: oppositeSign,
           };
         })
       );
@@ -471,10 +485,12 @@ export function AllocatedInvoicePage() {
         remaining -= toAlloc;
         const ex = line.ex_rate_origin || line.ex_rate || 1;
         const allocOrig = ex !== 0 ? toAlloc / ex : toAlloc;
+        const oppositeSign = line.open_sign_ind === -1 ? 1 : -1;
         return {
           ...line,
           amount: toAlloc,
           amount_origin: Number(allocOrig.toFixed(3)),
+          sign_ind: toAlloc > 0 ? oppositeSign : line.sign_ind,
         };
       })
     );
@@ -564,7 +580,7 @@ export function AllocatedInvoicePage() {
       {
         accessorKey: "inv_no",
         header: "Invoice No",
-        size: 150,
+        size: 140,
         cell: ({ row }) => (
           <span
             className="font-mono text-xs font-semibold text-slate-800 cursor-pointer select-none"
@@ -589,36 +605,11 @@ export function AllocatedInvoicePage() {
         ),
       },
       {
-        accessorKey: "sign_ind",
-        header: "Type",
-        size: 95,
-        cell: ({ row }) => {
-          const currentSign = Number(row.original.sign_ind) >= 0 ? 1 : -1;
-          return (
-            <select
-              value={currentSign}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                patchLine(row.original.id, { sign_ind: val });
-              }}
-              className={`h-7 w-20 rounded border px-2 py-0.5 text-xs font-bold font-mono outline-none cursor-pointer transition-colors ${
-                currentSign === 1
-                  ? "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
-                  : "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100"
-              }`}
-            >
-              <option value={1} className="text-blue-700 font-bold bg-white">Dr (+)</option>
-              <option value={-1} className="text-purple-700 font-bold bg-white">Cr (-)</option>
-            </select>
-          );
-        },
-      },
-      {
         accessorKey: "balance_amount",
-        header: "Open Balance (Local)",
+        header: "Open Balance",
         size: 140,
         cell: ({ row }) => {
-          const isDr = Number(row.original.sign_ind) >= 0;
+          const isDr = Number(row.original.open_sign_ind) >= 0;
           const rawAmt = Number(row.original.balance_amount || 0);
           const formatted = rawAmt.toLocaleString("en-US", {
             minimumFractionDigits: 3,
@@ -650,11 +641,48 @@ export function AllocatedInvoicePage() {
         },
       },
       {
+        accessorKey: "sign_ind",
+        header: "Type",
+        size: 95,
+        cell: ({ row }) => {
+          const currentSign = Number(row.original.sign_ind) >= 0 ? 1 : -1;
+          return (
+            <select
+              value={currentSign}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                patchLine(row.original.id, { sign_ind: val });
+              }}
+              className={`h-7 w-20 rounded border px-2 py-0.5 text-xs font-bold font-mono outline-none cursor-pointer transition-colors ${
+                currentSign === 1
+                  ? "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
+                  : "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100"
+              }`}
+            >
+              <option value={1} className="text-blue-700 font-bold bg-white">Dr (+)</option>
+              <option value={-1} className="text-purple-700 font-bold bg-white">Cr (-)</option>
+            </select>
+          );
+        },
+      },
+      {
+        accessorKey: "amount",
+        header: "Allocated Amount",
+        size: 140,
+        cell: ({ row }) => (
+          <AllocatedAmountInput
+            line={row.original}
+            onPatch={patchLine}
+            onToggle={handleToggleAllocate}
+          />
+        ),
+      },
+      {
         accessorKey: "balance_amount_origin",
         header: "Balance (Origin)",
         size: 130,
         cell: ({ row }) => {
-          const isDr = Number(row.original.sign_ind) >= 0;
+          const isDr = Number(row.original.open_sign_ind) >= 0;
           const rawAmt = Number(row.original.balance_amount_origin ?? row.original.balance_amount ?? 0);
           const formatted = rawAmt.toLocaleString("en-US", {
             minimumFractionDigits: 3,
@@ -677,18 +705,6 @@ export function AllocatedInvoicePage() {
             </div>
           );
         },
-      },
-      {
-        accessorKey: "amount",
-        header: "Allocated Amount",
-        size: 150,
-        cell: ({ row }) => (
-          <AllocatedAmountInput
-            line={row.original}
-            onPatch={patchLine}
-            onToggle={handleToggleAllocate}
-          />
-        ),
       },
       {
         accessorKey: "amount_origin",
@@ -991,12 +1007,12 @@ export function AllocatedInvoicePage() {
                 <Plus size={12} /> Add Row
               </Button>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               <DataTable
                 columns={columns}
                 data={lines}
                 loading={loading}
-                height={580}
+                height={380}
                 pageSize={100}
                 density="compact"
                 onRowDoubleClick={(row) => handleToggleAllocate(row.id)}
