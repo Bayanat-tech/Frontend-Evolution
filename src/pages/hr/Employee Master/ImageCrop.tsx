@@ -79,20 +79,23 @@ const ImageCrop = (props: ImageCropProps) => {
           props.Image && <img src={props.Image} alt="Current" className="w-full rounded-md object-contain" />
         )}
 
-        {!selectedImage && (
-          <div className="flex items-center justify-center gap-3">
-            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">
-              <Upload size={15} />
-              Upload New File
-              <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-            </label>
-            {isErrorInUploadImages && (
-              <span title="Please upload an image.">
-                <AlertCircle size={20} className="text-destructive" />
-              </span>
-            )}
-          </div>
-        )}
+          {!selectedImage && (
+            <div className="flex flex-row items-center justify-center gap-3">
+              <label className="flex cursor-pointer flex-row items-center justify-center rounded-md border border-dashed border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">
+                <span className="inline-flex flex-row items-center gap-2 whitespace-nowrap">
+                  <Upload size={15} className="shrink-0" />
+                  Upload New File
+                </span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+              </label>
+
+              {isErrorInUploadImages && (
+                <span title="Please upload an image.">
+                  <AlertCircle size={20} className="text-destructive" />
+                </span>
+              )}
+            </div>
+          )}
 
         {selectedImage && (
           <div className="flex justify-end">

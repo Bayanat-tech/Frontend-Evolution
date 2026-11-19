@@ -1382,6 +1382,34 @@ export async function getPurchaseQuotationCompareReportExcel(params: Record<stri
 }
 
 
+export async function getPurchaseQuotationRegisterReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseQuotationRegister/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseQuotationRegisterReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseQuotationRegister/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_Quotation_Register.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
 
 
 
@@ -1782,6 +1810,105 @@ export async function getPrRegisterFormReportExcel(params: Record<string, any>):
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+
+export async function getCreditRequestReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+     `/api/finance/transactions/reports/CreditRequestReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+export async function getCreditRequestReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CreditRequestReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+ 
+  // JSON body = message from the backend, not an Excel file
+  if (blob.type && blob.type.includes("application/json")) {
+    let message = "Unable to generate Excel";
+    try {
+      const parsed = JSON.parse(await blob.text());
+      if (parsed?.message) message = String(parsed.message);
+    } catch {
+      /* keep default message */
+    }
+    throw new Error(message);
+  }
+ 
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Credit_Request_${params.request_number || "Report"}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+export async function getCRListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+     `/api/finance/transactions/reports/CRListingReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+export async function getCRListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CRListingReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+ 
+  // JSON body = message from the backend, not an Excel file
+  if (blob.type && blob.type.includes("application/json")) {
+    let message = "Unable to generate Excel";
+    try {
+      const parsed = JSON.parse(await blob.text());
+      if (parsed?.message) message = String(parsed.message);
+    } catch {
+      /* keep default message */
+    }
+    throw new Error(message);
+  }
+ 
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Credit_Request_${params.request_number || "Report"}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function getCreditRequestHistory(
+  params: Record<string, any>
+): Promise<any[]> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CreditRequestHistory`,
+    params
+  );
+  const body = response.data;
+  if (body?.success === false) {
+    throw new Error(body.message || "Unable to load history");
+  }
+  return body?.data ?? [];
+}
+
+
+
+
+ 
+
+
 
 
 export async function getStockTransactionReportHtml(params: Record<string, any>): Promise<string> {

@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Save,
@@ -15,6 +15,10 @@ import {
   Layers,
   MessageSquare,
   type LucideIcon,
+  GitBranch,
+  User,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
@@ -25,8 +29,9 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { CardContent, CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsCommonSelect } from "../../api/alms";
-import { executeDynamicMutationColumn90 } from "../../api/lookups";
+import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
+import { getCreditRequestHistory } from "../../api/transactions";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
 export type TCRHeader = {
@@ -95,11 +100,111 @@ type AddCRRequestPageProps = {
   onClose: (refresh?: boolean, message?: string) => void;
 };
 
+// ─── Field limits (match CREDIT_FORM_REQUEST column sizes) ───────────────
+const FIELD_MAX: Partial<Record<keyof TCRHeader, number>> = {
+  COMPANY_NAME: 50,
+  WAY_NO: 10,
+  BLDG_NO: 10,
+  FLAT_NO: 10,
+  LOCATION: 10,
+  PO_BOX: 10,
+  CITY: 10,
+  OFFICE_TEL_NO: 20,
+  FAX_NO: 20,
+  WEBSITE: 50,
+  EMAIL: 50,
+  FIN_CONTACT_PERSON: 50,
+  FIN_CONTACT_NUMBER: 10,
+  FIN_CONTACT_EMAIL: 50,
+  COMMERCIAL_REG_NO: 20,
+  BUSINESS_SECTOR: 50,
+  REMARKS_CONTACT_PERSON: 50,
+  AUTHORIZED_SIGNATORY: 50,
+  ACCOUNT_NO: 50,
+  DESCRIPTION: 200,
+  COMMENTS: 1000,
+  REMARKS: 1000,
+};
+
+// VARCHAR2(n BYTE) counts bytes, so non-English text can use more than 1 per character
+const clipBytes = (text: string, max: number) => {
+  const enc = new TextEncoder();
+  let out = "";
+  let bytes = 0;
+  for (const ch of text) {
+    const n = enc.encode(ch).length;
+    if (bytes + n > max) break;
+    out += ch;
+    bytes += n;
+  }
+  return out;
+};
+
+// Blocks e, +, - (and "." for whole-number fields) in number inputs
+const blockNumberKeys = (allowDecimal: boolean) => (e: KeyboardEvent<HTMLInputElement>) => {
+  const blocked = ["e", "E", "+", "-"];
+  if (!allowDecimal) blocked.push(".");
+  if (blocked.includes(e.key)) e.preventDefault();
+};
+
+// ─── Validation rules ────────────────────────────────────────────────────
+const MAX_AMOUNT = 999999999.999; // NUMBER(12,3)
+const MAX_PERIOD = 9999; // NUMBER(4)
+const MAX_SANCTIONED_PERIOD = 999999999999999; // NUMBER(20), kept within JS safe range
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_RE = /^[0-9+\-\s()]+$/;
+const WEB_RE = /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/\S*)?$/i;
+
+const DRAFT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
+  REQUEST_DATE: "Request Date",
+  COMPANY_NAME: "Company Name",
+};
+
+const SUBMIT_REQUIRED: Partial<Record<keyof TCRHeader, string>> = {
+  ...DRAFT_REQUIRED,
+  WAY_NO: "Way No",
+  BLDG_NO: "Bldg No",
+  FLAT_NO: "Flat No",
+  LOCATION: "Location",
+  PO_BOX: "Po Box",
+  POSTAL_CODE: "Postal Code",
+  CITY: "City",
+  OFFICE_TEL_NO: "Tel No",
+  FAX_NO: "Fax No",
+  WEBSITE: "Website",
+  EMAIL: "Email",
+  FIN_CONTACT_PERSON: "Finance Contact Person",
+  FIN_CONTACT_NUMBER: "Finance Tel No",
+  FIN_CONTACT_EMAIL: "Finance Email",
+  COMMERCIAL_REG_NO: "Commercial Reg No",
+  BUSINESS_SECTOR: "Business Sector",
+  REMARKS_CONTACT_PERSON: "Contact Person",
+  AUTHORIZED_SIGNATORY: "Authorized Signatory",
+  CREDIT_FORM_SIGNATURE_DATE: "Credit Form Signature Date",
+  // CREDIT_LIMIT: "Credit Limit",
+  // REQUESTED_CREDIT_PERIOD: "Requested Credit Period",
+  // ACCOUNT_NO: "Account No",
+  DESCRIPTION: "Description",
+  COMMENTS: "Comments",
+  REMARKS: "Remarks",
+};
+
+// Approval levels that must NOT see the Send Back button
+const SEND_BACK_HIDDEN_LEVELS = [1, 5];
+// Approval levels that must NOT see the Reject and Cancel buttons
+const REJECT_CANCEL_HIDDEN_LEVELS = [5];
+// Approval levels allowed to enter the Account No
+const ACCOUNT_NO_EDIT_LEVELS = [5];
+// Approval levels that must NOT edit the Credit Requested / Sanctioned fields
+const CREDIT_FIELDS_LOCKED_LEVELS = [1, 5];
+
+
+const NUM_INPUT_CLS =
+  "text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
 const Required = () => <span className="ml-0.5 text-destructive">*</span>;
 
 const GRID_4 = "grid grid-cols-1 gap-0.5 p-1 md:grid-cols-2 xl:grid-cols-4";
-
 
 const TEXTAREA_CLS =
   "min-h-[56px] w-full resize-y rounded-md border bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60";
@@ -110,7 +215,6 @@ type SectionCardProps = {
   hint?: string;
   children: ReactNode;
 };
-
 
 const SectionCard = ({ icon: Icon, title, hint, children }: SectionCardProps) => (
   <div className="shrink-0 rounded-xl border bg-card shadow-sm">
@@ -139,6 +243,7 @@ const AddCRRequestPage = ({
   const loginid = user?.loginid ?? "";
 
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
   const [dialogError, setDialogError] = useState("");
@@ -149,14 +254,48 @@ const AddCRRequestPage = ({
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
+
+  const [sendBackUsers, setSendBackUsers] = useState<
+    { LEVEL_NO: number; EMPLOYEE_CODE_ID: string; RPT_NAME: string }[]
+  >([]);
+
+  const [sendBackUser, setSendBackUser] = useState("");
+  const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+
+
+
+
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [logRows, setLogRows] = useState<any[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [userLevel, setUserLevel] = useState<number | null>(null);
+
+  // ── Approval Flow states ──────────────────────────────────
+  // ── Approval Flow states ──────────────────────────────────
+  const [approvalFlowOpen, setApprovalFlowOpen] = useState(false);
+  const [approvalFlowData, setApprovalFlowData] = useState<any[]>([]); // Merged data
+  const [approvalFlowLoading, setApprovalFlowLoading] = useState(false);
 
   const isCancelled = String(header.LAST_ACTION || "").toUpperCase() === "CANCELED";
   const disabled = isViewMode || saving || isCancelled;
   const canTakeAction = !isViewMode && isPendingTab && !isCancelled;
   const canSendBackOrReject = canTakeAction && isEditMode && !!requestNumber;
+
+  // Send Back is hidden for the levels in SEND_BACK_HIDDEN_LEVELS (and while the level is unknown)
+  const canSendBack =
+    canSendBackOrReject && userLevel !== null && !SEND_BACK_HIDDEN_LEVELS.includes(userLevel);
+  const canEditAccountNo = userLevel !== null && ACCOUNT_NO_EDIT_LEVELS.includes(userLevel);
+  const canEditCredit = userLevel !== null && !CREDIT_FIELDS_LOCKED_LEVELS.includes(userLevel);
   const busy = saving || actionLoading !== null;
+
+
+  const rejectCancelAllowed = userLevel !== null && !REJECT_CANCEL_HIDDEN_LEVELS.includes(userLevel);
+  const canReject = canSendBackOrReject && rejectCancelAllowed;
+  const canCancel = canTakeAction && !!requestNumber && rejectCancelAllowed;
+
+
+
 
   const { data: hdrList = [], isLoading: hdrLoading, isError: hdrError } = useQuery<TCRHeader[]>({
     queryKey: ["cr-header", requestNumber, companyCode],
@@ -175,9 +314,108 @@ const AddCRRequestPage = ({
     if (!(isEditMode || isViewMode) || !hdrLoading) setLoading(false);
   }, [hdrList, hdrLoading, isEditMode, isViewMode]);
 
-  const setHdr = (field: keyof TCRHeader, value: unknown) =>
-    setHeader((prev) => ({ ...prev, [field]: value }));
+  // Logged-in user's approval level (decides who sees "Send Back")
+  useEffect(() => {
+    if (!companyCode) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const rows = await getDynamicLookup({
+          parameter: "PS_CREDITREQUEST_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
+          code1: companyCode,
+          code2: loginid || user?.username || "ADMIN",
+          code3: "credit_request_form",
+        });
+        if (!mounted) return;
+        const first = (rows || [])[0] as Record<string, unknown> | undefined;
+        const level = first
+          ? Number(first.level ?? first.LEVEL ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0])
+          : 0;
+        setUserLevel(Number.isFinite(level) ? level : 0);
+      } catch {
+        // If the level can't be read, hide Send Back instead of showing it to everyone
+        if (mounted) setUserLevel(null);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [companyCode, loginid, user?.username]);
 
+
+
+
+  useEffect(() => {
+    if (!sendBackOpen || !companyCode || !requestNumber || userLevel === null) {
+      return;
+    }
+
+    let mounted = true;
+
+    const fetchSendBackUsers = async () => {
+      try {
+        setSendBackUsersLoading(true);
+        setSendBackUsers([]);
+
+        const rows = await getDynamicLookup({
+          parameter: "PS_CREDITREQUEST_ENTRY_SENDBACK_LEVELS",
+          code1: companyCode,
+          code2: requestNumber,
+          code3: loginid,
+          code4: String(userLevel),
+        });
+
+        if (!mounted) return;
+
+        const users = (rows || []).map((row: any) => ({
+          LEVEL_NO: Number(row.LEVEL_NO ?? row.level_no),
+          EMPLOYEE_CODE_ID: String(
+            row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""
+          ),
+          RPT_NAME:
+            row.RPT_NAME ??
+            row.rpt_name ??
+            row.EMPLOYEE_CODE_ID ??
+            row.employee_code_id ??
+            "",
+        }));
+
+        setSendBackUsers(
+          users.filter((u) => u.EMPLOYEE_CODE_ID)
+        );
+      } catch (error) {
+        if (mounted) {
+          setDialogError("Unable to load Send Back users");
+        }
+      } finally {
+        if (mounted) setSendBackUsersLoading(false);
+      }
+    };
+
+    fetchSendBackUsers();
+
+    return () => {
+      mounted = false;
+    };
+  }, [sendBackOpen, companyCode, requestNumber, loginid, userLevel]);
+
+  const setHdr = (field: keyof TCRHeader, value: unknown) =>
+    setHeader((prev) => ({
+      ...prev,
+      [field]:
+        typeof value === "string" && FIELD_MAX[field]
+          ? clipBytes(value, FIELD_MAX[field] as number)
+          : value,
+    }));
+
+  // Number fields: ignores any keystroke that would exceed the column's digits
+  const setNum = (field: keyof TCRHeader, raw: string, intDigits: number, decimals = 0) => {
+    if (raw === "") return setHdr(field, undefined);
+    const [i = "", d = ""] = raw.split(".");
+    if (!/^\d*$/.test(i) || !/^\d*$/.test(d)) return;
+    if (i.length > intDigits || d.length > decimals) return;
+    setHdr(field, Number(raw));
+  };
 
   const envSelected = [
     header.ACCOUNT_ENV_TMS === "Y" && "TMS",
@@ -187,7 +425,7 @@ const AddCRRequestPage = ({
 
   const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     executeDynamicMutationColumn90({
-      parameter: "capex_req_ins_upd",
+      parameter: "credit_req_ins_upd",
       loginid,
       val1s1: requestNumber || "",
       val1s2: companyCode,
@@ -253,12 +491,76 @@ const AddCRRequestPage = ({
       ...extra,
     });
 
-  const validateTel = () => {
-    if (header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10) {
-      setNotice({ type: "error", message: "Tel No must be exactly 10 digits" });
-      return false;
+  const validateForm = (mode: "draft" | "submit") => {
+    const errs: string[] = [];
+    const text = (f: keyof TCRHeader) => String(header[f] ?? "").trim();
+    const num = (f: keyof TCRHeader) => Number(header[f] ?? 0);
+
+    // Required
+    const required = mode === "submit" ? SUBMIT_REQUIRED : DRAFT_REQUIRED;
+    (Object.keys(required) as (keyof TCRHeader)[]).forEach((f) => {
+      const v = header[f];
+      const empty = typeof v === "number" ? v <= 0 : text(f) === "";
+      if (empty) errs.push(`${required[f]} is required`);
+    });
+
+
+    // Account No is entered by the allowed level only
+
+    // Credit Limit / Requested Credit Period are required only from the levels that can edit them
+    if (mode === "submit" && canEditCredit) {
+      if (num("CREDIT_LIMIT") <= 0) errs.push("Credit Limit is required");
+      if (num("REQUESTED_CREDIT_PERIOD") <= 0) errs.push("Requested Credit Period is required");
     }
-    return true;
+
+    if (mode === "submit" && canEditAccountNo && text("ACCOUNT_NO") === "") {
+      errs.push("Account No is required");
+    }
+
+    // Formats
+    if (text("EMAIL") && !EMAIL_RE.test(text("EMAIL"))) errs.push("Email is not valid");
+    if (text("FIN_CONTACT_EMAIL") && !EMAIL_RE.test(text("FIN_CONTACT_EMAIL")))
+      errs.push("Finance Email is not valid");
+    if (text("OFFICE_TEL_NO") && !PHONE_RE.test(text("OFFICE_TEL_NO")))
+      errs.push("Tel No can contain only digits, +, -, spaces and brackets");
+    if (text("FAX_NO") && !PHONE_RE.test(text("FAX_NO")))
+      errs.push("Fax No can contain only digits, +, -, spaces and brackets");
+    if (text("WEBSITE") && !WEB_RE.test(text("WEBSITE")))
+      errs.push("Website is not valid (example: www.company.com)");
+    if (text("FIN_CONTACT_NUMBER") && text("FIN_CONTACT_NUMBER").length !== 10)
+      errs.push("Finance Tel No must be exactly 10 digits");
+
+    // Numbers
+    const postal = num("POSTAL_CODE");
+    if (postal && (!Number.isInteger(postal) || postal < 0 || String(postal).length > 10))
+      errs.push("Postal Code must be a whole number of up to 10 digits");
+
+    const checkAmount = (label: string, n: number) => {
+      if (n < 0) errs.push(`${label} cannot be negative`);
+      else if (n > MAX_AMOUNT) errs.push(`${label} cannot be more than ${MAX_AMOUNT.toLocaleString()}`);
+      else if ((String(n).split(".")[1] ?? "").length > 3)
+        errs.push(`${label} allows a maximum of 3 decimal places`);
+    };
+    checkAmount("Credit Limit", num("CREDIT_LIMIT"));
+    checkAmount("Sanctioned Credit Limit Amt", num("SANCTIONED_CREDIT_LIMIT_AMT"));
+
+    const checkPeriod = (label: string, n: number, max: number) => {
+      if (n < 0 || !Number.isInteger(n)) errs.push(`${label} must be a whole number`);
+      else if (n > max) errs.push(`${label} cannot be more than ${max.toLocaleString()}`);
+    };
+    checkPeriod("Requested Credit Period", num("REQUESTED_CREDIT_PERIOD"), MAX_PERIOD);
+    checkPeriod("Sanctioned Credit Period", num("SANCTIONED_CREDIT_PERIOD"), MAX_SANCTIONED_PERIOD);
+
+    return errs;
+  };
+
+  const runValidation = (mode: "draft" | "submit") => {
+    const list = validateForm(mode);
+    setErrors(list);
+    if (list.length) {
+      document.querySelector(".commercial-editor-body")?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return list.length === 0;
   };
 
   const execute = async (
@@ -294,10 +596,10 @@ const AddCRRequestPage = ({
   };
 
   const handleSaveDraft = () => {
-    if (validateTel()) void execute("draft", "SAVEASDRAFT", "Draft saved successfully!");
+    if (runValidation("draft")) void execute("draft", "SAVEASDRAFT", "Draft saved successfully!");
   };
   const handleSubmit = () => {
-    if (validateTel()) void execute("submit", "SUBMITTED", "CR submitted successfully!");
+    if (runValidation("submit")) void execute("submit", "SUBMITTED", "CR submitted successfully!");
   };
 
   const handleRejectConfirm = () => {
@@ -307,9 +609,27 @@ const AddCRRequestPage = ({
     );
   };
   const handleSendBackConfirm = () => {
-    if (!remarkText.trim()) return setDialogError("Please enter a send back reason");
-    void execute("sendBack", "SENTBACK", "CR sent back successfully!", { val1s46: remarkText.trim() }, () =>
-      setSendBackOpen(false)
+    if (!sendBackUser) {
+      return setDialogError("Please select a user to send back");
+    }
+
+    if (!remarkText.trim()) {
+      return setDialogError("Please enter a send back reason");
+    }
+
+    void execute(
+      "sendBack",
+      "SENTBACK",
+      "CR sent back successfully!",
+      {
+        val1s45: sendBackUser,
+        val1s46: remarkText.trim(),
+      },
+      () => {
+        setSendBackOpen(false);
+        setSendBackUser("");
+        setRemarkText("");
+      }
     );
   };
   const handleCancelConfirm = () => {
@@ -323,9 +643,134 @@ const AddCRRequestPage = ({
   };
   const openSendBack = () => {
     setRemarkText("");
+    setSendBackUser("");
+    setSendBackUsers([]);
     setDialogError("");
     setSendBackOpen(true);
   };
+
+
+
+
+  const openLog = async () => {
+    if (!requestNumber) return;
+    setLogOpen(true);
+    setLogLoading(true);
+    setLogRows([]);
+    try {
+      const rows = await getCreditRequestHistory({
+        loginid,
+        company_code: companyCode,
+        request_number: requestNumber,
+      });
+
+      setLogRows(rows);
+    } catch (e) {
+      console.error(e);
+      setLogRows([]);
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
+  // ── Open Approval Flow dialog ─────────────────────────────
+
+  const openApprovalFlow = async () => {
+    if (!companyCode || !requestNumber || userLevel === null) return;
+
+    setApprovalFlowOpen(true);
+    setApprovalFlowLoading(true);
+    setApprovalFlowData([]);
+
+    try {
+
+      const historyRows = await getCreditRequestHistory({
+        loginid,
+        company_code: companyCode,
+        request_number: requestNumber,
+      });
+
+      const nextLevels = await getDynamicLookup({
+        parameter: "PS_CREDITREQUEST_ENTRY_APPROVAL_FLOW",
+        code1: companyCode,
+        code2: requestNumber,
+        code3: loginid,
+        code4: String(userLevel),
+      });
+
+      const mergedMap = new Map();
+
+      (nextLevels || []).forEach((row: any) => {
+        const level = Number(row.LEVEL_NO ?? row.level_no);
+        if (!level) return;
+
+        mergedMap.set(level, {
+          LEVEL_NO: level,
+          RPT_NAME: row.RPT_NAME || row.rpt_name || row.EMPLOYEE_CODE_ID || "Approver",
+          EMPLOYEE_CODE_ID: String(row.EMPLOYEE_CODE_ID ?? row.employee_code_id ?? ""),
+          STATUS: "PENDING",
+          REMARKS: "",
+          DATE: null,
+        });
+      });
+
+
+
+      const currentRunningLevel = Number(header.FLOW_LEVEL_RUNNING || 1);
+
+
+      (historyRows || []).forEach((h: any) => {
+        const level = Number(h.flow_level_running);
+        if (!level) return;
+
+        const existing = mergedMap.get(level);
+        let actualStatus = (h.last_action || "PENDING").toUpperCase();
+        let actualDate = h.user_dt || null;
+
+
+        if (level > currentRunningLevel) {
+          actualStatus = "PENDING";
+          actualDate = null;
+        }
+
+
+        else if (level === currentRunningLevel) {
+          actualStatus = "PENDING";
+          actualDate = null;
+        }
+
+
+        else if (level < currentRunningLevel) {
+          actualStatus = "SUBMITTED";
+
+        }
+
+        mergedMap.set(level, {
+          LEVEL_NO: level,
+          RPT_NAME: existing?.RPT_NAME || h.next_action_by || h.user_id || "Approver",
+          EMPLOYEE_CODE_ID: existing?.EMPLOYEE_CODE_ID || h.user_id || "",
+          STATUS: actualStatus,
+          REMARKS: h.reject_reason || h.sentback_reason || h.cancel_remark || "",
+          DATE: actualDate,
+        });
+      });
+
+      const level1Data = mergedMap.get(1);
+      if (level1Data) {
+        level1Data.STATUS = "SUBMITTED";
+        level1Data.DATE = header.CREATE_DATE || header.REQUEST_DATE || new Date().toISOString();
+      }
+
+      const finalData = Array.from(mergedMap.values()).sort((a, b) => a.LEVEL_NO - b.LEVEL_NO);
+      setApprovalFlowData(finalData);
+
+    } catch (err) {
+      console.error("Error loading approval flow:", err);
+    } finally {
+      setApprovalFlowLoading(false);
+    }
+  };
+
   const closeReject = () => {
     if (actionLoading === "reject") return;
     setRejectOpen(false);
@@ -382,28 +827,29 @@ const AddCRRequestPage = ({
                     {actionLoading === "submit" ? "Submitting..." : "Submit"}
                   </Button>
 
-                  {canSendBackOrReject && (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={openSendBack}
-                        disabled={busy}
-                        className="rounded-full bg-yellow-500 shadow-md hover:bg-yellow-600 disabled:opacity-60"
-                      >
-                        <ChevronLeft size={15} /> {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={openReject}
-                        disabled={busy}
-                        className="rounded-full bg-red-600 shadow-md hover:bg-red-700 disabled:opacity-60"
-                      >
-                        {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-                      </Button>
-                    </>
+                  {canSendBack && (
+                    <Button
+                      type="button"
+                      onClick={openSendBack}
+                      disabled={busy}
+                      className="rounded-full bg-yellow-500 shadow-md hover:bg-yellow-600 disabled:opacity-60"
+                    >
+                      <ChevronLeft size={15} /> {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                    </Button>
                   )}
 
-                  {!!requestNumber && (
+                  {canReject && (
+                    <Button
+                      type="button"
+                      onClick={openReject}
+                      disabled={busy}
+                      className="rounded-full bg-red-600 shadow-md hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </Button>
+                  )}
+
+                  {canCancel && (
                     <Button
                       type="button"
                       onClick={() => setCancelOpen(true)}
@@ -419,8 +865,23 @@ const AddCRRequestPage = ({
               <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={openLog}
+                disabled={!requestNumber}
+              >
                 <FileText size={15} /> Log
+              </Button>
+
+
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={openApprovalFlow}
+                disabled={!requestNumber || userLevel === null}
+              >
+                <GitBranch size={15} /> Approval Flow
               </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
                 <X size={16} />
@@ -454,6 +915,17 @@ const AddCRRequestPage = ({
               style={{ height: "auto", maxHeight: "none", overflow: "visible" }}
             >
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+              {errors.length > 0 && (
+                <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                  <p className="m-0 mb-1 font-semibold">Please fix the following:</p>
+                  <ul className="m-0 list-disc pl-5">
+                    {errors.map((e) => (
+                      <li key={e}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* ── 1. Request Information ─────────────────────────────────── */}
               <SectionCard icon={ClipboardList} title="Request Information" hint="Credit Request">
@@ -489,7 +961,7 @@ const AddCRRequestPage = ({
 
                   {/* Row 2 */}
                   <label className="field"><span>Po Box<Required /></span><Input disabled={disabled} value={header.PO_BOX || ""} onChange={(e) => setHdr("PO_BOX", e.target.value)} /></label>
-                  <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" value={header.POSTAL_CODE ?? ""} onChange={(e) => setHdr("POSTAL_CODE", Number(e.target.value))} /></label>
+                  <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.POSTAL_CODE ?? ""} onChange={(e) => setNum("POSTAL_CODE", e.target.value, 10)} /></label>
                   <label className="field"><span>City<Required /></span><Input disabled={disabled} value={header.CITY || ""} onChange={(e) => setHdr("CITY", e.target.value)} /></label>
                   <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.OFFICE_TEL_NO || ""} onChange={(e) => setHdr("OFFICE_TEL_NO", e.target.value)} /></label>
 
@@ -544,10 +1016,10 @@ const AddCRRequestPage = ({
               {/* ── 4. Credit Requested / Sanctioned ───────────────────────── */}
               <SectionCard icon={CreditCard} title="Credit Requested / Sanctioned" hint="Requested And Sanctioned Limits">
                 <div className={GRID_4}>
-                  <label className="field"><span>Credit Limit<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setHdr("CREDIT_LIMIT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Requested Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("REQUESTED_CREDIT_PERIOD", Number(e.target.value))} /></label>
-                  <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
+                  <label className="field"><span>Credit Limit{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} step="0.001" onKeyDown={blockNumberKeys(true)} value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setNum("CREDIT_LIMIT", e.target.value, 9, 3)} /></label>
+                  <label className="field"><span>Requested Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("REQUESTED_CREDIT_PERIOD", e.target.value, 4)} /></label>
+                  <label className="field"><span>Sanctioned Credit Limit Amt{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} step="0.001" onKeyDown={blockNumberKeys(true)} value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_LIMIT_AMT", e.target.value, 9, 3)} /></label>
+                  <label className="field"><span>Sanctioned Credit Period{canEditCredit && <Required />}</span><Input disabled={disabled || !canEditCredit} type="number" className={NUM_INPUT_CLS} onKeyDown={blockNumberKeys(false)} value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setNum("SANCTIONED_CREDIT_PERIOD", e.target.value, 15)} /></label>
                 </div>
               </SectionCard>
 
@@ -584,8 +1056,12 @@ const AddCRRequestPage = ({
                   })}
 
                   <label className="field">
-                    <span>Account No<Required /></span>
-                    <Input disabled={disabled} value={header.ACCOUNT_NO || ""} onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)} />
+                    <span>Account No{canEditAccountNo && <Required />}</span>
+                    <Input
+                      disabled={disabled || !canEditAccountNo}
+                      value={header.ACCOUNT_NO || ""}
+                      onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)}
+                    />
                   </label>
                 </div>
               </SectionCard>
@@ -658,29 +1134,345 @@ const AddCRRequestPage = ({
         {dialogError && <p className="mt-1 text-xs text-destructive">{dialogError}</p>}
       </Dialog>
 
+
       {/* Send Back */}
       <Dialog
         open={sendBackOpen}
         title="Send Back Request"
-        description="Enter the reason for sending back."
+        description="Select who to send this back to, and enter the reason."
         onClose={closeSendBack}
         footer={
           <>
-            <Button variant="outline" onClick={closeSendBack} disabled={actionLoading === "sendBack"}>Cancel</Button>
-            <Button disabled={busy} onClick={handleSendBackConfirm} variant="default">
-              {actionLoading === "sendBack" ? "Sending Back..." : "Confirm Send Back"}
+            <Button
+              variant="outline"
+              onClick={closeSendBack}
+              disabled={actionLoading === "sendBack"}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              disabled={busy || sendBackUsersLoading}
+              onClick={handleSendBackConfirm}
+              variant="default"
+            >
+              {actionLoading === "sendBack" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending Back...
+                </>
+              ) : (
+                <>
+                  <ChevronLeft size={15} className="mr-1" />
+                  Confirm Send Back
+                </>
+              )}
             </Button>
           </>
         }
       >
-        <textarea
-          rows={3}
-          value={remarkText}
-          onChange={(e) => { setRemarkText(e.target.value); setDialogError(""); }}
-          placeholder="Enter send back reason..."
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-        />
-        {dialogError && <p className="mt-1 text-xs text-destructive">{dialogError}</p>}
+        <div className="space-y-3">
+
+          {/* Send Back To */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Send Back To <span className="text-destructive">*</span>
+            </label>
+
+            <select
+              value={sendBackUser}
+              onChange={(e) => {
+                setSendBackUser(e.target.value);
+                setDialogError("");
+              }}
+              disabled={sendBackUsersLoading || busy}
+              className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">
+                {sendBackUsersLoading
+                  ? "Loading users..."
+                  : "Select user"}
+              </option>
+
+              {sendBackUsers.map((user) => (
+                <option
+                  key={user.EMPLOYEE_CODE_ID}
+                  value={user.EMPLOYEE_CODE_ID}
+                >
+                  {user.RPT_NAME}
+                </option>
+              ))}
+            </select>
+
+            {!sendBackUsersLoading && sendBackUsers.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No eligible users available for Send Back.
+              </p>
+            )}
+          </div>
+
+          {/* Send Back Reason */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Send Back Reason <span className="text-destructive">*</span>
+            </label>
+
+            <textarea
+              rows={4}
+              value={remarkText}
+              onChange={(e) => {
+                setRemarkText(e.target.value);
+                setDialogError("");
+              }}
+              placeholder="Enter send back reason..."
+              disabled={busy}
+              className="min-h-[110px] w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          {dialogError && (
+            <p className="text-xs text-destructive">
+              {dialogError}
+            </p>
+          )}
+
+        </div>
+      </Dialog>
+
+
+
+      <Dialog
+        open={logOpen}
+        title="Credit Request Flow Log"
+        description={requestNumber ? String(requestNumber) : ""}
+        onClose={() => setLogOpen(false)}
+        footer={
+          <Button type="button" onClick={() => setLogOpen(false)}>
+            OK
+          </Button>
+        }
+       >
+        <div className="w-[min(920px,92vw)] max-w-full">
+          {/* ── Important fields ── */}
+          <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border bg-slate-50 p-3 text-sm md:grid-cols-3">
+            <div>
+              <span className="text-muted-foreground">Request No</span>
+              <div className="font-semibold">{requestNumber || "—"}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Status</span>
+              <div className="font-semibold">{header.LAST_ACTION || "—"}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Company</span>
+              <div className="font-semibold">{header.COMPANY_NAME || "—"}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Created By</span>
+              <div className="font-semibold">{header.CREATE_USER || "—"}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Credit Limit</span>
+              <div className="font-semibold">
+                {header.CREDIT_LIMIT != null
+                  ? Number(header.CREDIT_LIMIT).toLocaleString()
+                  : "—"}
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Req. Period</span>
+              <div className="font-semibold">
+                {header.REQUESTED_CREDIT_PERIOD ?? "—"}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Approval History ── */}
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#00378C]">
+            Approval History
+          </p>
+
+          {logLoading ? (
+            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading history...
+            </div>
+          ) : logRows.length === 0 ? (
+            <p className="py-6 text-sm text-muted-foreground">
+              No flow history available.
+            </p>
+          ) : (
+            <div className="max-h-[60vh] overflow-auto rounded-md border">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
+                <thead className="sticky top-0 bg-[#eaf0f8] text-[#00378C]">
+                  <tr>
+                    <th className="border-b px-3 py-2 text-left font-semibold">S.No.</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">Action</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">By</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">Date &amp; Time</th>
+                    <th className="border-b px-3 py-2 text-right font-semibold">Level</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">Next By</th>
+                    <th className="border-b px-3 py-2 text-left font-semibold">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logRows.map((r, i) => {
+                    const remark =
+                      r.reject_reason ||
+                      r.sentback_reason ||
+                      r.cancel_remark ||
+                      "—";
+                    const when = r.user_dt
+                      ? new Date(r.user_dt).toLocaleString("en-GB", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      })
+                      : "—";
+                    return (
+                      <tr key={i} className="odd:bg-white even:bg-slate-50/80">
+                        <td className="border-b px-3 py-1.5">{i + 1}</td>
+                        <td className="border-b px-3 py-1.5 font-medium">
+                          {r.last_action || "—"}
+                        </td>
+                        <td className="border-b px-3 py-1.5">{r.user_id || "—"}</td>
+                        <td className="border-b px-3 py-1.5 whitespace-nowrap">{when}</td>
+                        <td className="border-b px-3 py-1.5 text-right">
+                          {r.flow_level_running ?? "—"}
+                        </td>
+                        <td className="border-b px-3 py-1.5">
+                          {r.next_action_by || "—"}
+                        </td>
+                        <td className="border-b px-3 py-1.5">{remark}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Dialog>
+
+      {/* Approval Graph Dialog - Separate Status & Remarks */}
+      <Dialog
+        open={approvalFlowOpen}
+        title="Approval Flow"
+        description={requestNumber ? String(requestNumber) : ""}
+        onClose={() => setApprovalFlowOpen(false)}
+        footer={
+          <Button type="button" onClick={() => setApprovalFlowOpen(false)} className="px-8">
+            OK
+          </Button>
+        }
+      >
+        <div className="w-[min(850px,95vw)] max-w-full bg-white pb-4">
+
+          {/* Table Header - 6, 3, 3 Split */}
+          <div className="mb-4 grid grid-cols-12 gap-4 border-b-2 border-gray-100 pb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
+            <div className="col-span-6 pl-12">Level & Details</div>
+            <div className="col-span-3 text-center">Status</div>
+            <div className="col-span-3 text-right pr-4">Remarks</div>
+          </div>
+
+          {approvalFlowLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" /> Loading...
+            </div>
+          ) : approvalFlowData.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No approval flow available.
+            </p>
+          ) : (
+            <div className="relative pl-4 space-y-0">
+
+              {/* Main Vertical Line (Tree Trunk) */}
+              <div className="absolute left-[26px] top-6 bottom-8 w-0.5 bg-gray-200 z-0" />
+              {approvalFlowData.map((item, idx) => {
+            
+                const statusStr = String(item.STATUS).toUpperCase();
+                const isApproved = statusStr.includes("APPROV") || statusStr.includes("SUBMIT");
+                const isSentBack = statusStr.includes("BACK") || statusStr.includes("REJECT") || statusStr.includes("CANCEL");
+                const isPending = statusStr.includes("PEND") || statusStr === "" || statusStr === "UNKNOWN";
+
+                return (
+                  <div key={idx} className="relative z-10 flex gap-4 pb-6 group">
+
+                    {/* Tree Node Icon */}
+                    <div className="relative flex flex-col items-center mt-1">
+                      <div className="absolute top-4 -left-4 w-4 h-px bg-gray-200" />
+
+                      {/* Node Box */}
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-white shadow-sm
+          ${isApproved ? 'border-green-500' : isSentBack ? 'border-red-500' : 'border-gray-300'}`}>
+                        {isApproved ? <CheckCircle2 size={16} className="text-green-500" /> :
+                          isSentBack ? <X size={16} className="text-red-500" /> :
+                            <span className="text-xs font-bold text-gray-400">{item.LEVEL_NO}</span>}
+                      </div>
+                    </div>
+
+                    {/* Row Content */}
+                    <div className="flex-1 pb-4 border-b border-dashed border-gray-100 last:border-0">
+                      <div className="grid grid-cols-12 gap-4 items-center">
+
+                        {/* Left: Level & Role Name (col-span-6) */}
+                        <div className="col-span-6 flex flex-col gap-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-bold text-gray-700 text-xs uppercase">LEVEL {item.LEVEL_NO}</span>
+                            <span className="font-semibold text-gray-900 text-sm">{item.RPT_NAME}</span>
+                          </div>
+
+                          {item.EMPLOYEE_CODE_ID && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium pl-1">
+                              <User size={12} className="text-gray-400" /> {item.EMPLOYEE_CODE_ID}
+                            </div>
+                          )}
+
+                    
+                          {item.DATE && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-400 pl-1 mt-0.5">
+                              <Clock size={12} />
+                              {new Date(item.DATE).toLocaleString("en-GB", {
+                                day: "2-digit", month: "2-digit", year: "numeric",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Middle: Status Badge (col-span-3) */}
+                        <div className="col-span-3 flex justify-center">
+                          <span className={`px-3 py-1 text-[11px] font-bold rounded-md tracking-wide text-center min-w-[90px]
+              ${isApproved ? 'bg-green-100 text-green-700 border border-green-200' :
+                              isSentBack ? 'bg-red-100 text-red-700 border border-red-200' :
+                                'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+                            {item.STATUS ? item.STATUS : "PENDING"}
+                          </span>
+                        </div>
+
+                        {/* Right: Remarks (col-span-3) */}
+                        <div className="col-span-3 flex justify-end pr-2">
+                          {item.REMARKS ? (
+                            <span className="text-xs text-gray-600 text-right italic line-clamp-2" title={item.REMARKS}>
+                              "{item.REMARKS}"
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
+                        </div>
+
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+
+            </div>
+          )}
+        </div>
       </Dialog>
 
       {/* Cancel */}

@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { MultiSelectField, type MultiSelectOption } from "../../components/ui/MultiSelectField";
 import { ReportFilterHeader } from "../../components/reports/ReportFilterHeader";
 import { NewReportDialog } from "../../components/new_report_format";
+import { VoucherPreviewModal, openTransactionScreen } from "../../components/finance/VoucherPreviewModal";
 import { useAuth } from "../../state/AuthContext";
 import { getDynamicLookup } from "../../api/lookups";
 import {
@@ -137,6 +138,11 @@ export default function ProfitLossPage() {
   const [drillLoading, setDrillLoading] = useState(false);
   const [drillError, setDrillError] = useState<string | null>(null);
   const drillIdCounter = useRef(0);
+  const [voucherModal, setVoucherModal] = useState<{ open: boolean; docType: string; docNo: string }>({
+    open: false,
+    docType: "",
+    docNo: "",
+  });
 
   // ── Derived ──────────────────────────────────────────────────────────────
   const canGenerate = Boolean(dateFrom && dateTo);
@@ -165,11 +171,22 @@ export default function ProfitLossPage() {
     fetchDivisions();
   }, [companyCode, loginId]);
 
-  // ── postMessage listener for drill-down clicks ───────────────────────────
+  // ── postMessage listener for drill-down clicks & voucher actions ───────────────────────────
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       const data = event.data;
-      if (!data || data.type !== "PNL_DRILL_DOWN") return;
+      if (!data) return;
+
+      if (data.type === "OPEN_DOCUMENT" || data.type === "OPEN_VOUCHER_PREVIEW") {
+        const { docType, docNo } = data as { docType: string; docNo: string };
+        if (docType && docNo) {
+          setVoucherModal({ open: true, docType: String(docType), docNo: String(docNo) });
+        }
+        return;
+      }
+
+
+      if (data.type !== "PNL_DRILL_DOWN") return;
 
       setDrillLoading(true);
       setDrillError(null);
@@ -466,6 +483,8 @@ export default function ProfitLossPage() {
         loading={reportLoading || drillLoading}
         error={drillError ?? (reportError && !reportHtml ? reportError : null)}
         onExportExcel={handleExcel}
+        canGoBack={drillStack.length > 0}
+        onBack={() => handleDrillNavigate(drillStack.length - 2)}
         headerSlot={
           (drillLoading || drillError || drillStack.length > 0) ? (
             <div className="flex flex-col gap-0">
@@ -496,6 +515,12 @@ export default function ProfitLossPage() {
             </div>
           ) : undefined
         }
+      />
+      <VoucherPreviewModal
+        open={voucherModal.open}
+        onClose={() => setVoucherModal({ open: false, docType: "", docNo: "" })}
+        docType={voucherModal.docType}
+        docNo={voucherModal.docNo}
       />
     </section>
   );

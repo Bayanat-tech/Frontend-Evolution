@@ -9,6 +9,10 @@ export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | 
 
 export interface PurchaseOrderLineRow {
   id: string;
+  grn_unit_chgs?: number;
+  po_disc_price?:number;
+  po_disc_percent?:number;
+  po_tx_compnt_perc_1?:number;
   div_code: string;
   prod_code: string;
   prod_name: string;
@@ -43,7 +47,7 @@ export interface PurchaseOrderLineRow {
   tx_compnt_1_expmt: string,
   tx_cat_name?: string
   tx_compntcat_name?: string
-  
+
   po_p_uom?: string;
   po_qty_puom?: number;
   po_l_uom?: string;
@@ -90,8 +94,11 @@ export interface PurchaseOrderLineRow {
 
 export interface PurchaseOrderForm {
   pr_req_no?: string;
-  job_card_no?:string;
-warranty_period?: number;
+  po_discount_scoope?: string;
+  po_tx_compnt_1_expmt?: string;
+  po_tx_compntcat_name_1?:string;
+  job_card_no?: string;
+  warranty_period?: number;
   warranty_uom?: "D" | "M" | "Y";
   warranty_desc?: string;
   salesman_name?: string;
@@ -360,6 +367,7 @@ export interface ExpenseRow {
   dept_code: string | null;
   serial_no: number;
   exp_code: string | null;
+  expense_name?: string | null;
   remarks: string | null;
   amount: number;
   curr_code: string | null;
@@ -423,6 +431,7 @@ export interface PurchaseConfig {
   docType: PODocType;
   headerParameter: string;
   detailParameter: string;
+  expenseDetails?: string;
 }
 
 export const LPO_CONFIG: PurchaseConfig = {
@@ -441,6 +450,7 @@ export const GRN_CONFIG: PurchaseConfig = {
   docType: PO_DOC_TYPE.GRN,
   headerParameter: "PS_GRN_ENTRY_HEADER_PAGE",
   detailParameter: "PS_GRN_ENTRY_DETAIL_PAGE",
+  expenseDetails: "PS_GRN_ENTRY_VW_TTE_PGRN_EXP_CHGS",
 };
 export const MRT_CONFIG: PurchaseConfig = {
   docType: PO_DOC_TYPE.MRT,

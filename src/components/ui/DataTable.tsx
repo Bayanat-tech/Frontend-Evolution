@@ -62,6 +62,7 @@ export type DataTableProps<TData, TValue> = {
   exportFilename?: string;
   rowClassName?: (row: TData) => string;
   onRowClick?: (row: TData) => void;
+  onRowDoubleClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
   /** Called whenever row selection changes; receives array of selected row originals */
   onRowSelectionChange?: (selectedRows: TData[]) => void;
@@ -219,6 +220,7 @@ export function DataTable<TData, TValue>({
   exportFilename,
   rowClassName,
   onRowClick,
+  onRowDoubleClick,
   getRowId,
   onRowSelectionChange,
   initialSorting = [],
@@ -663,6 +665,7 @@ export function DataTable<TData, TValue>({
                     data-state={row.getIsSelected() && "selected"}
                     key={row.id}
                     onClick={() => onRowClick?.(row.original)}
+                    onDoubleClick={() => onRowDoubleClick?.(row.original)}
                   >
                     {row.getVisibleCells().map((cell, colIndex) => {
                       const cells = row.getVisibleCells();

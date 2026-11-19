@@ -392,16 +392,6 @@ const PayrollAccountSetupPage = () => {
 
             <button
               type="button"
-              onClick={() => void refetch()}
-              disabled={!ready || isFetching}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
-              Refresh
-            </button>
-
-            <button
-              type="button"
               onClick={() => openEditor("add")}
               disabled={!ready}
               title={ready ? "Add payroll account setup" : "Select all four filters first"}

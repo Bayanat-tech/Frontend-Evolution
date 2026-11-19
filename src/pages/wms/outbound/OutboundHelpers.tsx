@@ -195,6 +195,14 @@ export function makeOutboundJobForm(row: WmsRow, companyCode?: string): WmsRow {
     ),
   };
 }
+async function fetchName(sql: string, nameKey: string): Promise<string> {
+  try {
+    const rows = await executeWmsInboundSql(sql);
+    return value(normalizeRow(rows[0] || {}), nameKey);
+  } catch {
+    return ""; // one failed lookup shouldn't break the whole edit form
+  }
+}
 
 export async function enrichOutboundJobFormNames(
   form: WmsRow,
@@ -202,28 +210,65 @@ export async function enrichOutboundJobFormNames(
 ): Promise<WmsRow> {
   const deptCode = value(form, "dept_code");
   const divCode = value(form, "div_code");
-  if (
-    (!deptCode && !divCode) ||
-    (value(form, "dept_name") && value(form, "div_name"))
-  )
-    return form;
+  const countryOrigin = value(form, "country_origin");
+  const countryDestination = value(form, "country_destination");
+  const portCode = value(form, "port_code");
+  const destinationPort = value(form, "destination_port");
 
-  const rows = await executeWmsInboundSql(`
-    SELECT d.DEPT_NAME, v.DIV_NAME
-    FROM MS_DEPARTMENT d
-    LEFT JOIN MS_HR_DIVISION v
-      ON v.COMPANY_CODE = d.COMPANY_CODE
-     AND v.DIV_CODE = d.DIV_CODE
-    WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
-      ${deptCode ? `AND d.DEPT_CODE = '${sqlEscape(deptCode)}'` : ""}
-      ${divCode ? `AND d.DIV_CODE = '${sqlEscape(divCode)}'` : ""}
-    FETCH FIRST 1 ROWS ONLY
-  `);
-  const names = normalizeRow(rows[0] || {});
+  const countryName = (code: string) =>
+    code
+      ? fetchName(
+          `SELECT COUNTRY_NAME FROM MS_COUNTRY WHERE COUNTRY_CODE = '${sqlEscape(code)}' FETCH FIRST 1 ROWS ONLY`,
+          "country_name"
+        )
+      : Promise.resolve("");
+
+  const portName = (code: string) =>
+    code
+      ? fetchName(
+          `SELECT PORT_NAME FROM MS_PORT WHERE PORT_CODE = '${sqlEscape(code)}' FETCH FIRST 1 ROWS ONLY`,
+          "port_name"
+        )
+      : Promise.resolve("");
+
+  const deptDivNames = async () => {
+    if ((!deptCode && !divCode) || (value(form, "dept_name") && value(form, "div_name")))
+      return { dept_name: "", div_name: "" };
+    try {
+      const rows = await executeWmsInboundSql(`
+        SELECT d.DEPT_NAME, v.DIV_NAME
+        FROM MS_DEPARTMENT d
+        LEFT JOIN MS_HR_DIVISION v
+          ON v.COMPANY_CODE = d.COMPANY_CODE
+         AND v.DIV_CODE = d.DIV_CODE
+        WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
+          ${deptCode ? `AND d.DEPT_CODE = '${sqlEscape(deptCode)}'` : ""}
+          ${divCode ? `AND d.DIV_CODE = '${sqlEscape(divCode)}'` : ""}
+        FETCH FIRST 1 ROWS ONLY
+      `);
+      const names = normalizeRow(rows[0] || {});
+      return { dept_name: value(names, "dept_name"), div_name: value(names, "div_name") };
+    } catch {
+      return { dept_name: "", div_name: "" };
+    }
+  };
+
+  const [dd, originName, destName, polName, podName] = await Promise.all([
+    deptDivNames(),
+    countryName(countryOrigin),
+    countryName(countryDestination),
+    portName(portCode),
+    portName(destinationPort),
+  ]);
+
   return {
     ...form,
-    dept_name: value(form, "dept_name") || value(names, "dept_name"),
-    div_name: value(form, "div_name") || value(names, "div_name"),
+    dept_name: value(form, "dept_name") || dd.dept_name,
+    div_name: value(form, "div_name") || dd.div_name,
+    country_origin_name: value(form, "country_origin_name") || originName,
+    country_destination_name: value(form, "country_destination_name") || destName,
+    port_name: value(form, "port_name") || polName,
+    destination_port_name: value(form, "destination_port_name") || podName,
   };
 }
 
@@ -231,6 +276,9 @@ export function buildOutboundJobPayload(form: WmsRow, companyCode: string): WmsR
   const allowedFields = new Set([
     "company_code",
     "job_no",
+    "job_date",
+    "curr_code",
+    "ex_rate",
     ...jobFields.map((field) => field.name),
   ]);
   const payload: WmsRow = {};
@@ -238,6 +286,15 @@ export function buildOutboundJobPayload(form: WmsRow, companyCode: string): WmsR
   allowedFields.forEach((field) => {
     if (field in form) payload[field] = form[field];
   });
+
+  // Oracle returns NULL for empty columns; Joi.string() rejects null
+  jobFields
+    .filter((field) => field.type !== "date")
+    .forEach(({ name }) => {
+      if (payload[name] === null || payload[name] === undefined) {
+        payload[name] = "";
+      }
+    });
 
   payload.company_code = form.company_code || companyCode;
   payload.job_type = "EXP";

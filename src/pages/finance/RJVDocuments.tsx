@@ -81,9 +81,9 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SI: { title: "Sales", subtitle: "Sales invoice document", addLabel: "Add Sales" },
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
-   RJV: { title: "Provisional / Reverse Journal Voucher", subtitle: "Provisional & reversal general ledger journal", addLabel: "Add Provisional / Reverse JV" },
-   EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
-   PJV: { title: "PDC Journal Voucher", subtitle: "Post dated cheque journal", addLabel: "Add PDC JV" },
+  RJV: { title: "Reverse Journal Voucher (RJV)", subtitle: "Reversal of provisional general ledger vouchers", addLabel: "Reverse Provisional JV" },
+  EJV: { title: "Year End JV", subtitle: "Year end closing journal", addLabel: "Add Year End JV" },
+  PJV: { title: "Provisional Journal Voucher (PJV)", subtitle: "Provisional accrued general ledger voucher", addLabel: "Add Provisional JV" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -585,32 +585,41 @@ function JVDocument({
   const loadJvOptions = async (searchQuery?: string) => {
     try {
       const activeFy = (form as any).fy_period || fyPeriod || undefined;
-      const res = await getTransactionDocuments(
-        "JV",
-        activeFy,
-        searchQuery?.trim() || undefined,
-        1,
-        100,
-        [{ field: "canceled", values: "N" }]
-      );
-      const tableData = res?.tableData || [];
-      return tableData.map((row: any) => {
-        const rawDocNo = String(row.doc_no || "").trim();
-        const formattedDocNo = rawDocNo.toUpperCase().startsWith("JV") ? rawDocNo : `JV${rawDocNo}`;
-        const formattedDate = formatDate(row.doc_date);
-        const amt = Number(row.amount ?? row.resolved_amount ?? 0);
-        return {
-          ...row,
-          doc_no: rawDocNo,
-          formatted_doc_no: formattedDocNo,
-          formatted_date: formattedDate,
-          formatted_amount: formatAmount(amt, currencyDecimals),
-          remarks: row.remarks || "Journal Voucher",
-          curr_code: row.curr_code || form.curr_code || "INR",
-        };
-      });
+      // Per audit rules: Reverse JV displays Provisional JVs (doc_type: RJV or PJV) that have not been reversed yet
+      const [resRjv, resPjv] = await Promise.all([
+        getTransactionDocuments("RJV", activeFy, searchQuery?.trim() || undefined, 1, 100, [
+          { field: "canceled", values: "N" },
+          { field: "unreversed_only", values: "Y" },
+        ]),
+        getTransactionDocuments("PJV", activeFy, searchQuery?.trim() || undefined, 1, 100, [
+          { field: "canceled", values: "N" },
+          { field: "unreversed_only", values: "Y" },
+        ]),
+      ]);
+      const tableData = [...(resRjv?.tableData || []), ...(resPjv?.tableData || [])];
+      return tableData
+        .filter((row: any) => {
+          // Strictly exclude any document that is already a reversal voucher or has ref_doc_no
+          const rem = String(row.remarks || "").toUpperCase();
+          if (row.ref_doc_no || rem.startsWith("(AUTO REVERSE")) return false;
+          return true;
+        })
+        .map((row: any) => {
+          const rawDocNo = String(row.doc_no || "").trim();
+          const formattedDate = formatDate(row.doc_date);
+          const amt = Number(row.amount ?? row.resolved_amount ?? 0);
+          return {
+            ...row,
+            doc_no: rawDocNo,
+            formatted_doc_no: rawDocNo,
+            formatted_date: formattedDate,
+            formatted_amount: formatAmount(amt, currencyDecimals),
+            remarks: row.remarks || "Provisional Journal Voucher",
+            curr_code: row.curr_code || form.curr_code || "INR",
+          };
+        });
     } catch (err) {
-      console.error("Failed to load JVs for reversal:", err);
+      console.error("Failed to load Provisional JVs for reversal:", err);
       return [];
     }
   };
@@ -618,7 +627,7 @@ function JVDocument({
   const handleReverseJV = async (jvDocNo: string) => {
     const cleanDocNo = jvDocNo.trim();
     if (!cleanDocNo) {
-      setError("Please enter or select a JV Document Number to reverse");
+      setError("Please enter or select a Provisional JV Document Number to reverse");
       return;
     }
     setReversing(true);
@@ -631,43 +640,42 @@ function JVDocument({
 
       try {
         [headerRaw, detailRaw] = await Promise.all([
-          getTransactionHeader(cleanDocNo, "JV"),
-          getTransactionDetail(cleanDocNo, form.div_code, "JV"),
+          getTransactionHeader(cleanDocNo, "RJV"),
+          getTransactionDetail(cleanDocNo, form.div_code, "RJV"),
         ]);
       } catch (err1) {
         if (numOnly && numOnly !== cleanDocNo) {
-          [headerRaw, detailRaw] = await Promise.all([
-            getTransactionHeader(numOnly, "JV"),
-            getTransactionDetail(numOnly, form.div_code, "JV"),
-          ]);
-        } else {
-          throw err1;
+          try {
+            [headerRaw, detailRaw] = await Promise.all([
+              getTransactionHeader(numOnly, "RJV"),
+              getTransactionDetail(numOnly, form.div_code, "RJV"),
+            ]);
+          } catch {}
         }
       }
 
-      if ((!headerRaw || !headerRaw.doc_no) && numOnly && numOnly !== cleanDocNo) {
+      // If not found in RJV, try PJV (Provisional Journal Voucher)
+      if (!headerRaw || !headerRaw.doc_no) {
         try {
-          const [h2, d2] = await Promise.all([
-            getTransactionHeader(numOnly, "JV"),
-            getTransactionDetail(numOnly, form.div_code, "JV"),
+          const [hPjv, dPjv] = await Promise.all([
+            getTransactionHeader(cleanDocNo, "PJV"),
+            getTransactionDetail(cleanDocNo, form.div_code, "PJV"),
           ]);
-          if (h2 && (h2.doc_no || (Array.isArray(d2) && d2.length))) {
-            headerRaw = h2;
-            detailRaw = d2;
+          if (hPjv && (hPjv.doc_no || (Array.isArray(dPjv) && dPjv.length))) {
+            headerRaw = hPjv;
+            detailRaw = dPjv;
           }
-        } catch {
-          // ignore fallback error
-        }
+        } catch {}
       }
 
       if (!headerRaw) {
-        setError(`JV Document ${cleanDocNo} not found`);
+        setError(`Provisional JV Document ${cleanDocNo} not found`);
         return;
       }
 
       const rawDetails = Array.isArray(detailRaw) ? detailRaw : (detailRaw as any)?.data || [];
       if (!rawDetails.length) {
-        setError(`No detail lines found in JV ${cleanDocNo}`);
+        setError(`No detail lines found in Provisional JV ${cleanDocNo}`);
         return;
       }
 
@@ -698,23 +706,22 @@ function JVDocument({
         };
       });
 
-      const formattedSelected = cleanDocNo.toUpperCase().startsWith("JV") ? cleanDocNo : `JV${cleanDocNo}`;
-      setSourceJvDocNo(formattedSelected);
+      setSourceJvDocNo(cleanDocNo);
 
       setForm((current) => ({
         ...current,
-        ref_no: formattedSelected,
-        ref_doc_no: formattedSelected,
+        ref_no: cleanDocNo,
+        ref_doc_no: cleanDocNo,
         curr_code: text(headerRaw.curr_code ?? current.curr_code),
         curr_name: text(headerRaw.curr_name ?? current.curr_name),
         ex_rate: Number(headerRaw.ex_rate ?? current.ex_rate ?? 1),
-        remarks: `Reversal of JV ${formattedSelected}${headerRaw.remarks ? " - " + headerRaw.remarks : ""}`,
+        remarks: `(AUTO REVERSE JV ${cleanDocNo} ) ${headerRaw.remarks || ""}`.trim(),
         detail: mappedDetails,
       }));
 
-      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from JV ${formattedSelected}`);
+      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from Provisional JV ${cleanDocNo}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to load JV ${cleanDocNo}`);
+      setError(err instanceof Error ? err.message : `Failed to load Provisional JV ${cleanDocNo}`);
     } finally {
       setReversing(false);
     }
@@ -727,10 +734,11 @@ function JVDocument({
       setError("");
       try {
         if (editMode && editor?.mode === "edit") {
-          const [headerRaw, detailRaw, childrenRaw] = await Promise.all([
-            getTransactionHeader(editor.row.doc_no, docType),
-            getTransactionDetail(editor.row.doc_no, editor.row.div_code, docType),
-            getTransactionChildren(editor.row.doc_no, editor.row.div_code, docType),
+          const headerRaw = await getTransactionHeader(editor.row.doc_no, docType);
+          const effectiveDivCode = String(editor.row.div_code || (headerRaw as any)?.div_code || "");
+          const [detailRaw, childrenRaw] = await Promise.all([
+            getTransactionDetail(editor.row.doc_no, effectiveDivCode, docType),
+            getTransactionChildren(editor.row.doc_no, effectiveDivCode, docType),
           ]);
           if (!mounted) return;
           // map existing document first
@@ -1467,22 +1475,18 @@ function JVDocument({
                     <Field label="Doc Date" required>
                       <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
                     </Field>
-                    <Field label="Source JV No (To Reverse)">
+                    <Field label="Source Provisional JV (To Reverse)">
                       <div className="flex gap-1.5 items-center w-full min-w-0">
                         <div className="flex-1 min-w-0">
                           <LookupField
                             compact
                             dense
                             disabled={disabled || editMode}
-                            placeholder="Select JV to reverse..."
+                            placeholder="Select Provisional JV to reverse..."
                             value={sourceJvDocNo || form.ref_no || ""}
-                            displayValue={
-                              sourceJvDocNo || form.ref_no
-                                ? (String(sourceJvDocNo || form.ref_no).toUpperCase().startsWith("JV") ? String(sourceJvDocNo || form.ref_no) : `JV${sourceJvDocNo || form.ref_no}`)
-                                : ""
-                            }
+                            displayValue={sourceJvDocNo || form.ref_no || ""}
                             columns={[
-                              { field: "formatted_doc_no", header: "JV No" },
+                              { field: "formatted_doc_no", header: "Provisional JV No" },
                               { field: "formatted_date", header: "Date" },
                               { field: "remarks", header: "Narration / Remarks" },
                               { field: "formatted_amount", header: "Amount" },
@@ -1509,7 +1513,7 @@ function JVDocument({
                             size="sm"
                             disabled={disabled || reversing || !(sourceJvDocNo || form.ref_no)}
                             onClick={() => void handleReverseJV(sourceJvDocNo || form.ref_no || "")}
-                            title="Auto-Reverse / Reload lines from selected JV"
+                            title="Auto-Reverse / Reload lines from selected Provisional JV"
                             className="shrink-0 h-7 px-2.5 text-xs bg-[#00378C] text-white hover:bg-[#002b6d] cursor-pointer"
                           >
                             <RefreshCw size={12} className={reversing ? "animate-spin mr-1" : "mr-1"} />
@@ -2323,6 +2327,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     create_user: loginid,
     edit_user: loginid,
     canceled: originalForm.canceled || "N",
+    auto_reverse: docType === "RJV" ? "Y" : ((originalForm as any).auto_reverse || "N"),
     last_dtl_serial_no: originalForm.detail.length,
     sys_gen: "N",
   };

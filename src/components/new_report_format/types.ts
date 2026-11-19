@@ -116,5 +116,11 @@ export interface NewReportDialogProps {
    * Does not affect page measurement or print layout.
    */
   headerSlot?: ReactNode;
+  /** Drill-down backward navigation callback */
+  onBack?: () => void;
+  /** Whether the report is currently in a drill-down sublevel and can step back */
+  canGoBack?: boolean;
+  /** Custom z-index when dialog needs to layer above other modals */
+  zIndex?: number;
 }
 
