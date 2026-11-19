@@ -616,3 +616,34 @@
 .platform-access-controls .lookup-field-trigger {
   min-height: 40px;
 }
+.platform-password-field {
+  position: relative;
+  min-width: 0;
+}
+.platform-console .platform-password-field input {
+  width: 100%;
+  padding-right: 44px;
+}
+.platform-password-toggle {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pa-muted, #526179);
+  cursor: pointer;
+}
+.platform-password-toggle:hover {
+  background: rgba(23, 78, 153, 0.08);
+  color: var(--pa-accent, #174e99);
+}
+.platform-password-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
