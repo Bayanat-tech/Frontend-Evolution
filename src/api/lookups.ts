@@ -419,3 +419,22 @@ export function formatLookupDisplayValue(field: string, value: unknown) {
 
   return text;
 }
+
+export async function executeEdiSave(
+  ediKey: string,
+  rows: Record<string, string | null>[],
+  loginid?: string,
+) {
+  try {
+    const response = await api.post<ApiResponse<unknown>>(
+      "/api/wms/common/proc_build_dynamic_edi_save",
+      { ediKey, loginid, rows },
+    );
+    if (!response.data.success) {
+      throw new Error(response.data.details || response.data.message || "Unable to save EDI rows");
+    }
+    return response.data;
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to save EDI rows"));
+  }
+}

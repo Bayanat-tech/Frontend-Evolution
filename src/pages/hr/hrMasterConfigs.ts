@@ -1,6 +1,10 @@
 import type { HrMasterConfig } from "./HrMasterPage";
-import { getDynamicLookup } from "../../api/lookups";
-import { getWmsMaster } from "../../api/wms";
+import type { WmsMasterField } from "../wms/WmsSimpleMasterPage";
+import { DynamicMutationParams, executeDynamicMutationColumn90 } from "../../api/lookups";
+
+/* ------------------------------------------------------------------ */
+/*  Shared option lists                                                */
+/* ------------------------------------------------------------------ */
 
 const yesNo = [
   { label: "No", value: "N" },
@@ -12,11 +16,75 @@ const activeInactive = [
   { label: "Inactive", value: "I" },
 ];
 
+/* ------------------------------------------------------------------ */
+/*  Shared dropdowns (WMS style: dropdownParam + display/value keys)   */
+/*  WmsMasterForm adds loginid + code1 (company) automatically.        */
+/* ------------------------------------------------------------------ */
+
+const countryDropdown: Partial<WmsMasterField> = {
+  dropdownParam: "DROP_DOWN_COUNTRY",
+  dropdownDisplayFields: ["country_code", "country_name"],
+  dropdownValueKey: "country_code",
+  dropdownDisplaySeparator: " - ",
+};
+
+const mainBankDropdown: Partial<WmsMasterField> = {
+  dropdownParam: "MST_HR_Main_Bank",
+  dropdownDisplayFields: ["main_bank_code", "main_bank_name"],
+  dropdownValueKey: "main_bank_code",
+  dropdownDisplaySeparator: " - ",
+};
+
+const religionDropdown: Partial<WmsMasterField> = {
+  dropdownParam: "MST_HR_MS_HR_RELIGION",
+  dropdownDisplayFields: ["religion_code", "religion_name"],
+  dropdownValueKey: "religion_code",
+  dropdownDisplaySeparator: " - ",
+};
+
+const divisionDropdown: Partial<WmsMasterField> = {
+  dropdownParam: "HR_DROPDOWN_MS_DIVISION",
+  dropdownDisplayFields: ["div_code", "div_name"],
+  dropdownValueKey: "div_code",
+  dropdownDisplaySeparator: " - ",
+};
+
+/** Department list filtered by the selected division (div_code -> code2). */
+const departmentByDivisionDropdown: Partial<WmsMasterField> = {
+  dropdownParam: "HR_DROPDOWN_MS_DEPARTMENT",
+  dropdownCodeMap: { div_code: "code2" },
+  dropdownDisplayFields: ["dept_code", "dept_name"],
+  dropdownValueKey: "dept_code",
+  dropdownDisplaySeparator: " - ",
+};
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
 const dynamicList = (parameter: string, useCompany = false) => (context: { loginid: string; companyCode: string }) => ({
   parameter,
   loginid: context.loginid,
   code1: useCompany ? context.companyCode : "",
   code2: "",
+});
+
+/** Full list-query shape used by the column90 procedures. */
+const fullList = (parameter: string) => (context: { loginid: string; companyCode: string }) => ({
+  parameter,
+  loginid: context.loginid,
+  code1: context.companyCode,
+  code2: "",
+  code3: "",
+  code4: "",
+  number1: 0,
+  number2: 0,
+  number3: 0,
+  number4: 0,
+  date1: null,
+  date2: null,
+  date3: null,
+  date4: null,
 });
 
 const text = (form: Record<string, unknown>, key: string, fallback = "") => String(form[key] ?? fallback);
@@ -26,122 +94,45 @@ const num = (form: Record<string, unknown>, key: string) => {
 };
 const dateText = (form: Record<string, unknown>, key: string) => text(form, key);
 
-const countryLookup = {
-  columns: [
-    { field: "country_code", header: "Code" },
-    { field: "country_name", header: "Country" },
-  ],
-  valueField: "country_code",
-  displayFields: ["country_code", "country_name"],
-  loadOptions: async () => (await getWmsMaster("country", { page: 1, limit: 100000 })).tableData,
-};
+/* ------------------------------------------------------------------ */
+/*  Configs                                                            */
+/* ------------------------------------------------------------------ */
 
-const mainBankLookup = {
-  columns: [
-    { field: "main_bank_code", header: "Code" },
-    { field: "main_bank_name", header: "Bank Name" },
-    { field: "main_bank_short_name", header: "Short Name" },
-  ],
-  valueField: "main_bank_code",
-  displayFields: ["main_bank_code", "main_bank_name"],
-  loadOptions: (context: { loginid: string; companyCode: string }) =>
-    getDynamicLookup({
-      parameter: "MST_HR_Main_Bank",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    }),
-};
-
-const religionLookup = {
-  columns: [
-    { field: "religion_code", header: "Code" },
-    { field: "religion_name", header: "Religion Name" },
-  ],
-  valueField: "religion_code",
-  displayFields: ["religion_code", "religion_name"],
-  loadOptions: (context: { loginid: string; companyCode: string }) =>
-    getDynamicLookup({
-      parameter: "MST_HR_MS_HR_RELIGION",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-    }),
-};
-
-const sectionDivisionLookup = {
-  columns: [
-    { field: "div_code", header: "Division Code" },
-    { field: "div_name", header: "Division Name" },
-  ],
-  valueField: "div_code",
-  displayFields: ["div_code", "div_name"],
-  loadOptions: (context: { loginid: string; companyCode: string }) =>
-    getDynamicLookup({
-      parameter: "HR_DROPDOWN_MS_DIVISION",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-    }),
-};
-
-const sectionDepartmentLookup = {
-  columns: [
-    { field: "dept_code", header: "Department Code" },
-    { field: "dept_name", header: "Department Name" },
-  ],
-  valueField: "dept_code",
-  displayFields: ["dept_code", "dept_name"],
-  loadOptions: (context: { loginid: string; companyCode: string; form?: Record<string, unknown> }) => {
-    const divisionCode = String(context.form?.div_code ?? "").trim();
-    
-    // We removed the early return. Now we always fetch.
-    return getDynamicLookup({
-      parameter: "HR_DROPDOWN_MS_DEPARTMENT",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      // If divisionCode is empty, send undefined/null so the backend ignores it
-      code2: divisionCode || undefined, 
-    });
-  },
-};
 export const hrMasterConfigs: Record<string, HrMasterConfig> = {
-  department: {
-    title: "Department Master",
-    subtitle: "Maintain HR departments, division link, department head, address and contact details.",
-    master: "hrDepartment",
-    gmEndpoint: "department",
-    routeKeys: ["hrdepartment", "hr_department", "department"],
-    keyField: "dept_code",
-    fields: [
-      { name: "dept_code", label: "Department Code", required: true, disabledOnEdit: true, width: 160 },
-      { name: "dept_name", label: "Department Name", required: true, width: 260 },
-      { name: "dept_short_name", label: "Short Name", required: true, width: 140 },
-      { name: "div_code", label: "Division", required: true, width: 130 },
-      { name: "dept_head_id", label: "Department Head", width: 160 },
-      { name: "phone", label: "Phone", width: 150 },
-      { name: "email", label: "Email", type: "email", width: 220 },
-      { name: "status", label: "Status", type: "select", options: yesNo, required: true, width: 120 },
-      { name: "dept_addr1", label: "Address 1", table: false },
-      { name: "dept_addr2", label: "Address 2", table: false },
-      { name: "dept_addr3", label: "Address 3", table: false },
-      { name: "fax", label: "Fax", table: false },
-      { name: "enterprice_code", label: "Enterprise Code", table: false },
-      { name: "remarks", label: "Remarks", table: false },
-    ],
-    defaults: { status: "Y" },
-    deleteMode: "master",
-  },
+  // department: {
+  //   title: "Department Master",
+  //   subtitle: "Maintain HR departments, division link, department head, address and contact details.",
+  //   master: "hrDepartment",
+  //   gmEndpoint: "department",
+  //   routeKeys: ["hrdepartment", "hr_department", "department"],
+  //   keyField: "dept_code",
+  //   fields: [
+  //     // General
+  //     { name: "dept_code", label: "Department Code", required: true, disabledOnEdit: true, width: 160, section: "General" },
+  //     { name: "dept_name", label: "Department Name", required: true, width: 260, colSpan: 2, section: "General" },
+  //     { name: "dept_short_name", label: "Short Name", required: true, width: 140, section: "General" },
+  //     { name: "div_code", label: "Division", required: true, width: 130, section: "General" },
+  //     { name: "status", label: "Status", type: "select", options: yesNo, required: true, width: 120, section: "General" },
+  //     { name: "dept_head_id", label: "Department Head", width: 160, section: "General" },
+  //     { name: "enterprice_code", label: "Enterprise Code", table: false, section: "General" },
+
+  //     // Contact
+  //     { name: "phone", label: "Phone", width: 150, section: "Contact Details" },
+  //     { name: "fax", label: "Fax", table: false, section: "Contact Details" },
+  //     { name: "email", label: "Email", type: "email", width: 220, colSpan: 2, section: "Contact Details" },
+
+  //     // Address
+  //     { name: "dept_addr1", label: "Address 1", table: false, colSpan: 2, section: "Address Details" },
+  //     { name: "dept_addr2", label: "Address 2", table: false, colSpan: 2, section: "Address Details" },
+  //     { name: "dept_addr3", label: "Address 3", table: false, colSpan: 2, section: "Address Details" },
+
+  //     // Remarks
+  //     { name: "remarks", label: "Remarks", table: false, type: "textarea", colSpan: 3, section: "Remarks" },
+  //   ],
+  //   defaults: { status: "Y" },
+  //   deleteMode: "master",
+  // },
+
   division: {
     title: "Division Master",
     subtitle: "Maintain HR divisions, payroll settings, contacts and invoice bank details.",
@@ -150,31 +141,42 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["hrdivision", "hr_division", "division"],
     keyField: "div_code",
     fields: [
-      { name: "div_code", label: "Division Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "div_name", label: "Division Name", required: true, width: 260 },
-      { name: "div_short_name", label: "Short Name", required: true, width: 140 },
-      { name: "country_code", label: "Country", lookup: countryLookup, width: 120 },
-      { name: "div_head_id", label: "Division Head", width: 150 },
-      { name: "phone", label: "Phone", width: 150 },
-      { name: "email", label: "Email", type: "email", width: 220 },
-      { name: "status", label: "Status", type: "select", options: yesNo, required: true, width: 120 },
-      { name: "payroll_status", label: "Payroll Status", width: 150 },
-      { name: "pay_month", label: "Pay Month", type: "number", width: 120 },
-      { name: "pay_year", label: "Pay Year", type: "number", width: 120 },
-      { name: "normal_working_hrs", label: "Normal Working Hours", type: "number", table: false },
-      { name: "payroll_date", label: "Payroll Date", type: "date", table: false },
-      { name: "payroll_cutoff_date", label: "Payroll Cutoff Date", type: "date", table: false },
-      { name: "div_address1", label: "Address 1", table: false },
-      { name: "div_address2", label: "Address 2", table: false },
-      { name: "div_address3", label: "Address 3", table: false },
-      { name: "bank_name_inv", label: "Invoice Bank", table: false },
-      { name: "ac_code_inv", label: "Invoice A/C Code", table: false },
-      { name: "swift_code_inv", label: "Swift Code", table: false },
-      { name: "remarks", label: "Remarks", table: false },
+      // General
+      { name: "div_code", label: "Division Code", required: true, disabledOnEdit: true, width: 150, section: "General" },
+      { name: "div_name", label: "Division Name", required: true, width: 260, colSpan: 2, section: "General" },
+      { name: "div_short_name", label: "Short Name", required: true, width: 140, section: "General" },
+      { name: "country_code", label: "Country", width: 120, ...countryDropdown, section: "General" },
+      { name: "div_head_id", label: "Division Head", width: 150, section: "General" },
+      { name: "status", label: "Status", type: "select", options: yesNo, required: true, width: 120, section: "General" },
+
+      // Contact
+      { name: "phone", label: "Phone", width: 150, section: "Contact Details" },
+      { name: "email", label: "Email", type: "email", width: 220, colSpan: 2, section: "Contact Details" },
+
+      // Payroll
+      { name: "payroll_status", label: "Payroll Status", width: 150, section: "Payroll" },
+      { name: "pay_month", label: "Pay Month", type: "number", width: 120, section: "Payroll" },
+      { name: "pay_year", label: "Pay Year", type: "number", width: 120, section: "Payroll" },
+      { name: "normal_working_hrs", label: "Normal Working Hours", type: "number", table: false, section: "Payroll" },
+      { name: "payroll_date", label: "Payroll Date", type: "date", table: false, section: "Payroll" },
+      { name: "payroll_cutoff_date", label: "Payroll Cutoff Date", type: "date", table: false, section: "Payroll" },
+
+      // Address
+      { name: "div_address1", label: "Address 1", table: false, colSpan: 2, section: "Address Details" },
+      { name: "div_address2", label: "Address 2", table: false, colSpan: 2, section: "Address Details" },
+      { name: "div_address3", label: "Address 3", table: false, colSpan: 2, section: "Address Details" },
+
+      // Invoice bank
+      { name: "bank_name_inv", label: "Invoice Bank", table: false, colSpan: 2, section: "Invoice Bank" },
+      { name: "ac_code_inv", label: "Invoice A/C Code", table: false, colSpan: 2, section: "Invoice Bank" },
+      { name: "swift_code_inv", label: "Swift Code", table: false, colSpan: 2, section: "Invoice Bank" },
+
+      { name: "remarks", label: "Remarks", table: false, type: "textarea", colSpan: 3, section: "Remarks" },
     ],
     defaults: { status: "Y" },
     deleteMode: "master",
   },
+
   airport: {
     title: "Airport Master",
     subtitle: "Maintain airport codes, fare class, ticket fares, currency and destination country.",
@@ -183,23 +185,28 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["hrairport", "hr_airport", "airport"],
     keyField: "airport_code",
     fields: [
-      { name: "airport_code", label: "Airport Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "airport_name", label: "Airport Name", required: true, width: 260 },
-      { name: "airport_short_name", label: "Short Name", width: 140 },
-      { name: "fair_class", label: "Fare Class", required: true, width: 120 },
-      { name: "adult_ticket_fair", label: "Adult Fare", type: "number", required: true, width: 130 },
-      { name: "curr_code", label: "Currency", width: 120 },
-      { name: "ex_rate", label: "Exchange Rate", type: "number", width: 140 },
-      { name: "destination_country", label: "Destination Country", width: 170 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "fc_adult_fair", label: "First Class Adult Fare", type: "number", table: false },
-      { name: "fc_child_fair", label: "First Class Child Fare", type: "number", table: false },
-      { name: "fc_infant_fair", label: "First Class Infant Fare", type: "number", table: false },
-      { name: "remarks", label: "Remarks", table: false },
+      // General
+      { name: "airport_code", label: "Airport Code", required: true, disabledOnEdit: true, width: 150, section: "General" },
+      { name: "airport_name", label: "Airport Name", required: true, width: 260, colSpan: 2, section: "General" },
+      { name: "airport_short_name", label: "Short Name", width: 140, section: "General" },
+      { name: "destination_country", label: "Destination Country", width: 170, colSpan: 2, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+
+      // Fares
+      { name: "fair_class", label: "Fare Class", required: true, width: 120, section: "Fare Details" },
+      { name: "adult_ticket_fair", label: "Adult Fare", type: "number", required: true, width: 130, section: "Fare Details" },
+      { name: "curr_code", label: "Currency", width: 120, section: "Fare Details" },
+      { name: "ex_rate", label: "Exchange Rate", type: "number", width: 140, section: "Fare Details" },
+      { name: "fc_adult_fair", label: "First Class Adult Fare", type: "number", table: false, section: "Fare Details" },
+      { name: "fc_child_fair", label: "First Class Child Fare", type: "number", table: false, section: "Fare Details" },
+      { name: "fc_infant_fair", label: "First Class Infant Fare", type: "number", table: false, section: "Fare Details" },
+
+      { name: "remarks", label: "Remarks", table: false, type: "textarea", colSpan: 3, section: "Remarks" },
     ],
     defaults: { status: "A", fair_class: "E", adult_ticket_fair: 0, ex_rate: 1 },
     deleteMode: "master",
   },
+
   employeestatus: {
     title: "Employee Status Master",
     subtitle: "Maintain employee status codes used by employee and HR flow screens.",
@@ -208,10 +215,10 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["hremployeestatus", "hr_employee_status", "employee_status", "empstatus"],
     keyField: "empstatus_code",
     fields: [
-      { name: "empstatus_code", label: "Status Code", required: true, disabledOnEdit: true, width: 140 },
-      { name: "empstatus_name", label: "Status Name", required: true, width: 260 },
-      { name: "empstatus_short_desc", label: "Short Description", width: 170 },
-      { name: "remarks", label: "Remarks", width: 280 },
+      { name: "empstatus_code", label: "Status Code", required: true, disabledOnEdit: true, width: 140, section: "General" },
+      { name: "empstatus_name", label: "Status Name", required: true, width: 260, section: "General" },
+      { name: "empstatus_short_desc", label: "Short Description", width: 170, section: "General" },
+      { name: "remarks", label: "Remarks", width: 280, section: "General" },
     ],
     deleteMode: "master",
   },
@@ -223,26 +230,11 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     master: "bank",
     gmEndpoint: "bank",
     routeKeys: ["bank", "bank_master", "banks_master", "main_bank", "main_banks", "hrbank", "hr_bank"],
-    keyField: "main_bank_code", 
+    keyField: "main_bank_code",
     reportEndpoint: "/wms/main-bank/html",
     source: "dynamic",
     mutationMode: "column90",
-    listQuery: (context) => ({
-      parameter: "MST_HR_Main_Bank",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    }),
+    listQuery: fullList("MST_HR_Main_Bank"),
     buildSave: (form, context) => ({
       parameter: "mst_hr_main_bank_ins_upd",
       loginid: context.loginid,
@@ -272,103 +264,102 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "main_bank_code"),
     }),
     fields: [
-      { name: "main_bank_name", label: "Bank Name", required: true, width: 280, limit: 50 },
-      { name: "main_bank_code", label: "Bank Code", required: true, width: 140, limit: 10 },
-      { name: "main_bank_short_name", label: "Short Name", width: 150, limit: 4 },
+      // General
+      { name: "main_bank_code", label: "Bank Code", required: true, width: 140, maxLength: 10, section: "General" },
+      { name: "main_bank_name", label: "Bank Name", required: true, width: 280, maxLength: 50, colSpan: 2, section: "General" },
+      { name: "main_bank_short_name", label: "Short Name", width: 150, maxLength: 4, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, required: true, table: false, section: "General" },
 
-      { name: "payer_bk_short_name", label: "Bank Short Name", table: false, limit: 4 },
-      { name: "payer_ac_iban", label: "Bank IBAN", table: false, limit: 34 },
-      { name: "bk_bic_swift", label: "Bank BIC/Swift", table: false, limit: 11 },
+      // Bank identifiers
+      { name: "payer_bk_short_name", label: "Bank Short Name", table: false, maxLength: 4, section: "Bank Identifiers" },
+      { name: "payer_ac_iban", label: "Bank IBAN", table: false, maxLength: 34, colSpan: 2, section: "Bank Identifiers" },
+      { name: "bk_bic_swift", label: "Bank BIC/Swift", table: false, maxLength: 11, section: "Bank Identifiers" },
 
-      { name: "main_bank_addr1", label: "Address", required: true, table: false, limit: 100 },
-      { name: "main_bank_addr2", label: "Address 2", table: false, limit: 100 },
-      { name: "main_bank_addr3", label: "Address 3", table: false, limit: 100 },
-      { name: "country_code", label: "Country Code", lookup: countryLookup, required: true, table: false },
-      { name: "phone", label: "Phone", table: false, limit: 20 },
-      { name: "fax", label: "Fax", table: false, limit: 20 },
-      { name: "email", label: "Email", type: "email", table: false, limit: 100 },
+      // Address
+      { name: "main_bank_addr1", label: "Address", required: true, table: false, maxLength: 100, colSpan: 2, section: "Address Details" },
+      { name: "main_bank_addr2", label: "Address 2", table: false, maxLength: 100, colSpan: 2, section: "Address Details" },
+      { name: "main_bank_addr3", label: "Address 3", table: false, maxLength: 100, colSpan: 2, section: "Address Details" },
+      { name: "country_code", label: "Country Code", required: true, table: false, colSpan: 2, ...countryDropdown, section: "Address Details" },
 
-      { name: "remarks", label: "Remarks", table: false, limit: 200 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, required: true, table: false },
+      // Contact
+      { name: "phone", label: "Phone", table: false, maxLength: 20, section: "Contact Details" },
+      { name: "fax", label: "Fax", table: false, maxLength: 20, section: "Contact Details" },
+      { name: "email", label: "Email", type: "email", table: false, maxLength: 100, colSpan: 2, section: "Contact Details" },
+
+      { name: "remarks", label: "Remarks", table: false, maxLength: 200, type: "textarea", colSpan: 3, section: "Remarks" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
   },
 
-  // ── Bank ───────────────────────────────────────────────────────────────────
-  hrbank: {
-    title: "Bank",
-    subtitle: "Maintain HR bank code, address, contact and remarks.",
-    master: "hrbank",
-    gmEndpoint: "hrbank",
-    routeKeys: ["hrbank", "hr_bank", "bank", "banks"],
-    keyField: "bank_code",
-    reportEndpoint: "/wms/bank/html",
-    source: "dynamic",
-    mutationMode: "column90",
-    listQuery: (context) => ({
-      parameter: "MST_HR_Bank",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    }),
-    buildSave: (form, context) => ({
-      parameter: "mst_hr_bank_ins_upd",
-      loginid: context.loginid,
-      val1s1: context.companyCode,
-      val1s2: form._edit_key ? String(form._edit_key) : "",
-      val1s3: text(form, "bank_name"),
-      val1s4: text(form, "bank_short_name"),
-      val1s5: text(form, "main_bank_code"),
-      val1s6: text(form, "company_flag", "N"),
-      val1s7: text(form, "bank_addr1"),
-      val1s8: text(form, "bank_addr2"),
-      val1s9: text(form, "bank_addr3"),
-      val1s10: text(form, "country_code"),
-      val1s11: text(form, "phone"),
-      val1s12: text(form, "fax"),
-      val1s13: text(form, "email"),
-      val1s14: text(form, "comp_acct_code"),
-      val1s15: text(form, "remarks"),
-      val1s16: text(form, "status", "A"),
-      val1s17: form._edit_key ? text(form, "bank_code") : "",
-    }),
-    buildDelete: (row, context) => ({
-      parameter: "MST_HR_DEL_BANK",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: text(row, "bank_code"),
-    }),
-    fields: [
-      { name: "bank_code", label: "Bank Code", hideOnAdd: true, disabledOnEdit: true, width: 140 },
-      { name: "bank_name", label: "Bank Name", required: true, width: 280, limit: 50 },
-      { name: "bank_short_name", label: "Short Name", width: 150, limit: 10 },
-      { name: "main_bank_code", label: "Main Bank Code", width: 160, table: false, required: true, lookup: mainBankLookup },
-      { name: "company_flag", label: "Company Branch", type: "select", options: yesNo, width: 150, table: false },
+  // ── Bank (branch) ──────────────────────────────────────────────────────────
+hrbank: {
+  title: "Bank",
+  subtitle: "Maintain HR bank code, address, contact and remarks.",
+  master: "hrbank",
+  gmEndpoint: "hrbank",
+  routeKeys: ["hrbank", "hr_bank", "bank", "banks"],
+  keyField: "bank_code",
+  reportEndpoint: "/wms/bank/html",
+  source: "dynamic",
+  mutationMode: "column90",
+  listQuery: fullList("MST_HR_Bank"),
 
-      { name: "bank_addr1", label: "Address", required: true, table: false, limit: 100 },
-      { name: "bank_addr2", label: "Address 2", table: false, limit: 100 },
-      { name: "bank_addr3", label: "Address 3", table: false, limit: 100 },
-      { name: "country_code", label: "Country Code", lookup: countryLookup, required: true, table: false },
-      { name: "phone", label: "Phone", table: false, limit: 20 },
-      { name: "fax", label: "Fax", table: false, limit: 20 },
-      { name: "email", label: "Email", type: "email", table: false, limit: 100 },
-      { name: "remarks", label: "Remarks", table: false, limit: 200 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, required: true, table: false },
-    ],
-    defaults: { status: "A", company_flag: "N" },
-    deleteMode: "master",
-  },
+  // ── EDI import ──
+  ediKey: "BANK", // shows the Import button; must match a key in the procedure's table mapping
+
+  buildSave: (form, context) => ({
+    parameter: "mst_hr_bank_ins_upd",
+    loginid: context.loginid,
+    val1s1: context.companyCode,
+    val1s2: form._edit_key ? String(form._edit_key) : "",
+    val1s3: text(form, "bank_name"),
+    val1s4: text(form, "bank_short_name"),
+    val1s5: text(form, "main_bank_code"),
+    val1s6: text(form, "company_flag", "N"),
+    val1s7: text(form, "bank_addr1"),
+    val1s8: text(form, "bank_addr2"),
+    val1s9: text(form, "bank_addr3"),
+    val1s10: text(form, "country_code"),
+    val1s11: text(form, "phone"),
+    val1s12: text(form, "fax"),
+    val1s13: text(form, "email"),
+    val1s14: text(form, "comp_acct_code"),
+    val1s15: text(form, "remarks"),
+    val1s16: text(form, "status", "A"),
+    val1s17: form._edit_key ? text(form, "bank_code") : "",
+  }),
+  buildDelete: (row, context) => ({
+    parameter: "MST_HR_DEL_BANK",
+    loginid: context.loginid,
+    code1: context.companyCode,
+    code2: text(row, "bank_code"),
+  }),
+  fields: [
+    // General
+    { name: "bank_code", label: "Bank Code", hideOnAdd: true, disabledOnEdit: true, width: 140, section: "General" },
+    { name: "bank_name", label: "Bank Name", required: true, width: 280, maxLength: 50, colSpan: 2, section: "General" },
+    { name: "bank_short_name", label: "Short Name", width: 150, maxLength: 10, section: "General" },
+    { name: "main_bank_code", label: "Main Bank Code", required: true, width: 160, table: false, colSpan: 2, ...mainBankDropdown, section: "General" },
+    { name: "company_flag", label: "Company Branch", type: "select", options: yesNo, width: 150, table: false, section: "General" },
+    { name: "status", label: "Status", type: "select", options: activeInactive, required: true, table: false, section: "General" },
+
+    // Address
+    { name: "bank_addr1", label: "Address", required: true, table: false, maxLength: 100, colSpan: 2, section: "Address Details" },
+    { name: "bank_addr2", label: "Address 2", table: false, maxLength: 100, colSpan: 2, section: "Address Details" },
+    { name: "bank_addr3", label: "Address 3", table: false, maxLength: 100, colSpan: 2, section: "Address Details" },
+    { name: "country_code", label: "Country Code", required: true, table: false, colSpan: 2, ...countryDropdown, section: "Address Details" },
+
+    // Contact
+    { name: "phone", label: "Phone", table: false, maxLength: 20, section: "Contact Details" },
+    { name: "fax", label: "Fax", table: false, maxLength: 20, section: "Contact Details" },
+    { name: "email", label: "Email", type: "email", table: false, maxLength: 100, colSpan: 2, section: "Contact Details" },
+
+    { name: "remarks", label: "Remarks", table: false, maxLength: 200, type: "textarea", colSpan: 3, section: "Remarks" },
+  ],
+  defaults: { status: "A", company_flag: "N" },
+  deleteMode: "master",
+},
 
   sponsor: {
     title: "Sponsor Master",
@@ -380,22 +371,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     reportEndpoint: "/wms/sponsor/html",
     source: "dynamic",
     mutationMode: "column90",
-    listQuery: (context) => ({
-      parameter: "HR_SPONSOR_SELECT",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    }),
+    listQuery: fullList("HR_SPONSOR_SELECT"),
     buildSave: (form, context) => ({
       parameter: "hr_sponsor_ins_upd",
       loginid: context.loginid,
@@ -418,25 +394,38 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       val1n1: num(form, "no_of_visa") || 0,
       val1n2: num(form, "no_of_visit_visa") || 0,
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_SPONSOR", loginid: context.loginid, code1: context.companyCode, code2: text(row, "sponsor_code") }),
+    buildDelete: (row, context) => ({
+      parameter: "MST_HR_DEL_SPONSOR",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: text(row, "sponsor_code"),
+    }),
     fields: [
-      { name: "sponsor_code", label: "Sponsor Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "sponsor_name", label: "Sponsor Name", required: true, width: 280 },
-      { name: "sponsor_short_name", label: "Short Name", width: 140 },
-      { name: "trade_license_no", label: "Trade License No", width: 160 },
-      { name: "trade_license_exp_date", label: "License Expiry", type: "date", width: 150 },
-      { name: "country_code", label: "Country", lookup: countryLookup, width: 120 },
-      { name: "no_of_visa", label: "No of Visa", type: "number", width: 130 },
-      { name: "no_of_visit_visa", label: "Visit Visa", type: "number", width: 130 },
-      { name: "sponsor_labor_no", label: "Labor No", width: 140 },
-      { name: "sponsor_immgr_no", label: "Immigration No", required: true, width: 160 },
-      { name: "sponsor_immgr_dt", label: "Immigration Date", type: "date", width: 150 },
-      { name: "labour_card_blocked", label: "Blocked", type: "select", options: yesNo, width: 120 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120 },
-      { name: "sponsor_address1", label: "Address 1", table: false },
-      { name: "sponsor_address2", label: "Address 2", table: false },
-      { name: "blocked_reason", label: "Blocked Reason", table: false },
-      { name: "remarks", label: "Remarks", table: false },
+      // General
+      { name: "sponsor_code", label: "Sponsor Code", required: true, disabledOnEdit: true, width: 150, section: "General" },
+      { name: "sponsor_name", label: "Sponsor Name", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "sponsor_short_name", label: "Short Name", width: 140, section: "General" },
+      { name: "country_code", label: "Country", width: 120, ...countryDropdown, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120, section: "General" },
+
+      // Trade license
+      { name: "trade_license_no", label: "Trade License No", width: 160, colSpan: 2, section: "Trade License" },
+      { name: "trade_license_exp_date", label: "License Expiry", type: "date", width: 150, colSpan: 2, section: "Trade License" },
+      { name: "sponsor_address1", label: "Address 1", table: false, colSpan: 2, section: "Trade License" },
+      { name: "sponsor_address2", label: "Address 2", table: false, colSpan: 2, section: "Trade License" },
+
+      // Immigration / labour
+      { name: "sponsor_labor_no", label: "Labor No", width: 140, section: "Immigration & Visa" },
+      { name: "sponsor_immgr_no", label: "Immigration No", required: true, width: 160, section: "Immigration & Visa" },
+      { name: "sponsor_immgr_dt", label: "Immigration Date", type: "date", width: 150, section: "Immigration & Visa" },
+      { name: "no_of_visa", label: "No of Visa", type: "number", width: 130, section: "Immigration & Visa" },
+      { name: "no_of_visit_visa", label: "Visit Visa", type: "number", width: 130, section: "Immigration & Visa" },
+
+      // Block
+      { name: "labour_card_blocked", label: "Blocked", type: "select", options: yesNo, width: 120, section: "Block Status" },
+      { name: "blocked_reason", label: "Blocked Reason", table: false, colSpan: 3, section: "Block Status" },
+
+      { name: "remarks", label: "Remarks", table: false, type: "textarea", colSpan: 3, section: "Remarks" },
     ],
     defaults: { status: "A", labour_card_blocked: "N", no_of_visa: 0, no_of_visit_visa: 0 },
     deleteMode: "master",
@@ -451,22 +440,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     keyField: "contract_type",
     reportEndpoint: "/hr/reports/contract",
     source: "dynamic",
-    listQuery: (context) => ({
-      parameter: "HR_CONTRACT_TYPES_SELECT",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    }),
+    listQuery: fullList("HR_CONTRACT_TYPES_SELECT"),
     buildSave: (form, context) => ({
       parameter: "MST_HR_CONTRACT_TYPES",
       loginid: context.loginid,
@@ -477,13 +451,18 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       val1s5: text(form, "remarks"),
       val1s6: text(form, "status", "A"),
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CONTRACT_TYPES", loginid: context.loginid, code1: context.companyCode, code2: text(row, "contract_type") }),
+    buildDelete: (row, context) => ({
+      parameter: "MST_HR_DEL_CONTRACT_TYPES",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: text(row, "contract_type"),
+    }),
     fields: [
-      { name: "contract_type", label: "Contract Type", required: true, disabledOnEdit: true, width: 150, limit: 5 },
-      { name: "contract_type_desc", label: "Description", required: true, width: 280 },
-      { name: "contract_type_short_desc", label: "Short Description", width: 170 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120 },
-      { name: "remarks", label: "Remarks", width: 260 },
+      { name: "contract_type", label: "Contract Type", required: true, disabledOnEdit: true, width: 150, maxLength: 5, section: "General" },
+      { name: "contract_type_desc", label: "Description", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "contract_type_short_desc", label: "Short Description", width: 170, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 260, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
@@ -498,22 +477,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     keyField: "religion_code",
     reportEndpoint: "/hr/reports/religion",
     source: "dynamic",
-    listQuery: (context) => ({
-      parameter: "MST_HR_MS_HR_RELIGION",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    }),
+    listQuery: fullList("MST_HR_MS_HR_RELIGION"),
     buildSave: (form, context) => ({
       parameter: "MST_HR_RELIGION",
       loginid: context.loginid,
@@ -531,11 +495,11 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "religion_code"),
     }),
     fields: [
-      { name: "religion_code", label: "Religion Code", disabledOnEdit: true, disabledOnAdd: true, width: 150 },
-      { name: "religion_name", label: "Religion Name", required: true, width: 260 },
-      { name: "religion_short_name", label: "Short Name", width: 140 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 260 },
+      { name: "religion_code", label: "Religion Code", autoGenerated: true, disabledOnEdit: true, width: 150, section: "General" },
+      { name: "religion_name", label: "Religion Name", required: true, width: 260, colSpan: 2, section: "General" },
+      { name: "religion_short_name", label: "Short Name", width: 140, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 260, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
@@ -571,15 +535,16 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code3: text(row, "religion_code"),
     }),
     fields: [
-      { name: "caste_code", label: "Caste Code", disabledOnEdit: true, disabledOnAdd: true, width: 140 },
-      { name: "religion_code", label: "Religion", required: true, lookup: religionLookup, width: 150 },
-      { name: "caste_name", label: "Caste Name", required: true, width: 260 },
-      { name: "caste_short_name", label: "Short Name", width: 150 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 280 },
+      { name: "caste_code", label: "Caste Code", autoGenerated: true, disabledOnEdit: true, width: 140, section: "General" },
+      { name: "religion_code", label: "Religion", required: true, width: 150, colSpan: 2, ...religionDropdown, section: "General" },
+      { name: "caste_name", label: "Caste Name", required: true, width: 260, colSpan: 2, section: "General" },
+      { name: "caste_short_name", label: "Short Name", width: 150, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 280, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
+    ediKey : 'CASTE'
   },
 
   educational_level: {
@@ -610,11 +575,11 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "edu_level_code"),
     }),
     fields: [
-      { name: "edu_level_code", label: "Level Code", required: true, disabledOnAdd: true, disabledOnEdit: true, width: 140 },
-      { name: "edu_level_desc", label: "Level Description", required: true, width: 280 },
-      { name: "edu_level_short_desc", label: "Short Description", width: 170 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 280 },
+      { name: "edu_level_code", label: "Level Code", required: true, autoGenerated: true, disabledOnEdit: true, width: 140, section: "General" },
+      { name: "edu_level_desc", label: "Level Description", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "edu_level_short_desc", label: "Short Description", width: 170, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 280, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
@@ -648,11 +613,11 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "edu_disc_code"),
     }),
     fields: [
-      { name: "edu_disc_code", label: "Discipline Code", required: true, disabledOnAdd: true, disabledOnEdit: true, width: 160 },
-      { name: "edu_disc_desc", label: "Discipline Description", required: true, width: 300 },
-      { name: "edu_disc_short_desc", label: "Short Description", width: 170 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 280 },
+      { name: "edu_disc_code", label: "Discipline Code", required: true, autoGenerated: true, disabledOnEdit: true, width: 160, section: "General" },
+      { name: "edu_disc_desc", label: "Discipline Description", required: true, width: 300, colSpan: 2, section: "General" },
+      { name: "edu_disc_short_desc", label: "Short Description", width: 170, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 280, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
@@ -687,11 +652,11 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "lang_code"),
     }),
     fields: [
-      { name: "lang_code", label: "Language Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "lang_desc", label: "Language Description", required: true, width: 280 },
-      { name: "lang_short_desc", label: "Short Description", width: 170 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 280 },
+      { name: "lang_code", label: "Language Code", required: true, disabledOnEdit: true, width: 150, section: "General" },
+      { name: "lang_desc", label: "Language Description", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "lang_short_desc", label: "Short Description", width: 170, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 280, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
@@ -719,11 +684,16 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       val1s6: text(form, "remarks"),
       val1s7: text(form, "status", "A"),
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_SKILLS_DELETE", loginid: context.loginid, code1: context.companyCode, code2: text(row, "skill_code") }),
+    buildDelete: (row, context) => ({
+      parameter: "MST_HR_SKILLS_DELETE",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: text(row, "skill_code"),
+    }),
     fields: [
-      { name: "skill_code", label: "Skill Code", required: true, disabledOnEdit: true, width: 140 },
-      { name: "skill_desc", label: "Skill Description", required: true, width: 280 },
-      { name: "skill_short_desc", label: "Short Description", width: 170 },
+      { name: "skill_code", label: "Skill Code", required: true, disabledOnEdit: true, width: 140, section: "General" },
+      { name: "skill_desc", label: "Skill Description", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "skill_short_desc", label: "Short Description", width: 170, section: "General" },
       {
         name: "skill_category",
         label: "Skill Category",
@@ -734,9 +704,10 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
           { label: "Other", value: "O" },
         ],
         width: 170,
+        section: "General",
       },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 280 },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 280, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
@@ -762,35 +733,39 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       alert_before: num(form, "alert_before"),
       user_id: context.loginid,
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_DOCTYPES", loginid: context.loginid, code1: context.companyCode, code2: text(row, "doc_type") }),
+    buildDelete: (row, context) => ({
+      parameter: "MST_HR_DEL_DOCTYPES",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: text(row, "doc_type"),
+    }),
     fields: [
-      {
-        name: "doc_type",
-        label: "Doc Type",
-        disabledOnAdd: true,
-        disabledOnEdit: true,
-        width: 120,
-        helperText: "Doc Type is auto generated. You don't need to enter it.",
-      },
-      { name: "doctype_name", label: "Document Name", required: true, width: 280 },
-      { name: "doctype_short_desc", label: "Short Description", width: 180 },
-      { name: "renewal_period_days", label: "Renewal Days", type: "number", width: 140 },
-      { name: "renewal_chgs", label: "Renewal Charges", type: "number", width: 150 },
-      { name: "mand_flag", label: "Mandatory", type: "select", options: yesNo, width: 120 },
-      { name: "attach_folder", label: "Attach Folder", width: 220 },
-      { name: "attach_prefix", label: "Attach Prefix", width: 150 },
-      { name: "attach_type", label: "Attach Type", width: 140 },
-      { name: "doc_editable", label: "Editable", type: "select", options: yesNo, width: 120 },
-      { name: "status_flag", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "email_id_for_alerts", label: "Email Alerts", type: "email", table: false },
-      { name: "alert_before", label: "Alert Before Days", type: "number", table: false },
-      { name: "doc_notes", label: "Notes", table: false },
+      // General
+      { name: "doc_type", label: "Doc Type", autoGenerated: true, disabledOnEdit: true, width: 120, section: "General" },
+      { name: "doctype_name", label: "Document Name", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "doctype_short_desc", label: "Short Description", width: 180, section: "General" },
+      { name: "mand_flag", label: "Mandatory", type: "select", options: yesNo, width: 120, section: "General" },
+      { name: "doc_editable", label: "Editable", type: "select", options: yesNo, width: 120, section: "General" },
+      { name: "status_flag", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+
+      // Renewal
+      { name: "renewal_period_days", label: "Renewal Days", type: "number", width: 140, section: "Renewal & Alerts" },
+      { name: "renewal_chgs", label: "Renewal Charges", type: "number", width: 150, section: "Renewal & Alerts" },
+      { name: "alert_before", label: "Alert Before Days", type: "number", table: false, section: "Renewal & Alerts" },
+      { name: "email_id_for_alerts", label: "Email Alerts", type: "email", table: false, colSpan: 2, section: "Renewal & Alerts" },
+
+      // Attachments
+      { name: "attach_folder", label: "Attach Folder", width: 220, colSpan: 2, section: "Attachment Settings" },
+      { name: "attach_prefix", label: "Attach Prefix", width: 150, section: "Attachment Settings" },
+      { name: "attach_type", label: "Attach Type", width: 140, section: "Attachment Settings" },
+
+      { name: "doc_notes", label: "Notes", table: false, type: "textarea", colSpan: 3, section: "Notes" },
     ],
     defaults: { mand_flag: "N", doc_editable: "Y", status_flag: "A" },
     deleteMode: "master",
   },
 
-    categorymaster: {
+  categorymaster: {
     title: "Category Master",
     subtitle: "Maintain employee category codes, short names, remarks, and active status.",
     master: "categorymaster",
@@ -807,29 +782,18 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       code2: text(row, "category_code"),
     }),
     fields: [
-      { name: "category_code", label: "Category Code", required: true, disabledOnAdd: true, disabledOnEdit: true, width: 160 },
-      { name: "category_name", label: "Category Name", required: true, width: 260 },
-      { name: "category_short_name", label: "Short Name", width: 140 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 260 },
+      { name: "category_code", label: "Category Code", required: true, autoGenerated: true, disabledOnEdit: true, width: 160, section: "General" },
+      { name: "category_name", label: "Category Name", required: true, width: 260, colSpan: 2, section: "General" },
+      { name: "category_short_name", label: "Short Name", width: 140, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 260, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
+    ediKey : "CATEGORY",
   },
 
-  // Grade Master lives in its own page. Its report endpoint is "/hr/reports/grade".
-  // grademaster: {
-  //   title: "Grade Master",
-  //   subtitle: "Maintain employee grades, entitlement flags, and benefit limits.",
-  //   master: "grade_master",
-  //   gmEndpoint: "grade_master",
-  //   routeKeys: ["grade_master", "grade master", "grademaster", "grade"],
-  //   keyField: "grade_code",
-  //   reportEndpoint: "/hr/reports/grade",
-  //   fields: [ ... ],
-  //   defaults: { ot_eligibility: "N", status: "A" },
-  //   deleteMode: "gm",
-  // },
+  // Grade Master lives in its own page (report endpoint: "/hr/reports/grade").
 
   designation: {
     title: "Designation Master",
@@ -841,14 +805,15 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     reportEndpoint: "/hr/reports/designation",
     stripEditKeyOnSave: true,
     fields: [
-      { name: "desg_code", label: "Designation Code", required: true, disabledOnEdit: true, width: 170 },
-      { name: "desg_name", label: "Designation Name", required: true, width: 280 },
-      { name: "desg_short_name", label: "Short Name", required: true, width: 140 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 260 },
+      { name: "desg_code", label: "Designation Code", required: true, disabledOnEdit: true, width: 170, section: "General" },
+      { name: "desg_name", label: "Designation Name", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "desg_short_name", label: "Short Name", required: true, width: 140, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 260, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "gm",
+    ediKey : 'DESIGNATION'
   },
 
   formaldesignation: {
@@ -860,99 +825,76 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     keyField: "labour_desg_code",
     stripEditKeyOnSave: true,
     buildSave: (form) => ({
-      // Only the fields the backend accepts
+      // Only the fields the backend accepts (no company_code / user_id / user_dt)
       labour_desg_code: text(form, "labour_desg_code"),
       labour_desg_name: text(form, "labour_desg_name"),
       labour_desg_short_name: text(form, "labour_desg_short_name"),
       status: text(form, "status", "A"),
       remarks: text(form, "remarks"),
-      // Do NOT send company_code, user_id, user_dt
     }),
     fields: [
-      { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280 },
-      { name: "labour_desg_short_name", label: "Short Name",   width: 140 },
-      { name: "status", label: "Status", type: "select", required: true, options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 260 },
+      { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150, section: "General" },
+      { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "labour_desg_short_name", label: "Short Name", width: 140, section: "General" },
+      { name: "status", label: "Status", type: "select", required: true, options: activeInactive, width: 120, section: "General" },
+      { name: "remarks", label: "Remarks", width: 260, colSpan: 2, section: "General" },
     ],
     defaults: { status: "A" },
     deleteMode: "master",
   },
 
-  // leavetype: {
-  //   title: "Leave Type Master",
-  //   subtitle: "Maintain leave type codes, carry-forward behavior, and half-day eligibility.",
-  //   master: "leavetype",
-  //   gmEndpoint: "leavetype",
-  //   routeKeys: ["leavetype", "leave_type"],
-  //   keyField: "leave_type",
-  //   fields: [
-  //     { name: "leave_type", label: "Leave Type", required: true, disabledOnEdit: true, width: 150 },
-  //     { name: "leave_type_desc", label: "Leave Description", required: true, width: 280 },
-  //     { name: "carry_forward", label: "Carry Forward", type: "select", options: yesNo, width: 150 },
-  //     { name: "half_day", label: "Half Day", type: "select", options: yesNo, width: 130 },
-  //   ],
-  //   defaults: { carry_forward: "N", half_day: "N" },
-  //   deleteMode: "master",
-  // },
+  leavetype: {
+    title: "Leave Type Master",
+    subtitle: "Maintain leave type codes, carry-forward behavior, and half-day eligibility.",
+    master: "leavetype",
+    gmEndpoint: "leavetype",
+    routeKeys: ["leavetype", "leave_type"],
+    keyField: "leave_type",
+    source: "dynamic",
+    mutationMode: "column90",
+    listQuery: dynamicList("MST_HR__LEAVE_TYPES_SELECT", true),
+    buildSave: (form, context) => ({
+      parameter: "hr_mse_leave_types",
+      loginid: context.loginid,
+      val1s1: context.companyCode,
+      val1s2: text(form, "leave_type"),
+      val1s3: text(form, "leave_type_desc"),
+      val1s4: text(form, "leave_type_short_desc"),
+      val1s5: text(form, "attend_type"),
+      val1s6: text(form, "maximum_days_allow"),
+      val1s7: text(form, "min_service_days_required"),
+      val1s8: text(form, "carry_forward", "N"),
+      val1s9: text(form, "half_day", "N"),
+      val1s10: text(form, "all_employees"),
+      val1s11: text(form, "back_dated_allow"),
+      val1s12: text(form, "post_dated_allow"),
+      val1s13: text(form, "encashable"),
+      val1s14: text(form, "pay_comp_id"),
+      val1s15: text(form, "with_pay"),
+      val1s16: text(form, "remarks"),
+      val1s17: text(form, "status", "A"),
+    }),
+    // NOTE: confirm the delete procedure name against your DB.
+    buildDelete: (row, context) => ({
+      parameter: "MST_HR_DEL_LEAVE_TYPES",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: text(row, "leave_type"),
+    }),
+    fields: [
+      { name: "leave_type", label: "Leave Type", required: true, disabledOnEdit: true, width: 150, maxLength: 5, section: "General" },
+      { name: "leave_type_desc", label: "Leave Description", required: true, width: 280, colSpan: 2, section: "General" },
+      { name: "leave_type_short_desc", label: "Short Description", width: 170, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120, section: "General" },
 
+      { name: "carry_forward", label: "Carry Forward", type: "select", options: yesNo, width: 150, section: "Leave Rules" },
+      { name: "half_day", label: "Half Day", type: "select", options: yesNo, width: 130, section: "Leave Rules" },
 
-  
- leavetype: {
-  title: "Leave Type Master",
-  subtitle: "Maintain leave type codes, carry-forward behavior, and half-day eligibility.",
-  master: "leavetype",
-  gmEndpoint: "leavetype",
-  routeKeys: ["leavetype", "leave_type"],
-  keyField: "leave_type",
-  source: "dynamic",
-  mutationMode: "column90",
-
-  listQuery: dynamicList("MST_HR__LEAVE_TYPES_SELECT", true),
-
-  buildSave: (form, context) => ({
-    parameter: "hr_mse_leave_types",
-    loginid: context.loginid,
-    val1s1: context.companyCode,
-    val1s2: text(form, "leave_type"),
-    val1s3: text(form, "leave_type_desc"),
-    val1s4: text(form, "leave_type_short_desc"),
-    val1s5: text(form, "attend_type"),
-    val1s6: text(form, "maximum_days_allow"),
-    val1s7: text(form, "min_service_days_required"),
-    val1s8: text(form, "carry_forward", "N"),
-    val1s9: text(form, "half_day", "N"),
-    val1s10: text(form, "all_employees"),
-    val1s11: text(form, "back_dated_allow"),
-    val1s12: text(form, "post_dated_allow"),
-    val1s13: text(form, "encashable"),
-    val1s14: text(form, "pay_comp_id"),
-    val1s15: text(form, "with_pay"),
-    val1s16: text(form, "remarks"),
-    val1s17: text(form, "status", "A"),
-  }),
-
-  // ⚠️ Delete procedure ka naam apne DB ke hisaab se confirm karo
-  buildDelete: (row, context) => ({
-    parameter: "MST_HR_DEL_LEAVE_TYPES",
-    loginid: context.loginid,
-    code1: context.companyCode,
-    code2: text(row, "leave_type"),
-  }),
-
-  fields: [
-    { name: "leave_type", label: "Leave Type", required: true, disabledOnEdit: true, width: 150, limit: 5 },
-    { name: "leave_type_desc", label: "Leave Description", required: true, width: 280 },
-    { name: "leave_type_short_desc", label: "Short Description", width: 170 },
-    { name: "carry_forward", label: "Carry Forward", type: "select", options: yesNo, width: 150 },
-    { name: "half_day", label: "Half Day", type: "select", options: yesNo, width: 130 },
-    { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120 },
-    { name: "remarks", label: "Remarks", table: false },
-  ],
-
-  defaults: { carry_forward: "N", half_day: "N", status: "A" },
-  deleteMode: "master",
-},
+      { name: "remarks", label: "Remarks", table: false, type: "textarea", colSpan: 3, section: "Remarks" },
+    ],
+    defaults: { carry_forward: "N", half_day: "N", status: "A" },
+    deleteMode: "master",
+  },
 
   paycomponent: {
     title: "Pay Component Master",
@@ -962,9 +904,9 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["paycomponent", "pay_component", "hrpaycomponent"],
     keyField: "pay_comp_id",
     fields: [
-      { name: "pay_comp_id", label: "Component ID", required: true, disabledOnEdit: true, width: 160 },
-      { name: "pay_comp_desc", label: "Component Description", required: true, width: 300 },
-      { name: "remarks", label: "Remarks", width: 280 },
+      { name: "pay_comp_id", label: "Component ID", required: true, disabledOnEdit: true, width: 160, section: "General" },
+      { name: "pay_comp_desc", label: "Component Description", required: true, width: 300, colSpan: 2, section: "General" },
+      { name: "remarks", label: "Remarks", width: 280, colSpan: 2, section: "General" },
     ],
   },
 
@@ -976,24 +918,43 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["section"],
     keyField: "section_code",
     fields: [
-      { name: "section_code", label: "Section Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "section_name", label: "Section Name", required: true, width: 260 },
-      { name: "section_short_name", label: "Short Name", width: 140 },
-      { name: "div_code", label: "Division", required: true, width: 130, lookup: sectionDivisionLookup },
-      { name: "dept_code", label: "Department", required: true, width: 140, lookup: sectionDepartmentLookup },
-      { name: "sect_head_id", label: "Section Head", width: 150 },
-      { name: "phone", label: "Phone", width: 140 },
-      { name: "email", label: "Email", type: "email", width: 220 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", table: false },
-      { name: "sect_addr1", label: "Address 1", required: true, table: false },
-      { name: "sect_addr2", label: "Address 2", table: false },
-      { name: "sect_addr3", label: "Address 3", table: false },
-      { name: "staff_cntrl_ac_group", label: "Staff Control A/C Group", table: false },
-      { name: "staff_loan_ac_group", label: "Staff Loan A/C Group", table: false },
-      { name: "salary_expense_ac_code", label: "Salary Expense A/C", table: false },
-      { name: "expense_type", label: "Expense Type", table: false },
-      { name: "expense_sub_type", label: "Expense Sub Type", table: false },
+      // General
+      { name: "section_code", label: "Section Code", required: true, disabledOnEdit: true, width: 150, section: "General" },
+      { name: "section_name", label: "Section Name", required: true, width: 260, colSpan: 2, section: "General" },
+      { name: "section_short_name", label: "Short Name", width: 140, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+
+      // Organization
+      { name: "div_code", label: "Division", required: true, width: 130, colSpan: 2, ...divisionDropdown, section: "Organization" },
+      {
+        name: "dept_code",
+        label: "Department",
+        required: true,
+        width: 140,
+        colSpan: 2,
+        disabledWhen: (form) => !form.div_code,
+        ...departmentByDivisionDropdown,
+        section: "Organization",
+      },
+      { name: "sect_head_id", label: "Section Head", width: 150, section: "Organization" },
+
+      // Contact
+      { name: "phone", label: "Phone", width: 140, section: "Contact Details" },
+      { name: "email", label: "Email", type: "email", width: 220, colSpan: 2, section: "Contact Details" },
+
+      // Address
+      { name: "sect_addr1", label: "Address 1", required: true, table: false, colSpan: 2, section: "Address Details" },
+      { name: "sect_addr2", label: "Address 2", table: false, colSpan: 2, section: "Address Details" },
+      { name: "sect_addr3", label: "Address 3", table: false, colSpan: 2, section: "Address Details" },
+
+      // Accounts
+      { name: "staff_cntrl_ac_group", label: "Staff Control A/C Group", table: false, colSpan: 2, section: "Account Details" },
+      { name: "staff_loan_ac_group", label: "Staff Loan A/C Group", table: false, colSpan: 2, section: "Account Details" },
+      { name: "salary_expense_ac_code", label: "Salary Expense A/C", table: false, colSpan: 2, section: "Account Details" },
+      { name: "expense_type", label: "Expense Type", table: false, colSpan: 2, section: "Account Details" },
+      { name: "expense_sub_type", label: "Expense Sub Type", table: false, colSpan: 2, section: "Account Details" },
+
+      { name: "remarks", label: "Remarks", table: false, type: "textarea", colSpan: 3, section: "Remarks" },
     ],
     defaults: { status: "A" },
     deleteMode: "gm",
@@ -1007,8 +968,8 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["kpiname", "kpi_name"],
     keyField: "kpi_name",
     fields: [
-      { name: "kpi_name", label: "KPI Name", required: true, disabledOnEdit: true, width: 280 },
-      { name: "serial_no", label: "Serial No", type: "number", required: true, width: 130 },
+      { name: "kpi_name", label: "KPI Name", required: true, disabledOnEdit: true, width: 280, colSpan: 2, section: "General" },
+      { name: "serial_no", label: "Serial No", type: "number", required: true, width: 130, section: "General" },
     ],
     deleteMode: "master",
   },
@@ -1021,8 +982,8 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["kpioperation", "operation"],
     keyField: "operation_name",
     fields: [
-      { name: "operation_name", label: "Operation Name", required: true, disabledOnEdit: true, width: 320 },
-      { name: "serial_no", label: "Serial No", type: "number", required: true, width: 130 },
+      { name: "operation_name", label: "Operation Name", required: true, disabledOnEdit: true, width: 320, colSpan: 2, section: "General" },
+      { name: "serial_no", label: "Serial No", type: "number", required: true, width: 130, section: "General" },
     ],
     deleteMode: "master",
   },
