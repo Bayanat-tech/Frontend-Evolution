@@ -2998,28 +2998,62 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       amount_origin: Math.abs(Number(line.amount || 0)),
     }));
 
-  const allocRows = (form.allocations || [])
+  const allocRows: any[] = [];
+  let dtlSrNo = 2;
+
+  const advanceKnockoffSign = (form.doc_type === "PI" ? -1 : 1) as (1 | -1);
+  const invoiceSettlementSign = (form.doc_type === "PI" ? 1 : -1) as (1 | -1);
+
+  (form.allocations || [])
     .filter((a) => Number(a.amount || 0) > 0)
-    .map((a, i) => ({
-      company_code: companyCode,
-      doc_type: form.doc_type,
-      doc_no: docNo,
-      serial_no: 1,
-      dtl_sr_no: i + 2,
-      doc_date: form.doc_date,
-      ac_code: form.ac_code,
-      inv_no: a.inv_no,
-      inv_date: a.inv_date || form.doc_date,
-      amount: Number(a.amount),
-      lcur_amount: Number(a.amount) * Number(form.ex_rate || 1),
-      sign_ind: (form.doc_type === "PI" ? 1 : -1) as (1 | -1),
-      sign_code: form.doc_type === "PI" ? "DR" : "CR",
-      curr_code: a.curr_code || form.curr_code,
-      ex_rate: Number(form.ex_rate || 1),
-      div_code: form.div_code,
-      indicator_origin: "N",
-      amount_origin: Number(a.amount),
-    }));
+    .forEach((a) => {
+      const allocatedAmt = Number(a.amount);
+      const lcurAllocatedAmt = allocatedAmt * Number(form.ex_rate || 1);
+
+      // 1. Knock off the open advance/voucher (e.g. BP2261600058) so its balance decreases
+      allocRows.push({
+        company_code: companyCode,
+        doc_type: form.doc_type,
+        doc_no: docNo,
+        serial_no: 1,
+        dtl_sr_no: dtlSrNo++,
+        doc_date: form.doc_date,
+        ac_code: form.ac_code,
+        inv_no: a.inv_no,
+        inv_date: a.inv_date || form.doc_date,
+        amount: allocatedAmt,
+        lcur_amount: lcurAllocatedAmt,
+        sign_ind: advanceKnockoffSign,
+        sign_code: advanceKnockoffSign === 1 ? "DR" : "CR",
+        curr_code: a.curr_code || form.curr_code,
+        ex_rate: Number(form.ex_rate || 1),
+        div_code: form.div_code,
+        indicator_origin: "N",
+        amount_origin: allocatedAmt,
+      });
+
+      // 2. Matching offset row settling this invoice (e.g. 33333) so it does NOT stay open as unpaid
+      allocRows.push({
+        company_code: companyCode,
+        doc_type: form.doc_type,
+        doc_no: docNo,
+        serial_no: 1,
+        dtl_sr_no: dtlSrNo++,
+        doc_date: form.doc_date,
+        ac_code: form.ac_code,
+        inv_no: invNo,
+        inv_date: form.inv_date || form.ref_date || form.doc_date,
+        amount: allocatedAmt,
+        lcur_amount: lcurAllocatedAmt,
+        sign_ind: invoiceSettlementSign,
+        sign_code: invoiceSettlementSign === 1 ? "DR" : "CR",
+        curr_code: form.curr_code,
+        ex_rate: Number(form.ex_rate || 1),
+        div_code: form.div_code,
+        indicator_origin: "N",
+        amount_origin: allocatedAmt,
+      });
+    });
 
   return [...originRows, ...allocRows];
 }
