@@ -22,6 +22,8 @@ import { useAuth } from "../../state/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { PlatformPasswordInput } from "./PlatformPasswordInput";
 import { LookupField } from "../../components/ui/LookupField";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { CompanySubscriptionPanel } from "./CompanySubscriptionPanel";
 import {
   primaryFields,
   resourceHints,
@@ -106,6 +108,9 @@ export function PlatformAdminPage() {
   }>({ users: [], screens: [], access: [] });
   const [loginid, setLoginid] = useState("");
   const [module, setModule] = useState("");
+  const [bulkConfirmation, setBulkConfirmation] = useState<{ serials: number[]; enabled: boolean; loginid: string; tenant: string; company: string } | null>(null);
+  const [showAttempts, setShowAttempts] = useState(false);
+  const accessMutation = useRef(false);
   const [newUser, setNewUser] = useState(false);
   const [userDraft, setUserDraft] = useState({
     loginid: "",
@@ -176,6 +181,7 @@ export function PlatformAdminPage() {
   useEffect(() => {
     if (
       !allowed ||
+      mode === "billing" ||
       (mode === "records" && !table) ||
       ((mode === "screens" || mode === "access") && !company)
     )
@@ -247,7 +253,7 @@ export function PlatformAdminPage() {
       </section>
     );
   const title =
-    mode === "access"
+    mode === "billing" ? "Subscription & billing" : mode === "access"
       ? "User screen access"
       : mode === "screens"
         ? "Company screen availability"
@@ -552,6 +558,8 @@ export function PlatformAdminPage() {
         .includes(query.toLowerCase()),
   );
   const grant = async (serials: number[], enabled: boolean) => {
+    if (accessMutation.current) return;
+    accessMutation.current = true;
     setSaving(true);
     setError("");
     try {
@@ -565,6 +573,7 @@ export function PlatformAdminPage() {
     } catch (e) {
       setError(errorText(e));
     } finally {
+      accessMutation.current = false;
       setSaving(false);
     }
   };
@@ -722,6 +731,9 @@ export function PlatformAdminPage() {
               <KeyRound size={16} />
               Company screens
             </button>
+            <button aria-current={mode === "billing" ? "page" : undefined} disabled={saving || !company} onClick={() => setMode("billing")}>
+              <Building2 size={16} /> Subscription & billing
+            </button>
           </>
         )}
         <button
@@ -745,6 +757,7 @@ export function PlatformAdminPage() {
       )}
       <div className="platform-toolbar">
         <h2>{title}</h2>
+        {mode === "audit" && <label><input type="checkbox" checked={showAttempts} onChange={e => setShowAttempts(e.target.checked)} /> Include technical attempt records</label>}
         {mode === "records" && (
           <label className="platform-resource">
             <span className="sr-only">Security resource</span>
@@ -880,21 +893,13 @@ export function PlatformAdminPage() {
             </Button>
             <Button
               disabled={!loginid || saving || loading || !accessScreens.length}
-              onClick={() =>
-                grant(
-                  accessScreens.map((s) => Number(s.SERIAL_NO)),
-                  true,
-                )
-              }
+              onClick={() => setBulkConfirmation({ serials: accessScreens.map(s => Number(s.SERIAL_NO)), enabled: true, loginid, tenant, company })}
             >
               Grant all shown screens
             </Button>
             <Button variant="outline"
               disabled={!loginid || saving || loading || !accessScreens.length}
-              onClick={() => {
-                if (window.confirm(`Remove access to ${accessScreens.length} shown screens for ${loginid}? Other screen permissions will be preserved.`))
-                  void grant(accessScreens.map((s) => Number(s.SERIAL_NO)), false);
-              }}>
+              onClick={() => setBulkConfirmation({ serials: accessScreens.map(s => Number(s.SERIAL_NO)), enabled: false, loginid, tenant, company })}>
               Remove all shown access
             </Button>
           </div>
@@ -1084,8 +1089,8 @@ export function PlatformAdminPage() {
           </div>
         </form>
       )}
-      <div className="platform-grid" aria-busy={loading}>
-        {loading ? (
+      <div className="platform-grid" aria-busy={loading && mode !== "billing"}>
+        {mode === "billing" ? <CompanySubscriptionPanel key={`${tenant}/${company}`} tenant={tenant} company={company} /> : loading ? (
           <p className="platform-empty" role="status">
             Loading security records…
           </p>
@@ -1180,7 +1185,7 @@ export function PlatformAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {audit.map((a) => (
+              {audit.filter(a => (showAttempts || a.ACTION !== "ATTEMPT") && (!query || `${a.ACTOR} ${a.TENANT_ID} ${a.COMPANY_CODE} ${a.ACTION} ${a.RESOURCE_NAME}`.toLowerCase().includes(query.toLowerCase()))).map((a) => (
                 <tr key={a.AUDIT_ID}>
                   <td>{new Date(a.CREATED_AT).toLocaleString()}</td>
                   <td>{a.ACTOR}</td>
@@ -1267,6 +1272,21 @@ export function PlatformAdminPage() {
           </Button>
         </footer>
       )}
+      <ConfirmDialog open={Boolean(bulkConfirmation)}
+        title={bulkConfirmation?.enabled ? "Grant all shown screens?" : "Remove all shown screen access?"}
+        description={`${bulkConfirmation?.serials.length || 0} screens for ${bulkConfirmation?.loginid || ""} in ${bulkConfirmation?.company || ""} / ${bulkConfirmation?.tenant || ""}.`}
+        actionLabel={bulkConfirmation?.enabled ? "Confirm grant" : "Confirm removal"}
+        tone={bulkConfirmation?.enabled ? "default" : "danger"}
+        onClose={() => setBulkConfirmation(null)}
+        onConfirm={() => {
+          const pending = bulkConfirmation;
+          setBulkConfirmation(null);
+          if (!pending || saving) return;
+          if (pending.tenant !== tenant || pending.company !== company || pending.loginid !== loginid) { setError("The selection changed. Review the user and company, then try again."); return; }
+          void grant(pending.serials, pending.enabled);
+        }}>
+        <p>{bulkConfirmation?.enabled ? "Every shown screen will receive all operations. Screens outside this selection stay unchanged." : "Direct and role access to the shown screens will be removed for this user. Their other role permissions will be preserved as direct grants."}</p>
+      </ConfirmDialog>
     </section>
   );
 }

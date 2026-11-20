@@ -390,6 +390,17 @@
   flex: 1 1 240px;
   max-width: 400px;
 }
+.platform-subscription-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 20px;
+  border: 0;
+  padding: 20px 0 0;
+  margin: 0;
+  min-width: 0;
+}
+.platform-subscription-fields label { display: grid; align-content: start; gap: 8px; }
+.platform-subscription-fields .platform-editor-actions { grid-column: 1 / -1; }
 .platform-access-source {
   display: inline-block;
   margin-left: 10px;

@@ -6,7 +6,7 @@ import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
 import { roundFinanceTax } from "../../utils/financeTaxAmounts";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins, RotateCcw, Zap, CheckCircle2, Layers } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState, ReactNode, Fragment } from "react";
+import { FormEvent, useEffect, useMemo, useState, ReactNode, Fragment, CSSProperties } from "react";
 import { api } from "../../api/client";
 import {
   Division,
@@ -2306,7 +2306,16 @@ const limitProps = (f: keyof FormState) => ({
                       {expandedRowIds[line.id] && !isPO && (
                         <tr key={`${line.id}_alloc`} className="finance-allocation-row">
                           <td colSpan={isPO ? (showAllColumns ? 20 : 16) : (showAllColumns ? 17 : 13)} className="finance-allocation-cell p-1">
-                            <div className="finance-allocation-panel my-0.5 mx-1 overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
+                            <div
+                              className="finance-allocation-panel my-0.5 mx-1 overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs"
+                              style={{
+                                width: "880px",
+                                minWidth: "860px",
+                                maxWidth: "100%",
+                                "--allocation-panel-width": "880px",
+                                "--allocation-panel-min-width": "860px",
+                              } as CSSProperties}
+                            >
                               {/* Compact Allocations Toolbar */}
                               <div className="finance-allocation-toolbar flex items-center justify-between gap-2 border-b border-[#bfd1e8] bg-[#eef5fc] px-2 py-1 text-xs">
                                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
@@ -2370,7 +2379,7 @@ const limitProps = (f: keyof FormState) => ({
                               </div>
 
                               {/* Compact Allocations Table */}
-                              <div className="commercial-lines-scroll max-h-[160px] min-h-[70px] overflow-auto border-t border-[#bfd1e8] bg-white">
+                              <div className="commercial-lines-scroll max-h-[170px] min-h-[70px] overflow-y-auto overflow-x-hidden border-t border-[#bfd1e8] bg-white">
                                 {allocLoading ? (
                                   <div className="flex items-center justify-center p-4 text-[11px] text-muted-foreground gap-2">
                                     <RefreshCw size={12} className="animate-spin text-emerald-600" />
@@ -2381,18 +2390,18 @@ const limitProps = (f: keyof FormState) => ({
                                     No open advances or credit/debit notes available for allocation against party <strong>{form.ac_code}</strong>.
                                   </div>
                                 ) : (
-                                  <table className="finance-lines-table finance-detail-table w-full text-[11px]">
+                                  <table className="finance-lines-table finance-detail-table w-full text-[11px] table-auto">
                                     <thead className="sticky top-0 bg-[#00378C] text-[10px] font-semibold text-white shadow-2xs z-10">
                                       <tr>
                                         <th className="w-8 px-2 py-1 text-center">#</th>
-                                        <th className="px-2 py-1 text-left">Voucher No</th>
-                                        <th className="px-2 py-1 text-left">Date</th>
+                                        <th className="w-32 px-2 py-1 text-left">Voucher No</th>
+                                        <th className="w-24 px-2 py-1 text-left">Date</th>
                                         <th className="w-12 px-1.5 py-1 text-center">Type</th>
-                                        <th className="px-2 py-1 text-right">Balance Amt</th>
-                                        <th className="w-32 min-w-[120px] px-2 py-1 text-right">Allocated Amt</th>
+                                        <th className="w-28 px-2 py-1 text-right">Balance Amt</th>
+                                        <th className="w-36 min-w-[130px] px-2 py-1 text-right">Allocated Amt</th>
                                         <th className="w-12 px-1.5 py-1 text-center">Sign</th>
                                         <th className="w-16 px-1.5 py-1 text-center">Status</th>
-                                        <th className="px-2 py-1 text-right">Remaining</th>
+                                        <th className="w-28 px-2 py-1 text-right">Remaining Bal</th>
                                         <th className="w-8 px-1 py-1 text-center"></th>
                                       </tr>
                                     </thead>
@@ -2418,17 +2427,17 @@ const limitProps = (f: keyof FormState) => ({
                                             title="Double-click to allocate full balance"
                                           >
                                             <td className="w-8 px-2 py-0.5 text-center text-[10px] text-slate-500 font-mono">{aIdx + 1}</td>
-                                            <td className="px-2 py-0.5 font-mono font-bold text-slate-900">{alloc.inv_no}</td>
-                                            <td className="px-2 py-0.5 font-mono text-slate-600">{alloc.inv_date ? String(alloc.inv_date).slice(0, 10) : "—"}</td>
+                                            <td className="w-32 px-2 py-0.5 font-mono font-bold text-slate-900">{alloc.inv_no}</td>
+                                            <td className="w-24 px-2 py-0.5 font-mono text-slate-600">{alloc.inv_date ? String(alloc.inv_date).slice(0, 10) : "—"}</td>
                                             <td className="w-12 px-1.5 py-0.5 text-center">
                                               <span className="inline-flex items-center px-1 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
                                                 {alloc.origin_doc_type || "ADV"}
                                               </span>
                                             </td>
-                                            <td className="px-2 py-0.5 text-right font-mono tabular-nums text-slate-900">
+                                            <td className="w-28 px-2 py-0.5 text-right font-mono tabular-nums text-slate-900">
                                               {formatAmount(maxBal)}
                                             </td>
-                                            <td className="w-32 min-w-[120px] px-1 py-0.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                            <td className="w-36 min-w-[130px] px-1 py-0.5 text-right" onClick={(e) => e.stopPropagation()}>
                                               <div className="flex items-center gap-1 justify-end">
                                                 <Input
                                                   type="number"
@@ -2480,7 +2489,7 @@ const limitProps = (f: keyof FormState) => ({
                                                 <span className="text-[10px] text-slate-400">Open</span>
                                               )}
                                             </td>
-                                            <td className="px-2 py-0.5 text-right font-mono tabular-nums font-semibold text-slate-700">
+                                            <td className="w-28 px-2 py-0.5 text-right font-mono tabular-nums font-semibold text-slate-700">
                                               {formatAmount(remainingBal)}
                                             </td>
                                             <td className="w-8 px-1 py-0.5 text-center" onClick={(e) => e.stopPropagation()}>
