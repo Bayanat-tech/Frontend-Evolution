@@ -69,11 +69,11 @@ function AllocatedAmountInput({
     const ex = line.ex_rate_origin || line.ex_rate || 1;
     const numOrig = ex !== 0 ? num / ex : num;
     setVal(num > 0 ? num.toFixed(3) : "");
-    const oppositeSign = line.open_sign_ind === -1 ? 1 : -1;
+    const targetSign = line.open_sign_ind === -1 ? 1 : -1;
     onPatch(line.id, {
       amount: num,
       amount_origin: Number(numOrig.toFixed(3)),
-      sign_ind: num > 0 ? oppositeSign : line.sign_ind,
+      sign_ind: targetSign,
     });
   };
 
@@ -278,9 +278,8 @@ export function AllocatedInvoicePage() {
             const currOrig = String(inv.CURR_CODE_ORIGIN || inv.curr_code_origin || inv.ORG_CURR_CODE || inv.org_curr_code || "INR");
             const exOrig = Number(inv.EX_RATE_ORIGIN || inv.ex_rate_origin || inv.EX_RATE || inv.ex_rate || 1);
             const openSign = Number(inv.SIGN_IND ?? inv.sign_ind ?? (rawBal >= 0 ? 1 : -1));
-            // In PowerBuilder UJV, allocating a Credit invoice creates a Debit (+1) allocation,
-            // and allocating a Debit invoice creates a Credit (-1) allocation (opposite sign).
-            const allocSign = openSign === -1 ? 1 : -1;
+            // PowerBuilder maintains the invoice sign (Cr -1 for Cr, Dr 1 for Dr)
+            const allocSign = openSign;
             return {
               id: `line_${idx}_${inv.INV_NO || inv.inv_no}`,
               sr: idx + 1,
@@ -405,7 +404,7 @@ export function AllocatedInvoicePage() {
     setLines((prev) => prev.filter((row) => row.id !== id).map((row, index) => ({ ...row, sr: index + 1 })));
   }, []);
 
-  // Double-click toggle: allocate full balance with OPPOSITE sign, or toggle off to 0
+  // Double-click toggle: allocate full balance with OPPOSITE sign of open balance (as per PowerBuilder logic), or toggle off to 0
   const handleToggleAllocate = useCallback((id: string) => {
     setLines((prev) =>
       prev.map((line) => {
@@ -414,14 +413,16 @@ export function AllocatedInvoicePage() {
           const allocAmt = line.balance_amount;
           const ex = line.ex_rate_origin || line.ex_rate || 1;
           const allocAmtOrig = ex !== 0 ? allocAmt / ex : allocAmt;
-          // In double-entry allocation, offsetting a Credit balance (-1) requires a Debit (+1),
-          // and offsetting a Debit balance (+1) requires a Credit (-1).
-          const oppositeSign = line.open_sign_ind === -1 ? 1 : -1;
+          // As per PowerBuilder dw_tr_ac_bill_allocation:
+          // Allocate with OPPOSITE sign of open balance:
+          // If invoice balance is Cr (-1), allocation entry is Dr (+1)
+          // If invoice balance is Dr (+1), allocation entry is Cr (-1)
+          const targetSign = line.open_sign_ind === -1 ? 1 : -1;
           return {
             ...line,
             amount: allocAmt,
             amount_origin: Number(allocAmtOrig.toFixed(3)),
-            sign_ind: oppositeSign,
+            sign_ind: targetSign,
           };
         } else {
           return {
@@ -465,12 +466,12 @@ export function AllocatedInvoicePage() {
         prev.map((line) => {
           const ex = line.ex_rate_origin || line.ex_rate || 1;
           const orig = ex !== 0 ? line.balance_amount / ex : line.balance_amount;
-          const oppositeSign = line.open_sign_ind === -1 ? 1 : -1;
+          const targetSign = line.open_sign_ind === -1 ? 1 : -1;
           return {
             ...line,
             amount: line.balance_amount,
             amount_origin: Number(orig.toFixed(3)),
-            sign_ind: oppositeSign,
+            sign_ind: targetSign,
           };
         })
       );
@@ -485,12 +486,12 @@ export function AllocatedInvoicePage() {
         remaining -= toAlloc;
         const ex = line.ex_rate_origin || line.ex_rate || 1;
         const allocOrig = ex !== 0 ? toAlloc / ex : toAlloc;
-        const oppositeSign = line.open_sign_ind === -1 ? 1 : -1;
+        const targetSign = line.open_sign_ind === -1 ? 1 : -1;
         return {
           ...line,
           amount: toAlloc,
           amount_origin: Number(allocOrig.toFixed(3)),
-          sign_ind: toAlloc > 0 ? oppositeSign : line.sign_ind,
+          sign_ind: targetSign,
         };
       })
     );
@@ -1027,7 +1028,8 @@ export function AllocatedInvoicePage() {
                 columns={columns}
                 data={lines}
                 loading={loading}
-                height={300}
+                height={190}
+                minWidth={880}
                 pageSize={100}
                 density="compact"
                 onRowDoubleClick={(row) => handleToggleAllocate(row.id)}

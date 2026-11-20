@@ -2698,10 +2698,10 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
 
   function getUtilityMasterConfig(pathname: string) {
     const normalized = pathname.toLowerCase();
-    if (normalized.includes("/finance/a/c_others/assets/asset_group")) return financeUtilityConfigs.assetGroup;
-    if (normalized.includes("/finance/a/c_others/assets/asset_subgroup")) return financeUtilityConfigs.assetSubgroup;
-    if (normalized.includes("/finance/a/c_others/assets/asset_location")) return financeUtilityConfigs.assetLocation;
-    if (normalized.includes("/finance/a/c_others/prepaid/prepaid_group")) return financeUtilityConfigs.prepaidGroup;
+    if (normalized.includes("asset_group") || normalized.includes("assetgroup")) return financeUtilityConfigs.assetGroup;
+    if (normalized.includes("asset_subgroup") || normalized.includes("assetsubgroup")) return financeUtilityConfigs.assetSubgroup;
+    if (normalized.includes("asset_location") || normalized.includes("assetlocation") || normalized.includes("asset_site") || normalized.includes("assetsite")) return financeUtilityConfigs.assetLocation;
+    if (normalized.includes("prepaid_group") || normalized.includes("prepaidgroup")) return financeUtilityConfigs.prepaidGroup;
     return null;
   }
 
