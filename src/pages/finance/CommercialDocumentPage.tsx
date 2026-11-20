@@ -5,8 +5,8 @@ import { ColumnModeToggle } from "../../components/ui/ColumnModeToggle";
 import { useFinanceTaxLabels } from "../../hooks/useFinanceTaxLabels";
 import { roundFinanceTax } from "../../utils/financeTaxAmounts";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins, RotateCcw, Zap, CheckCircle2 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins, RotateCcw, Zap, CheckCircle2, Layers } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState, ReactNode, Fragment } from "react";
 import { api } from "../../api/client";
 import {
   Division,
@@ -672,6 +672,8 @@ function CommercialEditor({
 
   const [activeTab, setActiveTab] = useState<"lines" | "allocations">("lines");
   const [allocLoading, setAllocLoading] = useState(false);
+  const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
+  const toggleRowExpanded = (id: string) => setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const loadAllocations = async (
     acCode: string,
@@ -712,7 +714,7 @@ function CommercialEditor({
           lcur_amount: existingAmt * Number(form.ex_rate || 1),
           ac_code: acCode,
           div_code: divCode,
-          sign_ind: targetDocType === "PI" ? -1 : 1,
+          sign_ind: targetDocType === "PI" ? 1 : -1,
           dtl_sr_no: idx + 1,
           isExisting: existingAmt > 0,
         };
@@ -735,7 +737,7 @@ function CommercialEditor({
               lcur_amount: amt * Number(form.ex_rate || 1),
               ac_code: acCode,
               div_code: divCode,
-              sign_ind: targetDocType === "PI" ? -1 : 1,
+              sign_ind: targetDocType === "PI" ? 1 : -1,
               dtl_sr_no: 990 + i,
               isExisting: true,
             });
@@ -763,9 +765,9 @@ function CommercialEditor({
     }));
   };
 
-  const autoAllocateFIFO = () => {
-    const invoiceNet = total + taxTotal;
-    let remaining = invoiceNet;
+  const autoAllocateForLine = (targetLine?: Line) => {
+    const lineAmount = targetLine ? Math.abs(Number(targetLine.amount || 0)) : (total + taxTotal);
+    let remaining = lineAmount;
     setForm((c) => ({
       ...c,
       allocations: (c.allocations || []).map((a) => {
@@ -777,6 +779,8 @@ function CommercialEditor({
       }),
     }));
   };
+
+  const autoAllocateFIFO = () => autoAllocateForLine();
 
   const clearAllocations = () => {
     setForm((c) => ({
@@ -2051,6 +2055,7 @@ const limitProps = (f: keyof FormState) => ({
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
+                      {!isPO && <th className="w-[110px] min-w-[110px] max-w-[110px] px-2 py-2 text-center">Allocations</th>}
                       {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Product Code</th>}
                       <th className="w-[380px] min-w-[300px] px-2 py-2 text-left">Description</th>
                       {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Cost Code</th>}
@@ -2077,10 +2082,10 @@ const limitProps = (f: keyof FormState) => ({
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? (showAllColumns ? 20 : 16) : (showAllColumns ? 16 : 12)}>No lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? (showAllColumns ? 20 : 16) : (showAllColumns ? 17 : 13)}>No lines yet</td></tr>
                     ) : filteredLines.length === 0 ? (
                       <tr>
-                        <td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? (showAllColumns ? 20 : 16) : (showAllColumns ? 16 : 12)}>
+                        <td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? (showAllColumns ? 20 : 16) : (showAllColumns ? 17 : 13)}>
                           <div className="flex flex-col items-center justify-center gap-1.5 py-3">
                             <Search size={20} className="text-slate-400" />
                             <span className="text-xs font-medium text-slate-600">No matching lines found for &quot;{lineSearch}&quot;</span>
@@ -2095,7 +2100,8 @@ const limitProps = (f: keyof FormState) => ({
                         </td>
                       </tr>
                     ) : filteredLines.map((line, index) => (
-                      <tr className="border-t odd:bg-muted/20" key={line.id}>
+                      <Fragment key={line.id}>
+                        <tr className="border-t odd:bg-muted/20">
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{line.serial_no}</td>
                         <td className="finance-sticky-col finance-col-account finance-account-cell px-2 py-1">
                           <LookupField
@@ -2120,6 +2126,26 @@ const limitProps = (f: keyof FormState) => ({
   )}
 
                         </td>
+                        {!isPO && (
+                          <td className="w-[110px] min-w-[110px] max-w-[110px] px-1 py-1 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleRowExpanded(line.id)}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+                                expandedRowIds[line.id]
+                                  ? "bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700"
+                                  : ((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length > 0)
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                              }`}
+                              title="Toggle bill allocations for this invoice line"
+                            >
+                              <Layers size={12} />
+                              <span>Allocations</span>
+                              <ChevronDown size={12} className={`transition-transform duration-150 ${expandedRowIds[line.id] ? "rotate-180" : ""}`} />
+                            </button>
+                          </td>
+                        )}
                         {isPO && (
   <td className="w-36 px-2 py-1">
     <Input disabled={isCancelled}
@@ -2276,6 +2302,230 @@ const limitProps = (f: keyof FormState) => ({
                           </td>
                         <td className="finance-sticky-col-right px-1 py-1 text-center"><button type="button" disabled={isCancelled} title="Delete row" className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer" onClick={() => removeLine(line.id)}><Trash2 size={13} /></button></td>
                       </tr>
+
+                      {expandedRowIds[line.id] && !isPO && (
+                        <tr key={`${line.id}_alloc`} className="finance-allocation-row">
+                          <td colSpan={isPO ? (showAllColumns ? 20 : 16) : (showAllColumns ? 17 : 13)} className="finance-allocation-cell p-0">
+                            <div className="finance-allocation-branch bg-emerald-50/25 border-y-2 border-emerald-300/80 p-3 shadow-inner">
+                              {/* Allocations Toolbar */}
+                              <div className="finance-line-actions flex flex-wrap items-center justify-between border-b border-emerald-200 bg-emerald-50/80 px-3 py-2 rounded-t-md gap-2">
+                                <div className="finance-line-actions-title flex items-center gap-2">
+                                  <span className="finance-section-icon bg-emerald-600"><Receipt size={12} className="text-white" /></span>
+                                  <h4 className="m-0 text-xs font-bold uppercase tracking-wider text-emerald-950">
+                                    {isPI
+                                      ? `Bill Allocations — Advance Payments & Debit Notes (Line ${line.serial_no})`
+                                      : `Bill Allocations — Advance Receipts & Credit Notes (Line ${line.serial_no})`}
+                                  </h4>
+                                  <span className="inline-flex items-center rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                                    {(form.allocations || []).length} open items
+                                  </span>
+                                  {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length > 0) && (
+                                    <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-300 px-2 py-0.5 text-[10px] font-bold text-[#00378C]">
+                                      {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length)} active ({formatAmount(((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)))})
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    disabled={isCancelled || allocLoading || (form.allocations || []).length === 0}
+                                    size="sm"
+                                    type="button"
+                                    onClick={() => autoAllocateForLine(line)}
+                                    className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer shadow-xs"
+                                    title="Auto-allocate against line amount (FIFO as per PowerBuilder)"
+                                  >
+                                    <Zap size={13} />
+                                    <span>Auto Allocate (FIFO)</span>
+                                  </Button>
+                                  <Button
+                                    disabled={isCancelled || allocLoading || ((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length) === 0}
+                                    size="sm"
+                                    type="button"
+                                    variant="outline"
+                                    onClick={clearAllocations}
+                                    className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                                    title="Reset all allocation amounts to zero"
+                                  >
+                                    <RotateCcw size={13} />
+                                    <span>Clear All</span>
+                                  </Button>
+                                  <Button
+                                    disabled={allocLoading || !form.ac_code || !form.div_code}
+                                    size="sm"
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                      if (form.ac_code && form.div_code) {
+                                        void loadAllocations(form.ac_code, form.div_code, docType);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded text-xs font-semibold text-blue-700 border-blue-300 hover:bg-blue-50 cursor-pointer"
+                                    title="Reload open advances from server"
+                                  >
+                                    <RefreshCw size={13} className={allocLoading ? "animate-spin" : ""} />
+                                    <span>Refresh</span>
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {/* Allocations Table */}
+                              <div className="commercial-lines-scroll max-h-[300px] min-h-[120px] overflow-auto border border-t-0 border-emerald-200 bg-white rounded-b-md">
+                                {allocLoading ? (
+                                  <div className="flex items-center justify-center p-8 text-xs text-muted-foreground gap-2">
+                                    <RefreshCw size={14} className="animate-spin text-emerald-600" />
+                                    <span>Loading open advances from server...</span>
+                                  </div>
+                                ) : (form.allocations || []).length === 0 ? (
+                                  <div className="p-8 text-center text-xs text-slate-500">
+                                    No open advances or credit/debit notes available for allocation against party <strong>{form.ac_code}</strong>.
+                                  </div>
+                                ) : (
+                                  <table className="finance-lines-table finance-detail-table w-full text-xs">
+                                    <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left">Document No</th>
+                                        <th className="px-3 py-2 text-left">Date</th>
+                                        <th className="px-2 py-2 text-center">Type</th>
+                                        <th className="px-3 py-2 text-right">Balance Amt</th>
+                                        <th className="w-20 min-w-[70px] px-2 py-2 text-center">Sign</th>
+                                        <th className="w-36 min-w-[130px] px-3 py-2 text-right">Allocated Amt</th>
+                                        <th className="px-2 py-2 text-center">Status</th>
+                                        <th className="px-3 py-2 text-right">Remaining Bal</th>
+                                        <th className="w-12 px-2 py-2 text-center">Clear</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(form.allocations || []).map((alloc) => {
+                                        const isAllocated = Number(alloc.amount || 0) > 0;
+                                        const maxBal = alloc.c_bal_amt_org > 0 ? alloc.c_bal_amt_org : alloc.inv_amt;
+                                        const remainingBal = Math.max(0, maxBal - Number(alloc.amount || 0));
+                                        return (
+                                          <tr
+                                            key={alloc.id}
+                                            className={`border-t transition-colors cursor-pointer select-none ${
+                                              isAllocated
+                                                ? "bg-emerald-50/70 hover:bg-emerald-100/70 font-medium"
+                                                : "hover:bg-slate-50/80"
+                                            }`}
+                                            onDoubleClick={() => {
+                                              if (!isCancelled) {
+                                                const target = isAllocated ? 0 : maxBal;
+                                                updateAllocationAmount(alloc.inv_no, target);
+                                              }
+                                            }}
+                                            title="Double-click to allocate full balance"
+                                          >
+                                            <td className="px-3 py-2 font-mono font-bold text-slate-900">{alloc.inv_no}</td>
+                                            <td className="px-3 py-2 font-mono text-slate-600">{alloc.inv_date ? String(alloc.inv_date).slice(0, 10) : "—"}</td>
+                                            <td className="px-2 py-2 text-center">
+                                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                                {alloc.origin_doc_type || "ADV"}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-900">
+                                              {formatAmount(maxBal)}
+                                            </td>
+                                            <td className="w-20 min-w-[70px] px-2 py-2 text-center">
+                                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                alloc.sign_ind === -1
+                                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                                              }`}>
+                                                {alloc.sign_ind === -1 ? "Cr" : "Dr"}
+                                              </span>
+                                            </td>
+                                            <td className="w-36 min-w-[130px] px-2 py-1 text-right" onClick={(e) => e.stopPropagation()}>
+                                              <div className="flex items-center gap-1 justify-end">
+                                                <Input
+                                                  type="number"
+                                                  step="0.001"
+                                                  min={0}
+                                                  max={maxBal}
+                                                  disabled={isCancelled}
+                                                  value={alloc.amount > 0 ? alloc.amount : ""}
+                                                  placeholder="0.000"
+                                                  className={`h-7 text-xs font-mono font-bold text-right w-24 tabular-nums ${
+                                                    isAllocated
+                                                      ? "!bg-white !text-emerald-800 !border-emerald-500 ring-1 ring-emerald-400"
+                                                      : "text-slate-600"
+                                                  }`}
+                                                  onChange={(e) => updateAllocationAmount(alloc.inv_no, Number(e.target.value || 0))}
+                                                />
+                                                <button
+                                                  type="button"
+                                                  disabled={isCancelled}
+                                                  onClick={() => updateAllocationAmount(alloc.inv_no, maxBal)}
+                                                  className="h-7 px-1.5 rounded text-[10px] font-semibold bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 border border-slate-300 transition-colors cursor-pointer"
+                                                  title="Allocate full balance"
+                                                >
+                                                  Full
+                                                </button>
+                                              </div>
+                                            </td>
+                                            <td className="px-2 py-2 text-center">
+                                              {isAllocated ? (
+                                                remainingBal <= 0.001 ? (
+                                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                                                    <CheckCircle2 size={11} /> Settled
+                                                  </span>
+                                                ) : (
+                                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                                    Partial
+                                                  </span>
+                                                )
+                                              ) : (
+                                                <span className="text-[11px] text-slate-400">Open</span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-mono tabular-nums font-semibold text-slate-700">
+                                              {formatAmount(remainingBal)}
+                                            </td>
+                                            <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                              {isAllocated ? (
+                                                <button
+                                                  type="button"
+                                                  disabled={isCancelled}
+                                                  onClick={() => updateAllocationAmount(alloc.inv_no, 0)}
+                                                  className="inline-flex items-center justify-center h-6 w-6 rounded border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                                                  title="Clear allocation on this voucher"
+                                                >
+                                                  <Trash2 size={11} />
+                                                </button>
+                                              ) : (
+                                                <span className="text-[10px] text-slate-300 font-mono">—</span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+
+                              {/* Allocations Footer */}
+                              <div className="commercial-lines-footer flex flex-wrap items-center justify-between border-t border-[#cbd5e1] bg-slate-50/95 px-3 py-1.5 rounded-b-md gap-2 mt-1">
+                                <div className="flex items-center gap-2">
+                                  {((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) > 0 ? (
+                                    <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded px-2.5 py-1">
+                                      <CheckCircle2 size={13} className="text-emerald-600" />
+                                      <span>
+                                        {formatAmount(((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)))} allocated across {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length)} advance/voucher{((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length) > 1 ? "s" : ""}.
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-500 font-medium italic">
+                                      Enter amounts, double click balance, or click &quot;Auto Allocate (FIFO)&quot; to knock off open advances against this invoice line.
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -2311,241 +2561,6 @@ const limitProps = (f: keyof FormState) => ({
                   )}
                 </div>
               </div>
-              {/* Child Bill Allocations Section (Advances & Open Adjustments) */}
-            {docType !== "PO" && (
-              <div className="commercial-lines-card min-w-0 rounded-md border border-emerald-300/80 bg-card shadow-sm overflow-hidden mb-3 mt-3">
-                {/* Allocations Toolbar */}
-                <div className="finance-line-actions flex flex-wrap items-center justify-between border-b border-emerald-200 bg-emerald-50/70 px-3 py-2 gap-2">
-                  <div className="finance-line-actions-title flex items-center gap-2">
-                    <span className="finance-section-icon bg-emerald-600"><Receipt size={12} className="text-white" /></span>
-                    <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-emerald-900">
-                      {isPI ? "Bill Allocations (Child of Details: Advance Payments & Open Debit Notes)" : "Bill Allocations (Child of Details: Advance Receipts & Open Credit Notes)"}
-                    </h3>
-                    <span className="inline-flex items-center rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                      {(form.allocations || []).length} open items
-                    </span>
-                    {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length) > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-300 px-2 py-0.5 text-[10px] font-bold text-[#00378C]">
-                        {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length)} active ({formatAmount(((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)))})
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      disabled={isCancelled || allocLoading || (form.allocations || []).length === 0}
-                      size="sm"
-                      type="button"
-                      onClick={autoAllocateFIFO}
-                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer shadow-xs"
-                      title="Auto-allocate invoice total against oldest open advances first (FIFO)"
-                    >
-                      <Zap size={13} />
-                      <span>Auto Allocate (FIFO)</span>
-                    </Button>
-                    <Button
-                      disabled={isCancelled || allocLoading || ((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length) === 0}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                      onClick={clearAllocations}
-                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
-                      title="Reset all allocation amounts to zero"
-                    >
-                      <RotateCcw size={13} />
-                      <span>Clear All</span>
-                    </Button>
-                    <Button
-                      disabled={allocLoading || !form.ac_code || !form.div_code}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        if (form.ac_code && form.div_code) {
-                          void loadAllocations(form.ac_code, form.div_code, docType);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-semibold text-blue-700 border-blue-300 hover:bg-blue-50 cursor-pointer"
-                      title="Reload open advances from server"
-                    >
-                      <RefreshCw size={13} className={allocLoading ? "animate-spin" : ""} />
-                      <span>Refresh</span>
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Allocations Table */}
-                <div className="commercial-lines-scroll max-h-[38vh] min-h-[160px] overflow-auto">
-                  {allocLoading ? (
-                    <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-2">
-                      <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
-                      <span className="text-xs font-semibold">Loading open advances and vouchers...</span>
-                    </div>
-                  ) : (form.allocations || []).length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-1.5">
-                      <Receipt size={28} className="text-slate-300" />
-                      <span className="text-xs font-medium text-slate-600">
-                        No open advances or unallocated vouchers found for this party ({form.ac_code || "no account selected"}).
-                      </span>
-                    </div>
-                  ) : (
-                    <table className="w-full border-collapse text-xs">
-                      <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10 border-b">
-                        <tr>
-                          <th className="px-2 py-2 text-center w-10">Sr.</th>
-                          <th className="px-3 py-2 text-left">Voucher / Doc No</th>
-                          <th className="px-2 py-2 text-center w-24">Date</th>
-                          <th className="px-2 py-2 text-center w-16">Type</th>
-                          <th className="px-2 py-2 text-center w-16">Curr</th>
-                          <th className="px-3 py-2 text-right">Original Amt</th>
-                          <th className="px-3 py-2 text-right">Available Balance</th>
-                          <th className="px-3 py-2 text-right w-44">Allocated Amt</th>
-                          <th className="px-3 py-2 text-right">Remaining Bal</th>
-                          <th className="px-2 py-2 text-center w-20">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(form.allocations || []).map((alloc, idx) => {
-                          const allocatedAmt = Number(alloc.amount || 0);
-                          const maxBal = alloc.c_bal_amt_org > 0 ? alloc.c_bal_amt_org : alloc.inv_amt;
-                          const remainingBal = Math.max(0, maxBal - allocatedAmt);
-                          const isAllocated = allocatedAmt > 0;
-                          const toggleAllocRow = () => {
-                            if (isCancelled) return;
-                            if (isAllocated) {
-                              updateAllocationAmount(alloc.inv_no, 0);
-                            } else {
-                              const curTot = (form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0);
-                              const needed = Math.max(0, (total + taxTotal) - curTot);
-                              const take = Math.min(maxBal, needed > 0 ? needed : maxBal);
-                              updateAllocationAmount(alloc.inv_no, take);
-                            }
-                          };
-                          return (
-                            <tr
-                              key={alloc.id || idx}
-                              onDoubleClick={toggleAllocRow}
-                              className={`border-t transition-colors cursor-pointer select-none ${
-                                isAllocated ? "bg-emerald-50/40 hover:bg-emerald-50/70" : "odd:bg-muted/20 hover:bg-slate-50"
-                              }`}
-                              title="Double click to allocate full balance / toggle off"
-                            >
-                              <td className="px-2 py-2 text-center font-mono text-slate-500">{idx + 1}</td>
-                              <td className="px-3 py-2 font-mono font-bold text-slate-800">
-                                <div className="flex items-center gap-1.5">
-                                  <FileText size={12} className={isAllocated ? "text-emerald-600" : "text-slate-400"} />
-                                  <span>{alloc.doc_no || alloc.inv_no}</span>
-                                  {alloc.ref_no && alloc.ref_no !== alloc.doc_no && (
-                                    <span className="text-[10px] text-slate-400 font-normal">({alloc.ref_no})</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-2 py-2 text-center font-mono text-slate-600">{formatDate(alloc.inv_date)}</td>
-                              <td className="px-2 py-2 text-center">
-                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  ["BP", "CP"].includes(alloc.origin_doc_type || "")
-                                    ? "bg-amber-100 text-amber-800 border border-amber-300"
-                                    : ["BR", "CR"].includes(alloc.origin_doc_type || "")
-                                    ? "bg-blue-100 text-blue-800 border border-blue-300"
-                                    : "bg-slate-100 text-slate-700 border border-slate-300"
-                                }`}>
-                                  {alloc.origin_doc_type || "ADV"}
-                                </span>
-                              </td>
-                              <td className="px-2 py-2 text-center font-mono text-slate-600">{alloc.curr_code || form.curr_code || "OMR"}</td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-600">
-                                {formatAmount(alloc.inv_amt)}
-                              </td>
-                              <td
-                                className="px-3 py-2 text-right font-mono tabular-nums font-bold text-emerald-800 cursor-pointer"
-                                title="Double-click to allocate full balance"
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleAllocRow();
-                                }}
-                              >
-                                {formatAmount(maxBal)}
-                              </td>
-                              <td className="px-3 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
-                                <div className="inline-flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="0.001"
-                                    min="0"
-                                    max={maxBal}
-                                    disabled={isCancelled}
-                                    value={alloc.amount === 0 ? "" : alloc.amount}
-                                    placeholder="0.000"
-                                    onChange={(e) => {
-                                      const val = parseFloat(e.target.value) || 0;
-                                      updateAllocationAmount(alloc.inv_no, val);
-                                    }}
-                                    className={`h-7 w-28 text-right font-mono tabular-nums px-2 py-1 rounded border text-xs font-semibold focus:outline-none focus:ring-1 ${
-                                      isAllocated
-                                        ? "bg-white border-emerald-500 text-emerald-900 focus:ring-emerald-500 font-bold"
-                                        : "bg-white border-slate-300 text-slate-800 focus:ring-primary"
-                                    }`}
-                                  />
-                                  <button
-                                    type="button"
-                                    disabled={isCancelled || isAllocated}
-                                    onClick={() => {
-                                      const remainingNeeded = Math.max(0, (total + taxTotal) - ((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) + allocatedAmt);
-                                      const take = Math.min(maxBal, remainingNeeded > 0 ? remainingNeeded : maxBal);
-                                      updateAllocationAmount(alloc.inv_no, take);
-                                    }}
-                                    className="h-7 px-1.5 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[10px] font-bold text-slate-700 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                    title="Allocate full balance (or up to remaining invoice total)"
-                                  >
-                                    Full
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums font-semibold text-slate-700">
-                                {formatAmount(remainingBal)}
-                              </td>
-                              <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                                {isAllocated ? (
-                                  <button
-                                    type="button"
-                                    disabled={isCancelled}
-                                    onClick={() => updateAllocationAmount(alloc.inv_no, 0)}
-                                    className="inline-flex items-center justify-center h-6 w-6 rounded border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
-                                    title="Clear allocation on this voucher"
-                                  >
-                                    <Trash2 size={11} />
-                                  </button>
-                                ) : (
-                                  <span className="text-[10px] text-slate-300 font-mono">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-
-                {/* Allocations Footer */}
-                <div className="commercial-lines-footer flex flex-wrap items-center justify-between border-t border-[#cbd5e1] bg-slate-50/95 px-4 py-2.5 gap-3.5">
-                  <div className="flex items-center gap-2">
-                    {((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)) > 0 ? (
-                      <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded px-2.5 py-1">
-                        <CheckCircle2 size={13} className="text-emerald-600" />
-                        <span>
-                          {formatAmount(((form.allocations || []).reduce((sum, a) => sum + Number(a.amount || 0), 0)))} allocated across {((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length)} advance/voucher{((form.allocations || []).filter(a => Number(a.amount || 0) > 0).length) > 1 ? "s" : ""}.
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-500 font-medium italic">
-                        Enter amounts, double click balance, or click &quot;Auto Allocate (FIFO)&quot; to knock off open advances against this invoice.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
             </div>
           </div>
         )}

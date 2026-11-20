@@ -875,8 +875,8 @@ function AssetEditor({
         val1s30: form.tax_last_dprc_date,
         val1s31: form.active_flag,
         val1s32: form.sales_profitloss,
-        val1s33: form.ytd_dprcn,
-        val1s34: form.accudprc_amount,
+        val1s33: isEdit ? form.ytd_dprcn : "0",
+        val1s34: isEdit ? form.accudprc_amount : "0",
         val1s35: num(form.wd_value) > 0 ? form.wd_value : form.amount,
         val1s36: form.dprc_percentage,
         val1s37: form.doc_no,
@@ -1014,10 +1014,22 @@ function AssetEditor({
                   columns={[{ field: "asset_group_code", header: "Group" }, { field: "asset_group_name", header: "Name" }]}
                   valueField="asset_group_code" displayFields={["asset_group_code", "asset_group_name"]}
                   disabled={isReadOnly}
-                  loadOptions={loader("AC_ASSETS_group_code")}
+                  loadOptions={loader("AC_ASSETS_GROUP_PAGE")}
                   onChange={(value, row) => {
                     set("asset_group_code", value);
                     set("asset_group_name", String(getLookupValue(row || {}, "asset_group_name") || ""));
+                    if (row) {
+                      const dprcPct = Number(getLookupValue(row, "dprc_percentage") || 0);
+                      const dprcReq = String(getLookupValue(row, "dprc_required") || "");
+                      const assetAc = String(getLookupValue(row, "asset_ac_code") || "");
+                      const dprcAc = String(getLookupValue(row, "dprc_ac_code") || "");
+                      const accuAc = String(getLookupValue(row, "accudprc_ac_code") || "");
+                      if (dprcPct > 0) set("dprc_percentage", String(dprcPct));
+                      if (dprcReq) set("dprc_required", dprcReq);
+                      if (assetAc) set("asset_ac_code", assetAc);
+                      if (dprcAc) set("dprc_ac_code", dprcAc);
+                      if (accuAc) set("accudprc_ac_code", accuAc);
+                    }
                   }}
                 />
               </LookupBlock>
@@ -1137,7 +1149,12 @@ function AssetEditor({
               </LookupBlock>
 
               <DateField label="Purchase Date" value={form.purchase_date}
-                onChange={(v) => set("purchase_date", v)} disabled={isReadOnly} />
+                onChange={(v) => {
+                  set("purchase_date", v);
+                  if (!form.dprc_commence_date || form.dprc_commence_date === form.purchase_date) {
+                    set("dprc_commence_date", v);
+                  }
+                }} disabled={isReadOnly} />
 
               {/* <Field label="Doc Type" value={form.doc_type} maxLength={lim("doc_type")} error={limErr("doc_type")}
                 onChange={(v) => set("doc_type", v)} disabled={isReadOnly} /> */}
