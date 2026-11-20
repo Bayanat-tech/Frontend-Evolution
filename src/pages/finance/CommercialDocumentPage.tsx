@@ -2388,8 +2388,8 @@ const limitProps = (f: keyof FormState) => ({
                                         <th className="px-3 py-2 text-left">Date</th>
                                         <th className="px-2 py-2 text-center">Type</th>
                                         <th className="px-3 py-2 text-right">Balance Amt</th>
-                                        <th className="w-20 min-w-[70px] px-2 py-2 text-center">Sign</th>
                                         <th className="w-36 min-w-[130px] px-3 py-2 text-right">Allocated Amt</th>
+                                        <th className="w-20 min-w-[70px] px-2 py-2 text-center">Sign</th>
                                         <th className="px-2 py-2 text-center">Status</th>
                                         <th className="px-3 py-2 text-right">Remaining Bal</th>
                                         <th className="w-12 px-2 py-2 text-center">Clear</th>
@@ -2426,15 +2426,6 @@ const limitProps = (f: keyof FormState) => ({
                                             <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-900">
                                               {formatAmount(maxBal)}
                                             </td>
-                                            <td className="w-20 min-w-[70px] px-2 py-2 text-center">
-                                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                                alloc.sign_ind === -1
-                                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                                  : "bg-amber-50 text-amber-700 border border-amber-200"
-                                              }`}>
-                                                {alloc.sign_ind === -1 ? "Cr" : "Dr"}
-                                              </span>
-                                            </td>
                                             <td className="w-36 min-w-[130px] px-2 py-1 text-right" onClick={(e) => e.stopPropagation()}>
                                               <div className="flex items-center gap-1 justify-end">
                                                 <Input
@@ -2462,6 +2453,15 @@ const limitProps = (f: keyof FormState) => ({
                                                   Full
                                                 </button>
                                               </div>
+                                            </td>
+                                            <td className="w-20 min-w-[70px] px-2 py-2 text-center">
+                                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                alloc.sign_ind === -1
+                                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                                              }`}>
+                                                {alloc.sign_ind === -1 ? "Cr" : "Dr"}
+                                              </span>
                                             </td>
                                             <td className="px-2 py-2 text-center">
                                               {isAllocated ? (
@@ -3028,7 +3028,7 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       inv_date: a.inv_date || form.doc_date,
       amount: Number(a.amount),
       lcur_amount: Number(a.amount) * Number(form.ex_rate || 1),
-      sign_ind: (form.doc_type === "PI" ? -1 : 1) as (1 | -1),
+      sign_ind: (form.doc_type === "PI" ? 1 : -1) as (1 | -1),
       sign_code: form.doc_type === "PI" ? "DR" : "CR",
       curr_code: a.curr_code || form.curr_code,
       ex_rate: Number(form.ex_rate || 1),
