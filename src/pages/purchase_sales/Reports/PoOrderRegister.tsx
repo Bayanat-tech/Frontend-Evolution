@@ -463,7 +463,8 @@ export default function PoOrderRegisterPage() {
                         <LookupField
                             label=""
                             value={acCode}
-                            displayValue={acName ? `${acCode} - ${acName}` : acCode}
+                            // displayValue={acName ? `${acCode} - ${acName}` : acCode}
+                            displayValue={acCode ? (acName ? `${acCode} - ${acName}` : acCode) : "All"}
                             columns={[
                                 { field: "ac_code", header: "Code" },
                                 { field: "ac_name", header: "Name" },

@@ -1442,6 +1442,105 @@ export async function getPurchaseInvoiceTaxReportExcel(params: Record<string, an
   window.URL.revokeObjectURL(url);
 }
 
+
+//Purchase GRN Listing Report HTML and Excel route
+export async function getPurchaseGrnListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getPurchaseGrnListingReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseGrnListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getPurchaseGrnListingReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_GRN_Listing.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+} 
+
+
+
+
+//sales DN Listing Report HTML and Excel route
+
+
+
+export async function getSalesDnListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesDNListingReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getSalesDnListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesDNListingReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Sales_DN_Listing.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+} 
+
+
+
+
+// Sales order Listing Report HTML and Excel route
+
+export async function getSalesOrderListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesOrderRegisterReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getSalesOrderListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesOrderRegisterReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Sales_DN_Listing.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+} 
+
+
+
+
+
+
+
+
 // ─── Purchase Invoice - Account Details ─────────────────────────────────
 
 export async function getPurchaseInvoiceAccountDetailsReportHtml(params: Record<string, any>): Promise<string> {
@@ -1469,6 +1568,41 @@ export async function getPurchaseInvoiceAccountDetailsReportExcel(params: Record
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+
+
+
+// purchase invoice listing report 
+
+
+
+export async function getPurchaseInvoiceListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoiceListingReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseInvoiceListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoiceListingReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_Invoice_Listing.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
 
 
 // Sales Invoice Report HTML and Excel route
