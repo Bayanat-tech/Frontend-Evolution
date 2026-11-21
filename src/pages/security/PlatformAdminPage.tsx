@@ -129,6 +129,7 @@ export function PlatformAdminPage() {
   const [draft, setDraft] = useState<Row>({});
   const [deleting, setDeleting] = useState(false);
   const [version, setVersion] = useState(0);
+  const [readiness, setReadiness] = useState<Row | null>(null);
   const [fieldOptions, setFieldOptions] = useState<
     Record<string, { value: string; label: string }[]>
   >({});
@@ -138,6 +139,13 @@ export function PlatformAdminPage() {
   const allowed = user?.isPlatformAdmin === true;
   const scope = `/${encodeURIComponent(tenant)}`;
   const params = `?company=${encodeURIComponent(company)}&page=${page}&search=${encodeURIComponent(search)}`;
+  useEffect(() => {
+    setReadiness(null);
+    if (!allowed || tenant === "root" || !company) return;
+    let active = true;
+    request(`${scope}/readiness?company=${encodeURIComponent(company)}`).then(data => { if (active) setReadiness(data); }).catch(() => {});
+    return () => { active = false; };
+  }, [allowed, tenant, company, version]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -334,7 +342,7 @@ export function PlatformAdminPage() {
       setVersion((v) => v + 1);
       setNotice(
         creatingCompany
-          ? `${values.COMPANY_NAME || values.COMPANY_CODE} was created and is now selected.`
+          ? `${values.COMPANY_NAME || values.COMPANY_CODE} was created. Please create a user and assign an application module before sign-in. Billing is inactive by default.`
           : deleting
             ? "Record deleted."
             : "Changes saved.",
@@ -754,6 +762,12 @@ export function PlatformAdminPage() {
         <p className="platform-notice" role="status">
           {notice}
         </p>
+      )}
+      {readiness && (readiness.companyNeedsModules || (mode === "access" && loginid && !readiness.users?.some((u: Row) => u.LOGINID === loginid && Number(u.MODULE_COUNT) > 0))) && (
+        <div className="platform-assignment-warning" role="status">
+          <div><strong>Module assignment required</strong><p>{mode === "access" && loginid ? `User ${loginid} has no application module assigned.` : `Company ${company} has no application modules assigned to its users.`} Select a user, choose a module and grant the required screens. Billing selection does not grant access.</p></div>
+          <Button variant="outline" onClick={() => { setMode("access"); setNewUser(!readiness.userCount); }}>Assign modules</Button>
+        </div>
       )}
       <div className="platform-toolbar">
         <h2>{title}</h2>
