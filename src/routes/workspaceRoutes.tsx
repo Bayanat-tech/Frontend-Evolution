@@ -68,6 +68,16 @@ import EmployeeWorkspacePage from "../pages/hr/Employee/EmployeeWorkspacePage";
   import { WmsBillingActPage } from "../pages/wms/Masters/WmsBillingActivityPage";
   import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
   import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
+  import { TMSDashboardPage } from "../pages/tms/TMSDashboardPage";
+  import { DriverMasterPage } from "../pages/tms/DriverMasterPage";
+  import { VehicleMasterPage } from "../pages/tms/VehicleMasterPage";
+  import { VehicleTypesPage } from "../pages/tms/VehicleTypesPage";
+  import { TransportRequestPage } from "../pages/tms/TransportRequestPage";
+  import { TripTicketPage } from "../pages/tms/TripTicketPage";
+  import { FuelFillingPage } from "../pages/tms/FuelFillingPage";
+  import { VehicleMaintenancePage } from "../pages/tms/VehicleMaintenancePage";
+  import { AccidentsFinesPage } from "../pages/tms/AccidentsFinesPage";
+  import { TMSReportsPage } from "../pages/tms/TMSReportsPage";
   import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
   import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
   import BalanceSheetReportFilter from "../pages/accounts_report/detailed_reports/BalanceSheetReportFilter";
@@ -299,6 +309,58 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
 };
 
   export const workspaceRoutes: WorkspaceRoute[] = [
+
+    // ── TMS (Transport Management System) Routes ──
+    {
+      name: "TMS Dashboard",
+      match: ({ pathname }) => /^\/workspace\/tms(?:\/dashboard)?\/?$/i.test(pathname) || pathname.toLowerCase().includes("/tms/dashboard"),
+      element: () => <TMSDashboardPage />,
+    },
+    {
+      name: "TMS Driver Master",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/masters/drivers"),
+      element: () => <DriverMasterPage />,
+    },
+    {
+      name: "TMS Vehicle Master",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/masters/vehicles"),
+      element: () => <VehicleMasterPage />,
+    },
+    {
+      name: "TMS Vehicle Types",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/masters/vehicle-types"),
+      element: () => <VehicleTypesPage />,
+    },
+    {
+      name: "TMS Transport Requests",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/operations/requests"),
+      element: () => <TransportRequestPage />,
+    },
+    {
+      name: "TMS Trip Tickets",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/operations/trip-tickets") || pathname.toLowerCase().includes("/tms/operations/trip-confirmation"),
+      element: () => <TripTicketPage />,
+    },
+    {
+      name: "TMS Fuel Filling",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/operations/fuel-filling"),
+      element: () => <FuelFillingPage />,
+    },
+    {
+      name: "TMS Vehicle Maintenance",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/operations/maintenance"),
+      element: () => <VehicleMaintenancePage />,
+    },
+    {
+      name: "TMS Accidents & Fines",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/operations/accidents-fines"),
+      element: () => <AccidentsFinesPage />,
+    },
+    {
+      name: "TMS Reports",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/tms/reports"),
+      element: () => <TMSReportsPage />,
+    },
 
     {
       name: "HR Visa and Labour Card Cancel",

@@ -2309,11 +2309,11 @@ const limitProps = (f: keyof FormState) => ({
                             <div
                               className="finance-allocation-panel my-0.5 mx-1 overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs"
                               style={{
-                                width: "880px",
-                                minWidth: "860px",
+                                width: "1020px",
+                                minWidth: "980px",
                                 maxWidth: "100%",
-                                "--allocation-panel-width": "880px",
-                                "--allocation-panel-min-width": "860px",
+                                "--allocation-panel-width": "1020px",
+                                "--allocation-panel-min-width": "980px",
                               } as CSSProperties}
                             >
                               {/* Compact Allocations Toolbar */}
@@ -2379,7 +2379,7 @@ const limitProps = (f: keyof FormState) => ({
                               </div>
 
                               {/* Compact Allocations Table */}
-                              <div className="commercial-lines-scroll max-h-[170px] min-h-[70px] overflow-y-auto overflow-x-hidden border-t border-[#bfd1e8] bg-white">
+                              <div className="finance-alloc-table-scroll max-h-[170px] min-h-[70px] overflow-y-auto overflow-x-hidden border-t border-[#bfd1e8] bg-white">
                                 {allocLoading ? (
                                   <div className="flex items-center justify-center p-4 text-[11px] text-muted-foreground gap-2">
                                     <RefreshCw size={12} className="animate-spin text-emerald-600" />
