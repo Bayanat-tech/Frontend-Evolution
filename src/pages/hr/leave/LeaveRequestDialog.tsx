@@ -1,4 +1,4 @@
-import { ArrowLeft, Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, History, Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, Undo2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -24,6 +24,7 @@ import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate
 import { getDynamicLookupaccount, type LookupRow } from "../../../api/lookups";
 import { api } from "../../../api/client";
 import { HrLeaveAttachmentPanel } from "./HrLeaveAttachmentPanel";
+import { LeaveLogPanel } from "./LeaveLogPanel";
 
 const LEAVE_TYPES_SKIP_VALIDATION = new Set(["SL"]);
 
@@ -225,7 +226,7 @@ export function LeaveRequestDialog({
   const [approverInfo, setApproverInfo] = useState<Record<string, unknown> | null>(null);
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [requestNumber, setRequestNumber] = useState("");
-  const [activeTab, setActiveTab] = useState<"details" | "attachments">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "attachments" | "log">("details");
   const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
   const [notice, setNotice] = useState<ToastNotice>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof LeaveForm, string>>>({});
@@ -873,6 +874,21 @@ export function LeaveRequestDialog({
   const actionBtn = "!w-auto shrink-0 whitespace-nowrap h-8 gap-1.5 text-xs font-semibold px-3 rounded-lg cursor-pointer";
   const dangerBtn = `${actionBtn} !text-red-600 !border-red-200 hover:!bg-red-50`;
 
+  // View Log: only once the request exists (there is nothing to log before the first save).
+  // Switches the inner tab to the Log view.
+  const viewLogButton = requestNumber ? (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => setActiveTab("log")}
+      className={`${actionBtn} ${activeTab === "log" ? "!border-[#00378C] !text-[#00378C]" : ""}`}
+      title="View Log"
+    >
+      <History size={14} />
+      <span>View Log</span>
+    </Button>
+  ) : null;
+
   // All action buttons in one flat group (rendered in the page header, or in the modal footer)
   const actionButtons =
     readOnly || (!createMode && !canPrimary && !resumeApprovalPending) ? (
@@ -953,7 +969,12 @@ export function LeaveRequestDialog({
       </>
     );
 
-  const footerNode = <div className="flex w-full flex-wrap items-center justify-end gap-2 p-2">{actionButtons}</div>;
+  const footerNode = (
+    <div className="flex w-full flex-wrap items-center justify-end gap-2 p-2">
+      {viewLogButton}
+      {actionButtons}
+    </div>
+  );
 
   /* ---------------- main (left) column: the form ---------------- */
   const mainNode = (
@@ -991,12 +1012,14 @@ export function LeaveRequestDialog({
         </p>
       )}
 
-      {/* Tabs: Attachments is required for sick leave and optional for every other leave type */}
+      {/* Tabs: Attachments is required for sick leave and optional for every other leave type.
+          The Log tab is also opened by the View Log button. */}
       <div className="flex gap-1 border-b border-slate-200">
         {(
           [
             { id: "details", label: "Leave Details" },
             { id: "attachments", label: "Attachments" },
+            { id: "log", label: "Log" },
           ] as const
         ).map((tab) => (
           <button
@@ -1010,6 +1033,7 @@ export function LeaveRequestDialog({
             }`}
           >
             {tab.id === "attachments" && <Paperclip size={13} />}
+            {tab.id === "log" && <History size={13} />}
             {tab.label}
             {tab.id === "attachments" && (
               <span className={`text-[10px] font-medium ${isSickLeave ? "text-red-500" : "text-slate-400"}`}>
@@ -1038,6 +1062,15 @@ export function LeaveRequestDialog({
           </p>
         ))}
 
+      {activeTab === "log" &&
+        (requestNumber ? (
+          <LeaveLogPanel requestNumber={requestNumber} loginId={loginId} height="calc(100dvh - 430px)" />
+        ) : (
+          <p className="m-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Save As Draft first, then the activity log will be available here.
+          </p>
+        ))}
+
       {showSendBackRemark && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Sent back with remarks</p>
@@ -1052,7 +1085,7 @@ export function LeaveRequestDialog({
       )}
 
       {/* Three columns side-by-side with bordered section cards */}
-      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${activeTab === "attachments" ? "hidden" : ""}`}>
+      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${activeTab !== "details" ? "hidden" : ""}`}>
         {/* ---------- Column 1: Leave Details ---------- */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
@@ -1290,7 +1323,7 @@ export function LeaveRequestDialog({
         </div>
       </div>
 
-      {hasActualResumeDate(initialRow) && activeTab !== "attachments" && (
+      {hasActualResumeDate(initialRow) && activeTab === "details" && (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
             <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
@@ -1463,7 +1496,10 @@ export function LeaveRequestDialog({
               <span className={statusBadgeTone(statusLabel)}>{statusLabel}</span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">{actionButtons}</div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {viewLogButton}
+              {actionButtons}
+            </div>
           </div>
         </div>
 
