@@ -19,11 +19,6 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
   doc.querySelectorAll("script,style,link,button,iframe,object,.viewerbar,.print-toolbar,.logo,.footer,.doc-title-row .print-meta").forEach((el) => el.remove());
   doc.querySelectorAll(".meta > div").forEach((el) => { if (/^Page:/i.test(el.textContent?.trim() || "")) el.remove(); });
 
-  // report_common.ts (buildReportDocument) sagle reports sathi HTML asa wrap karto:
-  //   table.report-shell > thead(.company-header) / tbody(content) / tfoot(.report-footer)
-  // Ithun logo/name/address extract kara (backend cha khara data, frontend cha
-  // separate lookup peksha jast reliable) ani thead/tfoot body madhun kadha —
-  // navhe tar pdfmake cha swataacha header/footer sobat duplicate disतो.
   let extractedCompany: ExtractedCompany | null = null;
   const shell = doc.querySelector("table.report-shell");
   if (shell) {
@@ -42,18 +37,31 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     }
   }
 
-let signLabels: string[] = [];
-const signTable = doc.querySelector("table.dn-sign");
-if (signTable) {
-  signLabels = Array.from(signTable.querySelectorAll("td"))
-    .map((td) => (td.textContent || "").replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-  signTable.remove();
-}
+  let signLabels: string[] = [];
+  const signTable = doc.querySelector("table.dn-sign");
+  if (signTable) {
+    signLabels = Array.from(signTable.querySelectorAll("td"))
+      .map((td) => (td.textContent || "").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    signTable.remove();
+  }
+  let poSign: { heads: string[]; left: string; right: string } | null = null;
+  const poSignTable = doc.querySelector("table.po-sign");
+  if (poSignTable) {
+    const firstLine = (td?: Element | null) =>
+      (td?.innerHTML.split(/<br\s*\/?>/i)[0] || "").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").trim();
+    const tds = poSignTable.querySelectorAll("tbody td");
+    poSign = {
+      heads: Array.from(poSignTable.querySelectorAll("th")).map((th) => (th.textContent || "").replace(/\s+/g, " ").trim()),
+      left: firstLine(tds[0]),
+      right: firstLine(tds[1]),
+    };
+    poSignTable.remove();
+  }
 
   doc.querySelectorAll("img").forEach((el) => el.remove());
 
- 
+
   if (options.stripChrome) {
     const table = doc.querySelector("table.data-table");
     if (table) {
@@ -154,9 +162,11 @@ if (signTable) {
   }
 
   doc.querySelectorAll("table.grn-two-col").forEach((table) => {
+    const isPo = table.classList.contains("po-two-col");
     table.setAttribute("data-pdfmake", JSON.stringify({
-      widths: ["50%", "50%"],
+     widths: isPo ? (table.classList.contains("po-two-wide") ? ["60%", "40%"] : ["70%", "30%"]) : ["50%", "50%"],
       layout: "noBorders",
+      ...(isPo ? { margin: [0, 4, 0, 8] } : {}),
     }));
   });
 
@@ -178,61 +188,72 @@ if (signTable) {
       // widths = [120, 230, "*"];
       widths = ["18%", "45%", "37%"];
       //  widths = ["18%", "42%", "*"];
+    } else if (table.classList.contains("po-kv-to")) {
+      widths = ["18%", 8, "*"];      // To box: label | : | value
+   } else if (table.classList.contains("po-kv-details")) {
+  widths = [table.classList.contains("po-kv-wide") ? "38%" : "32%", 8, "*"];    // PO Details box
     } else if (table.classList.contains("pr-kv-box")) {
       widths = ["38%", 8, "*"];
     }
 
     else if (table.classList.contains("pr-title-line")) {
       widths = ["*"];
-       } else if (table.classList.contains("si-top-cancel")) {
+    } else if (table.classList.contains("si-top-cancel")) {
       widths = ["*", 90];
-       }
-       else if (table.classList.contains("si-top-line")) {
+    }
+    else if (table.classList.contains("si-top-line")) {
       widths = ["*"];
-       }
+    }
     else if (table.classList.contains("el-listing")) {
       // PAMS Employee Appraisal Listing:  SL | Period | Employee | (Division) | Department | Designation | Rating
-           widths = table.classList.contains("el-listing-div")
+      widths = table.classList.contains("el-listing-div")
         ? ["4%", "8%", "29%", "13%", "15%", "26%", "5%"]
         : ["4%", "8%", "39%", "17%", "27%", "5%"];
     } else if (table.classList.contains("pr-items-portrait")) {
       widths = ["28%", "8%", "13%", "13%", "13%", "12%", "13%"];
     } else if (table.classList.contains("pr-items-landscape")) {
       widths = ["4%", "15%", "8%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
-    } 
-         else if (table.classList.contains("si-items")) {
+    }
+    else if (table.classList.contains("si-items")) {
       // S.No | Product/Description | Unit | Qty | Unit Rate | Disc | Amount
-       widths = ["6%", "41%", "6%", "9%", "10%", "13%", "15%"];
-        //  widths = ["8%", "32%", "8%", "10%", "14%", "13%", "15%"];
+      widths = ["6%", "41%", "6%", "9%", "10%", "13%", "15%"];
+      //  widths = ["8%", "32%", "8%", "10%", "14%", "13%", "15%"];
     } else if (table.classList.contains("si-items-tax")) {
       // S.No | Product | Unit | Qty | Rate | Disc | Amount | VAT % | Tax Amt | Amount (Inc. Tax)
-       widths = ["5%", "26%", "5%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
+      widths = ["5%", "26%", "5%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
       //  widths = ["6%", "24%", "6%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
-    }    else if (table.classList.contains("pr-reg-summary")) {
+    } else if (table.classList.contains("pr-reg-summary")) {
       // Request No | Request Date | Create User | Description | Currency | EX Rate | Amount
       // widths = ["15%", "12%", "12%", "35%", "5%", "8%", "14%"];
-        widths = ["13%", "13%", "11%", "32%", "10%", "8%", "13%"];
+      widths = ["13%", "13%", "11%", "32%", "10%", "8%", "13%"];
     } else if (table.classList.contains("pr-reg-details")) {
       // Sr No | Item Code | Item Description | Rate | Qty | Currency | EX Rate | Amount
       widths = ["7%", "14%", "30%", "11%", "9%", "10%", "8%", "11%"];
     }
-   else if (table.classList.contains("dn-items")) {
-  // S.No | Product / Description | Unit | Qty
-  widths = ["8%", "62%", "12%", "18%"];
-}     else if (table.classList.contains("cr-history")) {
+    else if (table.classList.contains("dn-items")) {
+      // S.No | Product / Description | Unit | Qty
+      widths = ["8%", "62%", "12%", "18%"];
+    } else if (table.classList.contains("po-items-ext")) {
+  // S.No | Product | Unit | Qty | Unit Rate | Gross Value | Disc % | Disc | Tax % | Grand Total
+  widths = ["5%", "33%", "6%", "6%", "9%", "10%", "7%", "8%", "7%", "9%"];
+} else if (table.classList.contains("po-items")) {
+  // S.No | Product | Unit | Qty | Unit Rate | Gross Value | Disc
+ widths = ["8%", "36%", "8%", "10%", "12%", "14%", "12%"];
+}
+    else if (table.classList.contains("cr-history")) {
       // S.No | Action | By | Date & Time | Level | Next Action By | Remarks
       widths = ["6%", "14%", "16%", "16%", "7%", "16%", "25%"];
-}
+    }
 
- else if (table.classList.contains("cr-register")) {
-  // Request No | Date | Description | Created | Status | Updated By
-  widths = ["14%", "10%", "36%", "12%", "14%", "14%"];
-}
+    else if (table.classList.contains("cr-register")) {
+      // Request No | Date | Description | Created | Status | Updated By
+      widths = ["14%", "10%", "36%", "12%", "14%", "14%"];
+    }
 
     // else if (!details && table.rows[0]) {
     //   widths = ["4%", "18%", "6%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
     // } else if (!details && table.rows[0]) {
-        else if (!details && table.rows[0]) {
+    else if (!details && table.rows[0]) {
       const isGrnKvTable = !!table.closest(".grn-two-col");
       if (isGrnKvTable) {
         widths = ["30%", 12, "*"];
@@ -272,19 +293,24 @@ if (signTable) {
       widths,
       headerRows: table.tHead?.rows.length || (table.rows[0]?.querySelector("th") ? 1 : 0),
       dontBreakRows: true,
-     layout: details
-  ? "noBorders"
-  : table.classList.contains("pr-title-line")
-    ? "titleLine"
-    : (table.classList.contains("si-top-line") || table.classList.contains("si-top-cancel"))
-      ? "blueLine"
-      : table.classList.contains("pr-kv-box")
-        ? "kvBox"
-        : table.classList.contains("pr-title-tight")
-          ? { margin: [0, 2, 0, 0] }
-          : table.classList.contains("el-listing")
-            ? "elListingTable"
-            : "biscReportTable"
+      keepWithHeaderRows: 1,
+      layout: details
+        ? "noBorders"
+        : table.classList.contains("pr-title-line")
+          ? "titleLine"
+          : (table.classList.contains("si-top-line") || table.classList.contains("si-top-cancel"))
+            ? "blueLine"
+            : (table.classList.contains("po-terms") || table.classList.contains("po-items") || table.classList.contains("po-grid"))
+              ? "poTermsBox"
+              : (table.classList.contains("po-kv-to") || table.classList.contains("po-kv-details"))
+                ? "poKvBox"
+                : table.classList.contains("pr-kv-box")
+                  ? "kvBox"
+                  : table.classList.contains("pr-title-tight")
+                    ? { margin: [0, 2, 0, 0] }
+                    : table.classList.contains("el-listing")
+                      ? "elListingTable"
+                      : "biscReportTable"
     }));
     if (table.classList.contains("el-listing")) {
       // keep each name / designation on ONE line (no break at spaces)
@@ -300,7 +326,7 @@ if (signTable) {
       cell.style.fontWeight = "bold";
     });
 
-        table.querySelectorAll<HTMLElement>(".si-cancel-tag").forEach((cell) => {
+    table.querySelectorAll<HTMLElement>(".si-cancel-tag").forEach((cell) => {
       cell.style.backgroundColor = "#fee2e2";
       cell.style.color = "#dc2626";
       cell.style.fontWeight = "bold";
@@ -331,7 +357,7 @@ if (signTable) {
     }
   });
 
-return { doc, html: doc.body.innerHTML, maxColumns, extractedCompany, signLabels };
+  return { doc, html: doc.body.innerHTML, maxColumns, extractedCompany, signLabels, poSign };
 }
 
 export async function buildPurchasePdfDefinition(report: PurchaseReportDocument, identity: ReportIdentity, browserWindow: Window = window): Promise<TDocumentDefinitions> {
@@ -376,22 +402,50 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
     },
   }) as Content;
 
+  // PO only: space after the Payment/Delivery/Project strip
+  if (Array.isArray(content)) {
+    (content as any[]).forEach((node) => {
+      if (node?.style?.includes?.("po-terms")) node.margin = [0, 0, 0, 2];
+    });
+  }
+  const tightenPoTables = (node: any): void => {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) { node.forEach(tightenPoTables); return; }
+  const cls = ([] as any[]).concat(node.style || []);
+  const isPoTable = ["po-kv-to", "po-kv-details", "po-terms", "po-items"].some((c) => cls.includes(c));
+  const isExt = cls.includes("po-items-ext");
+  if (node.table?.body) {
+    node.table.body.forEach((row: any[], rIdx: number) => row.forEach((cell: any) => {
+      if (isPoTable && cell && typeof cell === "object") cell.margin = [1, 0, 1, 0]; // [left, top, right, bottom]
+      if (isExt && rIdx === 0 && cell && typeof cell === "object") {
+        cell.fontSize = 6.5;          // header font of the 10-column table
+        cell.margin = [0, 0, 0, 0];
+      }
+      tightenPoTables(cell);
+    }));
+  }
+  if (node.stack) tightenPoTables(node.stack);
+  if (node.columns) tightenPoTables(node.columns);
+};
+  tightenPoTables(content);
+
   const hasOwnTopLine = !!prepared.doc.querySelector(".pr-title-line, .si-top-line");
   const topLine = branded && !hasOwnTopLine
     ? [{
-        canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 1.8, lineColor: "#1455a3" }],
-        margin: [0, 0, 0, 6] as [number, number, number, number],
-      }]
+      canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 1.8, lineColor: "#1455a3" }],
+      margin: [0, 0, 0, 6] as [number, number, number, number],
+    }]
     : [];
   const contentWithLine = [...topLine, ...(Array.isArray(content) ? content : [content])] as Content;
 
 
+  const signLabels = prepared.signLabels || [];
+  const SIGN_H = prepared.poSign ? 112 : 50;
+  const signColW = (pageWidth - 56) / 4;
 
- const signLabels = prepared.signLabels || [];
-const SIGN_H = 50;
-const signColW = (pageWidth - 56) / 4;
-const signBlock: Content | null = signLabels.length
-  ? ({
+  // Delivery note style (existing)
+  const labelSignBlock: Content | null = signLabels.length
+    ? ({
       margin: [0, 0, 0, 6],
       columns: signLabels.map((label) => ({
         width: "*",
@@ -401,7 +455,46 @@ const signBlock: Content | null = signLabels.length
         ],
       })),
     } as Content)
-  : null;
+    : null;
+
+  // Purchase Order signature block (pinned to the bottom of the last page)
+  const poSignBlock: Content | null = prepared.poSign
+    ? ({
+      margin: [0, 0, 0, 12],
+      table: {
+        widths: ["*", "*"],
+        body: [
+          prepared.poSign.heads.slice(0, 2).map((h) => ({ text: h, alignment: "center", bold: true, fontSize: 8, color: "#00378c", fillColor: "#eaf0f8" })),
+          [
+            {
+              stack: [
+                { text: prepared.poSign.left, bold: true, fontSize: 8 },
+                { text: "Signature: ______________________    Date: ____________", fontSize: 8, margin: [0, 50, 0, 0] },
+              ]
+            },
+            {
+              stack: [
+                { text: prepared.poSign.right, alignment: "center", fontSize: 8 },
+                { text: "Signature: ______________________    Date: ____________", fontSize: 8, margin: [0, 50, 0, 0] },
+              ]
+            },
+          ],
+        ],
+      },
+      layout: {
+        hLineWidth: (i: number) => (i === 1 ? 1.2 : i === 0 || i === 2 ? 0.5 : 0),
+        vLineWidth: () => 0,
+        hLineColor: (i: number) => (i === 1 ? "#00378c" : "#cbd5e1"),
+        paddingTop: () => 3,
+        paddingBottom: () => 3,
+        paddingLeft: () => 6,
+        paddingRight: () => 6,
+      },
+    } as Content)
+    : null;
+
+  const signBlock: Content | null = poSignBlock ?? labelSignBlock;
+
 
   const styles: StyleDictionary = {
     num: { alignment: "right" }, right: { alignment: "right" }, center: { alignment: "center" },
@@ -424,7 +517,7 @@ const signBlock: Content | null = signLabels.length
     info: { title: identity.title, author: identity.company, subject: "Purchase report" },
     pageSize: prepared.maxColumns > 14 ? "A3" : "A4",
     pageOrientation,
-   pageMargins: [28, branded ? 92 : 44, 28, 36 + (signBlock ? SIGN_H + 6 : 0)],
+    pageMargins: [28, branded ? 92 : 44, 28, 36 + (signBlock ? SIGN_H + 6 : 0)],
     defaultStyle: { font: "Inter", fontSize: compact ? 6 : (prepared.maxColumns > 12 ? 7 : (prepared.maxColumns > 8 ? 7.5 : 8.5)), color: "#1e293b", lineHeight: compact ? 0.9 : 1.15 },
     styles,
     header: {
@@ -445,22 +538,22 @@ const signBlock: Content | null = signLabels.length
         // { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.3, lineColor: "#1455a3" }] },
       ],
     },
-   footer: (page, count) => ({
-  margin: [28, 4, 28, 0], fontSize: 6.5, color: "#64748b",
-  stack: [
-    ...(signBlock
-      ? [page === count ? signBlock : ({ text: " ", margin: [0, SIGN_H, 0, 0] } as Content)]
-      : []),
-    { canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 0.5, lineColor: "#cbd5e1" }], margin: [0, 0, 0, 5] },
-    {
-      columns: [
-        { text: "Print: " + identity.generatedAt + " | User: " + identity.user },
-        { text: "Report: " + identity.title + " | Powered by Bayanat Technology", alignment: "right" },
+    footer: (page, count) => ({
+      margin: [28, 4, 28, 0], fontSize: 6.5, color: "#64748b",
+      stack: [
+        ...(signBlock
+          ? [page === count ? signBlock : ({ text: " ", margin: [0, SIGN_H, 0, 0] } as Content)]
+          : []),
+        { canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 0.5, lineColor: "#cbd5e1" }], margin: [0, 0, 0, 5] },
+        {
+          columns: [
+            { text: "Print: " + identity.generatedAt + " | User: " + identity.user },
+            { text: "Report: " + identity.title + " | Powered by Bayanat Technology", alignment: "right" },
+          ],
+        },
+        { text: "Page " + page + " of " + count, alignment: "right", margin: [0, 3, 0, 0] },
       ],
-    },
-    { text: "Page " + page + " of " + count, alignment: "right", margin: [0, 3, 0, 0] },
-  ],
-}),
+    }),
     content,
   };
 }
@@ -554,7 +647,7 @@ export async function createPurchasePdf(report: PurchaseReportDocument, identity
       paddingBottom: () => 0,
     },
 
-        blueLine: {
+    blueLine: {
       hLineWidth: (i: number) => (i === 0 ? 1.3 : 0),
       vLineWidth: () => 0,
       hLineColor: () => "#539bf2",
@@ -563,6 +656,31 @@ export async function createPurchasePdf(report: PurchaseReportDocument, identity
       paddingTop: () => 4,
       paddingBottom: () => 0,
     },
+
+    poTermsBox: {
+      hLineWidth: () => 0.75,
+      vLineWidth: () => 0.75,
+      hLineColor: () => "#4a6fa5",
+      vLineColor: () => "#4a6fa5",
+        paddingLeft: (_i: number, node: any) => (node.table.widths.length >= 10 ? 2 : 6),
+        paddingRight: (_i: number, node: any) => (node.table.widths.length >= 10 ? 2 : 6),
+      paddingTop: () => 3,
+      paddingBottom: () => 3,
+      fillColor: (rowIndex: number) => (rowIndex === 0 ? "#eaf0f8" : null),
+    },
+
+    poKvBox: {
+      hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length ? 0.75 : 0),
+      vLineWidth: (i: number, node: any) => (i === 0 || i === node.table.widths.length ? 0.75 : 0),
+      hLineColor: () => "#cbd5e1",
+      vLineColor: () => "#cbd5e1",
+      paddingLeft: () => 6,
+      paddingRight: () => 4,
+      paddingTop: () => 1,
+      paddingBottom: () => 1,
+      fillColor: (rowIndex: number) => (rowIndex === 0 ? "#eaf0f8" : null),
+    },
+
   };
   return new Promise<Blob>((resolve, reject) => {
     try {
