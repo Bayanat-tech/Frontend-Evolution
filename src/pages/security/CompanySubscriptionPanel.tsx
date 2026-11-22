@@ -29,11 +29,11 @@ export function CompanySubscriptionPanel({ tenant, company }: { tenant: string; 
   const fields = [["PLAN_NAME","Plan name","text"],["CURRENCY","Currency code","text"],["AMOUNT","Amount per cycle","number"],["START_DATE","Start date (UTC)","date"],["BILLING_EMAIL","Billing email contact","email"],["DUE_DAYS","Payment due after (days)","number"],["GRACE_DAYS","Grace period (days)","number"],["BILLING_REFERENCE","Contract / billing reference","text"]];
   return <section className="billing-workspace" aria-busy={loading || saving}>
     <div className={`billing-state ${enabled ? "billing-state-active" : ""}`}><div><h3>Invoice billing: {enabled ? "Active" : "Inactive"}</h3>
-      <p>{enabled ? `Billing applies to ${company}. Next invoice: ${draft.NEXT_BILL_DATE || "—"}.` : `Billing does not apply to ${company}. No invoices, reminders or billing-related restrictions will run.`}</p>
+      <p>{enabled ? draft.STATUS === "CLOSED" ? `Future renewals have stopped for ${company}.` : `Billing applies to ${company}. Next invoice: ${draft.NEXT_BILL_DATE || "—"}.` : `Billing does not apply to ${company}. No invoices, reminders or billing-related restrictions will run.`}</p>
       {enabled && draft.SUSPENDED === "Y" && <strong>Selected modules are suspended for non-payment.</strong>}
       {enabled && draft.CANCEL_ON && <strong>Renewals stopped. Access ends after {draft.CANCEL_ON}.</strong>}</div>
       <div className="billing-actions"><Button variant="outline" disabled={saving || loading} onClick={()=>setRevision(v=>v+1)}>Reload</Button>
-        {data.canManage && <Button variant={enabled ? "outline" : "default"} disabled={saving || loading || dirty || !draft.VERSION_NO || (!enabled && !data.emailConfigured)} onClick={()=>setAction(enabled ? "deactivate" : "activate")}>{enabled ? "Deactivate billing" : "Activate billing"}</Button>}</div>
+        {data.canManage && <Button variant={enabled ? "outline" : "default"} disabled={saving || loading || dirty || !draft.VERSION_NO || (!enabled && (!data.emailConfigured || data.schedulerEnabled === false))} onClick={()=>setAction(enabled ? "deactivate" : "activate")}>{enabled ? "Deactivate billing" : "Activate billing"}</Button>}</div>
     </div>
     {!loading && !data.canManage && <p className="platform-help">Only PRODADMIN / production administrators can activate billing, record payments and restrict access.</p>}
     {dirty && <p className="platform-notice">Save settings before activation.</p>}
