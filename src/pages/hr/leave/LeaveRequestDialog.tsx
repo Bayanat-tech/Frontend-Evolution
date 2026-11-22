@@ -1083,6 +1083,44 @@ export function LeaveRequestDialog({
           <p className="m-0 mt-0.5 text-sm text-red-900">{rejectRemark}</p>
         </div>
       )}
+      
+      {hasActualResumeDate(initialRow) && activeTab === "details" && (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-col justify-end">
+              <label className="flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-[#f8f9fb] px-2.5 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-[#00378C]"
+                  checked={form.actualresumedate ? true : form.resumework === "Y"}
+                  onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
+                  disabled={fieldsDisabled}
+                />
+                Resume Work
+              </label>
+            </div>
+            <Field label="Actual Resume Date">
+              <BiscDatePicker
+                value={form.actualresumedate}
+                onChange={(value) => update("actualresumedate", value)}
+                disabled={fieldsDisabled}
+              />
+            </Field>
+            {tenantName === "ALMS" && (
+              <Field label="Duty Resume Date">
+                <BiscDatePicker
+                  value={form.dutyresumedate}
+                  onChange={(value) => update("dutyresumedate", value)}
+                  disabled={fieldsDisabled}
+                />
+              </Field>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Three columns side-by-side with bordered section cards */}
       <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${activeTab !== "details" ? "hidden" : ""}`}>
@@ -1322,44 +1360,6 @@ export function LeaveRequestDialog({
           </div>
         </div>
       </div>
-
-      {hasActualResumeDate(initialRow) && activeTab === "details" && (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
-            <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
-          </div>
-          <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex flex-col justify-end">
-              <label className="flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-[#f8f9fb] px-2.5 text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-[#00378C]"
-                  checked={form.actualresumedate ? true : form.resumework === "Y"}
-                  onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
-                  disabled={fieldsDisabled}
-                />
-                Resume Work
-              </label>
-            </div>
-            <Field label="Actual Resume Date">
-              <BiscDatePicker
-                value={form.actualresumedate}
-                onChange={(value) => update("actualresumedate", value)}
-                disabled={fieldsDisabled}
-              />
-            </Field>
-            {tenantName === "ALMS" && (
-              <Field label="Duty Resume Date">
-                <BiscDatePicker
-                  value={form.dutyresumedate}
-                  onChange={(value) => update("dutyresumedate", value)}
-                  disabled={fieldsDisabled}
-                />
-              </Field>
-            )}
-          </div>
-        </div>
-      )}
     </>
   );
 
