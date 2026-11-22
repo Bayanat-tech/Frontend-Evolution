@@ -45,7 +45,7 @@ import {Navigate} from 'react-router-dom';
   import { KpiActivityPage } from "../pages/pams/KpiActivityPage";
   import MyTaskPage from "../pages/pams/MyTaskpage";
   import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
-  import { KpiGroupPage } from "../pages/pams/KpiItemPage";
+  import { KpiItemPage } from "../pages/pams/KpiItemPage";
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
   import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
@@ -308,6 +308,15 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
 };
 
   export const workspaceRoutes: WorkspaceRoute[] = [
+    {
+    name: "PAMS KPI Item",
+    match: ({ pathname }) =>
+      isPamsRoute(pathname) &&
+      (pathname.toLowerCase().includes("/appraisals/masters/kpi_item") ||
+       pathname.toLowerCase().includes("/appraisals/masters/kpi-item") ||
+       pathname.toLowerCase().includes("/appraisals/masters/kpiitem")),
+    element: () => <KpiItemPage />,
+  },
 
     {
       name: "HR Visa and Labour Card Cancel",
@@ -1600,7 +1609,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
     {
       name: "PAMS KPI Item",
       match: (context) => isPamsToken(context, "kpiactivity", "kpiitem"),
-      element: () => <KpiGroupPage  />,
+      element: () => <KpiItemPage />,
     },
 
     {
