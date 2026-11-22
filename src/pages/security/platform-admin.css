@@ -390,6 +390,51 @@
   flex: 1 1 240px;
   max-width: 400px;
 }
+.platform-subscription-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 20px;
+  border: 0;
+  padding: 20px 0 0;
+  margin: 0;
+  min-width: 0;
+}
+.platform-subscription-fields label { display: grid; align-content: start; gap: 8px; }
+.platform-subscription-fields .platform-editor-actions { grid-column: 1 / -1; }
+.billing-workspace { display: grid; gap: 24px; min-width: 0; }
+.billing-workspace h3 { margin: 0 0 8px; }
+.billing-state,.platform-assignment-warning { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; padding: 20px; border: 1px solid var(--pa-line); border-radius: 12px; background: var(--pa-surface); }
+.billing-state p,.platform-assignment-warning p { margin: 4px 0 0; max-width: 72ch; line-height: 1.6; }
+.billing-state-active { background: color-mix(in srgb, var(--pa-accent) 7%, var(--pa-surface)); }
+.platform-assignment-warning { background: #fff8e7; color: #684006; border-color: #ecd6a1; }
+.billing-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.billing-history { min-width: 0; }
+.billing-table-scroll { overflow-x: auto; }
+.billing-table-scroll table { min-width: 660px; }
+.billing-module-picker { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; border: 1px solid var(--pa-line); border-radius: 10px; }
+.billing-module-picker label { display: flex; align-items: center; gap: 6px; }
+.billing-module-picker input { width: auto; min-height: auto; }
+.billing-invoice-print { line-height: 1.7; }
+@media print {
+  body:has(.billing-invoice-print) * { visibility: hidden; }
+  body:has(.billing-invoice-print) .billing-invoice-print,body:has(.billing-invoice-print) .billing-invoice-print * { visibility: visible; }
+  .billing-invoice-print { position: fixed; inset: 0; padding: 32px; background: white; color: black; }
+}
+.platform-access-source {
+  display: inline-block;
+  margin-left: 10px;
+  color: var(--pa-muted);
+  font-size: 12px;
+}
+.platform-console .platform-grid tbody tr:hover {
+  background: color-mix(in srgb, var(--pa-accent) 5%, var(--pa-surface));
+}
+.platform-console .platform-access-controls button {
+  min-height: 40px;
+}
+.platform-console input[type="checkbox"] {
+  accent-color: var(--pa-accent);
+}
 .platform-editor {
   border: 1px solid #cbd9eb;
   background: var(--pa-surface);
@@ -615,4 +660,35 @@
 .platform-scope .lookup-field-trigger,
 .platform-access-controls .lookup-field-trigger {
   min-height: 40px;
+}
+.platform-password-field {
+  position: relative;
+  min-width: 0;
+}
+.platform-console .platform-password-field input {
+  width: 100%;
+  padding-right: 44px;
+}
+.platform-password-toggle {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pa-muted, #526179);
+  cursor: pointer;
+}
+.platform-password-toggle:hover {
+  background: rgba(23, 78, 153, 0.08);
+  color: var(--pa-accent, #174e99);
+}
+.platform-password-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
