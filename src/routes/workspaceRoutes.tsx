@@ -43,7 +43,7 @@
   import { KpiActivityPage } from "../pages/pams/KpiActivityPage";
   import MyTaskPage from "../pages/pams/MyTaskpage";
   import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
-  import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
+  import { KpiGroupPage } from "../pages/pams/KpiItemPage";
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
   import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
@@ -204,7 +204,6 @@ import EmployeeWorkspacePage from "../pages/hr/Employee/EmployeeWorkspacePage";
   import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
   import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
   import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
-  import { PamsBulkAppraisalPage } from "../pages/pams/PamsBulkAppraisalPage";
   import { KpiAcceptancePage } from "../pages/pams/KpiAcceptancePage";
   import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
   import StockReportPage from "../pages/purchase_sales/Reports/StockReportPage";
@@ -254,6 +253,7 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
 import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
 import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
 import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
+import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -1310,7 +1310,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
     {
       name: "PAMS Bulk Appraisal",
       match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
-      element: () => <PamsBulkAppraisalPage />,
+      element: () => <KpiAssignmentPage />,
     },
 
     {
@@ -1444,8 +1444,8 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/pending") ||
-            normalized.includes("/my-task/pending"));
+          (normalized.includes("/appraisal/pending") ||
+            normalized.includes("/appraisal/pending"));
       },
       element: () => <MyTaskPage initialTab={0} />,
     },
@@ -1454,8 +1454,8 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/in_progress") ||
-            normalized.includes("/my-task/in-progress"));
+          (normalized.includes("/appraisal/in_progress") ||
+            normalized.includes("/appraisal/in-progress"));
       },
       element: () => <MyTaskPage initialTab={1} />,
     },
@@ -1464,8 +1464,8 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/rejected") ||
-            normalized.includes("/my-task/rejected"));
+          (normalized.includes("/appraisal/rejected") ||
+            normalized.includes("/appraisal/rejected"));
       },
       element: () => <MyTaskPage initialTab={2} />,
     },
@@ -1474,8 +1474,8 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/sent_back") ||
-            normalized.includes("/my-task/sent-back"));
+          (normalized.includes("/appraisal/sent_back") ||
+            normalized.includes("/appraisal/sent-back"));
       },
       element: () => <MyTaskPage initialTab={3} />,
     },
@@ -1484,8 +1484,8 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/closed") ||
-            normalized.includes("/my-task/closed"));
+          (normalized.includes("/appraisal/closed") ||
+            normalized.includes("/appraisal/closed"));
       },
       element: () => <MyTaskPage initialTab={4} />,
     },
@@ -1494,7 +1494,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          normalized.includes("/my_task") &&
+          normalized.includes("/appraisal") &&
           !normalized.includes("/view/") &&
           !normalized.includes("/edit/") &&
           !normalized.includes("/pending") &&
@@ -1518,24 +1518,38 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       },
       element: () => <AppraisalViewTabsPage />,
     },
-    {
-      name: "PAMS Appraisal View",
-      match: ({ pathname }) => {
-        const normalized = pathname.toLowerCase();
-        return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/view/") ||
-            normalized.includes("/my-task/view/") ||
-            normalized.includes("/view/"));
-      },
-      element: () => <AppraisalViewTabsPage />,
-    },
+    // ── PAMS Appraisal View/Edit Routes ──
+// Must appear BEFORE "PAMS Appraisal List" and "PAMS My Task"
+{
+  name: "PAMS Appraisal Tabs View",
+  match: ({ pathname }) => {
+    const normalized = decodeRouteText(pathname).toLowerCase().replace(/\/+$/, "");
+    const compact = normalized.replace(/[^a-z0-9]/g, "");
+
+    const isViewOrEdit =
+      normalized.includes("/appraisal/view/") ||
+      normalized.includes("/appraisal/edit/") ||
+      /\/appraisal\/(view|edit)(\/|$)/.test(normalized) ||
+      /\/appraisal\/(view|edit)\//.test(normalized) ||
+      compact.includes("appraisalview") ||
+      compact.includes("appraisaledit");
+
+    const isPamsContext =
+      normalized.includes("/pams/") ||
+      normalized.includes("/ems/") ||
+      normalized.includes("appraisal");
+
+    return isPamsContext && isViewOrEdit;
+  },
+  element: () => <AppraisalViewTabsPage />,
+},
 
     // ── PAMS Department Assignment — compact-token matching ──
     {
       name: "PAMS Department Assignment",
       match: (context) =>
         isPamsToken(context, "kpiassignment", "departmentkpi", "deptkpi"),
-      element: () => <PamsBulkAppraisalPage />,
+      element: () => <KpiAssignmentPage />,
     },
 
     // ── PAMS KPI Item — compact-token matching ──
@@ -3272,7 +3286,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
   }
 
   function isPamsRoute(pathname: string) {
-    return pathname.toLowerCase().includes("/pams/");
+    return pathname.toLowerCase().includes("/hcm/");
   }
 
   function getPamsCompact(context: WorkspaceRouteContext): string {
