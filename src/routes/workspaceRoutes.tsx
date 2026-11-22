@@ -1444,8 +1444,8 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/pending") ||
-            normalized.includes("/my-task/pending"));
+          (normalized.includes("/appraisal/pending") ||
+            normalized.includes("/appraisal/pending"));
       },
       element: () => <MyTaskPage initialTab={0} />,
     },
@@ -1454,8 +1454,8 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/in_progress") ||
-            normalized.includes("/my-task/in-progress"));
+          (normalized.includes("/appraisal/in_progress") ||
+            normalized.includes("/appraisal/in-progress"));
       },
       element: () => <MyTaskPage initialTab={1} />,
     },
@@ -1464,8 +1464,8 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/rejected") ||
-            normalized.includes("/my-task/rejected"));
+          (normalized.includes("/appraisal/rejected") ||
+            normalized.includes("/appraisal/rejected"));
       },
       element: () => <MyTaskPage initialTab={2} />,
     },
@@ -1474,8 +1474,8 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/sent_back") ||
-            normalized.includes("/my-task/sent-back"));
+          (normalized.includes("/appraisal/sent_back") ||
+            normalized.includes("/appraisal/sent-back"));
       },
       element: () => <MyTaskPage initialTab={3} />,
     },
@@ -1484,8 +1484,8 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/closed") ||
-            normalized.includes("/my-task/closed"));
+          (normalized.includes("/appraisal/closed") ||
+            normalized.includes("/appraisal/closed"));
       },
       element: () => <MyTaskPage initialTab={4} />,
     },
@@ -1494,7 +1494,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       match: ({ pathname }) => {
         const normalized = pathname.toLowerCase();
         return isPamsRoute(pathname) &&
-          normalized.includes("/my_task") &&
+          normalized.includes("/appraisal") &&
           !normalized.includes("/view/") &&
           !normalized.includes("/edit/") &&
           !normalized.includes("/pending") &&
@@ -1518,17 +1518,31 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       },
       element: () => <AppraisalViewTabsPage />,
     },
-    {
-      name: "PAMS Appraisal View",
-      match: ({ pathname }) => {
-        const normalized = pathname.toLowerCase();
-        return isPamsRoute(pathname) &&
-          (normalized.includes("/my_task/view/") ||
-            normalized.includes("/my-task/view/") ||
-            normalized.includes("/view/"));
-      },
-      element: () => <AppraisalViewTabsPage />,
-    },
+    // ── PAMS Appraisal View/Edit Routes ──
+// Must appear BEFORE "PAMS Appraisal List" and "PAMS My Task"
+{
+  name: "PAMS Appraisal Tabs View",
+  match: ({ pathname }) => {
+    const normalized = decodeRouteText(pathname).toLowerCase().replace(/\/+$/, "");
+    const compact = normalized.replace(/[^a-z0-9]/g, "");
+
+    const isViewOrEdit =
+      normalized.includes("/appraisal/view/") ||
+      normalized.includes("/appraisal/edit/") ||
+      /\/appraisal\/(view|edit)(\/|$)/.test(normalized) ||
+      /\/appraisal\/(view|edit)\//.test(normalized) ||
+      compact.includes("appraisalview") ||
+      compact.includes("appraisaledit");
+
+    const isPamsContext =
+      normalized.includes("/pams/") ||
+      normalized.includes("/ems/") ||
+      normalized.includes("appraisal");
+
+    return isPamsContext && isViewOrEdit;
+  },
+  element: () => <AppraisalViewTabsPage />,
+},
 
     // ── PAMS Department Assignment — compact-token matching ──
     {
@@ -3272,7 +3286,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
   }
 
   function isPamsRoute(pathname: string) {
-    return pathname.toLowerCase().includes("/pams/");
+    return pathname.toLowerCase().includes("/hcm/");
   }
 
   function getPamsCompact(context: WorkspaceRouteContext): string {
