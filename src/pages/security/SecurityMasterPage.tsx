@@ -712,7 +712,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
         await saveSecurityMaster(endpoint, buildSecurityPayload(config, form, user?.company_code), method as "post" | "put");
       }
       setFormOpen(false);
-      setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
+      setNotice({ type: "success", message: config.master === "sec_login" && !editMode ? "User created. Assign an application module and screen permissions before sign-in." : `${config.title} ${editMode ? "updated" : "added"} successfully` });
       await loadRows(pageIndex, pageSize, false);
       if (isModuleData) await loadModuleDropdownRows();
     } catch (error) {

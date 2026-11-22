@@ -31,6 +31,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
 import { SupportLauncher } from "./support/SupportCenter";
+import { CompanyBillingNotices } from "../components/CompanyBillingNotices";
 import { useAuth } from "../state/AuthContext";
 import { useSupport } from "../components/SupportProvider";
 import type { MenuNode } from "../types/auth";
@@ -368,6 +369,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
         </div>
       </header>
       <main className="selection-main app-launch-main" style={launcherStyle}>
+        <CompanyBillingNotices />
         {sections.length === 0 ? (
           <div className="empty-state"><ShieldCheck size={34} /><h2>No modules available</h2><p>No application modules are assigned to your account.</p></div>
         ) : (

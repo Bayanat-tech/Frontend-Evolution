@@ -1,8 +1,9 @@
-import { Building2, Calendar, CheckCircle2, Clock, DollarSign, Edit2, FileText, Lock, Plus, Save, Trash2, X } from "lucide-react";
+import { Building2, Calendar, CheckCircle2, Clock, DollarSign, Edit2, FileText, Lock, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   CompanyFinanceSetupData,
   getCompanyFinanceSetup,
+  initializeCompanyFinance,
   saveCompanyFinanceSetup,
   saveFyPeriod,
   SaveFyPeriodPayload
@@ -35,6 +36,7 @@ export function CompanyFinanceSetupPage() {
 
   const [loading, setLoading] = useState(true);
   const [savingSetup, setSavingSetup] = useState(false);
+  const [initializing, setInitializing] = useState(false);
   const [data, setData] = useState<CompanyFinanceSetupData | null>(null);
 
   // Alert state
@@ -332,6 +334,25 @@ export function CompanyFinanceSetupPage() {
     }
   };
 
+  const handleAutoInitialize = async () => {
+    try {
+      setInitializing(true);
+      const res = await initializeCompanyFinance(companyCode);
+      setNotice({
+        type: "success",
+        message: res.message || "Finance setup successfully initialized with standard Chart of Accounts (L1–L4) and document types.",
+      });
+      await loadData();
+    } catch (err: any) {
+      setNotice({
+        type: "error",
+        message: err.message || "Failed to initialize company finance setup",
+      });
+    } finally {
+      setInitializing(false);
+    }
+  };
+
   const openAddPeriodDialog = () => {
     const nextSort = (data?.fy_periods?.length || 0) + 10;
     setPeriodForm({
@@ -569,6 +590,18 @@ export function CompanyFinanceSetupPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            onClick={handleAutoInitialize}
+            disabled={initializing || loading}
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5 cursor-pointer"
+            title="Auto-provision standard Chart of Accounts (Levels 1-4), Document Types, and Default Accounts from template"
+          >
+            <Sparkles size={14} className={initializing ? "animate-spin text-emerald-600" : "text-emerald-600"} />
+            {initializing ? "Initializing..." : "Auto-Init Standard Setup"}
+          </Button>
+
           {activeTab === "periods" && (
             <Button
               onClick={openAddPeriodDialog}
