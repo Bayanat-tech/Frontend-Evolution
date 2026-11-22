@@ -43,7 +43,7 @@
   import { KpiActivityPage } from "../pages/pams/KpiActivityPage";
   import MyTaskPage from "../pages/pams/MyTaskpage";
   import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
-  import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
+  import { KpiGroupPage } from "../pages/pams/KpiItemPage";
   import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
   import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
   import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
@@ -204,7 +204,6 @@ import EmployeeWorkspacePage from "../pages/hr/Employee/EmployeeWorkspacePage";
   import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
   import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
   import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
-  import { PamsBulkAppraisalPage } from "../pages/pams/PamsBulkAppraisalPage";
   import { KpiAcceptancePage } from "../pages/pams/KpiAcceptancePage";
   import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
   import StockReportPage from "../pages/purchase_sales/Reports/StockReportPage";
@@ -254,6 +253,7 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
 import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
 import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
 import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
+import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -1310,7 +1310,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
     {
       name: "PAMS Bulk Appraisal",
       match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
-      element: () => <PamsBulkAppraisalPage />,
+      element: () => <KpiAssignmentPage />,
     },
 
     {
@@ -1535,7 +1535,7 @@ import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
       name: "PAMS Department Assignment",
       match: (context) =>
         isPamsToken(context, "kpiassignment", "departmentkpi", "deptkpi"),
-      element: () => <PamsBulkAppraisalPage />,
+      element: () => <KpiAssignmentPage />,
     },
 
     // ── PAMS KPI Item — compact-token matching ──
