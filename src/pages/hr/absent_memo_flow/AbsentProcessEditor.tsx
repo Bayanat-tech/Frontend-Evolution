@@ -132,22 +132,60 @@ export function AbsentProcessEditor({ editor, onClose, onSaved }: AbsentProcessE
     setNotice({ type: "success", message: "Copied into a new draft document" });
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const result = await saveAbsentMemo({
-        company_code: user?.company_code,
-        user_id: user?.loginid || user?.username || "ADMIN",
-        header: header as unknown as Record<string, unknown>,
-        details: rows as unknown as Record<string, unknown>[],
-      });
-      await onSaved(`Document ${result.doc_no ?? header.doc_no} saved`);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save document" });
-    } finally {
-      setSaving(false);
-    }
-  };
+
+const handleSave = async () => {
+  setSaving(true);
+
+  try {
+    const result = await saveAbsentMemo({
+      company_code: user?.company_code,
+      user_id: user?.loginid || user?.username || "ADMIN",
+
+      header: {
+        doc_type: header.doc_type || "ABM",
+        doc_no: Number(header.doc_no) || 0,
+        doc_date: header.doc_date || null,
+        ref_no: header.ref_no || null,
+        name_from: header.name_from || null,
+        addr_from: header.addr_from || null,
+        name_to: header.name_to || null,
+        lettr_subject: header.lettr_subject || null,
+        signatory_name: header.signatory_name || null,
+        signatory_position: header.signatory_position || null,
+        remarks_1: header.remarks_1 || null,
+        remarks_2: header.remarks_2 || null,
+      },
+
+      details: rows.map((row) => ({
+        employee_code: row.employee_code || null,
+        sys_gen: row.sys_gen || "N",
+        recover_from_dt: row.recover_from_dt || null,
+        amount: Number(row.amount) || 0,
+        allocated_amt: Number(row.allocated_amt) || 0,
+        balance_amt: Number(row.balance_amt) || 0,
+        deduct_from_leave: row.deduct_from_leave || "N",
+        deduct_noof_leavedays:
+          Number(row.deduct_noof_leavedays) || 0,
+        ref_leave_doc_no: row.ref_leave_doc_no || null,
+        cancel_status: row.cancel_status || null,
+      })),
+    });
+
+    await onSaved(`Document ${result.doc_no} saved`);
+
+  } catch (error) {
+    setNotice({
+      type: "error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Unable to save document",
+    });
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
