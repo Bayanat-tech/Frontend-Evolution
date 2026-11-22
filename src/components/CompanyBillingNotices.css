@@ -1,0 +1,2 @@
+.company-billing-notices { grid-column: 1 / -1; padding: 18px 22px; margin-bottom: 18px; border: 1px solid #ead5a0; border-radius: 12px; background: #fff8e7; color: #684006; line-height: 1.6; }
+.company-billing-notices p { margin: 8px 0 0; max-width: 75ch; }
