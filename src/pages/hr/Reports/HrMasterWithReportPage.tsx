@@ -325,7 +325,7 @@ export function MasterWithReportPage({ config }: { config: MasterReportConfig })
                           type={field.type === "email" ? "text" : field.type || "text"}
                           value={field.type === "date" ? String(value ?? "").slice(0, 10) : String(value ?? "")}
                           disabled={disabled}
-                          placeholder={field.Placeholder}
+                          placeholder={field.placeholder}
                           onChange={(event) => setForm((current) => ({
                             ...current,
                             [field.name]: field.type === "number" ? Number(event.target.value || 0) : event.target.value,

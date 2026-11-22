@@ -1,22 +1,34 @@
 // Employee workspace — opened from the Employee Master list
+//
+// Save flow
+//  • Save on a tab → go to the next tab (a tab can stay put by returning false from save())
+//  • New employee: after the Master tab saves, the list is refreshed, the new employee is found
+//    (by the code/id the save returned, else as the only new row in the list) and its URL is
+//    opened on the "details" tab, so every later tab gets the generated code from the URL
+//  • Save on the last tab (Employee Pay Units) → back to the Employee Master list
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, FileText, IdCard, Languages, Loader2, Save, Users, Wallet } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react"; // Added useEffect
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import HrEmpDependantsTab from "./HrEmpDependantsTab";
 import HrEmpLanguageTab from "./HrEmpLanguageTab";
 import HrEmployeePayUnitsTab from "./HrEmployeePayUnitsTab";
-import AddEmployeeHrForm from "../../../pages/hr/Employee Master/AddEmployeeHrForm";
+import AddEmployeeHrForm, { type SavedEmployee } from "../../../pages/hr/Employee Master/AddEmployeeHrForm";
 import EditEmployeeDetailsForm, { type EmployeeFormHandle } from "../../../pages/hr/Employee Details/Employeedetailform";
-import { EMPLOYEE_MASTER_PATH, TAB_KEYS, type TabHandle } from "./Employee.workspace.shared";
+import {
+  EMPLOYEE_MASTER_PATH,
+  TAB_KEYS,
+  employeeWorkspacePath,
+  type TabHandle,
+} from "./Employee.workspace.shared";
 import { employeeListKey, useEmployeeList } from "./UseEmployeeList";
 
-// ADD THESE IMPORTS:
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup } from "../../../api/lookups";
+import { useToast } from "../../../components/ui/AlertToast";
 import type { TEmployeeDetails } from "../../../pages/hr/Employee Details/EmployeeDetails.types";
-import { mapEmployeeDetails } from "../../../pages/hr/Employee Details/Employeedetailspage"; 
+import { mapEmployeeDetails } from "../../../pages/hr/Employee Details/Employeedetailspage";
 
 const TABS = [
   { key: "master", label: "Employee Master", icon: FileText },
@@ -25,6 +37,8 @@ const TABS = [
   { key: "language", label: "Language Skills", icon: Languages },
   { key: "payunits", label: "Employee Pay Units", icon: Wallet },
 ] as const;
+
+const LAST_TAB_INDEX = TABS.length - 1;
 
 export function EmployeeWorkspacePage() {
   const { pathname } = useLocation();
@@ -37,13 +51,13 @@ export function EmployeeWorkspacePage() {
       return match[1];
     }
   }, [pathname]);
-  
+
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { rows, isLoading, companyCode } = useEmployeeList();
-  
-  // ADD AUTH
+  const { toast } = useToast();
+  const { rows, isLoading, isFetching, companyCode } = useEmployeeList();
+
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
 
@@ -54,11 +68,10 @@ export function EmployeeWorkspacePage() {
   );
   const employeeId = row ? String(row.employee_id) : "";
 
-  // ADD STATE FOR FULL DETAILS FETCH
+  /* ── Full details fetch (Employee Details tab) ── */
   const [detailedRow, setDetailedRow] = useState<TEmployeeDetails | null>(null);
   const [fetchingDetails, setFetchingDetails] = useState(false);
 
-  // ADD EFFECT TO FETCH FULL DETAILS
   useEffect(() => {
     if (!isNew && row) {
       const fetchDetails = async () => {
@@ -70,9 +83,9 @@ export function EmployeeWorkspacePage() {
             code1: companyCode,
           });
           const tableData = (Array.isArray(response) ? response : []) as Record<string, unknown>[];
-          const mapped = tableData.map(mapEmployeeDetails).find(
-            (r) => r.employee_id === String(row.employee_id) || r.employee_code === row.employee_code
-          );
+          const mapped = tableData
+            .map(mapEmployeeDetails)
+            .find((r) => r.employee_id === String(row.employee_id) || r.employee_code === row.employee_code);
           setDetailedRow(mapped || null);
         } catch (error) {
           console.error("Failed to fetch employee details", error);
@@ -103,28 +116,81 @@ export function EmployeeWorkspacePage() {
   const dependantsRef = useRef<TabHandle>(null);
   const languageRef = useRef<TabHandle>(null);
   const payUnitsRef = useRef<TabHandle>(null);
-  
+
   const tabRefs = [masterRef, detailsRef, dependantsRef, languageRef, payUnitsRef];
 
+  const backToList = () => navigate(EMPLOYEE_MASTER_PATH);
+
+  /* ── Move forward after a successful save ── */
+  const goNext = () => {
+    if (activeIndex >= LAST_TAB_INDEX) {
+      queryClient.invalidateQueries({ queryKey: employeeListKey(companyCode) });
+      backToList();
+      return;
+    }
+    selectTab(activeIndex + 1);
+  };
+
+  /* ── New employee: once saved, open it on the next tab using its generated code ── */
+  const preSaveIds = useRef<Set<string>>(new Set());
+  const [pendingNew, setPendingNew] = useState<SavedEmployee | null>(null);
+
+  useEffect(() => {
+    if (!pendingNew || isFetching) return;
+
+    const byResponse = rows.find(
+      (r) =>
+        (pendingNew.employee_code && r.employee_code === pendingNew.employee_code) ||
+        (pendingNew.employee_id && String(r.employee_id) === pendingNew.employee_id),
+    );
+    // Fallback: the only employee that was not in the list before saving
+    const fresh = rows.filter((r) => !preSaveIds.current.has(String(r.employee_id)));
+    const created = byResponse ?? (fresh.length === 1 ? fresh[0] : undefined);
+
+    setPendingNew(null);
+    if (created) {
+      navigate(employeeWorkspacePath(created.employee_code, "details"), { replace: true });
+    } else {
+      toast.warning("Employee saved. Open it from the list to continue.");
+      backToList();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingNew, isFetching, rows]);
+
+  /** Master tab saved (AddEmployeeHrForm calls this only on a successful save). */
+  const handleMasterSaved = async (saved: SavedEmployee) => {
+    await queryClient.invalidateQueries({ queryKey: employeeListKey(companyCode) });
+    if (isNew) {
+      setPendingNew(saved);
+    } else {
+      goNext();
+    }
+  };
+
+  /* ── Save button ── */
   const [saving, setSaving] = useState(false);
   const handleSave = async () => {
     setSaving(true);
     try {
-      await tabRefs[activeIndex].current?.save();
+      if (isNew && activeIndex === 0) {
+        preSaveIds.current = new Set(rows.map((r) => String(r.employee_id)));
+      }
+      const result = (await tabRefs[activeIndex].current?.save()) as unknown;
+      // The Master tab advances by itself through onSaved, so it is handled above.
+      if (activeIndex === 0) return;
+      // A tab returns false when it saved nothing or wants to stay on screen.
+      if (result === false) return;
+      goNext();
+    } catch (error) {
+      // The tab shows its own error message; stay on this tab.
+      console.error("Save failed", error);
     } finally {
       setSaving(false);
     }
   };
 
-  const backToList = () => navigate(EMPLOYEE_MASTER_PATH);
-
-  const handleDetailsSaved = () => {
-    queryClient.invalidateQueries({ queryKey: employeeListKey(companyCode) });
-    if (isNew) backToList();
-  };
-
   const mounted = (i: number) => !isNew && !!employeeId && (visited.has(i) || activeIndex === i);
-  
+
   /* ── Guards ── */
   if (!isNew && isLoading) {
     return (
@@ -146,6 +212,8 @@ export function EmployeeWorkspacePage() {
       </section>
     );
   }
+
+  const busy = saving || !!pendingNew;
 
   return (
     <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
@@ -172,12 +240,12 @@ export function EmployeeWorkspacePage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={backToList} disabled={saving}>
+          <Button type="button" size="sm" variant="outline" onClick={backToList} disabled={busy}>
             <ArrowLeft size={14} /> Back to List
           </Button>
-          <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
-            {saving ? "Saving" : "Save"}
+          <Button type="button" size="sm" onClick={handleSave} disabled={busy}>
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
+            {busy ? "Saving" : "Save"}
           </Button>
         </div>
       </div>
@@ -187,7 +255,7 @@ export function EmployeeWorkspacePage() {
         {TABS.map((t, i) => {
           const Icon = t.icon;
           const active = i === activeIndex;
-          const disabled = isNew && i > 0; 
+          const disabled = isNew && i > 0;
           return (
             <button
               key={t.key}
@@ -208,7 +276,7 @@ export function EmployeeWorkspacePage() {
       </div>
 
       {/* Tab panels */}
-      
+
       {/* 0: Employee Master */}
       <div hidden={activeIndex !== 0}>
         <AddEmployeeHrForm
@@ -216,7 +284,7 @@ export function EmployeeWorkspacePage() {
           ref={masterRef}
           isEditMode={!isNew}
           existingData={row}
-          onSaved={handleDetailsSaved}
+          onSaved={handleMasterSaved}
         />
       </div>
 
@@ -230,7 +298,7 @@ export function EmployeeWorkspacePage() {
           ) : detailedRow ? (
             <EditEmployeeDetailsForm
               ref={detailsRef}
-              existingData={detailedRow} // <-- Pass the fully fetched and mapped object here
+              existingData={detailedRow}
               onClose={(shouldRefetch?: boolean) => {
                 if (shouldRefetch) {
                   queryClient.invalidateQueries({ queryKey: employeeListKey(companyCode) });

@@ -221,7 +221,7 @@ async function fetchDesignations(
 }
 
 
-export function KpiGroupPage() {
+export function KpiItemPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const loginid = user?.loginid ?? "";
@@ -667,6 +667,11 @@ export function KpiGroupPage() {
     if (!form.KPI_DESC.trim()) { toast.warning("KPI Description is required"); return; }
 
     if (form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
+       const filledActivities = activities.filter((a) => a.desc.trim());
+      if (filledActivities.length < 1) {
+        toast.warning("Please add at least one activity before saving.");
+        return;
+      }
       const dupIndices = findDuplicateActivityIndices(activities);
       if (dupIndices.length > 0) {
         setDuplicateIndices(dupIndices);
@@ -1413,21 +1418,20 @@ export function KpiGroupPage() {
               {form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE && (
                 <Card>
                   <CardHeader className="border-b bg-muted/30">
-                    <div className="flex items-center justify-between">
-                      <p className="eyebrow">Activities / KPI Items</p>
-                      {!viewMode && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={addActivity}
-                          className="gap-1"
-                        >
-                          <Plus size={14} /> Add Activity
-                        </Button>
-                      )}
-                    </div>
-                  </CardHeader>
+  <div className="flex items-center justify-between">
+    <p className="eyebrow">Activities / KPI Items</p>
+    {!viewMode && (
+      <Button
+        type="button"
+        size="sm"
+        onClick={addActivity}
+        className="gap-1"
+      >
+        <Plus size={14} /> Add Activity
+      </Button>
+    )}
+  </div>
+</CardHeader>
 
                   <CardContent className="pt-4">
                     {activities.length === 0 ? (

@@ -1,12 +1,14 @@
 // Employee Master — list page only
 //  • Click the employee code (or the edit icon) to open the tabbed workspace
 //  • Add Employee opens the workspace in "new" mode
+//  • Import dropdown (Employee / Payunit) opens the common EDI import page
 //  • Print icon opens a dialog with the single-employee report
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Plus, Printer, RefreshCw, Trash2, Users } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, Edit2, Plus, Printer, Trash2, Upload, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../api/client";
 import { executeDynamicDelete } from "../../../api/lookups";
@@ -15,17 +17,31 @@ import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
 import { NewReportDialog } from "../../../components/new_report_format";
+import { EdiImportPage } from "../../../components/EdiImportPage";
 import { formatDate } from "../../../hooks/apiDate";
 import { employeeWorkspacePath } from "./Employee.workspace.shared";
 import type { TEmployeeHr } from "../../../pages/hr/Employee Master/employee-hr.types";
 
 import { employeeListKey, useEmployeeList } from "./UseEmployeeList";
 
+type ImportKey = "EMPLOYEE" | "PAYUNIT";
+
+const IMPORT_OPTIONS: { key: ImportKey; label: string }[] = [
+  { key: "EMPLOYEE", label: "Employee" },
+  { key: "PAYUNIT", label: "Payunit" },
+];
+
+/** Columns that are system-generated for the EMPLOYEE EDI key.
+ *  Blank EMPLOYEE_ID → INSERT (trigger generates ID + CODE).
+ *  Filled EMPLOYEE_ID → UPDATE.
+ */
+const EMPLOYEE_AUTO_GENERATED = ["EMPLOYEE_ID", "EMPLOYEE_CODE"];
+
 export function EmployeeMasterPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { rows, isLoading, isFetching, error, refetch, companyCode, loginid } = useEmployeeList();
+  const { rows, isLoading, error, refetch, companyCode, loginid } = useEmployeeList();
   const queryKey = useMemo(() => employeeListKey(companyCode), [companyCode]);
 
   const [query, setQuery] = useState("");
@@ -39,9 +55,41 @@ export function EmployeeMasterPage() {
   const [printHtml, setPrintHtml] = useState<string | null>(null);
   const [printExporting, setPrintExporting] = useState(false);
 
+  /* ── Import (EDI) state ── */
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const [importKey, setImportKey] = useState<ImportKey | null>(null);
+  const importMenuRef = useRef<HTMLDivElement | null>(null); // wrapper around the button
+  const importPanelRef = useRef<HTMLDivElement | null>(null); // the portal panel
+  const [importMenuPos, setImportMenuPos] = useState({ top: 0, right: 0 });
+
+  const toggleImportMenu = () => {
+    const rect = importMenuRef.current?.getBoundingClientRect();
+    if (rect) setImportMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setImportMenuOpen((o) => !o);
+  };
+
   useEffect(() => {
     if (error) toast.error(error instanceof Error ? error.message : "Unable to load employees");
   }, [error, toast]);
+
+  // close the import dropdown on outside click, scroll or resize
+  useEffect(() => {
+    if (!importMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (importMenuRef.current?.contains(t) || importPanelRef.current?.contains(t)) return;
+      setImportMenuOpen(false);
+    };
+    const close = () => setImportMenuOpen(false);
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [importMenuOpen]);
 
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -55,6 +103,7 @@ export function EmployeeMasterPage() {
     [navigate],
   );
   const openAdd = () => navigate(employeeWorkspacePath("new", "details"));
+
 
   /* ── Delete ── */
   const deleteMutation = useMutation({
@@ -178,7 +227,12 @@ export function EmployeeMasterPage() {
       },
       { accessorKey: "rpt_name", header: "Employee Name", size: 270 },
       { accessorKey: "desg_code", header: "Designation", size: 80 },
-      { accessorKey: "join_date", header: "Join Date", size: 100, cell: ({ getValue }) => formatDate(getValue()) },
+      {
+        accessorKey: "join_date",
+        header: "Join Date",
+        size: 100,
+        cell: ({ getValue }) => formatDate(getValue()),
+      },
       { accessorKey: "dept_code", header: "Department", size: 80 },
       {
         id: "actions",
@@ -218,6 +272,22 @@ export function EmployeeMasterPage() {
     [openEmployee, openPrint],
   );
 
+  /* ── Import page replaces the list while open ── */
+  if (importKey) {
+    return (
+      <EdiImportPage
+        key={importKey}
+        tableKey={importKey}
+        title={`Import ${importKey === "EMPLOYEE" ? "Employee" : "Payunit"}`}
+        autoGeneratedColumns={importKey === "EMPLOYEE" ? EMPLOYEE_AUTO_GENERATED : undefined}
+        onClose={() => {
+          setImportKey(null);
+          void refetch();
+        }}
+      />
+    );
+  }
+
   return (
     <section className="freight-workspace-ui freight-ui-standard grid gap-2">
       <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
@@ -229,9 +299,51 @@ export function EmployeeMasterPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} /> Refresh
-          </Button>
+          {/* Import dropdown */}
+          <div className="relative" ref={importMenuRef}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={toggleImportMenu}
+              aria-haspopup="menu"
+              aria-expanded={importMenuOpen}
+            >
+              <Upload size={14} /> Import <ChevronDown size={12} />
+            </Button>
+          </div>
+
+          {importMenuOpen &&
+            createPortal(
+              <div
+                ref={importPanelRef}
+                role="menu"
+                style={{
+                  position: "fixed",
+                  top: importMenuPos.top,
+                  right: importMenuPos.right,
+                  zIndex: 9999,
+                }}
+                className="min-w-[140px] overflow-hidden rounded-md border bg-white py-1 shadow-lg"
+              >
+                {IMPORT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="menuitem"
+                    className="block w-full cursor-pointer px-3 py-1.5 text-left text-sm text-slate-800 hover:bg-blue-50 hover:text-[#00378C]"
+                    onClick={() => {
+                      setImportMenuOpen(false);
+                      setImportKey(opt.key);
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>,
+              document.body,
+            )}
+
           <Button type="button" size="sm" onClick={openAdd}>
             <Plus size={14} /> Add Employee
           </Button>
