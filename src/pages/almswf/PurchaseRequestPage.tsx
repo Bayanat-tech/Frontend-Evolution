@@ -21,13 +21,11 @@ const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "P
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "PO Generated", "Cancelled"];
 
 const QUERY_ROOT = "purchase-request-page";
-
-// Employees who should always see the Add PR button (per sir's instruction).
 const HARDCODED_ADD_PR_EMPLOYEES = ["2019070493"];
 
 // Level-2 users who are also allowed to CREATE PRs for a specific flow.
 const LEVEL2_CREATOR_EXCEPTIONS = [
-  { loginid: "2016090408", flowCode: "003" },
+  { loginid: "2016090408", flowCode: "003" },{ loginid: "2010080024", flowCode: "007" }
 ];
 const isLevel2CreatorFlow = (loginid: string, flowCode: string) =>
   LEVEL2_CREATOR_EXCEPTIONS.some(

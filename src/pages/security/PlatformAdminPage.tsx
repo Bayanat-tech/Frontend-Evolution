@@ -20,7 +20,10 @@ import {
 import { api } from "../../api/client";
 import { useAuth } from "../../state/AuthContext";
 import { Button } from "../../components/ui/Button";
+import { PlatformPasswordInput } from "./PlatformPasswordInput";
 import { LookupField } from "../../components/ui/LookupField";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { CompanySubscriptionPanel } from "./CompanySubscriptionPanel";
 import {
   primaryFields,
   resourceHints,
@@ -101,9 +104,13 @@ export function PlatformAdminPage() {
     users: Row[];
     screens: Row[];
     access: Row[];
+    inherited?: Row[];
   }>({ users: [], screens: [], access: [] });
   const [loginid, setLoginid] = useState("");
   const [module, setModule] = useState("");
+  const [bulkConfirmation, setBulkConfirmation] = useState<{ serials: number[]; enabled: boolean; loginid: string; tenant: string; company: string } | null>(null);
+  const [showAttempts, setShowAttempts] = useState(false);
+  const accessMutation = useRef(false);
   const [newUser, setNewUser] = useState(false);
   const [userDraft, setUserDraft] = useState({
     loginid: "",
@@ -174,6 +181,7 @@ export function PlatformAdminPage() {
   useEffect(() => {
     if (
       !allowed ||
+      mode === "billing" ||
       (mode === "records" && !table) ||
       ((mode === "screens" || mode === "access") && !company)
     )
@@ -245,7 +253,7 @@ export function PlatformAdminPage() {
       </section>
     );
   const title =
-    mode === "access"
+    mode === "billing" ? "Subscription & billing" : mode === "access"
       ? "User screen access"
       : mode === "screens"
         ? "Company screen availability"
@@ -382,6 +390,7 @@ export function PlatformAdminPage() {
     catalog.tables.find((t) => t.name === table)?.readonly === true;
   const scoped = user?.platformAccess?.scope === "SCOPED";
   const renderField = (c: Column) => {
+    const InputControl = c.secret ? PlatformPasswordInput : "input";
     const locked =
       (["SEC_LOGIN", "SEC_LOGINTEST"].includes(table) &&
         c.name === "LOGINID" &&
@@ -490,7 +499,7 @@ export function PlatformAdminPage() {
             <option value="N">No</option>
           </select>
         ) : (
-          <input
+          <InputControl
             type={
               c.secret
                 ? "password"
@@ -549,6 +558,8 @@ export function PlatformAdminPage() {
         .includes(query.toLowerCase()),
   );
   const grant = async (serials: number[], enabled: boolean) => {
+    if (accessMutation.current) return;
+    accessMutation.current = true;
     setSaving(true);
     setError("");
     try {
@@ -557,10 +568,12 @@ export function PlatformAdminPage() {
         serials,
         enabled,
       });
+      setNotice(`${enabled ? "Granted" : "Removed"} access for ${serials.length} screen${serials.length === 1 ? "" : "s"}.`);
       setVersion((v) => v + 1);
     } catch (e) {
       setError(errorText(e));
     } finally {
+      accessMutation.current = false;
       setSaving(false);
     }
   };
@@ -570,6 +583,9 @@ export function PlatformAdminPage() {
     setError("");
     try {
       await request(`${scope}/users${params}`, "post", userDraft);
+      setNotice(
+        `User ${userDraft.loginid} was created with a central sign-in account and linked to ${company}. Assign screens below to finish access setup.`,
+      );
       setNewUser(false);
       setUserDraft({ loginid: "", username: "", email: "", password: "" });
       setLoginid(userDraft.loginid);
@@ -715,6 +731,9 @@ export function PlatformAdminPage() {
               <KeyRound size={16} />
               Company screens
             </button>
+            <button aria-current={mode === "billing" ? "page" : undefined} disabled={saving || !company} onClick={() => setMode("billing")}>
+              <Building2 size={16} /> Subscription & billing
+            </button>
           </>
         )}
         <button
@@ -738,6 +757,7 @@ export function PlatformAdminPage() {
       )}
       <div className="platform-toolbar">
         <h2>{title}</h2>
+        {mode === "audit" && <label><input type="checkbox" checked={showAttempts} onChange={e => setShowAttempts(e.target.checked)} /> Include technical attempt records</label>}
         {mode === "records" && (
           <label className="platform-resource">
             <span className="sr-only">Security resource</span>
@@ -873,21 +893,23 @@ export function PlatformAdminPage() {
             </Button>
             <Button
               disabled={!loginid || saving || loading || !accessScreens.length}
-              onClick={() =>
-                grant(
-                  accessScreens.map((s) => Number(s.SERIAL_NO)),
-                  true,
-                )
-              }
+              onClick={() => setBulkConfirmation({ serials: accessScreens.map(s => Number(s.SERIAL_NO)), enabled: true, loginid, tenant, company })}
             >
               Grant all shown screens
             </Button>
+            <Button variant="outline"
+              disabled={!loginid || saving || loading || !accessScreens.length}
+              onClick={() => setBulkConfirmation({ serials: accessScreens.map(s => Number(s.SERIAL_NO)), enabled: false, loginid, tenant, company })}>
+              Remove all shown access
+            </Button>
           </div>
           <p className="platform-help">
+            <strong>{accessScreens.length} screens shown{module ? ` in ${module}` : " across all modules"}.</strong>{" "}
             Create a user once to add their central login, tenant login and
             default tenant mapping together. Granting a screen enables all its
-            actions; use Security records to fine tune individual actions. Role
-            inherited access remains managed in Role screen access.
+            actions; use Security records to fine tune individual actions. Removal
+            covers direct and role access for this user. Other permissions are
+            preserved as direct grants; shared role definitions stay unchanged.
           </p>
         </>
       )}
@@ -897,8 +919,8 @@ export function PlatformAdminPage() {
             <div>
               <h3>Create user</h3>
               <p>
-                One step creates their login and connects it to {company} in{" "}
-                {catalog.owner}.
+                Creates the central sign-in account, the user in {company}, and
+                the tenant mapping together.
               </p>
             </div>
             <Users size={22} />
@@ -911,22 +933,27 @@ export function PlatformAdminPage() {
                 ["email", "Email", "email"],
                 ["password", "Password (12+ characters)", "password"],
               ] as const
-            ).map(([key, text, type]) => (
-              <label key={key}>
-                {text}
-                <input
-                  type={type}
-                  required
-                  maxLength={key === "loginid" ? 15 : undefined}
-                  minLength={key === "password" ? 12 : undefined}
-                  autoComplete={key === "password" ? "new-password" : "off"}
-                  value={userDraft[key]}
-                  onChange={(e) =>
-                    setUserDraft((d) => ({ ...d, [key]: e.target.value }))
-                  }
-                />
-              </label>
-            ))}
+            ).map(([key, text, type]) => {
+              const InputControl =
+                key === "password" ? PlatformPasswordInput : "input";
+              return (
+                <label key={key}>
+                  {text}
+                  <InputControl
+                    type={type}
+                    disabled={saving}
+                    required
+                    maxLength={key === "loginid" ? 15 : undefined}
+                    minLength={key === "password" ? 12 : undefined}
+                    autoComplete={key === "password" ? "new-password" : "off"}
+                    value={userDraft[key]}
+                    onChange={(e) =>
+                      setUserDraft((d) => ({ ...d, [key]: e.target.value }))
+                    }
+                  />
+                </label>
+              );
+            })}
           </div>
           <div className="platform-editor-actions">
             <Button type="submit" disabled={saving}>
@@ -964,6 +991,13 @@ export function PlatformAdminPage() {
       )}
       {editor && (
         <form onSubmit={save} className="platform-editor">
+          {table === "SEC_LOGIN" && !deleting && (
+            <p className="platform-help">
+              Password, name, email and active-status changes also update the
+              central sign-in account. Passwords are never displayed after
+              saving.
+            </p>
+          )}
           <div className="platform-editor-heading">
             <h3 tabIndex={-1} ref={editorHeading}>
               {deleting
@@ -1055,8 +1089,8 @@ export function PlatformAdminPage() {
           </div>
         </form>
       )}
-      <div className="platform-grid" aria-busy={loading}>
-        {loading ? (
+      <div className="platform-grid" aria-busy={loading && mode !== "billing"}>
+        {mode === "billing" ? <CompanySubscriptionPanel key={`${tenant}/${company}`} tenant={tenant} company={company} /> : loading ? (
           <p className="platform-empty" role="status">
             Loading security records…
           </p>
@@ -1064,29 +1098,33 @@ export function PlatformAdminPage() {
           <table>
             <thead>
               <tr>
-                <th>Direct access</th>
+                <th>Screen access</th>
                 <th>Screen</th>
                 <th>Module</th>
                 <th>Menu</th>
               </tr>
             </thead>
             <tbody>
-              {accessScreens.map((s, i) => (
-                <tr key={`${s.SERIAL_NO}-${i}`}>
+              {accessScreens.map((s) => (
+                <tr key={String(s.SERIAL_NO)}>
                   <td>
                     <input
                       type="checkbox"
                       disabled={!loginid || saving}
-                      checked={access.access.some(
+                      checked={(access.inherited || []).some((a) => Number(a.SERIAL_NO) === Number(s.SERIAL_NO)) || access.access.some(
                         (a) =>
                           Number(a.SERIAL_NO_OR_ROLE_ID) ===
                           Number(s.SERIAL_NO),
                       )}
-                      onChange={(e) =>
-                        grant([Number(s.SERIAL_NO)], e.target.checked)
-                      }
-                      aria-label={`Grant screen ${s.SERIAL_NO}`}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        const fromRole = (access.inherited || []).some((a) => Number(a.SERIAL_NO) === Number(s.SERIAL_NO));
+                        if (!enabled && fromRole && !window.confirm("Remove this user's access to this screen? Their other role permissions will be preserved as direct grants.")) return;
+                        void grant([Number(s.SERIAL_NO)], enabled);
+                      }}
+                      aria-label={`Access to screen ${s.SERIAL_NO}`}
                     />
+                    {(access.inherited || []).some((a) => Number(a.SERIAL_NO) === Number(s.SERIAL_NO)) && <small className="platform-access-source">From role</small>}
                   </td>
                   <td>{s.SERIAL_NO}</td>
                   <td>{s.APP_CODE}</td>
@@ -1147,7 +1185,7 @@ export function PlatformAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {audit.map((a) => (
+              {audit.filter(a => (showAttempts || a.ACTION !== "ATTEMPT") && (!query || `${a.ACTOR} ${a.TENANT_ID} ${a.COMPANY_CODE} ${a.ACTION} ${a.RESOURCE_NAME}`.toLowerCase().includes(query.toLowerCase()))).map((a) => (
                 <tr key={a.AUDIT_ID}>
                   <td>{new Date(a.CREATED_AT).toLocaleString()}</td>
                   <td>{a.ACTOR}</td>
@@ -1234,6 +1272,21 @@ export function PlatformAdminPage() {
           </Button>
         </footer>
       )}
+      <ConfirmDialog open={Boolean(bulkConfirmation)}
+        title={bulkConfirmation?.enabled ? "Grant all shown screens?" : "Remove all shown screen access?"}
+        description={`${bulkConfirmation?.serials.length || 0} screens for ${bulkConfirmation?.loginid || ""} in ${bulkConfirmation?.company || ""} / ${bulkConfirmation?.tenant || ""}.`}
+        actionLabel={bulkConfirmation?.enabled ? "Confirm grant" : "Confirm removal"}
+        tone={bulkConfirmation?.enabled ? "default" : "danger"}
+        onClose={() => setBulkConfirmation(null)}
+        onConfirm={() => {
+          const pending = bulkConfirmation;
+          setBulkConfirmation(null);
+          if (!pending || saving) return;
+          if (pending.tenant !== tenant || pending.company !== company || pending.loginid !== loginid) { setError("The selection changed. Review the user and company, then try again."); return; }
+          void grant(pending.serials, pending.enabled);
+        }}>
+        <p>{bulkConfirmation?.enabled ? "Every shown screen will receive all operations. Screens outside this selection stay unchanged." : "Direct and role access to the shown screens will be removed for this user. Their other role permissions will be preserved as direct grants."}</p>
+      </ConfirmDialog>
     </section>
   );
 }

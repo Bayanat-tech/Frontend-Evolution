@@ -34,7 +34,7 @@ const BTN_BLUE = "rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-m
 // 2019070493 = ESHRAQ, 2010080035 = SHAHAB
 const SUPPLIER_USER_CODES: string[] = ["2019070493", "2010080035"];
 const AMOUNT_CHECK_USER_CODES: string[] = ["2019070493", "2010080035"];
-const LEVEL2_CREATOR_EXCEPTIONS = [{ loginid: "2016090408", flowCode: "003" }];
+const LEVEL2_CREATOR_EXCEPTIONS = [{ loginid: "2016090408", flowCode: "003" }, { loginid: "2010080024", flowCode: "007" }];
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;

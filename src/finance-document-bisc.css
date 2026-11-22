@@ -1544,8 +1544,8 @@ button.commercial-add-line-btn:hover svg {
 }
 .finance-document-editor .commercial-lines-scroll { container-type: inline-size; }
 .finance-document-editor .finance-allocation-panel {
-  width: fit-content !important;
-  min-width: 520px !important;
+  width: var(--allocation-panel-width, fit-content) !important;
+  min-width: var(--allocation-panel-min-width, 520px) !important;
   max-width: 100% !important;
   border: 1.5px solid #9fcfc4 !important;
   border-radius: 8px !important;
