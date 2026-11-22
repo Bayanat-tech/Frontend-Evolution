@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { AlertTriangle, Calculator, CheckCircle2, FileText, RefreshCw, Save, TrendingDown } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, FileText, RefreshCw, RotateCcw, Save, Trash2, TrendingDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { executeCommonProcedure, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { api } from "../../api/client";
@@ -36,10 +36,18 @@ export function AssetDepreciationPage() {
     return div && div !== "10" ? `${div}${base}` : base;
   };
 
+  // JV status tracking (detects if linked JV is active or canceled in TR_AC_HEADER)
+  const [jvStatus, setJvStatus] = useState<{ isJvPosted: boolean; isJvCanceled: boolean; jvNo: string | null }>({
+    isJvPosted: false,
+    isJvCanceled: false,
+    jvNo: null,
+  });
+
   // JV button is enabled only when the grid has at least one row
   const hasRows = rows.length > 0;
-  const hasPostedJv = rows.some((r) => Boolean(r.ref_doc_no));
-  const postedJvNo = rows.find((r) => Boolean(r.ref_doc_no))?.ref_doc_no;
+  const postedJvNo = jvStatus.jvNo || rows.find((r) => Boolean(r.ref_doc_no))?.ref_doc_no;
+  const isJvCanceled = jvStatus.isJvCanceled;
+  const hasActivePostedJv = Boolean(postedJvNo) && !isJvCanceled;
 
   const columns = useMemo<ColumnDef<DepRow>[]>(() => [
     col("asset_id", "Asset ID", 110),
@@ -88,22 +96,51 @@ export function AssetDepreciationPage() {
       });
       const norm = data.map(normalize);
       setRows(norm);
+
+      // Check JV cancellation status from backend
+      let isCanceled = false;
+      const foundDocNo = norm.find((r) => Boolean(r.ref_doc_no))?.ref_doc_no;
+      let jvDocNum: string | null = foundDocNo ? String(foundDocNo) : null;
+      try {
+        const stResp = await api.get<{
+          success: boolean;
+          isJvPosted: boolean;
+          isJvCanceled: boolean;
+          jvNo: string | null;
+        }>(`/api/finance/asset-depreciation/status?doc_no=${targetDocNo}&div_code=${division}`);
+        if (stResp.data?.success) {
+          isCanceled = Boolean(stResp.data.isJvCanceled);
+          jvDocNum = stResp.data.jvNo ? String(stResp.data.jvNo) : jvDocNum;
+          setJvStatus({
+            isJvPosted: Boolean(stResp.data.isJvPosted),
+            isJvCanceled: isCanceled,
+            jvNo: jvDocNum,
+          });
+        }
+      } catch {
+        // Non-blocking status check
+      }
+
       if (norm.length === 0) {
         setNotice({
           type: "info",
           message: "No saved depreciation records found for this period. Click 'Save' to calculate and generate depreciation.",
         });
       } else {
-        const jvRecord = norm.find((r) => Boolean(r.ref_doc_no));
-        if (jvRecord?.ref_doc_no) {
+        if (jvDocNum && isCanceled) {
+          setNotice({
+            type: "warning",
+            message: `⚠️ Depreciation is calculated, but the linked Journal Voucher (JV #${jvDocNum}) was CANCELLED. You can post a new JV or Reset/Delete this calculation to re-calculate.`,
+          });
+        } else if (jvDocNum) {
           setNotice({
             type: "success",
-            message: `✓ Depreciation JV already posted to General Ledger (JV Doc #${jvRecord.ref_doc_no}).`,
+            message: `✓ Depreciation JV posted to General Ledger (JV Doc #${jvDocNum}).`,
           });
         } else {
           setNotice({
             type: "info",
-            message: `✓ Depreciation already calculated for ${monthYear || "this period"} (${norm.length} assets). Click "JV" to post to General Ledger.`,
+            message: `✓ Depreciation calculated for ${monthYear || "this period"} (${norm.length} assets). Click "JV" to post to General Ledger.`,
           });
         }
       }
@@ -133,6 +170,10 @@ export function AssetDepreciationPage() {
       return;
     }
     if (hasRows) {
+      if (!hasActivePostedJv) {
+        await recalculate();
+        return;
+      }
       setNotice({
         type: "success",
         message: `Depreciation document ${docNo} is already generated for ${monthYear} (${rows.length} assets). Click "JV" to post to General Ledger.`,
@@ -164,6 +205,51 @@ export function AssetDepreciationPage() {
       }
     } catch (error) {
       setNotice({ type: "error", message: friendlyError(error, "Unable to save depreciation") });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const recalculate = async () => {
+    if (!year || !month || !division) return;
+    if (hasActivePostedJv) {
+      setNotice({
+        type: "error",
+        message: `Cannot recalculate: Journal Voucher #${postedJvNo} is active in General Ledger. Please cancel the JV in Journal Voucher screen first.`,
+      });
+      return;
+    }
+    if (!confirm(`Are you sure you want to recalculate depreciation for ${monthYear}? This will clear the previous calculation and recalculate all eligible assets.`)) {
+      return;
+    }
+    setLoading(true);
+    setNotice(null);
+    try {
+      const computedDocNo = calculateDocNo(year, month, division) || docNo;
+      await api.post("/api/finance/asset-depreciation/delete", {
+        doc_no: Number(computedDocNo),
+        div_code: division,
+      });
+      await executeCommonProcedure({
+        parameter: "PROC_DOC_NO_DEPRECIATION",
+        loginid: loginId,
+        val1s1: year,
+        val1s2: month,
+        val1s3: division,
+        val1s4: companyCode,
+        val1s5: docType,
+      });
+      setNotice({ type: "success", message: `Depreciation for ${monthYear} recalculated successfully!` });
+      await retrieve();
+      const exc = await checkExceptions(division);
+      if (exc.length > 0) {
+        setNotice({
+          type: "error",
+          message: `Depreciation generated with ${exc.length} exception(s). Please review the Exception Register before posting JV.`,
+        });
+      }
+    } catch (error) {
+      setNotice({ type: "error", message: friendlyError(error, "Unable to recalculate depreciation") });
     } finally {
       setLoading(false);
     }
@@ -211,6 +297,48 @@ export function AssetDepreciationPage() {
     }
   };
 
+  const deleteDepreciation = async () => {
+    const computedDocNo = calculateDocNo(year, month, division) || docNo;
+    if (!computedDocNo || !division) return;
+    if (hasActivePostedJv) {
+      setNotice({
+        type: "error",
+        message: `Cannot reset: Journal Voucher #${postedJvNo} is active in General Ledger. Please cancel the JV in Journal Voucher screen first.`,
+      });
+      return;
+    }
+    if (!confirm(`Are you sure you want to delete depreciation document ${computedDocNo}? Asset book values (WD_VALUE) will be restored so you can recalculate.`)) {
+      return;
+    }
+    setLoading(true);
+    setNotice(null);
+    try {
+      const resp = await api.post<{ success: boolean; message: string }>(
+        "/api/finance/asset-depreciation/delete",
+        { doc_no: Number(computedDocNo), div_code: division }
+      );
+      if (resp.data?.success) {
+        setNotice({
+          type: "success",
+          message: resp.data.message || `Depreciation ${computedDocNo} deleted successfully. Ready to recalculate.`,
+        });
+        await retrieve();
+      } else {
+        setNotice({
+          type: "error",
+          message: resp.data?.message || "Failed to delete depreciation",
+        });
+      }
+    } catch (err: any) {
+      setNotice({
+        type: "error",
+        message: err.message || "Failed to delete depreciation",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="finance-utility-page finance-list-page grid gap-4 p-4 pb-24 overflow-y-auto max-w-full">
       {/* ===================== PAGE HEADER (matches Prepaid Register) ===================== */}
@@ -245,32 +373,61 @@ export function AssetDepreciationPage() {
             <RefreshCw size={14} /> Retrieve
           </Button>
           <Button
-            disabled={loading || hasRows}
-            onClick={() => void save()}
-            title={hasRows ? "Depreciation already generated for this month. Click JV to post." : "Generate and save depreciation"}
+            disabled={loading || (hasRows && hasActivePostedJv)}
+            onClick={() => (hasRows ? void recalculate() : void save())}
+            title={
+              hasActivePostedJv
+                ? `Depreciation is locked while JV #${postedJvNo} is active in GL`
+                : hasRows
+                ? "Recalculate depreciation for this period (clears old run and recalculates fresh)"
+                : "Generate and save depreciation"
+            }
             className={`h-8 gap-1.5 shadow-xs text-xs font-semibold px-4 rounded-lg transition-colors ${
-              hasRows
+              hasActivePostedJv
                 ? "bg-emerald-700 text-white opacity-85 cursor-not-allowed"
                 : "bg-[#00378C] text-white hover:bg-[#002d72] cursor-pointer"
             }`}
           >
-            {hasRows ? <CheckCircle2 size={14} /> : <Save size={14} />}
-            {hasRows ? "Calculated" : "Save"}
+            {hasActivePostedJv ? (
+              <CheckCircle2 size={14} />
+            ) : hasRows ? (
+              <Calculator size={14} />
+            ) : (
+              <Save size={14} />
+            )}
+            {hasActivePostedJv ? "Calculated" : hasRows ? "Recalculate" : "Save"}
           </Button>
           <Button
-            variant={hasPostedJv ? "outline" : "secondary"}
-            disabled={loading || !hasRows || hasPostedJv}
+            variant={hasActivePostedJv ? "outline" : "secondary"}
+            disabled={loading || !hasRows || hasActivePostedJv}
             onClick={() => void postJv()}
-            title={hasPostedJv ? `JV already posted (Doc #${postedJvNo})` : hasRows ? "Post depreciation JV" : "No rows to post"}
+            title={hasActivePostedJv ? `JV already posted (Doc #${postedJvNo})` : isJvCanceled ? `JV was cancelled in GL. Click to re-post JV.` : hasRows ? "Post depreciation JV" : "No rows to post"}
             className={`h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors ${
-              hasPostedJv
+              hasActivePostedJv
                 ? "border-emerald-500 text-emerald-700 bg-emerald-50 cursor-default"
+                : isJvCanceled
+                ? "border-amber-500 text-amber-700 bg-amber-50 hover:bg-amber-100"
                 : "disabled:cursor-not-allowed disabled:opacity-50"
             }`}
           >
-            {hasPostedJv ? <CheckCircle2 size={14} className="text-emerald-600" /> : <FileText size={14} />}
-            {hasPostedJv ? `JV Posted (#${postedJvNo})` : "JV"}
+            {hasActivePostedJv ? <CheckCircle2 size={14} className="text-emerald-600" /> : isJvCanceled ? <AlertTriangle size={14} className="text-amber-600" /> : <FileText size={14} />}
+            {hasActivePostedJv ? `JV Posted (#${postedJvNo})` : isJvCanceled ? `Re-Post JV (Cancelled #${postedJvNo})` : "JV"}
           </Button>
+          {hasRows && (
+            <Button
+              variant="outline"
+              disabled={loading || hasActivePostedJv}
+              onClick={() => void deleteDepreciation()}
+              title={hasActivePostedJv ? `Cannot delete while JV #${postedJvNo} is active in GL` : "Delete this month's depreciation and restore asset values"}
+              className={`h-8 gap-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                hasActivePostedJv
+                  ? "opacity-50 cursor-not-allowed text-slate-400 border-slate-200"
+                  : "text-rose-700 border-rose-300 bg-rose-50 hover:bg-rose-100 cursor-pointer"
+              }`}
+            >
+              <RotateCcw size={14} /> Reset Calculation
+            </Button>
+          )}
         </div>
       </div>
 

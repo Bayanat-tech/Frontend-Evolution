@@ -155,7 +155,26 @@ function statusLabelOf(r: Row): string {
   return getStatusMeta(text(r.LAST_ACTION), Number(r.FLOW_LEVEL_RUNNING || 0), text(r.STATUS)).label;
 }
 
-// Division: pehle row ke apne DIV_* fields, na mile to employee->division map se
+// Reason column: Sent Back / Rejected — reason + "by whom" (CODE - NAME)
+function reasonInfo(r: Row): { reason: string; by: string; byLabel: string; kind: "SENTBACK" | "REJECTED" | "" } {
+  const sbReason = text(r.SENT_BACK_REASON).trim();
+  const sbByCode = text(r.SENT_BACK_BY).trim();
+  const sbByName = text(r.SENT_BACK_BY_NAME).trim();
+  const rjReason = text(r.REJECT_REASON).trim();
+  const rjByCode = text(r.REJECT_BY).trim();
+  const rjByName = text(r.REJECT_BY_NAME).trim();
+  const action = text(r.LAST_ACTION).toUpperCase().replace(/[\s_]/g, "");
+  const isRejected = action === "REJECTED";
+
+  const sbBy = sbByCode && sbByName ? `${sbByCode} - ${sbByName}` : sbByCode || sbByName;
+  const rjBy = rjByCode && rjByName ? `${rjByCode} - ${rjByName}` : rjByCode || rjByName;
+
+  if (isRejected && rjReason) return { reason: rjReason, by: rjBy, byLabel: "Rejected by", kind: "REJECTED" };
+  if (sbReason) return { reason: sbReason, by: sbBy, byLabel: "Sent back by", kind: "SENTBACK" };
+  if (rjReason) return { reason: rjReason, by: rjBy, byLabel: "Rejected by", kind: "REJECTED" };
+  return { reason: "", by: "", byLabel: "", kind: "" };
+}
+
 function rowDiv(r: Row, empDiv: Record<string, string>, divName: Record<string, string>) {
   let code = text(r.DIV_CODE ?? r.DIVISION_CODE).trim();
   let name = text(r.DIV_NAME ?? r.DIVISION_NAME).trim();
@@ -170,7 +189,6 @@ function rowDept(r: Row) {
   return { key: code || name, label: code && name ? `${code} - ${name}` : code || name };
 }
 
-// Ek row ka poora "dikhne wala" text (search ke liye)
 function buildSearchText(
   r: Row,
   w: ActiveWeightage | null,
@@ -195,6 +213,10 @@ function buildSearchText(
     nextActionLabel(r),
     text(r.SENT_BACK_REASON),
     text(r.SENT_BACK_BY),
+    text(r.SENT_BACK_BY_NAME),
+    text(r.REJECT_REASON),
+    text(r.REJECT_BY),
+    text(r.REJECT_BY_NAME),
     statusLabelOf(r),
   ].join(" | ");
 }
@@ -259,6 +281,17 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   // Division master + employee->division map (Trn_appraisal rows me DIV_* nahi aata)
   const [divMaster, setDivMaster] = useState<Row[]>([]);
   const [empDivMap, setEmpDivMap] = useState<Record<string, string>>({});
+
+  // employees lookup se code -> name map (fallback ke liye jab SP name na bheje)
+  const empNameByCode = useMemo(() => {
+    const m: Record<string, string> = {};
+    employees.forEach((e) => {
+      const code = text(e.EMPLOYEE_CODE).trim().toUpperCase();
+      const name = text(e.RPT_NAME || e.EMP_NAME).trim();
+      if (code && name) m[code] = name;
+    });
+    return m;
+  }, [employees]);
 
   const divNameMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -328,7 +361,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [rows, divFilter, empDivMap, divNameMap]);
 
-  // Har row me _SEARCH field: table ka global search isko bhi dekhta hai
   const decoratedRows = useMemo(
     () => rows.map((r): Row => ({ ...r, _SEARCH: buildSearchText(r, activeWeightage, empDivMap, divNameMap) })),
     [rows, activeWeightage, empDivMap, divNameMap]
@@ -632,7 +664,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   };
 
   const handleBulkApprove = async () => {
-    if (approving) return; // double click guard
+    if (approving) return;
 
     const ids = selectedVisibleIds;
     if (!ids.length) {
@@ -667,7 +699,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       setSelectedRows({});
     } else {
       toast.warning(`${approvedCount} approved, ${failedIds.length} failed. Failed records selected rehenge, dobara try karo.`);
-      // sirf failed wale selected rakho
       const next: Record<string, boolean> = {};
       failedIds.forEach((id) => { next[id] = true; });
       setSelectedRows(next);
@@ -709,12 +740,26 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
   };
 
+  // employees lookup se name fallback resolve karne ke liye helper
+  const resolveByLabel = (code: string, name: string): string => {
+    const c = code.trim();
+    const n = name.trim();
+    if (c && n) return `${c} - ${n}`;
+    if (c && !n) {
+      const fromLookup = empNameByCode[c.toUpperCase()];
+      return fromLookup ? `${c} - ${fromLookup}` : c;
+    }
+    return n;
+  };
+
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const cols: ColumnDef<Row>[] = [];
 
+    // ── 1. Appraisal Doc No ──
     cols.push({
       accessorKey: "APPRAISAL_DOC_NO",
-      size: 220,
+      size: 240,
+      minSize: 180,
       header: () => {
         if (!showSelection) return <span>Appraisal Doc No</span>;
         const allChecked = visibleIds.length > 0 && selectedVisibleIds.length === visibleIds.length;
@@ -747,7 +792,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
             style={{
               display: "flex", alignItems: "center", gap: "8px",
               cursor: "pointer", whiteSpace: "nowrap",
-              overflow: "hidden", textOverflow: "ellipsis"
             }}
           >
             {showSelection && (
@@ -761,7 +805,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
             <span
               style={{
                 color: "#082A89", fontWeight: 600, fontSize: "0.82rem",
-                cursor: "pointer", display: "inline-block", minWidth: 80
+                cursor: "pointer", display: "inline-block",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
@@ -773,18 +817,24 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
+    // ── 2. Appraisal Date ──
     cols.push({
       accessorKey: "APPRAISAL_DOC_DATE",
       header: "Appraisal Date",
-      size: 110,
-      cell: ({ row }) => fmtDate(row.original.APPRAISAL_DOC_DATE),
+      size: 140,
+      minSize: 120,
+      cell: ({ row }) => (
+        <span style={{ whiteSpace: "nowrap" }}>{fmtDate(row.original.APPRAISAL_DOC_DATE)}</span>
+      ),
     });
 
+    // ── 3. Period No ──
     cols.push({
       id: "PERIOD_NUMBER",
       accessorFn: (r) => formatPeriodDisplay(r.PERIOD_NUMBER),
       header: "Period No",
-      size: 130,
+      size: 150,
+      minSize: 110,
       cell: ({ row }) => {
         const periodNumber = text(row.original.PERIOD_NUMBER);
         if (!periodNumber) return <span style={{ color: "#9ca3af" }}>—</span>;
@@ -796,11 +846,13 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
+    // ── 4. Employee ──
     cols.push({
       id: "EMPLOYEE_CODE",
       accessorFn: (r) => employeeLabel(r),
       header: "Employee",
-      size: 280,
+      size: 340,
+      minSize: 220,
       cell: ({ row }) => (
         <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
           {text(row.original.EMPLOYEE_CODE)} - {text(row.original.EMPLOYEE_NAME)}
@@ -808,27 +860,29 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       ),
     });
 
+    // ── 5. Designation ──
     cols.push({
       id: "DESG_NAME",
       accessorFn: (r) => desgLabel(r),
       header: "Designation",
-      size: 200,
+      size: 260,
+      minSize: 180,
       cell: ({ row }) => (
         <span style={{ whiteSpace: "nowrap" }}>{desgLabel(row.original) || "—"}</span>
       ),
     });
 
+    // ── 6. Period Range ──
     cols.push({
       id: "PERIOD_RANGE",
       accessorFn: (r) => `${fmtRangeDate(r.APPRAISAL_FROM)} ${fmtRangeDate(r.APPRAISAL_TO)}`.trim(),
       header: "Period Range",
-      size: 210,
+      size: 260,
+      minSize: 200,
       cell: ({ row }) => {
         const from = fmtRangeDate(row.original.APPRAISAL_FROM);
         const to = fmtRangeDate(row.original.APPRAISAL_TO);
-
         if (!from && !to) return <span style={{ color: "#9ca3af" }}>—</span>;
-
         return (
           <span style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
             <span style={{ color: "#0c0e11" }}>{from || "—"}</span>
@@ -839,23 +893,22 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
+    // ── 7. Avg Score ──
     cols.push({
       id: "FINAL_RATING",
       accessorFn: (r) => getAvg(r, activeWeightage) || "",
       header: "Avg Score",
-      size: 110,
+      size: 120,
+      minSize: 100,
       cell: ({ row }) => {
         const avg = getAvg(row.original, activeWeightage);
-
         if (!avg) return <span style={{ color: "#9ca3af" }}>—</span>;
-
         let bg = "#f3f4f6", color = "#374151", border = "#d1d5db";
         if (avg >= 5) { bg = "#f6fefe"; color = "#35a074"; border = "#6bff15"; }
         else if (avg >= 4) { bg = "#e6f9f0"; color = "#4d4dc1"; border = "#b7ebd4"; }
         else if (avg >= 3) { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
         else if (avg >= 2) { bg = "#fff4e5"; color = "#0e9289"; border = "#fcd38a"; }
         else if (avg >= 1) { bg = "#fdecea"; color = "#d80a0a"; border = "#f5b3b3"; }
-
         return (
           <span style={{
             display: "inline-block", padding: "2px 12px", borderRadius: "999px",
@@ -867,11 +920,13 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
+    // ── 8. Next Action By ──
     cols.push({
       id: "NEXT_ACTION_BY",
       accessorFn: (r) => nextActionLabel(r),
       header: "Next Action By",
-      size: 190,
+      size: 280,
+      minSize: 200,
       cell: ({ row }) => {
         const label = nextActionLabel(row.original);
         if (!label) return <span style={{ color: "#9ca3af" }}>—</span>;
@@ -879,34 +934,60 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
+    // ── 9. Reason ──
     cols.push({
       id: "SENT_BACK_REASON",
-      accessorFn: (r) => `${text(r.SENT_BACK_REASON)} ${text(r.SENT_BACK_BY)}`.trim(),
-      header: "Sent Back Remarks",
-      size: 230,
+      accessorFn: (r) => {
+        const i = reasonInfo(r);
+        return `${i.reason} ${i.by}`.trim();
+      },
+      header: "Reason",
+      size: 380,         
+      minSize: 350, 
       cell: ({ row }) => {
-        const reason = text(row.original.SENT_BACK_REASON);
-        const by = text(row.original.SENT_BACK_BY);
-        if (!reason) return <span style={{ color: "#9ca3af" }}>—</span>;
+        const info = reasonInfo(row.original);
+        if (!info.reason) return <span style={{ color: "#9ca3af" }}>—</span>;
+        const byColor = info.kind === "REJECTED" ? "#b91c1c" : "#6b21a8";
+
+        const rawCode = info.kind === "REJECTED"
+          ? text(row.original.REJECT_BY)
+          : text(row.original.SENT_BACK_BY);
+        const rawName = info.kind === "REJECTED"
+          ? text(row.original.REJECT_BY_NAME)
+          : text(row.original.SENT_BACK_BY_NAME);
+        const byDisplay = resolveByLabel(rawCode, rawName) || info.by;
+
         return (
-          <div style={{ lineHeight: 1.4 }}>
-            <div title={reason} style={{
-              maxWidth: "210px", overflow: "hidden",
-              textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.8rem", fontWeight: 500
+          <div
+            style={{ lineHeight: 1.35 }}
+            title={byDisplay ? `${info.reason} (${info.byLabel} ${byDisplay})` : info.reason}
+          >
+            <div style={{
+              fontSize: "0.8rem", fontWeight: 500,
+              whiteSpace: "normal", wordBreak: "break-word",
             }}>
-              {reason}
+              {info.reason}
             </div>
-            {by && <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "2px" }}>by {by}</div>}
+            {byDisplay && (
+              <div style={{
+                fontSize: "10px", fontWeight: 600, color: byColor, marginTop: "2px",
+                whiteSpace: "normal", wordBreak: "break-word",
+              }}>
+                {info.byLabel}: {byDisplay}
+              </div>
+            )}
           </div>
         );
       },
     });
 
+    // ── 10. Status ──
     cols.push({
       id: "LAST_ACTION",
       accessorFn: (r) => statusLabelOf(r),
       header: "Status",
-      size: 140,
+      size: 160,
+      minSize: 130,
       cell: ({ row }) => {
         const status = getStatusMeta(
           text(row.original.LAST_ACTION),
@@ -925,14 +1006,15 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
+    // ── 11. Actions ──
     cols.push({
       id: "actions",
       header: "Actions",
-      size: 100,
+      size: 110,
+      minSize: 90,
       enableColumnFilter: false,
       cell: ({ row }) => (
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          {/* Edit sirf Pending tab me */}
           {activeTab === 0 && (
             <Button size="sm" variant="ghost" title="Edit"
               onClick={(e) => { e.stopPropagation(); openAppraisalTabsPage(row.original, "edit"); }}
@@ -940,8 +1022,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
               <Edit2 size={14} />
             </Button>
           )}
-
-          {/* View har tab me, hamesha read-only */}
           <Button size="sm" variant="ghost" title="View"
             onClick={(e) => { e.stopPropagation(); openAppraisalTabsPage(row.original, "view"); }}
             style={{ padding: "4px", height: "28px", width: "28px" }}>
@@ -953,10 +1033,9 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
     return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showSelection, selectedRows, visibleIds, selectedVisibleIds, activeWeightage, activeTab]);
+  }, [showSelection, selectedRows, visibleIds, selectedVisibleIds, activeWeightage, activeTab, empNameByCode]);
 
-  // Sirf 3 HR users ko: search box ke right side me 3 dropdown
-  // LookupField ke liye options (har list me pehla "ALL" option)
+  // HR users ke liye: search box ke right side me 3 dropdown
   const empTypeLookupRows = useMemo(
     () => [
       { CODE: "ALL", LABEL: `All Employees (${rows.length})` },
@@ -1040,7 +1119,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Tabs UI: Purchase Request wala same */}
+      {/* Tabs UI */}
       <div
         style={{
           display: "flex", alignItems: "flex-end", gap: "4px",
@@ -1126,7 +1205,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
           loading={loading}
           loaderType="circle"
           height={550}
-          minWidth={1300}
+          minWidth={1800}
           density="compact"
           enablePagination
           pageSize={100}
