@@ -81,34 +81,34 @@ export function PurchaseInvoiceHeaderForm({
     amountDecimals?: number;
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
-  const [taxCats, setTaxCats] = useState<any[]>([]);
-  useEffect(() => {
-    let alive = true;
-    Promise.resolve(
-      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
-    )
-      .then((res: any) => {
-        const list = Array.isArray(res) ? res : res?.data ?? [];
-        if (alive) setTaxCats(list);
-      })
-      .catch(() => { });
-    return () => { alive = false; };
-  }, [companyCode, loginIdOrAdmin]);
+    const [taxCats, setTaxCats] = useState<any[]>([]);
+    useEffect(() => {
+        let alive = true;
+        Promise.resolve(
+            getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
+        )
+            .then((res: any) => {
+                const list = Array.isArray(res) ? res : res?.data ?? [];
+                if (alive) setTaxCats(list);
+            })
+            .catch(() => { });
+        return () => { alive = false; };
+    }, [companyCode, loginIdOrAdmin]);
 
     // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
-  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
-    if ((taxType || "N") !== "S") return 0;
-    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
-    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
-  };
+    const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+        if ((taxType || "N") !== "S") return 0;
+        const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+        return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+    };
     const discountScope = form.discount_scoope || "ITEM";
     const docTypeUpper = String(docType ?? "").trim().toUpperCase();
 
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
     // light placeholder on empty date inputs (Chrome/Edge/Safari)
-const dateCls = (v?: string | null) =>
-    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
+    const dateCls = (v?: string | null) =>
+        `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
 
     // phone / fax: digits, + ( ) - and space only, max 20 chars
     const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
@@ -139,9 +139,9 @@ const dateCls = (v?: string | null) =>
                                 label="Supplier*"
                                 value={form.ac_code}
                                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "city_name", header: "city" }]}
                                 valueField="ac_code"
-                                displayFields={["ac_code", "ac_name"]}
+                                displayFields={["ac_code", "ac_name", "city_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                                 disabled={headerAndLineDisabled}
                                 onChange={(value, row) =>
@@ -273,7 +273,8 @@ const dateCls = (v?: string | null) =>
                                     displayValue={String(form.grn_doc_no ?? "")}
                                     columns={[
                                         { field: "doc_no", header: "GRN No" },
-                                        { field: "ac_code", header: "A/c Code" },
+                                        { field: "grn_doc_date", header: "GRN Date" },
+                                        { field: "party_name", header: "Supplier Name" },
                                     ]}
                                     valueField="doc_no"
                                     displayFields={["doc_no"]}
@@ -328,8 +329,8 @@ const dateCls = (v?: string | null) =>
                                             address2: text(getLookupValue(row || {}, "address2") || accountRow?.address2),
                                             address3: text(getLookupValue(row || {}, "address3") || accountRow?.address3),
                                             e_mail: text(getLookupValue(row || {}, "e_mail") || accountRow?.e_mail),
-                                            credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount")  || accountRow?.credit_amount),
-                                            credit_period: numberOrZero(getLookupValue(row || {}, "credit_period") || accountRow?.credit_period ),
+                                            credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount") || accountRow?.credit_amount),
+                                            credit_period: numberOrZero(getLookupValue(row || {}, "credit_period") || accountRow?.credit_period),
                                             po_other_expense_cost: numberOrZero(getLookupValue(row || {}, "po_other_expense_cost")),
                                             disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
                                             disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
@@ -625,16 +626,16 @@ const dateCls = (v?: string | null) =>
                         </HeaderBlock>
 
                         <HeaderBlock label="Tax" icon={<Receipt size={11} />} gridCols="grid-cols-2">
-                             <CField label="Tax Type">
-                                            <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
-                                              const taxType = e.target.value;
-                                              // CHANGED: No Tax / Zero / Exempt => 0, Std Tax => % of the selected tax category
-                                              setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: resolveTaxPerc(taxType, current.tx_cat_code) }));
-                                            }}
-                                              disabled={headerAndLineDisabled}>
-                                              <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
-                                            </Select>
-                                          </CField>
+                            <CField label="Tax Type">
+                                <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+                                    const taxType = e.target.value;
+                                    // CHANGED: No Tax / Zero / Exempt => 0, Std Tax => % of the selected tax category
+                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: resolveTaxPerc(taxType, current.tx_cat_code) }));
+                                }}
+                                    disabled={headerAndLineDisabled}>
+                                    <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
+                                </Select>
+                            </CField>
 
                             <LookupField
                                 label="Tax Category"
