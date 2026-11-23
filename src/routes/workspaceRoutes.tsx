@@ -325,7 +325,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
     {
       name : "HR Skills",
       match : ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/general_master/source/skills"),
-      element : () => HrMasterPage({config : hrMasterConfigs.skills})
+      element : () => <HrMasterPage config={hrMasterConfigs.skills} />
     },
       {
       name: "HR Dashboard",
@@ -2293,7 +2293,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
 
   function isSalesInvoiceSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return (normalized.includes("purchase_sales/sales/sales_invoice"))
+    return (normalized.includes("/ims/purchase_sales/sales/sales_invoice"))
   }
 
   function isPurchaseQuotationSetupRoute(pathname: string) {
