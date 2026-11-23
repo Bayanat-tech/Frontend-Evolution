@@ -533,7 +533,8 @@ export function PlatformAdminPage() {
               (c.name === "COMPANY_CODE" && table === "MS_COMPANY") ||
               (c.name === "COMPANY_NAME" && table === "MS_COMPANY")
             }
-            maxLength={c.maxLength}
+            minLength={c.secret && /^(USERPASS|SEC_PASSWD|PASSWORD)$/.test(c.name) ? 8 : undefined}
+            maxLength={c.secret && /^(USERPASS|SEC_PASSWD|PASSWORD)$/.test(c.name) ? 20 : c.maxLength}
             step="any"
             value={
               /DATE|TIMESTAMP/.test(c.type)
@@ -954,7 +955,7 @@ export function PlatformAdminPage() {
                 ["loginid", "Login ID", "text"],
                 ["username", "User name", "text"],
                 ["email", "Email", "email"],
-                ["password", "Password (12+ characters)", "password"],
+                ["password", "Password (8 to 20 characters)", "password"],
               ] as const
             ).map(([key, text, type]) => {
               const InputControl =
@@ -966,8 +967,8 @@ export function PlatformAdminPage() {
                     type={type}
                     disabled={saving}
                     required
-                    maxLength={key === "loginid" ? 15 : undefined}
-                    minLength={key === "password" ? 12 : undefined}
+                    maxLength={key === "loginid" ? 15 : key === "password" ? 20 : undefined}
+                    minLength={key === "password" ? 8 : undefined}
                     autoComplete={key === "password" ? "new-password" : "off"}
                     value={userDraft[key]}
                     onChange={(e) =>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   BarChart3,
@@ -128,7 +128,7 @@ export function SupportLauncher() {
   }, [open]);
 
   // DEVADMIN and Developers work directly in full desk; hide floating headset launcher for staff
-  const isStaff = role === 'admin' || role === 'developer' || user?.loginid?.toUpperCase() === 'DEVADMIN';
+  const isStaff = role === 'admin' || role === 'developer';
   if (isStaff) {
     return null;
   }
@@ -203,7 +203,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isAdmin = role === 'admin' || user?.loginid?.toUpperCase() === 'DEVADMIN';
+  const isAdmin = role === 'admin' && user?.loginid?.trim().toUpperCase() === 'DEVADMIN' && user?.tenantId?.toUpperCase() === 'WMSDEV_TENANT';
   const isDeveloper = role === 'developer';
   const isStaff = isAdmin || isDeveloper;
 
@@ -648,6 +648,8 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     const start = (page - 1) * pageSize;
     return visible.slice(start, start + pageSize);
   }, [visible, page, pageSize]);
+
+  if (!compact && !isAdmin) return <Navigate to='/apps' replace />;
 
   return (
     <section className={`sup ${compact ? 'sup-compact' : ''}`}>
