@@ -90,33 +90,33 @@ export function SalesDNHeaderForm({
     amountDecimals?: number;
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
-          const [taxCats, setTaxCats] = useState<any[]>([]);
-          useEffect(() => {
-            let alive = true;
-            Promise.resolve(
-              getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
-            )
-              .then((res: any) => {
+    const [taxCats, setTaxCats] = useState<any[]>([]);
+    useEffect(() => {
+        let alive = true;
+        Promise.resolve(
+            getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })
+        )
+            .then((res: any) => {
                 const list = Array.isArray(res) ? res : res?.data ?? [];
                 if (alive) setTaxCats(list);
-              })
-              .catch(() => { });
-            return () => { alive = false; };
-          }, [companyCode, loginIdOrAdmin]);
-        
-            // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
-          const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
-            if ((taxType || "N") !== "S") return 0;
-            const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
-            return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
-          };
+            })
+            .catch(() => { });
+        return () => { alive = false; };
+    }, [companyCode, loginIdOrAdmin]);
+
+    // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+    const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+        if ((taxType || "N") !== "S") return 0;
+        const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+        return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+    };
     const discountScope = form.so_discount_scoope || "ITEM";
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-      const discPriceField = editMode ? "disc_hdr_price" : "so_disc_hdr_price";
+    const discPriceField = editMode ? "disc_hdr_price" : "so_disc_hdr_price";
     const discPercentField = editMode ? "disc_hdr_percent" : "so_disc_hdr_percent";
-// light placeholder on empty date inputs (Chrome/Edge/Safari)
-const dateCls = (v?: string | null) =>
-    `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
+    // light placeholder on empty date inputs (Chrome/Edge/Safari)
+    const dateCls = (v?: string | null) =>
+        `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
     // phone / fax: digits, + ( ) - and space only, max 20 chars
     const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
     const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
@@ -130,7 +130,7 @@ const dateCls = (v?: string | null) =>
         return "";
     };
     // Update header discount ONLY when received quantity changes (not on load / other row edits)
-     const qtySignature = (rows || []).map((r) => `${r.qty_puom}|${r.qty_luom}`).join(",");
+    const qtySignature = (rows || []).map((r) => `${r.qty_puom}|${r.qty_luom}`).join(",");
     const idSignature = (rows || []).map((r) => r.id).join(","); // ADDED
     const prevQtySignature = useRef<string | null>(null);
     const prevIdSignature = useRef<string | null>(null); // ADDED
@@ -171,12 +171,12 @@ const dateCls = (v?: string | null) =>
                         <div className="col-span-5">
                             <LookupField
                                 required
-                                label="A/c code"
+                                label="Customer*"
                                 value={form.ac_code}
                                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "city_name", header: "city" }]}
                                 valueField="ac_code"
-                                displayFields={["ac_code", "ac_name"]}
+                                displayFields={["ac_code", "ac_name", "city_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                                 disabled={headerAndLineDisabled}
                                 onChange={(value, row) => setForm((current) => ({
@@ -241,7 +241,7 @@ const dateCls = (v?: string | null) =>
                 {/* MIDDLE COLUMN — Other Details */}
                 <div className="flex flex-col gap-1.5">
                     <HeaderBlock label="Other Details" icon={<FileText size={11} />} gridCols="grid-cols-6" grow>
-                      <CField label="SO Date" required className="col-span-2">
+                        <CField label="SO Date" required className="col-span-2">
                             <Input className={dateCls(form.so_doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(event) => updateField("so_doc_date", event.target.value)} />
                         </CField>
                         <div className="col-span-2">
@@ -253,7 +253,8 @@ const dateCls = (v?: string | null) =>
                                 displayValue={String(form.so_doc_no ?? "")}
                                 columns={[
                                     { field: "so_doc_no", header: "SDN No" },
-                                    { field: "ac_code", header: "A/c Code" },
+                                    { field: "so_doc_date", header: "SO Date" },
+                                    { field: "ac_name", header: "Customer Name" },
                                 ]}
                                 valueField="so_doc_no"
                                 displayFields={["so_doc_no"]}
@@ -427,9 +428,7 @@ const dateCls = (v?: string | null) =>
                             />
                         </div>
 
-                        <CField label="SO Date" required className="col-span-2">
-                            <Input className={dateCls(form.so_doc_date)} type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(event) => updateField("so_doc_date", event.target.value)} />
-                        </CField>
+                     
 
                         {/* <CField label="SO Amount" required className="col-span-2">
                             <Input className="h-7 text-xs text-right" type="text" disabled={headerAndLineDisabled} required value={form.total_so_amount} onChange={(event) => updateField("total_so_amount", event.target.value)} />
@@ -572,7 +571,7 @@ const dateCls = (v?: string | null) =>
                                 </div>
                             </div>
 
-                                      <CField label="Disc Amt">
+                            <CField label="Disc Amt">
                                 <Input
                                     className="h-7 text-xs text-right"
                                     type="number"

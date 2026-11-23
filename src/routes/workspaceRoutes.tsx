@@ -2279,7 +2279,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
 
   function isSalesInvoiceSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return (normalized.includes("purchase_sales/sales/sales_invoice"))
+    return (normalized.includes("/ims/purchase_sales/sales/sales_invoice"))
   }
 
   function isPurchaseQuotationSetupRoute(pathname: string) {

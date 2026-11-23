@@ -475,7 +475,7 @@ export function SalesInvoiceLinesTable({
                   <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
                   {/* TAX: Tax % */}
                   <td className="px-2 py-1">
-                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1.toFixed(amountDecimals)} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
+                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={numberOrZero(row.tx_compnt_perc_1).toFixed(amountDecimals)} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
                   </td>
                   {/* TAX: Tax Amount */}
                   <td className={AMOUNT_CELL}>{formatAmount(lineTaxpoAmount(row))}</td>
