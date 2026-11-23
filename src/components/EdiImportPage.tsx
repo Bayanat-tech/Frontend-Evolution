@@ -33,8 +33,13 @@
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileSpreadsheet, RefreshCw, Save, Trash2, Upload, X } from "lucide-react";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { DynamicQueryParams, executeEdiSave, getDynamicLookupaccount } from "../api/lookups";
-import { Button } from "./ui/Button";
+import {
+  DynamicQueryParams,
+  executeEdiSave,
+  getDynamicLookupaccount,
+  EdiInvalidRowsError,
+  EdiInvalidRow,
+} from "../api/lookups";import { Button } from "./ui/Button";
 import AutoDismissAlert from "./ui/AutoDismissAlert";
 import { useAuth } from "../state/AuthContext";
 
@@ -89,19 +94,6 @@ export type EdiImportPageProps = {
 };
 
 type Notice = { type: "success" | "error"; message: string } | null;
-export type EdiInvalidRow = {
-  row: number; // 1-based position in the submitted rows
-  errors: { column: string; value: string | null; message: string }[];
-};
-
-export class EdiInvalidRowsError extends Error {
-  invalidRows: EdiInvalidRow[];
-  constructor(message: string, invalidRows: EdiInvalidRow[]) {
-    super(message);
-    this.name = "EdiInvalidRowsError";
-    this.invalidRows = invalidRows;
-  }
-}
 
 const TEMPLATE_SHEET = "Template";
 const TEMPLATE_ROWS = 500; // pre-formatted rows in the template
@@ -578,22 +570,38 @@ export function EdiImportPage({
 
   /** Marks the cells the server rejected (parent value not found) and jumps to them. */
   const applyServerErrors = (err: EdiInvalidRowsError) => {
-    // server row numbers are 1-based positions in the rows we submitted (same order as `rows`)
-    const byRow = new Map(err.invalidRows.map((r) => [r.row, r.errors]));
+    // API row numbers are 1-based and correspond to submitted row order.
+    const byRow = new Map(
+      err.invalidRows.map((r) => [r.row, r.errors]),
+    );
+
     setRows((prev) =>
       prev.map((r, idx) => {
-        const list = byRow.get(idx + 1);
-        if (!list) return r;
+        const serverErrors = byRow.get(idx + 1);
+
+        if (!serverErrors) return r;
+
         const errors = { ...r.errors };
-        list.forEach((e) => (errors[e.column] = e.message));
-        return { ...r, errors };
+
+        serverErrors.forEach((e) => {
+          errors[e.column] = e.message;
+        });
+
+        return {
+          ...r,
+          errors,
+        };
       }),
     );
+
+    // Automatically filter and display problematic rows.
     setErrorsOnly(true);
     setPage(0);
+
+    // Show the actual API response message.
     setNotice({
       type: "error",
-      message: `${err.invalidRows.length} row(s) have values that don't exist in the master tables (shown in red). Correct or remove them, then save again. Nothing was saved.`,
+      message: err.message,
     });
   };
 
@@ -821,7 +829,14 @@ export function EdiImportPage({
                 {pageRows.map((r) => {
                   const errCount = Object.keys(r.errors).length;
                   return (
-                    <tr key={r.id} className={errCount ? "bg-red-50/60" : "bg-white"}>
+                    <tr
+                      key={r.id}
+                      className={
+                        errCount
+                          ? "bg-red-50 border-l-4 border-l-red-500"
+                          : "bg-white"
+                      }
+                    >
                       <td className="border-b border-slate-100 px-2 py-1 align-middle">
                         <span
                           className={`inline-flex items-center gap-1 font-semibold ${
@@ -836,7 +851,14 @@ export function EdiImportPage({
                       {columns.map((c) => {
                         const err = r.errors[c.name];
                         return (
-                          <td key={c.name} className="border-b border-l border-slate-100 p-0.5 align-top">
+                          <td
+                            key={c.name}
+                            className={`border-b border-l p-0.5 align-top ${
+                              err
+                                ? "border-red-200 bg-red-50"
+                                : "border-slate-100"
+                            }`}
+                          >
                             <input
                               type={inputType(c)}
                               value={r.values[c.name] ?? ""}
@@ -850,8 +872,11 @@ export function EdiImportPage({
                               }`}
                             />
                             {err && (
-                              <div className="px-1 pb-0.5 text-[10px] leading-tight text-red-600">
-                                {err}
+                              <div className="px-1 pb-1 pt-1 text-[10px] leading-tight text-red-600 font-medium whitespace-normal">
+                                <span className="inline-flex items-start gap-1">
+                                  <AlertTriangle size={11} className="shrink-0 mt-0.5" />
+                                  {err}
+                                </span>
                               </div>
                             )}
                           </td>
