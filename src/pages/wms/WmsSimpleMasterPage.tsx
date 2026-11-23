@@ -225,12 +225,13 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         const activeFilters = columnFilters
           .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
           .filter((filter) => filter.values);
-        const response = await getWmsMaster(config.master, {
-          page: requestPageIndex + 1,
-          limit: requestPageSize,
-          ...(query.trim() ? { search: query.trim() } : {}),
-          ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
-        });
+const response = await getWmsMaster(config.master, {
+  page: requestPageIndex + 1,
+  limit: requestPageSize,
+  company_code: user?.company_code || "",   // <-- add this
+  ...(query.trim() ? { search: query.trim() } : {}),
+  ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
+});
         setRows(response.tableData.map(normalizeRow));
         setTotalRows(response.count || response.tableData.length);
       }
