@@ -245,6 +245,7 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 import { useAuth } from "../state/AuthContext";
 import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 import SeparationInitiationPage from "../pages/hr/SeperationInitiation";
+import SeparationConfirmationPage from "../pages/hr/SeperationConfirmation";
 import CreditRequestRegisterPage from "../pages/purchase_sales/Reports/CR_Listing_Report";
 import VisaLabourCardCancelPage from "../pages/hr/VisaLabourCardCancel";
 import EmployeeListingReport from "../pages/pams/EmployeeListingReport";
@@ -1756,6 +1757,11 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       match: ({ pathname }) => isHrSeparationInitiationRoute(pathname),
       element: () => <SeparationInitiationPage />,
     },
+            {
+      name: "HR Separation Confirmation",
+      match: ({ pathname }) => isHrSeparationConfirmationRoute(pathname),
+      element: () => <SeparationConfirmationPage />,
+    },
     {
       name: "Employee Dependants",
       match: ({ pathname }) => isHrEmpDependantsRoute(pathname),
@@ -2116,6 +2122,14 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       normalized.includes("/hcm/hr/general%20master/source/holiday_calendar") ||
       compact.includes("generalmastersourceholidaycalendar") ||
       compact.includes("holidaycalendar")
+    );
+  }
+
+  function isHrSeparationConfirmationRoute(pathname: string) {
+    const compact = decodeRouteText(pathname).toLowerCase().replace(/[^a-z0-9]/g, "");
+    return ( 
+      compact.includes("separationconfirmation") ||
+      compact.includes("seprationconfirmation") // menu url has this typo
     );
   }
 
