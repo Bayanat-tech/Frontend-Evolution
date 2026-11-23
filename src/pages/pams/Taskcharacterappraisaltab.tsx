@@ -55,6 +55,7 @@ const S = {
     outline: "none", backgroundColor: "#fff", cursor: "pointer",
   },
   totalGreen: { color: "#2e7d32", fontWeight: 600 },
+  totalBlue: { color: "#1976d2", fontWeight: 700, fontSize: "12px" },
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
 };
 
@@ -181,7 +182,7 @@ const TaskCharacterAppraisalTab: React.FC<Props> = ({
           <tr>
             <td style={S.tdPinned} />
             <td style={S.tdPinned}>Total</td>
-            <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalGreen }}>{grandTotal}</td>
+           <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalBlue }}>{grandTotal}</td>
           </tr>
         </tfoot>
       </table>
