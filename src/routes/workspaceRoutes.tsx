@@ -1716,7 +1716,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
 
     {
       name: "HR Manpower Requisition",
-      match: (context) => isHrRoute(context) && isHrManpowerRequisitionRoute(context),
+      match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/forms/review_confirm_form"),
       element: () => <HrManpowerPage />,
     },
 

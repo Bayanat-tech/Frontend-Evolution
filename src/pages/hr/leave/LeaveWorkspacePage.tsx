@@ -524,8 +524,8 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
                 className="text-foreground m-0"
                 style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
               >
-                Leave Request Flow this is the page
-              </h2>
+                Leave Request Flow
+              </h2> 
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {notice && (
