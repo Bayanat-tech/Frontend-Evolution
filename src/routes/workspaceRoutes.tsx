@@ -324,7 +324,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
     {
       name : "HR Skills",
       match : ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/general_master/source/skills"),
-      element : () => HrMasterPage({config : hrMasterConfigs.skills})
+      element : () => <HrMasterPage config={hrMasterConfigs.skills} />
     },
       {
       name: "HR Dashboard",
