@@ -221,7 +221,7 @@ async function fetchDesignations(
 }
 
 
-export function KpiGroupPage() {
+export function KpiItemPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const loginid = user?.loginid ?? "";
