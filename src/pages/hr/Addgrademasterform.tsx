@@ -183,9 +183,8 @@ function CheckboxField({
       {label && (
         <span
           onClick={() => !disabled && onChange(!checked)}
-          className={`text-[11.5px] font-medium text-slate-700 leading-none transition-colors ${
-            disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:text-slate-900"
-          }`}
+          className={`text-[11.5px] font-medium text-slate-700 leading-none transition-colors ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:text-slate-900"
+            }`}
         >
           {label}
         </span>
@@ -277,7 +276,7 @@ export const AddGradeMasterForm = forwardRef<GradeFormHandle, Props>(
           if (list.length === 0) {
             setComponentsError(
               `No component rows came back for grade code "${code}" (company "${user?.company_code ?? ""}"). ` +
-                `If this is unexpected, check that "MST_HR_MS_HR_Grade_Components_Page" is wired up in the backend dynamic-lookup dispatcher.`,
+              `If this is unexpected, check that "MST_HR_MS_HR_Grade_Components_Page" is wired up in the backend dynamic-lookup dispatcher.`,
             );
           }
           setComponents(
@@ -535,12 +534,11 @@ export const AddGradeMasterForm = forwardRef<GradeFormHandle, Props>(
                         value={form.grade_status}
                         onChange={(e) => set("grade_status", e.target.value)}
                       >
-                        <option value="">-- Select --</option>
-                        <option value="A">Approved</option>
-                        <option value="P">Pending</option>
+                        <option value="">None</option>
+                        <option value="J">Junior</option>
+                        <option value="S">Senior</option>
                       </Select>
                     </Field>
-
                     <Field label="Status" required error={errors.status}>
                       <Select
                         disabled={readonly}

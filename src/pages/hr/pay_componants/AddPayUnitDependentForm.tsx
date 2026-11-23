@@ -475,11 +475,11 @@ export const AddPayUnitDependentForm = forwardRef<PayUnitDependentFormHandle, Pr
         ...(readonly
           ? []
           : [
-              actionsColumn<DependRow>(
-                (r) => setDependDraft({ ...r }),
-                (r) => requestDelete({ kind: "depend", row: r }),
-              ),
-            ]),
+            actionsColumn<DependRow>(
+              (r) => setDependDraft({ ...r }),
+              (r) => requestDelete({ kind: "depend", row: r }),
+            ),
+          ]),
       ],
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [readonly, statusOptions, dependUnitOptions],
@@ -527,11 +527,11 @@ export const AddPayUnitDependentForm = forwardRef<PayUnitDependentFormHandle, Pr
         ...(readonly
           ? []
           : [
-              actionsColumn<LimitRow>(
-                (r) => setLimitDraft({ ...r }),
-                (r) => requestDelete({ kind: "limit", row: r }),
-              ),
-            ]),
+            actionsColumn<LimitRow>(
+              (r) => setLimitDraft({ ...r }),
+              (r) => requestDelete({ kind: "limit", row: r }),
+            ),
+          ]),
       ],
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [readonly, countryOptions],
@@ -611,7 +611,12 @@ export const AddPayUnitDependentForm = forwardRef<PayUnitDependentFormHandle, Pr
                           ["emp_percent", "Employee %"],
                         ] as const
                       ).map(([key, label]) => (
-                        <Field key={key} label={label}>
+
+                        <Field
+                          key={key}
+                          label={label}
+                          required={key === "percent"}
+                        >
                           <Input
                             type="number"
                             step="0.01"
@@ -628,7 +633,7 @@ export const AddPayUnitDependentForm = forwardRef<PayUnitDependentFormHandle, Pr
                         </Field>
                       ))}
 
-                      <Field label="Status">
+                      <Field label="Status" required>
                         <Select
                           value={dependDraft.status}
                           onChange={(e) => patchDepend({ status: e.target.value })}

@@ -318,7 +318,7 @@ const PayrollAccountSetupPage = () => {
       <div className="freight-workspace-ui freight-dense-form freight-ui-standard">
       <SectionPanel title="Filters" icon={Filter}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Company">
+          <Field label="Company" required>
             <Select value={company} onChange={(e) => handleCompany(e.target.value)}>
               <option value="">-- Select --</option>
               {companies.map((o) => (
@@ -329,7 +329,7 @@ const PayrollAccountSetupPage = () => {
             </Select>
           </Field>
 
-          <Field label="Division">
+          <Field label="Division" required>
             <Select disabled={!company} value={division} onChange={(e) => handleDivision(e.target.value)}>
               <option value="">-- Select --</option>
               {divisions.map((o) => (
@@ -340,7 +340,7 @@ const PayrollAccountSetupPage = () => {
             </Select>
           </Field>
 
-          <Field label="Department">
+          <Field label="Department" required>
             <Select disabled={!division} value={department} onChange={(e) => handleDepartment(e.target.value)}>
               <option value="">-- Select --</option>
               {departments.map((o) => (
@@ -351,7 +351,7 @@ const PayrollAccountSetupPage = () => {
             </Select>
           </Field>
 
-          <Field label="Section">
+          <Field label="Section" required>
             <Select disabled={!department} value={section} onChange={(e) => setSection(e.target.value)}>
               <option value="">-- Select --</option>
               {sections.map((o) => (

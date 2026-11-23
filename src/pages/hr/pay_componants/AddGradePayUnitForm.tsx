@@ -517,7 +517,7 @@ export const AddGradePayUnitForm = forwardRef<GradePayUnitFormHandle, Props>(
                 </Field>
               ))}
 
-              <Field label="Approved Date">
+              <Field label="Approved Date" required>
                 <Input
                   type="date"
                   value={draft.approved_date}

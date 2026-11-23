@@ -330,7 +330,7 @@ export const VisaLabourCardCancelForm = forwardRef<VisaLabourCancelFormHandle, P
                 min={toInputDatenull(form.labourcard_valid_from)} disabled={!form.labourcard_valid_from}
               />
             </CField>
-            <CField label="Labour Card Cancelled">
+            <CField label="Labour Card Cancelled" required>
               <select
                 className={SELECT_CLS} value={form.labourcard_cancelled}
                 onChange={(e) =>

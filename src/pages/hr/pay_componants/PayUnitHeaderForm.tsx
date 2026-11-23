@@ -36,6 +36,7 @@ function CodeSelectField({
   label,
   parameter,
   descField,
+  required,
   disabled
 }: {
   formik: FormikProps<TPayUnitFormValues>;
@@ -44,6 +45,7 @@ function CodeSelectField({
   parameter: string;
   descField?: keyof TPayUnitFormValues;
   disabled?: boolean;
+  required?:boolean;
 }) {
   const options = useCodeOptions(parameter);
   const { values, errors, touched, handleChange, handleBlur } = formik;
@@ -54,7 +56,7 @@ function CodeSelectField({
       : undefined;
 
   return (
-    <Field label={label} error={error}>
+    <Field label={label} required={required}error={error}>
       <Select
         name={fieldName}
         value={String(values[name] ?? '')}
@@ -132,7 +134,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
       {/* ===================== PAYROLL PARAMETER ===================== */}
       <SectionPanel title="Payroll Parameter" icon={SlidersHorizontal}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
-          <Field label="Pay Unit Type" error={fieldError('pay_comp_type')}>
+          <Field label="Pay Unit Type" required error={fieldError('pay_comp_type')}>
             <Select
               name="pay_comp_type"
               value={values.pay_comp_type}
@@ -152,6 +154,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
           <CodeSelectField
             formik={formik}
             disabled={disabled}
+            required
             name="pay_comp_earn_ded"
             label="Earning / Deduction"
             parameter="PAY_COMPONENT_EAR_DED_CodeValue"
@@ -160,6 +163,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
           <CodeSelectField
             formik={formik}
             disabled={disabled}
+            required
             name="pay_comp_dependent"
             label="Pay Component Dependent"
             parameter="PAY_COMPONENT_DEPENDENT_CodeValue"
@@ -168,6 +172,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
           <CodeSelectField
             formik={formik}
             disabled={disabled}
+            required
             name="periodicity"
             label="Periodicity"
             parameter="PAY_COMPONENT_PERIODICITY_CodeValue"
@@ -176,6 +181,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
           <CodeSelectField
             formik={formik}
             disabled={disabled}
+            required
             name="attendance_dependency"
             descField="attendance_dependency_desc"
             label="Attendance Dependency"
@@ -194,6 +200,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
           <CodeSelectField
             formik={formik}
             disabled={disabled}
+            required
             name="pay_flag"
             descField="pay_flag_desc"
             label="Pay Unit Category"
@@ -209,7 +216,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
             parameter="PAY_COMPONENT_ROUND_OFF_CodeValue"
           />
 
-          <Field label="Leave Paid" error={fieldError('leave_paid')}>
+          <Field label="Leave Paid" required error={fieldError('leave_paid')}>
             <Select
               name="leave_paid"
               value={values.leave_paid}
@@ -244,6 +251,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
           <CodeSelectField
             formik={formik}
             disabled={disabled}
+            required
             name="status"
             descField="status_desc"
             label="Status"
