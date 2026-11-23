@@ -402,7 +402,7 @@ export default function PurchaseInvoiceListing() {
             preview.ready({
                 html,
                 filename: `purchase_invoice_listing_${new Date().toISOString().slice(0, 10)}`,
-                orientation: "landscape",
+              orientation: "portrait",
                 onExcel: async () => {
                     await getPurchaseInvoiceListingReportExcel(params);
                 },

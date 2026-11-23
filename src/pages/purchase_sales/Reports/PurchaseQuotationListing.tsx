@@ -447,7 +447,7 @@ export default function PurchaseQuotationListing() {
             preview.ready({
                 html,
                 filename: `purchase_quotation_register_${new Date().toISOString().slice(0, 10)}`,
-                orientation: "landscape",
+               orientation: "portrait",
                 onExcel: async () => {
                     await getPurchaseQuotationRegisterReportExcel(params);
                 },

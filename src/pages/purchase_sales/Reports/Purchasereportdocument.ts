@@ -67,10 +67,19 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     if (table) {
       const holder = table.closest(".group") || table;
       const wrap = doc.createElement("div");
-      const titleText = doc.querySelector(".pl-title, .report-title, .doc-title")?.textContent?.trim();
+            const titleEl = doc.querySelector(".pl-title, .report-title, .doc-title");
+      const titleText = titleEl?.textContent?.trim();
       if (titleText) {
         const h1 = doc.createElement("h1");
-        h1.textContent = titleText;
+        if (titleEl?.classList.contains("pls-title")) {
+        
+          h1.className = "center";
+          const u = doc.createElement("u");
+          u.textContent = titleText.toUpperCase();
+          h1.append(u);
+        } else {
+          h1.textContent = titleText;
+        }
         wrap.append(h1);
       }
       wrap.append(holder);
@@ -214,13 +223,22 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     } else if (table.classList.contains("pr-items-landscape")) {
       widths = ["4%", "15%", "8%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
     }
+
+    else if (table.classList.contains("pi-items-tax")) {
+  // Purchase Invoice Tax: S.No | Product | Unit | Qty | Rate | Disc | Amount | VAT % | Tax Amt | Amount (Inc. Tax)
+  widths = ["5%", "30%", "5%", "6%", "9%", "8%", "9%", "6%", "9%", "13%"];
+}
+else if (table.classList.contains("pi-items")) {
+  // Purchase Invoice: S.No | Product/Description | Unit | Qty | Unit Rate | Disc | Amount
+  widths = ["7%", "49%", "6%", "8%", "10%", "9%", "11%"];
+}
     else if (table.classList.contains("si-items")) {
       // S.No | Product/Description | Unit | Qty | Unit Rate | Disc | Amount
-      widths = ["6%", "41%", "6%", "9%", "10%", "13%", "15%"];
+      widths = ["7%", "53%", "6%", "6%", "10%", "8%", "10%"];
       //  widths = ["8%", "32%", "8%", "10%", "14%", "13%", "15%"];
     } else if (table.classList.contains("si-items-tax")) {
       // S.No | Product | Unit | Qty | Rate | Disc | Amount | VAT % | Tax Amt | Amount (Inc. Tax)
-      widths = ["5%", "26%", "5%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
+      widths = ["4%", "37%", "5%", "5%", "7%", "7%", "8%", "6%", "9%", "12%"];
       //  widths = ["6%", "24%", "6%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
     } else if (table.classList.contains("pr-reg-summary")) {
       // Request No | Request Date | Create User | Description | Currency | EX Rate | Amount
@@ -230,15 +248,63 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
       // Sr No | Item Code | Item Description | Rate | Qty | Currency | EX Rate | Amount
       widths = ["7%", "14%", "30%", "11%", "9%", "10%", "8%", "11%"];
     }
-    else if (table.classList.contains("dn-items")) {
+       else if (table.classList.contains("dn-items")) {
       // S.No | Product / Description | Unit | Qty
-      widths = ["8%", "62%", "12%", "18%"];
+      widths = ["8%", "68%", "12%", "12%"];
+
+      
+    }
+    
+    else if (table.classList.contains("pq-items-tax")) {
+  // Quotation With Rates: Product | P Qty | L Qty | Net Qty | Unit Rate | Disc | Amount | Tax
+  widths = ["40%", "7%", "7%", "9%", "10%", "9%", "10%", "8%"];
+}
+else if (table.classList.contains("pq-items")) {
+  // Quotation: Product | P Qty | L Qty | Net Qty | Unit Rate | Disc | Amount
+  widths = ["46%", "8%", "8%", "9%", "10%", "9%", "10%"];
+}
+else if (table.classList.contains("por-items")) {
+  // PO Register: Product | Required Date | Remarks | P.O Qty | UOM
+  widths = ["30%", "15%", "35%", "12%", "8%"];
+}
+else if (table.classList.contains("pil-items")) {
+  // PI Listing: Product | UOM | Qty | Unit Rate | Disc | Amount | VAT % | Tax Amt | Total
+  widths = ["26%", "6%", "8%", "11%", "10%", "12%", "7%", "10%", "10%"];
+}
+else if (table.classList.contains("grl-items")) {
+  // GRN Listing: Product | PUOM | P. Qty | LUOM | L. Qty | Net Qty
+  widths = ["44%", "8%", "13%", "8%", "13%", "14%"];
+}
+else if (table.classList.contains("sdl-items")) {
+  // SDN Listing: Product / Description | Unit | Qty
+  widths = ["66%", "14%", "20%"];
+}
+else if (table.classList.contains("so-items")) {
+  // SO Listing: Product | Unit | Qty | Unit Rate | Disc | Amount
+  widths = ["40%", "9%", "12%", "13%", "12%", "14%"];
+}
+else if (table.classList.contains("pqr-items")) {
+  // PQ Register: Product | UOM | Qty | Unit Rate | Disc Amt | Amount
+  widths = ["38%", "8%", "12%", "14%", "13%", "15%"];
+}
+else if (table.classList.contains("pls-inv")) {
+  // P&L Summary (Invoice wise): Inv No | Date | Qty | Customer | Sales Value | Cost Value | Profit
+  widths = ["17%", "10%", "8%", "29%", "12%", "12%", "12%"];
+}
+else if (table.classList.contains("pls-std")) {
+  // P&L Summary (Customer / Salesman / Group wise): Code | Name | Sales Value | Cost Value | Profit
+  widths = ["18%", "34%", "16%", "16%", "16%"];
+}
+    
+    else if (table.classList.contains("gr-items")) {
+      // GRN: S.No | Product | PUOM | P. Qty | LUOM | L. Qty | Net Qty
+      widths = ["7%", "49%", "9%", "8%", "8%", "8%", "11%"];
     } else if (table.classList.contains("po-items-ext")) {
   // S.No | Product | Unit | Qty | Unit Rate | Gross Value | Disc % | Disc | Tax % | Grand Total
   widths = ["5%", "33%", "6%", "6%", "9%", "10%", "7%", "8%", "7%", "9%"];
 } else if (table.classList.contains("po-items")) {
   // S.No | Product | Unit | Qty | Unit Rate | Gross Value | Disc
- widths = ["8%", "36%", "8%", "10%", "12%", "14%", "12%"];
+ widths = ["8%", "45%", "7%", "8%", "10%", "12%", "10%"];
 }
     else if (table.classList.contains("cr-history")) {
       // S.No | Action | By | Date & Time | Level | Next Action By | Remarks
@@ -300,10 +366,12 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
           ? "titleLine"
           : (table.classList.contains("si-top-line") || table.classList.contains("si-top-cancel"))
             ? "blueLine"
-            : (table.classList.contains("po-terms") || table.classList.contains("po-items") || table.classList.contains("po-grid"))
-              ? "poTermsBox"
-              : (table.classList.contains("po-kv-to") || table.classList.contains("po-kv-details"))
-                ? "poKvBox"
+                       : table.classList.contains("gr-tight")
+              ? ((table.classList.contains("po-kv-to") || table.classList.contains("po-kv-details")) ? "poKvBoxTight" : "poTermsBoxTight")
+              : (table.classList.contains("po-terms") || table.classList.contains("po-items") || table.classList.contains("po-grid"))
+                ? "poTermsBox"
+                : (table.classList.contains("po-kv-to") || table.classList.contains("po-kv-details"))
+                  ? "poKvBox"
                 : table.classList.contains("pr-kv-box")
                   ? "kvBox"
                   : table.classList.contains("pr-title-tight")
@@ -383,7 +451,8 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
   const companyName = company?.name || identity.company;
   const address = company?.address || [];
   const branded = Boolean(company);
-  const pageOrientation = report.orientation || (prepared.maxColumns > 6 ? "landscape" : "portrait");
+const forcePortrait = !!prepared.doc.querySelector("table.pq-items, table.pqr-items");
+const pageOrientation = forcePortrait ? "portrait" : (report.orientation || (prepared.maxColumns > 6 ? "landscape" : "portrait"));
   const landscape = pageOrientation === "landscape";
   // PAMS Employee Listing: very compact rows so ~100 employees fit on one A4 page
   const compact = !!prepared.doc.querySelector("table.el-listing");
@@ -394,7 +463,7 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
     defaultStyles: {
       h1: { fontSize: 13, bold: true, color: "#00378c", marginBottom: 2 },
       h2: { fontSize: 10.5, bold: true, color: "#00378c", marginBottom: 3 },
-      h3: { fontSize: 9, bold: true, color: "#00378c", marginBottom: 2 },
+      h3: { fontSize: 6, bold: true, color: "#00378c", marginBottom: 2 },
       p: { margin: [0, 1, 0, 3] },
       td: { margin: compact ? [0, 0, 0, 0] : [1, 1.5, 1, 1.5] },
       th: { bold: true, color: "#00378c", fillColor: "#eaf0f8", margin: compact ? [0, 1, 0, 1] : [1, 2.5, 1, 2.5] },
@@ -509,6 +578,7 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
     "filter-summary": { fontSize: 8, color: "#475569", margin: [0, 4, 0, 6] },
     signature: { margin: [0, 14, 0, 0], alignment: "right" },
     empty: { margin: [0, 12, 0, 12], alignment: "center", color: "#64748b" },
+     "po-reg-title": { margin: [0, 3, 0, 6] },
   };
 
 
@@ -678,6 +748,30 @@ export async function createPurchasePdf(report: PurchaseReportDocument, identity
       paddingRight: () => 4,
       paddingTop: () => 1,
       paddingBottom: () => 1,
+      fillColor: (rowIndex: number) => (rowIndex === 0 ? "#eaf0f8" : null),
+    },
+
+        poTermsBoxTight: {
+      hLineWidth: () => 0.75,
+      vLineWidth: () => 0.75,
+      hLineColor: () => "#4a6fa5",
+      vLineColor: () => "#4a6fa5",
+      paddingLeft: () => 6,
+      paddingRight: () => 6,
+      paddingTop: () => 1,
+      paddingBottom: () => 1,
+      fillColor: (rowIndex: number) => (rowIndex === 0 ? "#eaf0f8" : null),
+    },
+
+    poKvBoxTight: {
+      hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length ? 0.75 : 0),
+      vLineWidth: (i: number, node: any) => (i === 0 || i === node.table.widths.length ? 0.75 : 0),
+      hLineColor: () => "#cbd5e1",
+      vLineColor: () => "#cbd5e1",
+      paddingLeft: () => 6,
+      paddingRight: () => 4,
+      paddingTop: () => 0.5,
+      paddingBottom: () => 0.5,
       fillColor: (rowIndex: number) => (rowIndex === 0 ? "#eaf0f8" : null),
     },
 
