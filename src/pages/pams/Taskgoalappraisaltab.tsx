@@ -33,9 +33,10 @@ const S = {
   table: { width: "100%", borderCollapse: "collapse" as const, tableLayout: "fixed" as const },
   th: { background: "#f8f8f8", borderBottom: "1px solid #ddd", borderRight: "1px solid #eee", padding: "8px 10px", textAlign: "left" as const, fontWeight: 600, fontSize: "11px", color: "#333", position: "sticky" as const, top: 0, zIndex: 1, whiteSpace: "nowrap" as const },
   td: { borderBottom: "1px solid #eee", padding: "8px 10px", verticalAlign: "middle" as const, background: "#fff" },
-  tdPinned: { borderTop: "2px solid #ddd", padding: "8px 10px", background: "#f8f8f8", fontWeight: 600, fontSize: "11px", position: "sticky" as const, bottom: 0, zIndex: 2 },
+  tdPinned: { borderTop: "2px solid #ddd", padding: "8px 10px", background: "#f8f8f8", fontWeight: 600, fontSize: "12px", position: "sticky" as const, bottom: 0, zIndex: 2 },
   ratingSelect: { width: "70px", border: "1px solid #ccc", borderRadius: "4px", padding: "3px 6px", fontSize: "11px", textAlign: "center" as const, outline: "none", backgroundColor: "#fff", cursor: "pointer" },
-  totalGreen: { color: "#2e7d32", fontWeight: 600 },
+  totalGreen: { color: "#1e9b22", fontWeight: 600 },
+  totalBlue: { color: "#1976d2", fontWeight: 600, fontSize: "12px" },
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
 };
 
@@ -90,6 +91,10 @@ const TaskGoalAppraisalTab: React.FC<Props> = ({
   return Math.round(t);   
 }, [rows, rowStates]);
 
+const totalWeightage = useMemo(
+  () => rows.reduce((sum, row) => sum + num(row.STANDARD_WEIGHTAGE), 0),
+  [rows]
+);
 
   useEffect(() => {
     if (onGrandTotalChange) onGrandTotalChange(grandTotal);
@@ -158,12 +163,16 @@ const TaskGoalAppraisalTab: React.FC<Props> = ({
           })}
         </tbody>
         <tfoot>
-          <tr>
-            <td style={S.tdPinned} /><td style={S.tdPinned}>Total</td>
-            <td style={S.tdPinned} /><td style={S.tdPinned} />
-            <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalGreen }}>{grandTotal}</td>
-          </tr>
-        </tfoot>
+  <tr>
+    <td style={S.tdPinned} />
+    <td style={S.tdPinned}>Total</td>
+    <td style={{ ...S.tdPinned, textAlign: "center", color: totalWeightage === 100 ? "#4135dc" : "#c62828" }}>
+      {totalWeightage}
+    </td>
+    <td style={S.tdPinned} />
+   <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalBlue }}>{grandTotal}</td>
+  </tr>
+</tfoot>
       </table>
     </div>
   );
