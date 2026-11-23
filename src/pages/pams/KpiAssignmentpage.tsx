@@ -17,6 +17,9 @@ import { useToast } from "../../components/ui/AlertToast";
 
 type Row = Record<string, unknown>;
 
+// Q4 se aage ke periods par Skill exactly itne hone chahiye
+const SKILL_REQUIRED_COUNT = 4;
+
 // ═══════════════════════════════════════════════════════════════════
 // MAIN PAGE — KPI Assignment
 // ═══════════════════════════════════════════════════════════════════
@@ -50,6 +53,8 @@ export function KpiAssignmentPage() {
   const [processAllPreviewOpen, setProcessAllPreviewOpen] = useState(false);
   const [processAllConfirmOpen, setProcessAllConfirmOpen] = useState(false);
   const [processAllTargets, setProcessAllTargets] = useState<Row[]>([]);
+  // NEW: Process All me kaun se employees selected hain (default sab selected)
+  const [processAllSelected, setProcessAllSelected] = useState<Record<string, boolean>>({});
   const [processAllLoading, setProcessAllLoading] = useState(false);
   const [hasSameDesgEmployees, setHasSameDesgEmployees] = useState(false);
   const [checkingDesg, setCheckingDesg] = useState(false);
@@ -71,8 +76,23 @@ export function KpiAssignmentPage() {
         : selectedType === "CHARACTERISTICS" ? "Characteristic"
           : "KPI";
 
-
   const canEditRow = true;
+
+  // NEW: Process All me jo employees tick hain
+  const processAllSelectedTargets = useMemo(
+    () => processAllTargets.filter((t) => processAllSelected[text(t.EMPLOYEE_CODE)]),
+    [processAllTargets, processAllSelected]
+  );
+  const allProcessAllChecked =
+    processAllTargets.length > 0 &&
+    processAllSelectedTargets.length === processAllTargets.length;
+
+  const toggleProcessAllAll = () => {
+    const next = !allProcessAllChecked;
+    setProcessAllSelected(
+      Object.fromEntries(processAllTargets.map((t) => [text(t.EMPLOYEE_CODE), next]))
+    );
+  };
 
   useEffect(() => {
     if (!selectedPeriod) {
@@ -122,36 +142,36 @@ export function KpiAssignmentPage() {
   }, [loginid, companyCode, selectedPeriod, toast]);
 
   const loadAssignments = async () => {
-  if (!selectedEmployee || !selectedType || !selectedPeriod) return;
-  const seq = ++loadSeqRef.current;
-  setLoading(true);
-  try {
-    await pamsSelect({
-      parameter: "populate_dept_kpi", loginid,
-      code1: companyCode, code2: selectedEmployee,
-      code3: selectedType, code4: selectedPeriod,
-    });
-    await pamsSelect({
-      parameter: "populate_new_dept_kpi", loginid,
-      code1: companyCode, code2: selectedEmployee,
-      code3: selectedType, code4: selectedPeriod,
-    });
-    const data = await pamsSelect({
-      parameter: "kpi_assignment_page", loginid,
-      code1: companyCode, code2: selectedType,
-      code3: selectedEmployee, code4: selectedPeriod,
-    });
-    if (seq !== loadSeqRef.current) return; // purana response ignore
-    setRows(data.map(normalizeRow));
-    setExpandedRows({});
-  } catch (error) {
-    if (seq !== loadSeqRef.current) return;
-    toast.error(error instanceof Error ? error.message : "Unable to load assignments");
-    setRows([]);
-  } finally {
-    if (seq === loadSeqRef.current) setLoading(false);
-  }
-};
+    if (!selectedEmployee || !selectedType || !selectedPeriod) return;
+    const seq = ++loadSeqRef.current;
+    setLoading(true);
+    try {
+      await pamsSelect({
+        parameter: "populate_dept_kpi", loginid,
+        code1: companyCode, code2: selectedEmployee,
+        code3: selectedType, code4: selectedPeriod,
+      });
+      await pamsSelect({
+        parameter: "populate_new_dept_kpi", loginid,
+        code1: companyCode, code2: selectedEmployee,
+        code3: selectedType, code4: selectedPeriod,
+      });
+      const data = await pamsSelect({
+        parameter: "kpi_assignment_page", loginid,
+        code1: companyCode, code2: selectedType,
+        code3: selectedEmployee, code4: selectedPeriod,
+      });
+      if (seq !== loadSeqRef.current) return; // purana response ignore
+      setRows(data.map(normalizeRow));
+      setExpandedRows({});
+    } catch (error) {
+      if (seq !== loadSeqRef.current) return;
+      toast.error(error instanceof Error ? error.message : "Unable to load assignments");
+      setRows([]);
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedEmployee && selectedType && selectedPeriod) void loadAssignments();
@@ -196,20 +216,60 @@ export function KpiAssignmentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee, selectedPeriod, companyCode, loginid]);
 
+  // ─────────────────────────────────────────────────────────────
+  // Validation: period table ka VALIDATION_REQUIRED = 'Y' ho tab hi
+  // Task 100%, Skill = SKILL_REQUIRED_COUNT, Goal 100%
+  // ─────────────────────────────────────────────────────────────
+  const validateAssignments = async (): Promise<string | null> => {
+    const periodRows = (
+      await pamsSelect({ parameter: "period", loginid, code1: companyCode })
+    ).map(normalizeRow);
+    const cur = periodRows.find((p) => text(p.PERIOD_NUMBER) === selectedPeriod);
+    if (text(cur?.VALIDATION_REQUIRED).toUpperCase() !== "Y") return null;
+
+    const fetchType = async (type: string) => {
+      await pamsSelect({
+        parameter: "populate_dept_kpi", loginid,
+        code1: companyCode, code2: selectedEmployee,
+        code3: type, code4: selectedPeriod,
+      });
+      const data = await pamsSelect({
+        parameter: "kpi_assignment_page", loginid,
+        code1: companyCode, code2: type,
+        code3: selectedEmployee, code4: selectedPeriod,
+      });
+      return data.map(normalizeRow);
+    };
+    const sumWt = (list: Row[]) =>
+      list.reduce((s, r) => s + number(r.WEIGHTAGE || r.STANDARD_WEIGHTAGE), 0);
+
+    const kpiRows = await fetchType("KPI");
+    const skillRows = await fetchType("SKILL");
+    const goalRows = await fetchType("GOAL");
+
+    const errors: string[] = [];
+    if (sumWt(kpiRows) !== 100)
+      errors.push(`Task weightage is ${sumWt(kpiRows)}% (must be 100%)`);
+    if (skillRows.length !== SKILL_REQUIRED_COUNT)
+      errors.push(`Skill count is ${skillRows.length} (must be exactly ${SKILL_REQUIRED_COUNT})`);
+    if (sumWt(goalRows) !== 100)
+      errors.push(`Goal weightage is ${sumWt(goalRows)}% (must be 100%)`);
+
+    return errors.length ? errors.join(" | ") : null;
+  };
 
   const process = async () => {
     if (!selectedPeriod) { toast.warning("Select a period first"); return; }
     if (!selectedEmployee) { toast.warning("Select an employee first"); return; }
 
-    if (showWeightage && totalWeightage !== 100) {
-      toast.error(
-        `Total weightage is ${totalWeightage}%. It must be exactly 100% to process.`
-      );
-      return;
-    }
-
     setSaving(true);
     try {
+      const validationError = await validateAssignments();
+      if (validationError) {
+        toast.error(validationError);
+        return; // finally block saving ko false kar deta hai
+      }
+
       await pamsCommonProcedure({
         parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
         loginid,
@@ -250,7 +310,6 @@ export function KpiAssignmentPage() {
     }
   };
 
-
   const openProcessAllPreview = async () => {
     if (!selectedPeriod) {
       toast.warning("Select a period first");
@@ -261,15 +320,14 @@ export function KpiAssignmentPage() {
       return;
     }
 
-    if (showWeightage && totalWeightage !== 100) {
-      toast.error(
-        `Total weightage is ${totalWeightage}%. It must be exactly 100% to process all.`
-      );
-      return;
-    }
-
     setProcessAllLoading(true);
     try {
+      const validationError = await validateAssignments();
+      if (validationError) {
+        toast.error(validationError);
+        return; // finally block loading ko false kar deta hai
+      }
+
       const data = await pamsSelect({
         parameter: "employees_with_same_desg",
         loginid,
@@ -284,6 +342,10 @@ export function KpiAssignmentPage() {
       );
 
       setProcessAllTargets(pending);
+      // NEW: by default sab employees selected
+      setProcessAllSelected(
+        Object.fromEntries(pending.map((t) => [text(t.EMPLOYEE_CODE), true]))
+      );
       setProcessAllPreviewOpen(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to load target employees");
@@ -294,6 +356,13 @@ export function KpiAssignmentPage() {
 
   const runProcessAll = async () => {
     if (!selectedEmployee || !selectedPeriod) return;
+
+    // NEW: sirf selected employees
+    const targets = processAllSelectedTargets;
+    if (targets.length === 0) {
+      toast.warning("Select at least one employee");
+      return;
+    }
 
     setProcessAllConfirmOpen(false);
     setSaving(true);
@@ -321,7 +390,7 @@ export function KpiAssignmentPage() {
 
       const copiedTargets: string[] = [];
 
-      for (const target of processAllTargets) {
+      for (const target of targets) {
         const targetEmp = text(target.EMPLOYEE_CODE);
         if (!targetEmp) continue;
 
@@ -388,7 +457,7 @@ export function KpiAssignmentPage() {
           });
           okCount++;
         } catch (err) {
-          const target = processAllTargets.find(
+          const target = targets.find(
             (t) => text(t.EMPLOYEE_CODE) === targetEmp
           );
           const msg = err instanceof Error ? err.message : "Unknown error";
@@ -425,6 +494,7 @@ export function KpiAssignmentPage() {
       setSelectedEmployeeLabel("");
       setRows([]);
       setProcessAllTargets([]);
+      setProcessAllSelected({});
       setProcessAllPreviewOpen(false);
       setHasSameDesgEmployees(false);
     } catch (err) {
@@ -433,7 +503,6 @@ export function KpiAssignmentPage() {
       setSaving(false);
     }
   };
-
 
   const openAddKpi = () => {
     if (!selectedEmployee) {
@@ -467,7 +536,7 @@ export function KpiAssignmentPage() {
         code4: selectedEmployee,
         code5: kpiCode,
         code6: text(deleteTarget.ITEM_TYPE) || selectedType,
-code7: text(deleteTarget.PERIOD_NUMBER) || selectedPeriod,
+        code7: text(deleteTarget.PERIOD_NUMBER) || selectedPeriod,
       });
 
       setDeleteTarget(null);
@@ -655,11 +724,8 @@ code7: text(deleteTarget.PERIOD_NUMBER) || selectedPeriod,
               loadOptions={async () => availableEmployees as LookupRow[]}
               onChange={(value, row) => {
                 setSelectedEmployee(value);
-                setSelectedEmployeeLabel(
-                  row
-                    ? [value, text(row.EMP_NAME || row.RPT_NAME)].filter(Boolean).join(" - ")
-                    : value
-                );
+                // FIX: code ek hi baar dikhe
+                setSelectedEmployeeLabel(row ? buildEmployeeLabel(value, row) : value);
               }}
             />
           </Field>
@@ -1001,14 +1067,14 @@ code7: text(deleteTarget.PERIOD_NUMBER) || selectedPeriod,
             </Button>
             <Button
               variant="default"
-              disabled={processAllTargets.length === 0}
+              disabled={processAllSelectedTargets.length === 0}
               onClick={() => {
                 setProcessAllPreviewOpen(false);
                 setProcessAllConfirmOpen(true);
               }}
               className="bg-emerald-600 hover:bg-emerald-700"
             >
-              <CheckCircle2 size={15} /> Proceed ({processAllTargets.length})
+              <CheckCircle2 size={15} /> Proceed ({processAllSelectedTargets.length})
             </Button>
           </>
         }
@@ -1019,9 +1085,9 @@ code7: text(deleteTarget.PERIOD_NUMBER) || selectedPeriod,
               Source employee: {selectedEmployeeLabel || selectedEmployee}
             </p>
             <p className="m-0 mt-1">
-              This employee's KPI will be copied to all employees below who have the{" "}
+              This employee's KPI will be copied to the selected employees below who have the{" "}
               <strong>same designation</strong> and don't have an appraisal document yet
-              for <strong>{selectedPeriod}</strong>.
+              for <strong>{selectedPeriod}</strong>. Untick any employee you want to skip.
             </p>
           </div>
 
@@ -1034,6 +1100,14 @@ code7: text(deleteTarget.PERIOD_NUMBER) || selectedPeriod,
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-slate-100">
                   <tr>
+                    <th className="w-10 px-2 py-1.5 text-left">
+                      <input
+                        type="checkbox"
+                        checked={allProcessAllChecked}
+                        onChange={toggleProcessAllAll}
+                        title={allProcessAllChecked ? "Deselect all" : "Select all"}
+                      />
+                    </th>
                     <th className="px-2 py-1.5 text-left">#</th>
                     <th className="px-2 py-1.5 text-left">Employee Code</th>
                     <th className="px-2 py-1.5 text-left">Name</th>
@@ -1041,18 +1115,31 @@ code7: text(deleteTarget.PERIOD_NUMBER) || selectedPeriod,
                   </tr>
                 </thead>
                 <tbody>
-                  {processAllTargets.map((r, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="px-2 py-1.5">{i + 1}</td>
-                      <td className="px-2 py-1.5 font-mono">
-                        {text(r.EMPLOYEE_CODE)}
-                      </td>
-                      <td className="px-2 py-1.5">{text(r.RPT_NAME)}</td>
-                      <td className="px-2 py-1.5">
-                        {text(r.DESG_CODE)} - {text(r.DESG_NAME)}
-                      </td>
-                    </tr>
-                  ))}
+                  {processAllTargets.map((r, i) => {
+                    const code = text(r.EMPLOYEE_CODE);
+                    return (
+                      <tr key={code || i} className="border-t">
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(processAllSelected[code])}
+                            onChange={(e) =>
+                              setProcessAllSelected((prev) => ({
+                                ...prev,
+                                [code]: e.target.checked,
+                              }))
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">{i + 1}</td>
+                        <td className="px-2 py-1.5 font-mono">{code}</td>
+                        <td className="px-2 py-1.5">{text(r.RPT_NAME)}</td>
+                        <td className="px-2 py-1.5">
+                          {text(r.DESG_CODE)} - {text(r.DESG_NAME)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1085,11 +1172,11 @@ code7: text(deleteTarget.PERIOD_NUMBER) || selectedPeriod,
           <AlertTriangle className="mt-0.5 shrink-0 text-emerald-600" size={20} />
           <div className="grid gap-1">
             <p className="m-0 text-sm font-semibold">
-              {processAllTargets.length} employee(s) will be processed
+              {processAllSelectedTargets.length} employee(s) will be processed
             </p>
             <p className="m-0 text-xs text-muted-foreground">
               KPI from <strong>{selectedEmployeeLabel || selectedEmployee}</strong> will be
-              copied to all listed employees, and appraisal documents will be created for
+              copied to all selected employees, and appraisal documents will be created for
               period <strong>{selectedPeriod}</strong>.
               <br />
               This action cannot be undone.
@@ -1280,6 +1367,12 @@ function KpiEditorModal({
       : [];
 
     if (needsActivities) {
+      // Task me kam se kam ek activity zaroori
+      if (finalActivities.length === 0) {
+        toast.warning("Add at least one activity for this task");
+        return;
+      }
+
       // Delimiter activity text me nahi aana chahiye, nahi to activity toot jayegi
       if (finalActivities.some((a) => a.includes(ITEM_DELIM))) {
         toast.error(`Activity me "${ITEM_DELIM}" character allowed nahi hai.`);
@@ -1710,6 +1803,15 @@ function text(v: unknown): string {
 function number(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+// NEW: "2016050397-MOHAMMED" ya "MOHAMMED" dono se sahi label: "2016050397 - MOHAMMED"
+// (code sirf ek baar)
+function buildEmployeeLabel(code: string, row: Row): string {
+  const raw = text(row.EMP_NAME || row.emp_name || row.RPT_NAME || row.rpt_name).trim();
+  const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const name = raw.replace(new RegExp(`^${escaped}\\s*-\\s*`), "").trim();
+  return name ? `${code} - ${name}` : code;
 }
 
 function formatValue(v: unknown): string {

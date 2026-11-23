@@ -1,9 +1,9 @@
 // src/pages/hr/SeparationInitiationPage.tsx
 //
 // HR Employee – Separation Initiation (port of the legacy PowerBuilder screen).
-// Design / code modelled on HolidayCalendarPage:
-//  • Freight-style header with Clear / Save
-//  • SectionPanel blocks using the in-house Input / Select / LookupField
+// Layout modelled on Employee Master → Employee Details (dense 5-column panels).
+//  • Freight-style header with status pill + "CODE - NAME" subtitle, Close / Clear / Save
+//  • Compact SectionPanel blocks using the in-house Input / Select / LookupField
 //  • toast feedback
 //  • ALL data access goes through executeWmsInboundSql (raw SQL), no dedicated endpoint
 //
@@ -17,7 +17,7 @@
 //  • Separation Reason lookup is blocked until an Employee is chosen (uof_chk_criteria)
 
 import { useCallback, useState } from "react";
-import { ClipboardList, RotateCcw, Save, UserMinus, Users, X} from "lucide-react";
+import { CalendarClock, ClipboardList, RotateCcw, Save, UserMinus, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { LookupField } from "../../components/ui/LookupField";
 import { Button } from "../../components/ui/Button";
@@ -28,6 +28,7 @@ import { executeWmsInboundSql } from "../../api/wms"; // adjust path to wherever
 import { getLookupValue } from "../../api/lookups";
 import { useAuth } from "../../state/AuthContext";
 import { useNavigate } from "react-router-dom";
+
 /* ─────────────────────────────────────────────────────────────
    Types / constants
    ───────────────────────────────────────────────────────────── */
@@ -219,30 +220,30 @@ function mapRowToForm(row: Row): SeparationForm {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Freight building blocks (same as Holiday Calendar / Grade / Product pages)
+   Compact building blocks (Employee Master style)
    ───────────────────────────────────────────────────────────── */
 function SectionPanel({
   title,
   icon: Icon,
   children,
+  className,
 }: {
   title: string;
   icon: LucideIcon;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={16} />
-          </span>
-          <div className="min-w-0">
-            <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-          </div>
-        </div>
+    <section
+      className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className ?? ""}`}
+    >
+      <div className="freight-panel-title flex items-center gap-2 border-b bg-muted/35 px-2.5 py-1.5">
+        <span className="freight-section-icon">
+          <Icon size={14} />
+        </span>
+        <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
       </div>
-      <div className="freight-panel-body p-3">{children}</div>
+      <div className="freight-panel-body px-2.5 py-2">{children}</div>
     </section>
   );
 }
@@ -259,15 +260,18 @@ function Field({
   className?: string;
 }) {
   return (
-    <label className={`freight-field-label group flex flex-col gap-0.5 ${className ?? ""}`}>
-      <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
+    <label className={`freight-field-label group flex min-w-0 flex-col gap-0.5 ${className ?? ""}`}>
+      <span className="text-[11px] font-medium text-muted-foreground transition-colors group-focus-within:text-primary">
         {label}
-        {required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
+        {required && <strong className="ml-0.5 font-bold text-destructive"> *</strong>}
       </span>
       {children}
     </label>
   );
 }
+
+/** Dense grid used by every panel: 1 → 2 → 5 columns, tight gaps. */
+const GRID = "grid grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-2 lg:grid-cols-5";
 
 /* ─────────────────────────────────────────────────────────────
    Page
@@ -277,8 +281,7 @@ export default function SeparationInitiationPage() {
   const { toast } = useToast();
   const companyCode = user?.company_code ?? "";
   const loginid = user?.loginid ?? "";
-  const companyName =
-    (user as { company_name?: string } | null)?.company_name || companyCode;
+  const companyName = (user as { company_name?: string } | null)?.company_name || companyCode;
 
   // criteria (top block)
   const [divCode, setDivCode] = useState("");
@@ -305,10 +308,12 @@ export default function SeparationInitiationPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
+
   const handleClose = () => {
     if (dirty && !window.confirm("You have unsaved changes. Close anyway?")) return;
     navigate("/workspace/hcm/hcm"); // HR dashboard
   };
+
   /* ── reset helpers ── */
   const resetRecord = useCallback(() => {
     setForm(emptyForm());
@@ -588,31 +593,34 @@ export default function SeparationInitiationPage() {
   /* ─────────────────────────────────────────────────────────── */
   return (
     <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
+      {/* Header (Employee Master style: title + status pill + CODE - NAME) */}
       <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
             <UserMinus size={15} />
           </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Separation Initiation</h1>
-              {hasEmployee && (
-                <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-blue-700">
-                  {isNew ? "New record" : "Existing record"}
-                </span>
-              )}
-              {dirty && (
-                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                  Unsaved changes
-                </span>
-              )}
-            </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Separation Initiation</h1>
+            {hasEmployee && (
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] font-medium leading-tight text-amber-700">
+                {isNew ? "New" : "Editing"}
+              </span>
+            )}
+            {hasEmployee && (
+              <span className="truncate text-sm text-muted-foreground">
+                {empCode} - {empDisplay}
+              </span>
+            )}
+            {dirty && (
+              <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] font-medium leading-tight text-blue-700">
+                Unsaved changes
+              </span>
+            )}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-           <Button type="button" size="sm" variant="outline" onClick={handleClose} disabled={saving}>
+          <Button type="button" size="sm" variant="outline" onClick={handleClose} disabled={saving}>
             <X size={14} /> Close
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={handleClear} disabled={busy}>
@@ -624,9 +632,9 @@ export default function SeparationInitiationPage() {
         </div>
       </div>
 
-      {/* Employee criteria */}
+      {/* Employee criteria — one row of 5 */}
       <SectionPanel title="Employee" icon={Users}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={GRID}>
           <Field label="Company" required>
             <Input type="text" value={companyName} readOnly />
           </Field>
@@ -688,7 +696,7 @@ export default function SeparationInitiationPage() {
             />
           </Field>
 
-          <Field label="Employee" required className="lg:col-span-2">
+          <Field label="Employee" required>
             <LookupField
               compact
               label=""
@@ -711,9 +719,9 @@ export default function SeparationInitiationPage() {
         </div>
       </SectionPanel>
 
-      {/* Separation details */}
+      {/* Separation details — one row of 5 */}
       <SectionPanel title="Separation Details" icon={ClipboardList}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={GRID}>
           <Field label="Request Date" required>
             <Input
               type="date"
@@ -746,7 +754,7 @@ export default function SeparationInitiationPage() {
             </Select>
           </Field>
 
-          <Field label="Separation Reason" required className="sm:col-span-2">
+          <Field label="Separation Reason" required>
             <LookupField
               compact
               label=""
@@ -773,9 +781,9 @@ export default function SeparationInitiationPage() {
         </div>
       </SectionPanel>
 
-      {/* Notice period & remarks */}
-      <SectionPanel title="Notice Period & Remarks" icon={ClipboardList}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Notice period & remarks — 5 + 3 fields, remarks spans the rest */}
+      <SectionPanel title="Notice Period & Remarks" icon={CalendarClock}>
+        <div className={GRID}>
           <Field label="In Notice Period">
             <Select
               value={form.inNoticePeriod}
@@ -847,13 +855,13 @@ export default function SeparationInitiationPage() {
             </Select>
           </Field>
 
-          <Field label="Remarks" className="sm:col-span-2 lg:col-span-4">
+          <Field label="Remarks" className="sm:col-span-2 lg:col-span-3">
             <textarea
-              rows={3}
+              rows={2}
               value={form.remarks}
               disabled={!hasEmployee}
               onChange={(e) => setField("remarks", e.target.value)}
-              className="w-full resize-y rounded-md border bg-background px-2 py-1.5 text-[12px] text-foreground outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full resize-none rounded-md border bg-background px-2 py-1.5 text-[12px] text-foreground outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
             />
           </Field>
         </div>
