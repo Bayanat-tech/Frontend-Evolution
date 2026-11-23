@@ -819,7 +819,7 @@ export function EdiImportPage({
                         {c.name}
                         {!c.nullable && <span className="text-red-600"> *</span>}
                       </div>
-                      <div className="font-normal text-[10.5px] text-slate-500">{c.typeLabel}</div>
+                      {/* <div className="font-normal text-[10.5px] text-slate-500">{c.typeLabel}</div> */}
                     </th>
                   ))}
                   <th className="w-10 border-b border-l border-slate-200 px-2 py-2" />
