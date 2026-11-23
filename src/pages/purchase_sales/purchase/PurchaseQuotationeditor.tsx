@@ -268,6 +268,7 @@ export function PurchaseQuotationEditor({
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           tx_cat_code: text(headerRaw.tx_cat_code || current.tx_cat_code),
           tx_compnt_perc_1: Number(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1 || 0),
+          pr_req_no: text(headerRaw.pr_req_no || current.pr_req_no),
           tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || current.tx_compntcat_code_1),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||

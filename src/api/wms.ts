@@ -252,9 +252,16 @@ export async function getAllStockAdjReports() {
   return getWmsStockAdjustment<{ reportid: string; reportname: string }[]>({ view: "reports" });
 }
 
-export async function getWmsMaster(master: string, options: WmsPagination & Record<string, unknown> = {}) {
+export async function getWmsMaster(
+  master: string,
+  options: WmsPagination & Record<string, unknown> = {},
+  companyCode?: string,
+) {
   const response = await api.get<ApiResponse<WmsMasterResponse>>(`/api/wms/${master}`, {
-    params: options,
+    params: {
+      ...options,
+      ...(companyCode ? { company_code: companyCode } : {}),
+    },
   });
   if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
   return response.data.data || { tableData: [], count: 0 };

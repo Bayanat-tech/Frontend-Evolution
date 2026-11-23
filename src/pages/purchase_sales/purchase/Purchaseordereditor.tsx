@@ -140,45 +140,43 @@ export function PurchaseOrderEditor({
     return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
   };
 
+  const prevHeaderTaxRef = useRef<{ type: string; cat: string } | null>(null);
+
   useEffect(() => {
-    // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (loading) return; // wait until saved lines are loaded
+    // Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
     if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
 
-    // CHANGED: from category list instead of hardcoded 5
+    const curType = form.tx_compnt_1_expmt || "";
+    const curCat = form.tx_cat_code || "";
+    const prev = prevHeaderTaxRef.current;
+    // true only when the HEADER Tax Type / Category really changed (not on load, not on line edits)
+    const headerTaxChanged = !!prev && (prev.type !== curType || prev.cat !== curCat);
+    prevHeaderTaxRef.current = { type: curType, cat: curCat };
+
     const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
 
     setRows((current) =>
-      current.map((row) => {
-        // Only reset % / amount when the Tax Type or Tax Category really changed for this line.
-        // On load (and when only the tax code changes) keep the saved line %.
-        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
-        const catChanged = (row.tx_cat_code || "") !== (form.tx_cat_code || ""); // ADDED
-        const taxChanged = typeChanged || catChanged; // ADDED
-
-        const updatedRow = {
-          ...row,
-
-          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
-          tx_cat_code: `${form.tx_cat_code || ""}`,
-          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxChanged ? taxPerc : row.tx_compnt_perc_1, // CHANGED
-          ...(taxChanged // CHANGED
-            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
-            : {}),
-        };
-
-        return updatedRow;
-      })
+      current.map((row) => ({
+        ...row,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        ...(headerTaxChanged
+          ? {
+              tx_cat_code: `${form.tx_cat_code || ""}`,
+              tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+              tx_compnt_perc_1: taxPerc,
+              tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100),
+            }
+          : {}),
+      }))
     );
-
-
   }, [
+    loading,
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
     form.tx_compnt_perc_1,
-    taxCats // ADDED
-
+    taxCats,
   ]);
 
   useEffect(() => {
@@ -300,7 +298,8 @@ export function PurchaseOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
-
+          pr_req_no: text(headerRaw.pr_req_no || current.pr_req_no),
+         tx_compnt_perc_1: Number(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1 || 0),
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
           discount_scoope:
@@ -309,6 +308,7 @@ export function PurchaseOrderEditor({
               ? headerRaw.discount_scoope
               : current.discount_scoope || "ITEM",
         }));
+        
 
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {

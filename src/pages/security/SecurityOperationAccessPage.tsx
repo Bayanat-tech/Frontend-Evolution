@@ -42,6 +42,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
   const [loading, setLoading] = useState(true);
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const permissionRequest = useRef(0);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   const isRoleMode = mode === "role";
@@ -61,13 +62,14 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
     [assignableScreens, selectedApp],
   );
   const selectedScreenRow = useMemo(
-    () => assignableScreens.find((screen) => String(screen.serial_no ?? "") === selectedScreen),
+    () => assignableScreens.find((screen) => String(screen.serial_no ?? "") === selectedScreen.split(",")[0]),
     [assignableScreens, selectedScreen],
   );
   const selectedPrincipalRow = useMemo(
     () => principalOptions.find((option) => String(option[isRoleMode ? "role_id" : "loginid"] ?? "") === selectedPrincipal),
     [isRoleMode, principalOptions, selectedPrincipal],
   );
+  const selectedScreenIds = selectedScreen.split(",").filter(Boolean);
   const canLoadPermissions = Boolean(selectedPrincipal && selectedScreen);
   const activePermissions = permissions || emptyPermissionRow();
 
@@ -89,30 +91,41 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
   };
 
   const loadPermissions = async (clearNotice = true) => {
+    const request = ++permissionRequest.current;
     if (!canLoadPermissions) {
       setPermissions(null);
       setHasExisting(false);
+      return;
+    }
+    if (selectedScreenIds.length > 1) {
+      setPermissions(emptyPermissionRow());
+      setHasExisting(true);
+      setPermissionLoading(false);
+      setNotice({ type: "info", message: "Choose the operations to apply to every selected screen. Saving replaces their direct permissions; unavailable operations stay disabled." });
       return;
     }
     setPermissionLoading(true);
     if (clearNotice) setNotice(null);
     try {
       const existing = await getExistingPermission(endpoint, mode, selectedPrincipal, selectedScreen);
+      if (request !== permissionRequest.current) return;
       if (existing) {
         setPermissions(normalizePermission(existing));
         setHasExisting(true);
         return;
       }
       const template = await getOperationTemplate(endpoint, selectedScreen);
+      if (request !== permissionRequest.current) return;
       setPermissions(normalizePermission(template?.[0] || emptyPermissionRow()));
       setHasExisting(false);
       setNotice({ type: "info", message: "No existing access found. Review the default screen operations and save to assign access." });
     } catch (error) {
+      if (request !== permissionRequest.current) return;
       setPermissions(emptyPermissionRow());
       setHasExisting(false);
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load operation access" });
     } finally {
-      setPermissionLoading(false);
+      if (request === permissionRequest.current) setPermissionLoading(false);
     }
   };
 
@@ -146,11 +159,25 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
     setSaving(true);
     setNotice(null);
     try {
-      const payload = buildPayload(mode, selectedPrincipal, selectedScreen, activePermissions, selectedScreenRow, user?.company_code);
-      await saveSecurityGm(endpoint, payload, hasExisting ? "put" : "post");
+      let completed = 0;
+      try {
+        for (const serial of selectedScreenIds) {
+          const row = assignableScreens.find((screen) => String(screen.serial_no) === serial);
+          const template = await getOperationTemplate(endpoint, serial);
+          const supported = normalizePermission(template?.[0] || emptyPermissionRow());
+          const values = { ...activePermissions };
+          for (const field of permissionFields)
+            if (String(supported[field.key]).toUpperCase() === "NA") values[field.key] = "NA";
+          const payload = buildPayload(mode, selectedPrincipal, serial, values, row, user?.company_code);
+          await saveSecurityGm(endpoint, payload, selectedScreenIds.length > 1 ? "post" : hasExisting ? "put" : "post");
+          completed++;
+        }
+      } catch (error) {
+        throw new Error(`Saved ${completed} of ${selectedScreenIds.length} screens. ${error instanceof Error ? error.message : "Please retry the remaining screens."}`);
+      }
       setHasExisting(true);
-      setNotice({ type: "success", message: `${title} saved successfully` });
       await loadPermissions(false);
+      setNotice({ type: "success", message: `Access saved for ${selectedScreenIds.length} screen(s)` });
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${title}` });
     } finally {
@@ -163,7 +190,8 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
     setSaving(true);
     setNotice(null);
     try {
-      await deleteSecurityGm(`${endpoint}/delete`, buildDeletePayload(mode, selectedPrincipal, selectedScreen));
+      if (!window.confirm(`Remove direct access to ${selectedScreenIds.length} selected screen(s)? Role permissions are managed separately.`)) return;
+      await deleteSecurityGm(`${endpoint}/delete`, { screen_details: selectedScreenIds.map((serial) => buildDeletePayload(mode, selectedPrincipal, serial).screen_details[0]) });
       setHasExisting(false);
       setPermissions(emptyPermissionRow());
       setNotice({ type: "success", message: `${title} deleted successfully` });
@@ -195,18 +223,17 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
                 <Icon size={20} />
               </span>
               <div>
-                <p className="eyebrow">Selection</p>
-                <h2 className="m-0 text-base font-semibold">Choose {principalLabel} And Screen</h2>
+                <h2 className="m-0 text-base font-semibold">Choose {principalLabel.toLowerCase()} and {isRoleMode ? "screen" : "screens"}</h2>
               </div>
             </div>
-            <Badge variant={hasExisting ? "default" : "secondary"}>{hasExisting ? "Existing Access" : "New Assignment"}</Badge>
+            <Badge variant={hasExisting ? "default" : "secondary"}>{selectedScreenIds.length > 1 ? `${selectedScreenIds.length} screens selected` : hasExisting ? "Existing Access" : "New Assignment"}</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid gap-3 pt-4 md:grid-cols-3">
           <label className="field">
             <span>{principalLabel}</span>
             <SearchablePicker
-              disabled={loading}
+              disabled={loading || saving}
               emptyText={`No ${principalLabel.toLowerCase()} found`}
               getLabel={(option) => formatPrincipal(option, isRoleMode)}
               getValue={(option) => String(option[isRoleMode ? "role_id" : "loginid"] ?? "")}
@@ -219,7 +246,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
           <label className="field">
             <span>Application</span>
             <SearchablePicker
-              disabled={loading}
+              disabled={loading || saving}
               emptyText="No application found"
               getLabel={(option) => String(option.app_code ?? "")}
               getValue={(option) => String(option.app_code ?? "")}
@@ -231,14 +258,15 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
             />
           </label>
           <label className="field">
-            <span>Screen</span>
+            <span>{isRoleMode ? "Screen" : "Screens · select one or more"}</span>
             <SearchablePicker
-              disabled={loading || !filteredScreens.length}
+              disabled={loading || saving || !filteredScreens.length}
               emptyText="No screen found"
               getLabel={formatScreen}
               getValue={(screen) => String(screen.serial_no ?? "")}
               options={filteredScreens}
               placeholder="Search screen"
+              multiple={!isRoleMode}
               value={selectedScreen}
               onChange={setSelectedScreen}
             />
@@ -250,7 +278,6 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
         <Card className="overflow-hidden">
           <CardHeader className="border-b">
             <div>
-              <p className="eyebrow">Operations</p>
               <h2 className="m-0 text-base font-semibold">Permission Matrix</h2>
             </div>
           </CardHeader>
@@ -295,21 +322,20 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
         <Card className="min-w-0 overflow-hidden">
           <CardHeader>
             <div>
-              <p className="eyebrow">Summary</p>
               <h2 className="m-0 text-base font-semibold">Selected Access</h2>
             </div>
           </CardHeader>
           <CardContent className="grid min-w-0 gap-3 text-sm">
             <SummaryRow label={principalLabel} value={selectedPrincipalRow ? formatPrincipal(selectedPrincipalRow, isRoleMode) : "Not selected"} />
             <SummaryRow label="App" value={selectedApp || String(selectedScreenRow?.app_code ?? "All")} />
-            <SummaryRow label="Screen" value={selectedScreenRow ? getScreenName(selectedScreenRow) : "Not selected"} />
+            <SummaryRow label="Screen" value={selectedScreenIds.length > 1 ? `${selectedScreenIds.length} screens selected` : selectedScreenRow ? getScreenName(selectedScreenRow) : "Not selected"} />
             <SummaryRow label="Company" value={String(selectedScreenRow?.company_code || user?.company_code || "")} />
             <div className="mt-2 grid gap-2">
               <Button className="w-full justify-center" disabled={!canLoadPermissions || saving || permissionLoading} onClick={saveAccess}>
-                <Save size={15} /> {saving ? "Saving..." : "Save Access"}
+                <Save size={15} /> {saving ? "Saving..." : selectedScreenIds.length > 1 ? `Save ${selectedScreenIds.length} screens` : "Save Access"}
               </Button>
               <Button className="w-full justify-center" disabled={!hasExisting || saving} variant="destructive" onClick={deleteAccess}>
-                <Trash2 size={15} /> Delete Access
+                <Trash2 size={15} /> Remove direct access
               </Button>
             </div>
           </CardContent>
@@ -334,14 +360,14 @@ async function getExistingPermission(endpoint: string, mode: "role" | "user", se
 async function getOperationTemplate(endpoint: string, selectedScreen: string) {
   try {
     return await getSecurityGm<PermissionRow[]>(`${endpoint}/${selectedScreen}`);
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : "Unable to load screen operations. Please retry.");
   }
 }
 
 function buildPayload(mode: "role" | "user", selectedPrincipal: string, selectedScreen: string, permissions: PermissionRow, screen: OptionRow | undefined, userCompany?: string) {
   const permissionValues = Object.fromEntries(permissionFields.map((field) => [field.key, String(permissions[field.key] ?? "N").toUpperCase()]));
-  const companyCode = String(permissions.company_code || screen?.company_code || userCompany || "");
+  const companyCode = String(userCompany || permissions.company_code || screen?.company_code || "");
   if (mode === "role") {
     return {
       role_id: Number(selectedPrincipal),
@@ -381,6 +407,7 @@ function SearchablePicker({
   emptyText,
   disabled,
   allowClear,
+  multiple,
   getValue,
   getLabel,
   onChange,
@@ -391,6 +418,7 @@ function SearchablePicker({
   emptyText: string;
   disabled?: boolean;
   allowClear?: boolean;
+  multiple?: boolean;
   getValue: (item: OptionRow) => string;
   getLabel: (item: OptionRow) => string;
   onChange: (value: string) => void;
@@ -401,12 +429,12 @@ function SearchablePicker({
   const pickerId = useRef(`picker-${Math.random().toString(36).slice(2)}`);
   const selected = options.find((item) => getValue(item) === value);
   const query = search.trim().toLowerCase();
-  const filtered = options
+  const matches = options
     .filter((item) => {
       if (!query) return true;
       return `${getValue(item)} ${getLabel(item)}`.toLowerCase().includes(query);
-    })
-    .slice(0, 100);
+    });
+  const filtered = matches.slice(0, 100);
 
   const close = () => {
     setOpen(false);
@@ -439,11 +467,13 @@ function SearchablePicker({
       <button
         type="button"
         disabled={disabled}
+        aria-expanded={open}
+        aria-haspopup="listbox"
         className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm text-foreground shadow-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
         onClick={() => open ? close() : openPicker()}
       >
         <span className={selected ? "min-w-0 truncate" : "min-w-0 truncate text-muted-foreground"}>
-          {selected ? getLabel(selected) : placeholder}
+          {multiple && value ? `${value.split(",").length} screens selected` : selected ? getLabel(selected) : placeholder}
         </span>
         <ChevronDown size={15} className="shrink-0 text-muted-foreground" />
       </button>
@@ -465,7 +495,12 @@ function SearchablePicker({
               }}
             />
           </label>
-          <div className="max-h-64 overflow-auto p-1">
+          {multiple && <div className="flex flex-wrap gap-2 border-b px-3 py-2">
+            <button type="button" className="text-sm font-semibold text-primary" onClick={() => onChange(Array.from(new Set([...value.split(",").filter(Boolean), ...matches.map(getValue)])).join(","))}>Select all matching ({matches.length})</button>
+            <button type="button" className="text-sm text-muted-foreground" onClick={() => onChange("")}>Clear selection</button>
+            <button type="button" className="ml-auto text-sm font-semibold text-primary" onClick={close}>Done</button>
+          </div>}
+          <div className="max-h-64 overflow-auto p-1" role="listbox" aria-multiselectable={multiple || undefined} aria-label={placeholder}>
             {allowClear && (
               <button
                 type="button"
@@ -482,14 +517,18 @@ function SearchablePicker({
             {filtered.length ? (
               filtered.map((item, index) => {
                 const optionValue = getValue(item);
-                const active = optionValue === value;
+                const active = multiple ? value.split(",").includes(optionValue) : optionValue === value;
                 return (
                   <button
                     type="button"
+                    role="option"
+                    aria-selected={active}
                     className={active ? "flex min-h-8 w-full items-center justify-between gap-2 rounded bg-primary/10 px-3 py-1.5 text-left text-sm font-semibold text-primary" : "flex min-h-8 w-full items-center justify-between gap-2 rounded px-3 py-1.5 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"}
                     onClick={() => {
-                      onChange(optionValue);
-                      close();
+                      if (multiple) {
+                        const ids = value.split(",").filter(Boolean);
+                        onChange((active ? ids.filter((id) => id !== optionValue) : [...ids, optionValue]).join(","));
+                      } else { onChange(optionValue); close(); }
                     }}
                     key={`${optionValue}_${index}`}
                   >
