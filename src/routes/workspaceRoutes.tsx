@@ -321,7 +321,11 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       match: ({ pathname }) => isPamsDashboardRoute(pathname),
       element: () => <PamsDashboard />,
     },
-
+    {
+      name : "HR Skills",
+      match : ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/general_master/source/skills"),
+      element : () => HrMasterPage({config : hrMasterConfigs.skills})
+    },
       {
       name: "HR Dashboard",
       // Matches exactly /workspace/hcm/hcm (ignoring trailing slashes)
@@ -1716,7 +1720,7 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
 
     {
       name: "HR Manpower Requisition",
-      match: (context) => isHrRoute(context) && isHrManpowerRequisitionRoute(context),
+      match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/forms/review_confirm_form"),
       element: () => <HrManpowerPage />,
     },
 
@@ -1763,47 +1767,47 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       element: () => <VacationSettlementPage />
     },
 
-    {
-    name: "HR Section Master",
-    match: (context) =>
-    isHrRoute(context) &&
-    isHrSectionMasterRoute(context),
-    element: () => (
-  <MasterWithReportPage config={{
-    title: "Section Master",
-    gridParameter: "MST_HR_MS_HR_SECTION",
-    reportUrl: "/api/wms/reports/section-master/html",
-    keyField: "section_code",
-    source: "dynamic",
-    gmEndpoint: "section",
-    fields: hrMasterConfigs.section.fields.filter((field) => field.table !== false),
-    defaults: hrMasterConfigs.section.defaults,
-    }} />
-    ),
-    },
+  //   {
+  //   name: "HR Section Master",
+  //   match: (context) =>
+  //   isHrRoute(context) &&
+  //   isHrSectionMasterRoute(context),
+  //   element: () => (
+  // <MasterWithReportPage config={{
+  //   title: "Section Master",
+  //   gridParameter: "MST_HR_MS_HR_SECTION",
+  //   reportUrl: "/api/wms/reports/section-master/html",
+  //   keyField: "section_code",
+  //   source: "dynamic",
+  //   gmEndpoint: "section",
+  //   fields: hrMasterConfigs.section.fields.filter((field) => field.table !== false),
+  //   defaults: hrMasterConfigs.section.defaults,
+  //   }} />
+  //   ),
+  //   },
 
-        {
-      name: "HR Formal Designation",
-      match: (context) => isHrRoute(context) && isHrFormalDesignationRoute(context),
-      element: () => (
-        <MasterWithReportPage config={{
-          title: "Formal Designation Master",
-          gridEndpoint: "formaldesignation", // 👈 Changed from gridParameter to gridEndpoint
-          reportUrl: "/api/wms/reports/formal-designation/html",
-          keyField: "labour_desg_code",
-          source: "gm",
-          gmEndpoint: "formaldesignation",
-          enableDelete: true,
-          fields: [
-            { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true },
-            { name: "labour_desg_name", label: "Formal Designation", required: true },
-            { name: "labour_desg_short_name", label: "Short Name" },
-            { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
-          ],
-          defaults: { status: "A" }
-        }} />
-      )
-    },
+    //     {
+    //   name: "HR Formal Designation",
+    //   match: (context) => isHrRoute(context) && isHrFormalDesignationRoute(context),
+    //   element: () => (
+    //     <MasterWithReportPage config={{
+    //       title: "Formal Designation Master",
+    //       gridEndpoint: "formaldesignation", // 👈 Changed from gridParameter to gridEndpoint
+    //       reportUrl: "/api/wms/reports/formal-designation/html",
+    //       keyField: "labour_desg_code",
+    //       source: "gm",
+    //       gmEndpoint: "formaldesignation",
+    //       enableDelete: true,
+    //       fields: [
+    //         { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true },
+    //         { name: "labour_desg_name", label: "Formal Designation", required: true },
+    //         { name: "labour_desg_short_name", label: "Short Name" },
+    //         { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
+    //       ],
+    //       defaults: { status: "A" }
+    //     }} />
+    //   )
+    // },
 
                 {
       name: "HR Category Master",

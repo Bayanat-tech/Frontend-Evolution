@@ -1,10 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Eye, Pencil, Plus, Printer } from "lucide-react";
+import { Eye, History, Pencil, Plus, Printer } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { DataTable } from "../../../components/ui/DataTable";
 import type { ToastNotice } from "../../../components/ui/NoticeToast";
 import { useAuth } from "../../../state/AuthContext";
 import { LeaveRequestDialog } from "./LeaveRequestDialog";
+import { LeaveLogPage } from "./LeaveLogPanel";
 import type { LeaveFlowKey } from "./leaveFlowConfig";
 import { DynamicQueryParams } from "../../../api/lookups";
 import { api } from "../../../api/client";
@@ -124,8 +125,9 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
   const [searchQuery, setSearchQuery] = useState("");
   const [notice, setNotice] = useState<ToastNotice>(null);
 
-  // Page state: "list" shows the grid, "editor" shows the leave form as a full page (like WMS masters)
-  const [view, setView] = useState<"list" | "editor">("list");
+  // Page state: "list" shows the grid, "editor" shows the leave form as a full page (like WMS masters),
+  // "log" shows the activity log of one request as a full page.
+  const [view, setView] = useState<"list" | "editor" | "log">("list");
   const [selectedRow, setSelectedRow] = useState<Row | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
 
@@ -237,6 +239,12 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     setSelectedRow(row);
     setIsReadOnly(false);
     setView("editor");
+  };
+
+  const handleOpenLog = (row: Row) => {
+    setSelectedRow(row);
+    setIsReadOnly(false);
+    setView("log");
   };
 
   const handleStartNew = () => {
@@ -422,7 +430,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
       {
         id: "actions",
         header: "ACTIONS",
-        size: 110,
+        size: 140,
         enableColumnFilter: false,
         cell: ({ row }) => {
           const tabKey = (row.original._inferredTab as LeaveFlowKey) || activeTab;
@@ -458,6 +466,17 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
               <button
                 type="button"
                 className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="View Log"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenLog(row.original);
+                }}
+              >
+                <History size={13} />
+              </button>
+              <button
+                type="button"
+                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                 title="Print Leave Request"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -475,10 +494,18 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
   );
 
   const editorOpen = view === "editor";
+  const logOpen = view === "log";
 
   return (
     <section className="leave-workspace-freight-view grid gap-2">
-      {editorOpen ? (
+      {logOpen ? (
+        /* ---------- LOG (full page, replaces the list) ---------- */
+        <LeaveLogPage
+          requestNumber={String(selectedRow?.REQUEST_NUMBER ?? selectedRow?.requestNumber ?? "")}
+          loginId={loginId}
+          onClose={closeEditor}
+        />
+      ) : editorOpen ? (
         /* ---------- EDITOR (full page, replaces the list like WMS masters) ---------- */
         <LeaveRequestDialog
           inline
@@ -498,7 +525,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
                 style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
               >
                 Leave Request Flow
-              </h2>
+              </h2> 
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {notice && (
