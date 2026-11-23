@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  ArrowLeft, Edit2, Eye, FileText, Plus, Printer, RefreshCw, Save, Trash2, X,
+  ArrowLeft, Edit2, Eye, FileText, Plus, Printer, RefreshCw, Save, Trash2, Upload, X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getHrReportHtml } from "../../api/hr";
@@ -12,6 +12,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { NewReportDialog } from "../../components/new_report_format";
 import { useAuth } from "../../state/AuthContext";
 import { AddGradeMasterForm, type GradeFormHandle } from "./Addgrademasterform";
+import { EdiImportPage } from "../../components/EdiImportPage";
 
 export type GradeRow = {
   company_code: string;
@@ -75,7 +76,7 @@ export function GradeMasterPage() {
   const [loading, setLoading] = useState(true);
 
   // view state
-  const [view, setView] = useState<"list" | "editor">("list");
+  const [view, setView] = useState<"list" | "editor" | "edi">("list");
   const [editorMode, setEditorMode] = useState<EditorMode>("add");
   const [activeGrade, setActiveGrade] = useState<GradeRow | null>(null);
   const [saving, setSaving] = useState(false);
@@ -318,6 +319,22 @@ export function GradeMasterPage() {
     />
   );
 
+  const handleCloseEdi = () => {
+  setView("list");
+  void loadRows(); // refresh the grid after import
+  };
+
+  /* ─────────── EDI IMPORT (Excel upload) ─────────── */
+  if (view === "edi") {
+    return (
+      <EdiImportPage
+        tableKey="GRADE"
+        title="EDI Import – Grade Master"
+        onClose={handleCloseEdi}
+      />
+    );
+  }
+
   /* ─────────────────────────────────────────────────────────
      EDITOR — Full-page, Freight-style header (with Save button)
      ───────────────────────────────────────────────────────── */
@@ -435,6 +452,16 @@ export function GradeMasterPage() {
         exportFilename="hr-grades-list.csv"
         toolbar={
           <div className="flex items-center gap-2">
+
+            <button
+              type="button"
+              onClick={() => setView("edi")}
+              title="Import grades from Excel"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Upload size={14} />
+              EDI Import
+            </button>
 
             <button
               type="button"

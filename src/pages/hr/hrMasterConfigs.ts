@@ -291,6 +291,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     ],
     defaults: { status: "A" },
     deleteMode: "master",
+    ediKey: "MAINBANK", // shows the Import button; must match a key in the procedure's table mapping
   },
 
   // ── Bank (branch) ──────────────────────────────────────────────────────────
@@ -719,6 +720,7 @@ hrbank: {
     ],
     defaults: { status: "A" },
     deleteMode: "master",
+    ediKey: "SKILLS",
   },
 
   document_types: {
