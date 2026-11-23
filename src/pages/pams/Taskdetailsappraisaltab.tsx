@@ -96,7 +96,9 @@ const S = {
     padding: "3px 6px", fontSize: "11px", textAlign: "center" as const,
     outline: "none", backgroundColor: "#fff", cursor: "pointer",
   },
-  totalGreen: { color: "#2e7d32", fontWeight: 700 },
+
+  totalGreen: { color: "#2e7d32", fontWeight: 600 },
+  totalBlue: { color: "#1976d2", fontSize: "12px", fontWeight: 700 },
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
   activityLine: { display: "flex", gap: "6px", padding: "2px 0", lineHeight: 1.4, alignItems: "flex-start" as const },
 
@@ -213,7 +215,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
     });
   };
 
- 
+
   return (
     <div style={S.wrapper}>
       <table style={S.table}>
@@ -328,7 +330,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
             <td style={S.tdPinned} />
 
             {/* Total column total */}
-            <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalGreen }}>
+            <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalBlue }}>
               {grandTotal}
             </td>
           </tr>

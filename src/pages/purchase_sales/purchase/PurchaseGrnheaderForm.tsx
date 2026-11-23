@@ -71,7 +71,7 @@ export function PurchaseGrnHeaderForm({
     setdetails,
     rows,
     calculateDiscount,
-      amountDecimals = 3,
+    amountDecimals = 3,
 
 }: {
     form: PurchaseOrderForm;
@@ -177,9 +177,9 @@ export function PurchaseGrnHeaderForm({
                                 label="Supplier*"
                                 value={form.ac_code}
                                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "city_name", header: "city" }]}
                                 valueField="ac_code"
-                                displayFields={["ac_code", "ac_name"]}
+                                displayFields={["ac_code", "ac_name", "city_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                                 disabled={headerAndLineDisabled}
                                 onChange={(value, row) =>
@@ -299,8 +299,9 @@ export function PurchaseGrnHeaderForm({
                                     value={String(form.po_doc_no ?? "")}
                                     displayValue={String(form.po_doc_no ?? "")}
                                     columns={[
-                                        { field: "po_doc_no", header: "GRN No" },
-                                        { field: "ac_code", header: "A/c Code" },
+                                        { field: "po_doc_date", header: "PO Date" },
+                                        { field: "po_doc_no", header: "PO No" },
+                                        { field: "party_name", header: "Supplier Name" },
                                     ]}
                                     valueField="po_doc_no"
                                     displayFields={["po_doc_no"]}

@@ -35,6 +35,7 @@ const S = {
   tdPinned: { borderTop: "2px solid #ddd", padding: "8px 10px", background: "#f8f8f8", fontWeight: 600, fontSize: "11px", position: "sticky" as const, bottom: 0, zIndex: 2 },
   ratingSelect: { width: "70px", border: "1px solid #ccc", borderRadius: "4px", padding: "3px 6px", fontSize: "11px", textAlign: "center" as const, outline: "none", backgroundColor: "#fff", cursor: "pointer" },
   totalGreen: { color: "#2e7d32", fontWeight: 600 },
+  totalBlue: { color: "#1976d2", fontWeight: 700, fontSize: "12px" },
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
 };
 
@@ -152,7 +153,7 @@ const TaskSkillAppraisalTab: React.FC<Props> = ({
           <tr>
             <td style={S.tdPinned} />
             <td style={S.tdPinned}>Total</td>
-            <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalGreen }}>{grandTotal}</td>
+            <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalBlue }}>{grandTotal}</td>
           </tr>
         </tfoot>
       </table>
