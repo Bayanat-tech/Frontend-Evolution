@@ -43,6 +43,7 @@ import { CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { QuickAddAccountModal, QuickAccountType, CreatedAccountResult } from "../../components/finance/QuickAddAccountModal";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
@@ -698,6 +699,15 @@ function CommercialEditor({
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [settledPaidAmount, setSettledPaidAmount] = useState<number>(0);
+  const [quickAddModal, setQuickAddModal] = useState<{
+    open: boolean;
+    accountType: QuickAccountType;
+    targetLineId: string | null;
+  }>({
+    open: false,
+    accountType: "general",
+    targetLineId: null,
+  });
 
   const [activeTab, setActiveTab] = useState<"lines" | "allocations">("lines");
   const [allocLoading, setAllocLoading] = useState(false);
@@ -1530,6 +1540,14 @@ const limitProps = (f: keyof FormState) => ({
                         displayFields={["ac_code", "ac_name"]}
                         loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
                         disabled={isCancelled || Boolean(settledPaidAmount > 0)}
+                        onQuickAdd={() => {
+                          setQuickAddModal({
+                            open: true,
+                            accountType: isSales ? "customer" : "supplier",
+                            targetLineId: null,
+                          });
+                        }}
+                        quickAddTooltip={isSales ? "Quick Add Customer Account" : "Quick Add Supplier Account"}
                         onChange={(value, row) => {
                           const r = row || {} as Record<string, unknown>;
                           const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -2146,6 +2164,14 @@ const limitProps = (f: keyof FormState) => ({
                             displayFields={["ac_code", "ac_name"]}
                             loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
                             disabled={isCancelled}
+                            onQuickAdd={() => {
+                              setQuickAddModal({
+                                open: true,
+                                accountType: "general",
+                                targetLineId: line.id,
+                              });
+                            }}
+                            quickAddTooltip="Quick Add Account"
                             onChange={(value, row) => updateLine(line.id, { ac_code: value, ac_name: text(getLookupValue(row || {}, "ac_name")) })}
                           />
                           {lineErrors[line.id]?.ac_code && (
@@ -2271,7 +2297,7 @@ const limitProps = (f: keyof FormState) => ({
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
                         <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" type="number" 
-                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(getAppDecimals())} /></td>
+                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(getAppDecimals(line.curr_code || form.curr_code))} /></td>
                        {showAllColumns && (
                         <td className="w-28 max-w-[115px] px-1 py-1">
                           <LookupField
@@ -2597,6 +2623,27 @@ const limitProps = (f: keyof FormState) => ({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
+      />
+      <QuickAddAccountModal
+        open={quickAddModal.open}
+        onClose={() => setQuickAddModal((prev) => ({ ...prev, open: false }))}
+        accountType={quickAddModal.accountType}
+        companyCode={user?.company_code}
+        onAccountCreated={(newAcc: CreatedAccountResult) => {
+          if (quickAddModal.targetLineId) {
+            updateLine(quickAddModal.targetLineId, {
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || form.curr_code,
+            });
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+            }));
+          }
+        }}
       />
       <Dialog
         open={cancelConfirmOpen}
@@ -3181,6 +3228,15 @@ function formatAmount(value: number, decimals?: number) {
   return value < 0 ? `(${amount})` : amount;
 }
 
-function getAppDecimals(): number {
+function getCurrencyDecimals(currCode?: string): number {
+  if (currCode) {
+    const c = String(currCode).trim().toUpperCase();
+    if (c === "OMR" || c === "BHD" || c === "KWD") return 3;
+    if (c === "SAR" || c === "AED" || c === "USD" || c === "EUR" || c === "INR" || c === "QAR") return 2;
+  }
   return typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? Number((window as any).__APP_DECIMALS__) : 2;
+}
+
+function getAppDecimals(currCode?: string): number {
+  return getCurrencyDecimals(currCode);
 }

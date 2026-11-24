@@ -52,6 +52,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
+import { QuickAddAccountModal, QuickAccountType, CreatedAccountResult } from "../../components/finance/QuickAddAccountModal";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
@@ -536,6 +537,15 @@ function PaymentDocumentEditor({
   const gst = useFinanceGst(form, docType, editMode);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [quickAddModal, setQuickAddModal] = useState<{
+    open: boolean;
+    accountType: QuickAccountType;
+    targetDetailId: string | null;
+  }>({
+    open: false,
+    accountType: "general",
+    targetDetailId: null,
+  });
   const [childLoading, setChildLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
@@ -1645,6 +1655,14 @@ if (tooLong.length) {
                               code4: form.div_code
                             })}
                             disabled={disabled || !form.div_code}
+                            onQuickAdd={() => {
+                              setQuickAddModal({
+                                open: true,
+                                accountType: docType === "CN" ? "customer" : "supplier",
+                                targetDetailId: null,
+                              });
+                            }}
+                            quickAddTooltip={docType === "CN" ? "Quick Add Customer Account" : "Quick Add Supplier Account"}
                             onChange={async (value, row) => {
                               const r = row || {} as Record<string, unknown>;
                               const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -2134,6 +2152,14 @@ if (tooLong.length) {
                                   code4: form.div_code
                                 })}
                                 disabled={disabled}
+                                onQuickAdd={() => {
+                                  setQuickAddModal({
+                                    open: true,
+                                    accountType: "general",
+                                    targetDetailId: detail.id,
+                                  });
+                                }}
+                                quickAddTooltip="Quick Add Account"
                                 onChange={(value, row) => {
                                   void selectDetailAccount(detail, value, row);
                                   if (value) {
@@ -2405,7 +2431,7 @@ if (tooLong.length) {
                             const taxAmt = Number(((Number(detail.amount || 0) * p) / 100).toFixed(getAppDecimals()));
                             updateDetail(detail.id, { tx_compnt_perc_1: p, tx_compnt_amt_1: taxAmt });
                           }} /></td>
-                          <td className="finance-amount-cell w-24 min-w-[100px] px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 != null ? Number(detail.tx_compnt_amt_1).toFixed(getAppDecimals()) : ""} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                          <td className="finance-amount-cell w-24 min-w-[100px] px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 != null ? Number(detail.tx_compnt_amt_1).toFixed(getAppDecimals(form.curr_code)) : ""} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                           {showAllColumns && (
                             <td className="w-28 min-w-[110px] px-2 py-1"><Input className="w-28 min-w-[110px]" disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                           )}
@@ -2485,6 +2511,27 @@ if (tooLong.length) {
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
         readOnly={form.canceled === "Y"}
+      />
+      <QuickAddAccountModal
+        open={quickAddModal.open}
+        onClose={() => setQuickAddModal((prev) => ({ ...prev, open: false }))}
+        accountType={quickAddModal.accountType}
+        companyCode={user?.company_code}
+        onAccountCreated={(newAcc: CreatedAccountResult) => {
+          if (quickAddModal.targetDetailId) {
+            updateDetail(quickAddModal.targetDetailId, {
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || form.curr_code,
+            });
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+            }));
+          }
+        }}
       />
       <ConfirmDialog
         open={cancelConfirmOpen}
@@ -3240,6 +3287,15 @@ function formatNumber(value: number, decimals?: number) {
   return value.toFixed(effectiveDecimals);
 }
 
-function getAppDecimals(): number {
+function getCurrencyDecimals(currCode?: string): number {
+  if (currCode) {
+    const c = String(currCode).trim().toUpperCase();
+    if (c === "OMR" || c === "BHD" || c === "KWD") return 3;
+    if (c === "SAR" || c === "AED" || c === "USD" || c === "EUR" || c === "INR" || c === "QAR") return 2;
+  }
   return typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? Number((window as any).__APP_DECIMALS__) : 2;
+}
+
+function getAppDecimals(currCode?: string): number {
+  return getCurrencyDecimals(currCode);
 }

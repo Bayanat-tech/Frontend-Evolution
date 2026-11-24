@@ -21,6 +21,20 @@ const transportMode = [
   { label: "Road", value: "Road" },
 ];
 
+const weekDays = [
+  { value: "1", label: "Sunday" },
+  { value: "2", label: "Monday" },
+  { value: "3", label: "Tuesday" },
+  { value: "4", label: "Wednesday" },
+  { value: "5", label: "Thursday" },
+  { value: "6", label: "Friday" },
+  { value: "7", label: "Saturday" },
+];
+
+const payroll_status = [
+  { value: "D", label: "Draft" },
+  { value: "F", label: "Final" },]
+
 // ---------- helpers ----------
 const s = (v: unknown): string | undefined =>
   v === undefined || v === null || String(v).trim() === "" ? undefined : String(v);
@@ -420,10 +434,10 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
       { name: "email", label: "Email", type: "email", width: 220, maxLength: 200, table: false, section: "Contact & Address" },
 
       // Approvers
-      { name: "dept_head_id", label: "Department Head ID", width: 160, maxLength: 10, table: false, section: "Approvers" },
-      { name: "dept_head_empid", label: "Dept Head Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers" },
-      { name: "supervisor_empid", label: "Supervisor Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers" },
-      { name: "mangr_empid", label: "Manager Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers" },
+      { name: "dept_head_id", label: "Department Head ID", width: 160, maxLength: 10, table: false, section: "Approvers", dropdownParam: "DROP_DOWN_EMPLOYEE", dropdownDisplayFields: ["emp_id", "emp_name"], dropdownLabelKey: "emp_name", dropdownValueKey: "emp_id" },
+      { name: "dept_head_empid", label: "Dept Head Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers", dropdownParam: "DROP_DOWN_EMPLOYEE", dropdownDisplayFields: ["emp_id", "emp_name"], dropdownLabelKey: "emp_name", dropdownValueKey: "emp_id" },
+      { name: "supervisor_empid", label: "Supervisor Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers", dropdownParam: "DROP_DOWN_EMPLOYEE", dropdownDisplayFields: ["emp_id", "emp_name"], dropdownLabelKey: "emp_name", dropdownValueKey: "emp_id" },
+      { name: "mangr_empid", label: "Manager Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers", dropdownParam: "DROP_DOWN_EMPLOYEE", dropdownDisplayFields: ["emp_id", "emp_name"], dropdownLabelKey: "emp_name", dropdownValueKey: "emp_id" },
       { name: "leave_final_approver", label: "Leave Final Approver", width: 180, maxLength: 20, table: false, section: "Approvers" },
 
       // Document expiry alerts
@@ -528,16 +542,16 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
 
       // Payroll
       { name: "payroll_date", label: "Payroll Date", type: "date", table: false, section: "Payroll" },
-      { name: "payroll_status", label: "Payroll Status", width: 130, maxLength: 1, table: false, section: "Payroll" },
+      { name: "payroll_status", label: "Payroll Status", width: 130, maxLength: 1, table: false, section: "Payroll", type: "select", options: payroll_status, },
       { name: "payroll_calc_type", label: "Payroll Calc Type", width: 140, maxLength: 1, table: false, section: "Payroll" },
       { name: "pay_month", label: "Pay Month", type: "number", table: false, section: "Payroll" },
       { name: "pay_year", label: "Pay Year", type: "number", table: false, section: "Payroll" },
       { name: "payroll_day", label: "Payroll Day", type: "number", table: false, section: "Payroll" },
       { name: "payroll_cutoff_date", label: "Payroll Cut-off Date", type: "date", table: false, section: "Payroll" },
       { name: "normal_working_hrs", label: "Normal Working Hrs", type: "number", table: false, section: "Payroll" },
-      { name: "day_off1", label: "Day Off 1", width: 110, maxLength: 1, table: false, section: "Payroll" },
+      { name: "day_off1", label: "Day Off 1", type: "select", options: weekDays, width: 110, maxLength: 1, table: false, section: "Payroll" },
       { name: "day_off1_half_day", label: "Day Off 1 Half Day", width: 150, maxLength: 1, table: false, section: "Payroll" },
-      { name: "day_off2", label: "Day Off 2", width: 110, maxLength: 1, table: false, section: "Payroll" },
+      { name: "day_off2", label: "Day Off 2", type: "select", options: weekDays, width: 110, maxLength: 1, table: false, section: "Payroll" },
       { name: "day_off2_half_day", label: "Day Off 2 Half Day", width: 150, maxLength: 1, table: false, section: "Payroll" },
       { name: "fin_year_start", label: "Financial Year Start", type: "date", table: false, section: "Payroll" },
       { name: "fin_year_end", label: "Financial Year End", type: "date", table: false, section: "Payroll" },
