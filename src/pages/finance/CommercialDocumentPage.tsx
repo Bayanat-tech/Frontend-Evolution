@@ -2271,7 +2271,7 @@ const limitProps = (f: keyof FormState) => ({
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
                         <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" type="number" 
-                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(getAppDecimals())} /></td>
+                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(getAppDecimals(line.curr_code || form.curr_code))} /></td>
                        {showAllColumns && (
                         <td className="w-28 max-w-[115px] px-1 py-1">
                           <LookupField
@@ -3181,6 +3181,15 @@ function formatAmount(value: number, decimals?: number) {
   return value < 0 ? `(${amount})` : amount;
 }
 
-function getAppDecimals(): number {
+function getCurrencyDecimals(currCode?: string): number {
+  if (currCode) {
+    const c = String(currCode).trim().toUpperCase();
+    if (c === "OMR" || c === "BHD" || c === "KWD") return 3;
+    if (c === "SAR" || c === "AED" || c === "USD" || c === "EUR" || c === "INR" || c === "QAR") return 2;
+  }
   return typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? Number((window as any).__APP_DECIMALS__) : 2;
+}
+
+function getAppDecimals(currCode?: string): number {
+  return getCurrencyDecimals(currCode);
 }

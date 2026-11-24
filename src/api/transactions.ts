@@ -244,6 +244,10 @@ export type CompanyFinanceSetupData = {
     CURR_CODE: string;
     CURR_NAME: string;
   }[];
+  tax_setup?: {
+    std_sales_tax_perc?: number;
+    std_purchase_tax_perc?: number;
+  };
 };
 
 export type SaveCompanyFinanceSetupPayload = {
@@ -257,6 +261,8 @@ export type SaveCompanyFinanceSetupPayload = {
   amount_decimal_nos?: number;
   price_decimal_nos?: number;
   lcur_decimal_nos?: number;
+  std_sales_tax_perc?: number;
+  std_purchase_tax_perc?: number;
 };
 
 export type SaveFyPeriodPayload = {
