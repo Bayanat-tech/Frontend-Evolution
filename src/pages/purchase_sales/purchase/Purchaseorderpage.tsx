@@ -19,6 +19,7 @@ import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { formatDate } from "../../../utils/date";
 import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
+import { PurchaseOrderPrintDialog } from "./purchaseOrderPrintDialoge";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -113,6 +114,8 @@ export function PurchaseOrderPage({ onClose, }: { onClose?: () => void } = {}) {
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
+
+  const [printRow, setPrintRow] = useState<PurchaseOrderRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -384,9 +387,9 @@ export function PurchaseOrderPage({ onClose, }: { onClose?: () => void } = {}) {
           >
             {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
           </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintPurchaseOrder(row.original)}>
-            <Printer size={15} />
-          </Button>
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => setPrintRow(row.original)}>
+  <Printer size={15} />
+</Button>
           <Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportPurchaseOrder(row.original)}>
             <Download size={15} />
           </Button>
@@ -566,6 +569,14 @@ export function PurchaseOrderPage({ onClose, }: { onClose?: () => void } = {}) {
           />
         </div>
       )}
+
+      <PurchaseOrderPrintDialog
+  open={!!printRow}
+  onClose={() => setPrintRow(null)}
+  form={printRow || {}}
+  companyCode={user?.company_code || ""}
+  docType={printRow?.doc_type || PO_DOC_TYPE.LPO}
+/>
 
       <PurchaseReportPreview />
 
