@@ -380,12 +380,41 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       ),
     },
     {
+      accessorKey: "ref_no",
+      header: () => <div className="font-bold">Ref No.*</div>,
+      cell: ({ getValue }) => <div className="font-mono text-slate-700">{String(getValue() || "")}</div>,
+      size: 130,
+      minSize: 110,
+    },
+    {
       accessorKey: "doc_date",
       header: () => <div className="text-center w-full font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
+      size: 100,
+      minSize: 90,
     },
-    { accessorKey: "ac_name", header: "Party" },
-    { accessorKey: "remarks", header: "Description" },
+    {
+      accessorKey: "ac_name",
+      header: () => <div className="font-bold">Party</div>,
+      cell: ({ getValue }) => (
+        <div className="font-medium text-slate-900" title={String(getValue() || "")}>
+          {String(getValue() || "")}
+        </div>
+      ),
+      size: 320,
+      minSize: 260,
+    },
+    {
+      accessorKey: "remarks",
+      header: () => <div className="font-bold">Description</div>,
+      cell: ({ getValue }) => (
+        <div className="text-slate-600 truncate max-w-[200px]" title={String(getValue() || "")}>
+          {String(getValue() || "")}
+        </div>
+      ),
+      size: 190,
+      minSize: 150,
+    },
     {
       accessorKey: "div_code",
       header: () => <div className="text-center w-full font-bold">Div</div>,
@@ -1785,7 +1814,7 @@ const limitProps = (f: keyof FormState) => ({
                             detail: c.detail.map((l) => {
                               if (!l.curr_code || l.curr_code === c.curr_code) {
                                 const baseLcur = Number(l.lcur_amount != null && Number(l.lcur_amount) > 0 ? l.lcur_amount : (Math.abs(Number(l.amount || 0)) * prevRate));
-                                const newAmt = newRate > 0 ? Number((baseLcur / newRate).toFixed(3)) : baseLcur;
+                                const newAmt = newRate > 0 ? Number((baseLcur / newRate).toFixed(getAppDecimals())) : baseLcur;
                                 return {
                                   ...l,
                                   curr_code: value,
@@ -2242,7 +2271,7 @@ const limitProps = (f: keyof FormState) => ({
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
                         <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" type="number" 
-                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
+                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(getAppDecimals())} /></td>
                        {showAllColumns && (
                         <td className="w-28 max-w-[115px] px-1 py-1">
                           <LookupField
@@ -2638,15 +2667,15 @@ const limitProps = (f: keyof FormState) => ({
                     lineAmt = expAmt;
                   } else if (docCurr === "OMR" || docEx === 1) {
                     // Invoice is in base currency: use the local currency amount
-                    lineAmt = Number(expLcurAmt.toFixed(3));
+                    lineAmt = Number(expLcurAmt.toFixed(getAppDecimals()));
                     remarksExtra = ` [Orig: ${expAmt} ${expCurr} @ ${expEx}]`;
                   } else {
                     // Invoice is in foreign currency: convert base amount using invoice exchange rate
-                    lineAmt = docEx > 0 ? Number((expLcurAmt / docEx).toFixed(3)) : expAmt;
+                    lineAmt = docEx > 0 ? Number((expLcurAmt / docEx).toFixed(getAppDecimals())) : expAmt;
                     remarksExtra = ` [Orig: ${expAmt} ${expCurr} @ ${expEx}]`;
                   }
 
-                  const lcurAmt = Number((lineAmt * docEx).toFixed(3));
+                  const lcurAmt = Number((lineAmt * docEx).toFixed(getAppDecimals()));
 
                   return {
                     ...emptyLine("PI", serial, docCurr, current.curr_name, docEx),
@@ -3150,4 +3179,8 @@ function formatAmount(value: number, decimals?: number) {
   const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
   const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
   return value < 0 ? `(${amount})` : amount;
+}
+
+function getAppDecimals(): number {
+  return typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? Number((window as any).__APP_DECIMALS__) : 2;
 }
