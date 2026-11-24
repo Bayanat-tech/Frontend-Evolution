@@ -31,7 +31,7 @@ const inputClass =
 const labelClass = "block text-[11px] font-semibold text-slate-600 mb-1";
 
 export function CompanyFinanceSetupPage() {
-  const { user } = useAuth();
+  const { user, updateUserSetup, refreshUser } = useAuth();
   const companyCode = useMemo(() => String(user?.company_code || "BSG").trim().toUpperCase(), [user]);
 
   const [loading, setLoading] = useState(true);
@@ -317,6 +317,22 @@ export function CompanyFinanceSetupPage() {
         price_decimal_nos: Number(form.price_decimal_nos),
         lcur_decimal_nos: Number(form.lcur_decimal_nos),
       });
+
+      // Update global currency and decimal precision immediately across the entire application
+      const newDecimals = Number(form.amount_decimal_nos);
+      if (typeof window !== "undefined") {
+        (window as any).__APP_DECIMALS__ = newDecimals;
+        (window as any).__APP_CURRENCY__ = form.base_curr_code;
+      }
+      updateUserSetup?.({
+        amount_decimal_nos: newDecimals,
+        decimals: newDecimals,
+        price_decimal_nos: Number(form.price_decimal_nos),
+        lcur_decimal_nos: Number(form.lcur_decimal_nos),
+        base_curr_code: form.base_curr_code,
+        currency: form.base_curr_code,
+      });
+      void refreshUser?.();
 
       setNotice({
         type: "success",

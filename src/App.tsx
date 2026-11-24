@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LoginPage } from "./pages/LoginPage";
+import { RegistrationPage } from './pages/RegistrationPage';
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { AppSelectionPage } from "./pages/AppSelectionPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
@@ -42,6 +43,8 @@ export function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
+            <Route path="/register" element={<RegistrationPage />} />
+            <Route path="/register/verify" element={<RegistrationPage verify />} />
             <Route path="/reset-password" element={<ResetPasswordPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
             <Route
               path="/apps"
