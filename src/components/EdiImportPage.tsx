@@ -42,6 +42,7 @@ import {
 } from "../api/lookups";import { Button } from "./ui/Button";
 import AutoDismissAlert from "./ui/AutoDismissAlert";
 import { useAuth } from "../state/AuthContext";
+import EdiExcelGrid from "./EdiExcelGrid";
 
 
 /* ------------------------------------------------------------------ */
@@ -798,114 +799,13 @@ export function EdiImportPage({
           </div>
 
           {/* table */}
-          <div
-            className="overflow-auto rounded-lg border border-slate-200"
-            style={{ maxHeight: "calc(100dvh - 260px)" }}
-          >
-            <table
-              className="border-collapse text-xs"
-              style={{ minWidth: columns.reduce((s, c) => s + colWidth(c), 120) }}
-            >
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-slate-100 text-left text-slate-700">
-                  <th className="w-14 border-b border-slate-200 px-2 py-2">#</th>
-                  {columns.map((c) => (
-                    <th
-                      key={c.name}
-                      className="border-b border-l border-slate-200 px-2 py-2"
-                      style={{ minWidth: colWidth(c) }}
-                    >
-                      <div className="font-semibold">
-                        {c.name}
-                        {!c.nullable && <span className="text-red-600"> *</span>}
-                      </div>
-                      {/* <div className="font-normal text-[10.5px] text-slate-500">{c.typeLabel}</div> */}
-                    </th>
-                  ))}
-                  <th className="w-10 border-b border-l border-slate-200 px-2 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {pageRows.map((r) => {
-                  const errCount = Object.keys(r.errors).length;
-                  return (
-                    <tr
-                      key={r.id}
-                      className={
-                        errCount
-                          ? "bg-red-50 border-l-4 border-l-red-500"
-                          : "bg-white"
-                      }
-                    >
-                      <td className="border-b border-slate-100 px-2 py-1 align-middle">
-                        <span
-                          className={`inline-flex items-center gap-1 font-semibold ${
-                            errCount ? "text-red-600" : "text-slate-500"
-                          }`}
-                          title={errCount ? `${errCount} error(s) in this row` : "Row is valid"}
-                        >
-                          {errCount ? <AlertTriangle size={12} /> : null}
-                          {rowNumber.get(r.id)}
-                        </span>
-                      </td>
-                      {columns.map((c) => {
-                        const err = r.errors[c.name];
-                        return (
-                          <td
-                            key={c.name}
-                            className={`border-b border-l p-0.5 align-top ${
-                              err
-                                ? "border-red-200 bg-red-50"
-                                : "border-slate-100"
-                            }`}
-                          >
-                            <input
-                              type={inputType(c)}
-                              value={r.values[c.name] ?? ""}
-                              onChange={(e) => updateCell(r.id, c, e.target.value)}
-                              title={err || c.typeLabel}
-                              aria-invalid={Boolean(err)}
-                              className={`h-7 w-full rounded border px-1.5 text-xs outline-none focus:ring-2 ${
-                                err
-                                  ? "border-red-500 bg-red-100 text-red-800 focus:ring-red-300"
-                                  : "border-transparent bg-transparent text-slate-800 hover:border-slate-300 focus:border-[#00378C] focus:bg-white focus:ring-blue-200"
-                              }`}
-                            />
-                            {err && (
-                              <div className="px-1 pb-1 pt-1 text-[10px] leading-tight text-red-600 font-medium whitespace-normal">
-                                <span className="inline-flex items-start gap-1">
-                                  <AlertTriangle size={11} className="shrink-0 mt-0.5" />
-                                  {err}
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="border-b border-l border-slate-100 px-1 text-center align-middle">
-                        <button
-                          type="button"
-                          onClick={() => removeRow(r.id)}
-                          title="Remove row"
-                          aria-label="Remove row"
-                          className="cursor-pointer rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {!pageRows.length && (
-                  <tr>
-                    <td colSpan={columns.length + 2} className="p-6 text-center text-slate-500">
-                      No rows to show.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+            <EdiExcelGrid
+              columns={columns}
+              rows={pageRows}
+              getRowNumber={(id) => rowNumber.get(id)}
+              onChangeCell={(id, col, value) => updateCell(id, col, value)}
+              onRemoveRow={removeRow}
+            />
 
           {/* pager */}
           <div className="flex items-center justify-end gap-2 px-1 text-xs text-slate-600">
