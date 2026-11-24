@@ -259,7 +259,8 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const { user, menuTree, logout } = useAuth();
   const { role } = useSupport();
   const navigate = useNavigate();
-  const canUseSupportDesk = role === 'admin' && user?.loginid?.trim().toUpperCase() === 'DEVADMIN' && user?.tenantId?.toUpperCase() === 'WMSDEV_TENANT';
+  const canUseSupportDesk = (role === 'admin' && user?.loginid?.trim().toUpperCase() === 'DEVADMIN' && user?.tenantId?.toUpperCase() === 'WMSDEV_TENANT')
+    || (role === 'developer' && user?.tenantId?.toUpperCase() === 'BTIND_TENANT');
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree).filter(app => canUseSupportDesk || !isBtSupportApp(app)), [menuTree, canUseSupportDesk]);
   const findApp = (code: string) =>
     workspaceApps.find((app) => getModuleMeta(app, 0).code.toUpperCase() === code.toUpperCase());

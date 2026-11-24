@@ -649,7 +649,7 @@ export function SupportCenter({ compact = false, onClose }: { compact?: boolean;
     return visible.slice(start, start + pageSize);
   }, [visible, page, pageSize]);
 
-  if (!compact && !isAdmin) return <Navigate to='/apps' replace />;
+  if (!compact && !isStaff) return <Navigate to='/apps' replace />;
 
   return (
     <section className={`sup ${compact ? 'sup-compact' : ''}`}>
