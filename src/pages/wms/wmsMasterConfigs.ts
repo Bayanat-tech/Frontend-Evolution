@@ -1,4 +1,4 @@
-import { executeDynamicMutation } from "../../api/lookups";
+import { executeDynamicMutation, executeDynamicMutationColumn90 } from "../../api/lookups";
 import { executeWmsInboundSql } from "../../api/wms";
 import msPrincipalServiceInstance from "../../api/principal";
 import type { WmsSimpleMasterConfig } from "./WmsSimpleMasterPage";
@@ -20,6 +20,19 @@ const transportMode = [
   { label: "Air", value: "Air" },
   { label: "Road", value: "Road" },
 ];
+
+// ---------- helpers ----------
+const s = (v: unknown): string | undefined =>
+  v === undefined || v === null || String(v).trim() === "" ? undefined : String(v);
+
+const n = (v: unknown): number | undefined =>
+  v === undefined || v === null || String(v).trim() === "" || Number.isNaN(Number(v)) ? undefined : Number(v);
+
+// 'YYYY-MM-DD' (strips any time part coming from Oracle)
+const d = (v: unknown): string | undefined => {
+  const x = s(v);
+  return x ? x.substring(0, 10) : undefined;
+};
 
 export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
   activity: {
@@ -371,43 +384,269 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
   },
   department: {
     title: "Department Master",
-    subtitle: "Maintain department code, name, and division link.",
+    subtitle: "Maintain department details, invoice prefixes, job sequences, approvers and document expiry alerts.",
     master: "department",
     gmEndpoint: "department",
     routeKeys: ["department"],
     keyField: "dept_code",
+    fieldsPerRow: 4,
     fields: [
-      { name: "dept_code", label: "Department Code", required: true, disabledOnEdit: true, width: 170 },
-      { name: "dept_name", label: "Department Name", required: true, width: 260 },
-      { name: "div_code", label: "Division Code", dropdownParam: "DROP_DOWN_DIVISION",dropdownDisplayFields:["div_code", "div_name"],
-      dropdownValueKey: "div_code",  width: 150, required: true },
+      // General
+      { name: "dept_code", label: "Department Code", required: true, disabledOnEdit: true, width: 150, maxLength: 10, section: "General" },
+      { name: "dept_name", label: "Department Name", required: true, width: 260, maxLength: 25, section: "General" },
+      { name: "dept_short_name", label: "Short Name", width: 150, maxLength: 10, section: "General" },
+      { name: "div_code", label: "Division Code", required: true, dropdownParam: "DROP_DOWN_DIVISION", dropdownDisplayFields: ["div_code", "div_name"], dropdownValueKey: "div_code", width: 150, section: "General" },
+      { name: "ac_div_code", label: "Accounts Division", dropdownParam: "DROP_DOWN_DIVISION", dropdownDisplayFields: ["div_code", "div_name"], dropdownValueKey: "div_code", width: 150, maxLength: 5, section: "General" },
+      { name: "operation_type", label: "Operation Type", width: 130, maxLength: 1, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "enterprice_code", label: "Enterprise Code", width: 140, maxLength: 5, section: "General" },
+
+      // Invoice / Job numbering
+      { name: "inv_flag", label: "Invoice Flag", width: 120, maxLength: 2, section: "Invoice & Job Numbering" },
+      { name: "inv_prefix", label: "Invoice Prefix", width: 130, maxLength: 3, section: "Invoice & Job Numbering" },
+      { name: "wms_inv_prefix", label: "WMS Invoice Prefix", width: 150, maxLength: 3, section: "Invoice & Job Numbering" },
+      { name: "trspt_inv_prefix", label: "Transport Invoice Prefix", width: 170, maxLength: 3, section: "Invoice & Job Numbering" },
+      { name: "jobno_seq", label: "Job No Sequence", type: "number", width: 140, section: "Invoice & Job Numbering" },
+      { name: "invno_seq", label: "Invoice No Sequence", type: "number", width: 150, section: "Invoice & Job Numbering" },
+      { name: "jobno_seq_inb", label: "Job Seq (Inbound)", width: 140, maxLength: 2, section: "Invoice & Job Numbering" },
+      { name: "jobno_seq_oub", label: "Job Seq (Outbound)", width: 150, maxLength: 2, section: "Invoice & Job Numbering" },
+
+      // Contact / Address
+      { name: "dept_addr1", label: "Address 1", maxLength: 50, table: false, section: "Contact & Address" },
+      { name: "dept_addr2", label: "Address 2", maxLength: 50, table: false, section: "Contact & Address" },
+      { name: "dept_addr3", label: "Address 3", maxLength: 50, table: false, section: "Contact & Address" },
+      { name: "phone", label: "Phone", width: 150, maxLength: 25, section: "Contact & Address" },
+      { name: "fax", label: "Fax", width: 150, maxLength: 25, table: false, section: "Contact & Address" },
+      { name: "email", label: "Email", type: "email", width: 220, maxLength: 200, table: false, section: "Contact & Address" },
+
+      // Approvers
+      { name: "dept_head_id", label: "Department Head ID", width: 160, maxLength: 10, table: false, section: "Approvers" },
+      { name: "dept_head_empid", label: "Dept Head Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers" },
+      { name: "supervisor_empid", label: "Supervisor Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers" },
+      { name: "mangr_empid", label: "Manager Emp ID", width: 160, maxLength: 5, table: false, section: "Approvers" },
+      { name: "leave_final_approver", label: "Leave Final Approver", width: 180, maxLength: 20, table: false, section: "Approvers" },
+
+      // Document expiry alerts
+      { name: "doc_expiry_days", label: "Doc Expiry Alert (Days)", type: "number", width: 170, table: false, section: "Document Expiry Alerts" },
+      { name: "doc_expiry_email", label: "Doc Expiry Email", width: 260, maxLength: 500, table: false, section: "Document Expiry Alerts" },
+      { name: "doc_expiry_cc", label: "Doc Expiry CC", width: 260, maxLength: 500, table: false, section: "Document Expiry Alerts" },
+      { name: "remarks", label: "Remarks", maxLength: 100, table: false, section: "Document Expiry Alerts" },
     ],
+    defaults: { status: "A", enterprice_code: "BSG" },
+
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_DEPARTMENT
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY DEPT_CODE
+      `);
+      return { tableData: data as Record<string, unknown>[], count: data.length };
+    },
+
+    customSave: async (form, context) => {
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+      const deptCode = (editMode ? (original?.dept_code ?? form.dept_code) : form.dept_code) as string;
+
+      await executeDynamicMutationColumn90({
+        loginid: typedUser.loginid,
+        parameter: "MS_DEPARTMENT_INS_UPD",
+        val1s1: typedUser.company_code,
+        val1s2: deptCode,
+        val1s3: s(form.dept_name),
+        val1s4: s(form.inv_flag),
+        val1s5: s(form.operation_type),
+        val1s6: s(form.div_code),
+        val1s7: s(form.ac_div_code),
+        val1s8: s(form.inv_prefix),
+        val1s9: s(form.wms_inv_prefix),
+        val1s10: s(form.trspt_inv_prefix),
+        val1s11: s(form.jobno_seq_inb),
+        val1s12: s(form.jobno_seq_oub),
+        val1s13: s(form.dept_short_name),
+        val1s14: s(form.dept_addr1),
+        val1s15: s(form.dept_addr2),
+        val1s16: s(form.dept_addr3),
+        val1s17: s(form.phone),
+        val1s18: s(form.fax),
+        val1s19: s(form.email),
+        val1s20: s(form.dept_head_id),
+        val1s21: s(form.remarks),
+        val1s22: s(form.status) ?? "A",
+        val1s23: s(form.enterprice_code) ?? "BSG",
+        val1s24: s(form.dept_head_empid),
+        val1s25: s(form.supervisor_empid),
+        val1s26: s(form.mangr_empid),
+        val1s27: s(form.doc_expiry_email),
+        val1s28: s(form.doc_expiry_cc),
+        val1s29: s(form.leave_final_approver),
+        val1s30: s(form.leave_final_approver_empid),  
+        val1n1: n(form.jobno_seq),
+        val1n2: n(form.invno_seq),
+        val1n3: n(form.doc_expiry_days),
+      } as any);
+    },
+
     deleteConfig: { mode: "rawDelete", payload: (row) => ({ ids: [row.dept_code] }) },
+    ediKey: "DEPARTMENT",
   },
+// ---------- division ----------
   division: {
     title: "Division Master",
-    subtitle: "Maintain division identity, address, contacts, and status.",
+    subtitle: "Maintain division identity, address, payroll, invoice bank and payer details.",
     master: "division",
     gmEndpoint: "division",
     routeKeys: ["division"],
     keyField: "div_code",
-    fieldsPerRow:4,
+    fieldsPerRow: 4,
     fields: [
-      { name: "div_code", label: "Division Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "div_name", label: "Division Name", required: true, width: 260 },
-      { name: "div_short_name", label: "Short Name", width: 150 },
-      { name: "country_code", label: "Country Code", dropdownParam: "DROP_DOWN_COUNTRY", dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code", width: 140 },
-      { name: "phone", label: "Phone", width: 150 },
-      { name: "fax", label: "Fax", width: 140 },
-      { name: "email", label: "Email", type: "email", width: 220 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "div_address1", label: "Address 1", required: true, table: false },
-      { name: "div_address2", label: "Address 2", table: false },
-      { name: "div_address3", label: "Address 3", table: false },
-      { name: "remarks", label: "Remarks", table: false },
+      // General
+      { name: "div_code", label: "Division Code", required: true, disabledOnEdit: true, width: 150, maxLength: 5, section: "General" },
+      { name: "div_name", label: "Division Name", required: true, width: 260, maxLength: 50, section: "General" },
+      { name: "div_short_name", label: "Short Name", width: 150, maxLength: 30, section: "General" },
+      { name: "country_code", label: "Country Code", required: true, dropdownParam: "DROP_DOWN_COUNTRY", dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code", width: 140, section: "General" },
+      { name: "curr_code", label: "Currency", dropdownParam: "DROP_DOWN_CURRENCY", dropdownDisplayFields: ["curr_code", "curr_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "curr_code", width: 130, section: "General" },
+      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120, section: "General" },
+      { name: "enterprice_code", label: "Enterprise Code", width: 140, maxLength: 5, section: "General" },
+      { name: "div_head_id", label: "Division Head ID", width: 150, maxLength: 10, table: false, section: "General" },
+      { name: "hr_representative", label: "HR Representative", width: 150, maxLength: 10, table: false, section: "General" },
+      { name: "default_grade", label: "Default Grade", width: 130, maxLength: 5, table: false, section: "General" },
+      { name: "emp_acgroup", label: "Employee A/C Group", width: 150, maxLength: 10, table: false, section: "General" },
+      { name: "emp_cnt", label: "Employee Count", type: "number", width: 130, table: false, section: "General" },
+      { name: "pda", label: "PDA", type: "select", options: yesNo, width: 100, table: false, section: "General" },
+
+      // Contact / Address
+      { name: "phone", label: "Phone", width: 150, maxLength: 25, section: "Contact & Address" },
+      { name: "fax", label: "Fax", width: 140, maxLength: 25, section: "Contact & Address" },
+      { name: "email", label: "Email", type: "email", width: 220, maxLength: 50, section: "Contact & Address" },
+      { name: "div_address1", label: "Address 1", required: true, maxLength: 50, table: false, section: "Contact & Address" },
+      { name: "div_address2", label: "Address 2", maxLength: 50, table: false, section: "Contact & Address" },
+      { name: "div_address3", label: "Address 3", maxLength: 50, table: false, section: "Contact & Address" },
+      { name: "remarks", label: "Remarks", maxLength: 100, table: false, section: "Contact & Address" },
+
+      // Payroll
+      { name: "payroll_date", label: "Payroll Date", type: "date", table: false, section: "Payroll" },
+      { name: "payroll_status", label: "Payroll Status", width: 130, maxLength: 1, table: false, section: "Payroll" },
+      { name: "payroll_calc_type", label: "Payroll Calc Type", width: 140, maxLength: 1, table: false, section: "Payroll" },
+      { name: "pay_month", label: "Pay Month", type: "number", table: false, section: "Payroll" },
+      { name: "pay_year", label: "Pay Year", type: "number", table: false, section: "Payroll" },
+      { name: "payroll_day", label: "Payroll Day", type: "number", table: false, section: "Payroll" },
+      { name: "payroll_cutoff_date", label: "Payroll Cut-off Date", type: "date", table: false, section: "Payroll" },
+      { name: "normal_working_hrs", label: "Normal Working Hrs", type: "number", table: false, section: "Payroll" },
+      { name: "day_off1", label: "Day Off 1", width: 110, maxLength: 1, table: false, section: "Payroll" },
+      { name: "day_off1_half_day", label: "Day Off 1 Half Day", width: 150, maxLength: 1, table: false, section: "Payroll" },
+      { name: "day_off2", label: "Day Off 2", width: 110, maxLength: 1, table: false, section: "Payroll" },
+      { name: "day_off2_half_day", label: "Day Off 2 Half Day", width: 150, maxLength: 1, table: false, section: "Payroll" },
+      { name: "fin_year_start", label: "Financial Year Start", type: "date", table: false, section: "Payroll" },
+      { name: "fin_year_end", label: "Financial Year End", type: "date", table: false, section: "Payroll" },
+      { name: "emp_document_path", label: "Employee Document Path", maxLength: 200, table: false, section: "Payroll" },
+
+      // Invoice bank details
+      { name: "bank_name_inv", label: "Bank Name (Invoice)", maxLength: 50, table: false, section: "Invoice Bank Details" },
+      { name: "ac_code_inv", label: "A/C No (Invoice)", maxLength: 50, table: false, section: "Invoice Bank Details" },
+      { name: "reference_no_inv", label: "Reference No (Invoice)", maxLength: 50, table: false, section: "Invoice Bank Details" },
+      { name: "bank_address_inv", label: "Bank Address (Invoice)", maxLength: 50, table: false, section: "Invoice Bank Details" },
+      { name: "swift_code_inv", label: "Swift Code (Invoice)", maxLength: 50, table: false, section: "Invoice Bank Details" },
+      { name: "ac_code_inv_usd", label: "A/C No (USD Invoice)", maxLength: 100, table: false, section: "Invoice Bank Details" },
+      { name: "ref_no_inv_usd", label: "Reference No (USD Invoice)", maxLength: 100, table: false, section: "Invoice Bank Details" },
+      { name: "swift_code_inv_usd", label: "Swift Code (USD Invoice)", maxLength: 100, table: false, section: "Invoice Bank Details" },
+
+      // Tax / Branding / Signatories
+      { name: "trn_no", label: "TRN No", maxLength: 20, table: false, section: "Tax, Logo & Signatories" },
+      { name: "comp_logo", label: "Company Logo", maxLength: 200, table: false, section: "Tax, Logo & Signatories" },
+      { name: "logo_title", label: "Logo Title", maxLength: 100, table: false, section: "Tax, Logo & Signatories" },
+      { name: "signatory_1", label: "Signatory 1", maxLength: 100, table: false, section: "Tax, Logo & Signatories" },
+      { name: "signatory_2", label: "Signatory 2", maxLength: 100, table: false, section: "Tax, Logo & Signatories" },
+
+      // Payer
+      { name: "employer_eid", label: "Employer EID", maxLength: 50, table: false, section: "Payer Details" },
+      { name: "payer_eid", label: "Payer EID", maxLength: 50, table: false, section: "Payer Details" },
+      { name: "payer_qid", label: "Payer QID", maxLength: 50, table: false, section: "Payer Details" },
+      { name: "payer_bank", label: "Payer Bank", maxLength: 10, table: false, section: "Payer Details" },
+      { name: "payer_iban", label: "Payer IBAN", maxLength: 150, table: false, section: "Payer Details" },
     ],
-    defaults: { status: "A" },
+    defaults: { status: "A", pda: "N" },
+
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_HR_DIVISION
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY DIV_CODE
+      `);
+      return { tableData: data as Record<string, unknown>[], count: data.length };
+    },
+
+    customSave: async (form, context) => {
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+      const divCode = (editMode ? (original?.div_code ?? form.div_code) : form.div_code) as string;
+
+      await executeDynamicMutationColumn90({
+        loginid: typedUser.loginid,
+        parameter: "MS_HR_DIVISION_INS_UPD",
+        val1s1: typedUser.company_code,
+        val1s2: divCode,
+        val1s3: s(form.div_name),
+        val1s4: s(form.div_short_name),
+        val1s5: s(form.div_address1),
+        val1s6: s(form.div_address2),
+        val1s7: s(form.div_address3),
+        val1s8: s(form.country_code),
+        val1s9: s(form.phone),
+        val1s10: s(form.fax),
+        val1s11: s(form.email),
+        val1s12: s(form.div_head_id),
+        val1s13: s(form.remarks),
+        val1s14: s(form.status) ?? "A",
+        val1s15: s(form.enterprice_code),
+        val1s16: s(form.payroll_status),
+        val1s17: s(form.day_off1),
+        val1s18: s(form.day_off2),
+        val1s19: s(form.hr_representative),
+        val1s20: s(form.payroll_calc_type),
+        val1s21: s(form.day_off1_half_day),
+        val1s22: s(form.day_off2_half_day),
+        val1s23: s(form.bank_name_inv),
+        val1s24: s(form.ac_code_inv),
+        val1s25: s(form.reference_no_inv),
+        val1s26: s(form.bank_address_inv),
+        val1s27: s(form.swift_code_inv),
+        val1s28: s(form.emp_document_path),
+        val1s29: s(form.emp_acgroup),
+        val1s30: s(form.trn_no),
+        val1s31: s(form.comp_logo),
+        val1s32: s(form.logo_title),
+        val1s33: s(form.signatory_1),
+        val1s34: s(form.signatory_2),
+        val1s35: s(form.default_grade),
+        val1s36: s(form.employer_eid),
+        val1s37: s(form.payer_eid),
+        val1s38: s(form.payer_qid),
+        val1s39: s(form.payer_bank),
+        val1s40: s(form.payer_iban),
+        val1s41: s(form.pda),
+        val1s42: s(form.curr_code),
+        val1s43: s(form.ac_code_inv_usd),
+        val1s44: s(form.ref_no_inv_usd),
+        val1s45: s(form.swift_code_inv_usd),
+        val1s46: d(form.payroll_date),
+        val1s47: d(form.fin_year_start),
+        val1s48: d(form.fin_year_end),
+        val1s49: d(form.payroll_cutoff_date),
+        val1n1: n(form.normal_working_hrs),
+        val1n2: n(form.pay_month),
+        val1n3: n(form.pay_year),
+        val1n4: n(form.payroll_day),
+        val1n5: n(form.emp_cnt),
+      } as any);
+    },
+
     deleteConfig: { mode: "rawDelete", payload: (row) => [{ company_code: row.company_code, div_code: row.div_code }] },
+    ediKey: "DIVISION",
   },
   manufacture: {
     title: "Manufacturer Master",

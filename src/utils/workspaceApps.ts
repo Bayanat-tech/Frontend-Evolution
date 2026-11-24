@@ -8,9 +8,19 @@ export function buildWorkspaceApps(menuTree: MenuNode[]): MenuNode[] {
   // APP_CODE=MASTERS is represented by the BT Masters utility only. Do not
   // expose it again as a standalone core application.
   const visibleApps = normalizedApps.filter(
-    (item) => !isDedicatedMastersApp(item) && !isBtMastersApp(item),
+    (item) => !isDedicatedMastersApp(item) && !isBtMastersApp(item) && !containsOnlyDefaultWmsMasters(item),
   );
   return [...visibleApps, mastersApp];
+}
+function containsOnlyDefaultWmsMasters(app:MenuNode) {
+  if(normalizeTitle(app.title)!=='wms')return false;
+  let defaults=0,other=0;
+  const visit=(nodes:MenuNode[])=>nodes.forEach(node=>{
+    if(node.children?.length)visit(node.children);
+    else if(/^\/?wms\/masters?\/gm\/(uom|division|department|country|currency|port|harmonize)\/?$/i.test(node.url_path||''))defaults++;
+    else if(node.url_path)other++;
+  });
+  visit(app.children||[]);return defaults>0&&other===0;
 }
 
 export function cleanAppCode(value: string) {
@@ -70,17 +80,32 @@ export function buildBtMastersApp(menuTree: MenuNode[]): MenuNode | null {
   const sourceApp = menuTree.find((app) => isDedicatedMastersApp(app));
   const existingBtMasters = menuTree.find((app) => isBtMastersApp(app));
 
-  if (!sourceApp) return existingBtMasters || null;
+  const extra:MenuNode[]=[];
+  const collect=(nodes:MenuNode[])=>nodes.forEach(node=>{
+    if(node.children?.length)collect(node.children);
+    else if(/^\/?wms\/masters?\/gm\/(uom|division|department|country|currency|port|harmonize)\/?$/i.test(node.url_path||''))extra.push({...node,children:undefined});
+  });
+  menuTree.filter(app=>!isDedicatedMastersApp(app)&&!isBtMastersApp(app)).forEach(app=>collect(app.children||[]));
+  if (!sourceApp && !existingBtMasters && !extra.length) return null;
+  const children=normalizeBtMasterRoutes(sourceApp?.children || existingBtMasters?.children || []);
+  const routes=new Set<string>();
+  const remember=(nodes:MenuNode[])=>nodes.forEach(node=>{if(node.children?.length)remember(node.children);else if(node.url_path)routes.add(node.url_path.toLowerCase());});
+  remember(children);
+  const additional=extra.filter(node=>{const key=(node.url_path||'').toLowerCase();if(routes.has(key))return false;routes.add(key);return true;});
+  if(additional.length)children.push({id:'default-company-masters',title:'Company masters',type:'group',children:additional});
 
   return {
     id: "virtual-bt-masters",
     title: "BT MASTERS",
     type: "group",
-    children: normalizeBtMasterRoutes(sourceApp.children || []),
+    children,
   };
 }
 
 const btMasterRoutes: Record<string, string> = {
+  uom: "wms/masters/gm/uom",
+  "unit of measure": "wms/masters/gm/uom",
+  "unit of charge uoc": "wms/masters/gm/uom",
   company: "security/masters/gm/company",
   division: "wms/masters/gm/division",
   department: "wms/masters/gm/department",

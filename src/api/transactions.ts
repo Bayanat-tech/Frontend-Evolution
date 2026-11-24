@@ -84,6 +84,8 @@ export type TransactionDetail = {
   curr_name?: string;
   ex_rate: number;
   amount: number;
+  qty?: number;
+  price?: number;
   sign_ind: 1 | -1;
   div_code: string;
   tx_compntcat_code_1?: string;
