@@ -252,7 +252,8 @@ function dateInput(value: unknown) {
   return Number.isNaN(date.getTime()) ? String(value).slice(0, 10) : date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
   return value < 0 ? `(${amount})` : amount;
 }

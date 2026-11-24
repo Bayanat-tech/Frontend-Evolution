@@ -1,5 +1,5 @@
 import { Check, ChevronDown, KeyRound, RefreshCw, Save, Search, ShieldCheck, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteSecurityGm, getSecurityGm, getSecurityGmWithParams, getSecurityMaster, saveSecurityGm } from "../../api/security";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -45,6 +45,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
   const permissionRequest = useRef(0);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
+  const closeNotice = useCallback(()=>setNotice(null),[]);
   const isRoleMode = mode === "role";
   const title = isRoleMode ? "Access To Role" : "Access To User";
   const principalLabel = isRoleMode ? "Role" : "User";
@@ -98,10 +99,14 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
       return;
     }
     if (selectedScreenIds.length > 1) {
-      setPermissions(emptyPermissionRow());
-      setHasExisting(true);
-      setPermissionLoading(false);
-      setNotice({ type: "info", message: "Choose the operations to apply to every selected screen. Saving replaces their direct permissions; unavailable operations stay disabled." });
+      setPermissionLoading(true);
+      try {
+        const result = await saveSecurityGm('accessassignuser/selection',{serials:selectedScreenIds.map(Number)});
+        if(request !== permissionRequest.current)return;
+        setPermissions(normalizePermission(result.data || emptyPermissionRow()));setHasExisting(true);
+        setNotice({type:'info',message:'Choose operations to apply to every selected screen. Only operations you can grant on all selected screens are available.'});
+      }catch(error){if(request===permissionRequest.current){setPermissions(null);setHasExisting(false);setNotice({type:'error',message:error instanceof Error?error.message:'Unable to load selected screen permissions'});}}
+      finally{if(request===permissionRequest.current)setPermissionLoading(false);}
       return;
     }
     setPermissionLoading(true);
@@ -159,11 +164,16 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
     setSaving(true);
     setNotice(null);
     try {
+      if (!isRoleMode) {
+        await saveSecurityGm('accessassignuser/bulk',{loginid:selectedPrincipal,serials:selectedScreenIds.map(Number),permissions:activePermissions});
+        setHasExisting(true);setNotice({type:'success',message:`Access saved for ${selectedScreenIds.length} screen(s)`});return;
+      }
+      const templates = new Map(await Promise.all(selectedScreenIds.map(async serial => [serial, await getOperationTemplate(endpoint, serial)] as const)));
       let completed = 0;
       try {
         for (const serial of selectedScreenIds) {
           const row = assignableScreens.find((screen) => String(screen.serial_no) === serial);
-          const template = await getOperationTemplate(endpoint, serial);
+          const template = templates.get(serial);
           const supported = normalizePermission(template?.[0] || emptyPermissionRow());
           const values = { ...activePermissions };
           for (const field of permissionFields)
@@ -191,7 +201,8 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
     setNotice(null);
     try {
       if (!window.confirm(`Remove direct access to ${selectedScreenIds.length} selected screen(s)? Role permissions are managed separately.`)) return;
-      await deleteSecurityGm(`${endpoint}/delete`, { screen_details: selectedScreenIds.map((serial) => buildDeletePayload(mode, selectedPrincipal, serial).screen_details[0]) });
+      if (!isRoleMode) await saveSecurityGm('accessassignuser/bulk',{loginid:selectedPrincipal,serials:selectedScreenIds.map(Number),remove:true});
+      else await deleteSecurityGm(`${endpoint}/delete`,  { screen_details: selectedScreenIds.map((serial) => buildDeletePayload(mode, selectedPrincipal, serial).screen_details[0]) });
       setHasExisting(false);
       setPermissions(emptyPermissionRow());
       setNotice({ type: "success", message: `${title} deleted successfully` });
@@ -213,7 +224,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
         </Button>
       </div>
 
-      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+      <NoticeToast notice={notice} onClose={closeNotice} />
 
       <Card className="overflow-visible">
         <CardHeader className="border-b bg-muted/40">
@@ -272,6 +283,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
             />
           </label>
         </CardContent>
+        {!isRoleMode && selectedApp && <div className="flex flex-wrap gap-3 px-4 pb-4"><Button type="button" variant="outline" disabled={saving || loading || !filteredScreens.length} onClick={()=>setSelectedScreen(filteredScreens.map(screen=>String(screen.serial_no)).join(','))}>Select all {selectedApp} screens ({filteredScreens.length})</Button><Button type="button" variant="ghost" disabled={saving || !selectedScreen} onClick={()=>setSelectedScreen('')}>Clear selection</Button></div>}
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
