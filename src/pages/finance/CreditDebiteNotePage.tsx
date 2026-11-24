@@ -52,6 +52,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
+import { QuickAddAccountModal, QuickAccountType, CreatedAccountResult } from "../../components/finance/QuickAddAccountModal";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
@@ -536,6 +537,15 @@ function PaymentDocumentEditor({
   const gst = useFinanceGst(form, docType, editMode);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [quickAddModal, setQuickAddModal] = useState<{
+    open: boolean;
+    accountType: QuickAccountType;
+    targetDetailId: string | null;
+  }>({
+    open: false,
+    accountType: "general",
+    targetDetailId: null,
+  });
   const [childLoading, setChildLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
@@ -1645,6 +1655,14 @@ if (tooLong.length) {
                               code4: form.div_code
                             })}
                             disabled={disabled || !form.div_code}
+                            onQuickAdd={() => {
+                              setQuickAddModal({
+                                open: true,
+                                accountType: docType === "CN" ? "customer" : "supplier",
+                                targetDetailId: null,
+                              });
+                            }}
+                            quickAddTooltip={docType === "CN" ? "Quick Add Customer Account" : "Quick Add Supplier Account"}
                             onChange={async (value, row) => {
                               const r = row || {} as Record<string, unknown>;
                               const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -2134,6 +2152,14 @@ if (tooLong.length) {
                                   code4: form.div_code
                                 })}
                                 disabled={disabled}
+                                onQuickAdd={() => {
+                                  setQuickAddModal({
+                                    open: true,
+                                    accountType: "general",
+                                    targetDetailId: detail.id,
+                                  });
+                                }}
+                                quickAddTooltip="Quick Add Account"
                                 onChange={(value, row) => {
                                   void selectDetailAccount(detail, value, row);
                                   if (value) {
@@ -2485,6 +2511,27 @@ if (tooLong.length) {
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
         readOnly={form.canceled === "Y"}
+      />
+      <QuickAddAccountModal
+        open={quickAddModal.open}
+        onClose={() => setQuickAddModal((prev) => ({ ...prev, open: false }))}
+        accountType={quickAddModal.accountType}
+        companyCode={user?.company_code}
+        onAccountCreated={(newAcc: CreatedAccountResult) => {
+          if (quickAddModal.targetDetailId) {
+            updateDetail(quickAddModal.targetDetailId, {
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || form.curr_code,
+            });
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+            }));
+          }
+        }}
       />
       <ConfirmDialog
         open={cancelConfirmOpen}

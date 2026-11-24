@@ -43,6 +43,7 @@ import { CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { QuickAddAccountModal, QuickAccountType, CreatedAccountResult } from "../../components/finance/QuickAddAccountModal";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
@@ -698,6 +699,15 @@ function CommercialEditor({
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [settledPaidAmount, setSettledPaidAmount] = useState<number>(0);
+  const [quickAddModal, setQuickAddModal] = useState<{
+    open: boolean;
+    accountType: QuickAccountType;
+    targetLineId: string | null;
+  }>({
+    open: false,
+    accountType: "general",
+    targetLineId: null,
+  });
 
   const [activeTab, setActiveTab] = useState<"lines" | "allocations">("lines");
   const [allocLoading, setAllocLoading] = useState(false);
@@ -1530,6 +1540,14 @@ const limitProps = (f: keyof FormState) => ({
                         displayFields={["ac_code", "ac_name"]}
                         loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
                         disabled={isCancelled || Boolean(settledPaidAmount > 0)}
+                        onQuickAdd={() => {
+                          setQuickAddModal({
+                            open: true,
+                            accountType: isSales ? "customer" : "supplier",
+                            targetLineId: null,
+                          });
+                        }}
+                        quickAddTooltip={isSales ? "Quick Add Customer Account" : "Quick Add Supplier Account"}
                         onChange={(value, row) => {
                           const r = row || {} as Record<string, unknown>;
                           const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -2146,6 +2164,14 @@ const limitProps = (f: keyof FormState) => ({
                             displayFields={["ac_code", "ac_name"]}
                             loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
                             disabled={isCancelled}
+                            onQuickAdd={() => {
+                              setQuickAddModal({
+                                open: true,
+                                accountType: "general",
+                                targetLineId: line.id,
+                              });
+                            }}
+                            quickAddTooltip="Quick Add Account"
                             onChange={(value, row) => updateLine(line.id, { ac_code: value, ac_name: text(getLookupValue(row || {}, "ac_name")) })}
                           />
                           {lineErrors[line.id]?.ac_code && (
@@ -2597,6 +2623,27 @@ const limitProps = (f: keyof FormState) => ({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
+      />
+      <QuickAddAccountModal
+        open={quickAddModal.open}
+        onClose={() => setQuickAddModal((prev) => ({ ...prev, open: false }))}
+        accountType={quickAddModal.accountType}
+        companyCode={user?.company_code}
+        onAccountCreated={(newAcc: CreatedAccountResult) => {
+          if (quickAddModal.targetLineId) {
+            updateLine(quickAddModal.targetLineId, {
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || form.curr_code,
+            });
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+            }));
+          }
+        }}
       />
       <Dialog
         open={cancelConfirmOpen}
