@@ -1,3 +1,4 @@
+import {CompanyDeletionDialog} from './CompanyDeletionDialog';
 import {moduleHierarchyFields,moduleHierarchyOptions,changeModuleHierarchy} from './moduleEditor';
 import { RegistrationSettingsPanel } from './RegistrationSettingsPanel';
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -136,6 +137,7 @@ export function PlatformAdminPage() {
   const [version, setVersion] = useState(0);
   const [readiness, setReadiness] = useState<Row | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [purgeTarget,setPurgeTarget]=useState<{tenant:string;company:string;name:string}|null>(null);
   const [statusChange, setStatusChange] = useState<{ row: Row; table: string; tenant: string; company: string; enabled: boolean } | null>(null);
   const editorContext = useRef("");
   const editorInstance = useRef(0);
@@ -417,6 +419,8 @@ export function PlatformAdminPage() {
   const readOnly =
     catalog.tables.find((t) => t.name === table)?.readonly === true;
   const scoped = user?.platformAccess?.scope === "SCOPED";
+  const deletionLogin=user?.loginid?.trim().toLowerCase();
+  const canDeleteCompany=(deletionLogin==='prodadmin'&&user?.platformAccess?.scope==='ALL')||(deletionLogin==='qaadmin'&&scoped&&tenant==='WMSTST_TENANT');
   const renderField = (c: Column) => {
     const InputControl = c.secret ? PlatformPasswordInput : "input";
     if(table==='SEC_MODULE_DATA'&&moduleHierarchyFields.includes(c.name)){
@@ -1284,6 +1288,8 @@ export function PlatformAdminPage() {
                         >
                           Delete
                         </Button>}
+                        {table==='MS_COMPANY'&&canDeleteCompany&&<Button size="sm" variant="destructive" disabled={saving||![row.STATUS,row.ACTIVE_FLAG,row.IS_ACTIVE].some(value=>['N','I','INACTIVE','DISABLED','0'].includes(String(value??'').trim().toUpperCase()))||String(tenants.find(item=>item.TENANT_ID===tenant)?.COMPANY_CODE||'')===String(row.COMPANY_CODE)} title="Deactivate the company first. The tenant default/template company is protected." onClick={()=>setPurgeTarget({tenant,company:String(row.COMPANY_CODE).trim(),name:String(row.COMPANY_NAME||row.COMPANY_CODE)})}>Delete company</Button>}
+
                       </>
                     )}
                   </td>
@@ -1326,6 +1332,10 @@ export function PlatformAdminPage() {
           </Button>
         </footer>
       )}
+      {purgeTarget&&<CompanyDeletionDialog tenant={purgeTarget.tenant} company={purgeTarget.company} name={purgeTarget.name} onClose={()=>setPurgeTarget(null)} onDeleted={()=>{
+        const removed=purgeTarget;setPurgeTarget(null);setEditor(null);setNotice(`Company ${removed.company} and its associated database records were permanently deleted.`);setVersion(value=>value+1);
+        void request(`/${encodeURIComponent(removed.tenant)}/catalog`).then((data:Catalog)=>{setCatalog(data);if(company===removed.company)setCompany(data.companies[0]?.COMPANY_CODE||'');}).catch(e=>setError(errorText(e)));
+      }}/>}
       <ConfirmDialog open={Boolean(statusChange)} title={`${statusChange?.enabled ? "Activate" : "Deactivate"} ${statusChange?.table === "MS_COMPANY" ? "company" : "user"}?`}
         description={String(statusChange?.row.COMPANY_NAME || statusChange?.row.USERNAME || statusChange?.row.LOGINID || "")}
         actionLabel={statusChange?.enabled ? "Activate" : "Deactivate"} tone={statusChange?.enabled ? "default" : "danger"} onClose={() => setStatusChange(null)} onConfirm={() => {
