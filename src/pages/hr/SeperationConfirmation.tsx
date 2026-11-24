@@ -5,7 +5,9 @@
 //  • Freight-style header with status pill + "CODE - NAME" subtitle, Close / Clear / Save
 //  • Compact SectionPanel blocks using the in-house Input / Select / LookupField
 //  • toast feedback
-//  • ALL data access goes through executeWmsInboundSql (raw SQL)
+//  • Employee lookup comes from the proc API (getDynamicLookup → MSEHR_TRANSACTIONS_MS_HR_EMPLOYEE),
+//    the same source the Employee Master list uses
+//  • Everything else goes through executeWmsInboundSql (raw SQL)
 //
 // Flow:
 //  Company (read-only) → Division → Department → Section → Employee
@@ -25,7 +27,7 @@ import { Select } from "../../components/ui/Select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { useToast } from "../../components/ui/AlertToast";
 import { executeWmsInboundSql } from "../../api/wms"; // adjust path to wherever this actually lives
-import { getLookupValue } from "../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../api/lookups";
 import { useAuth } from "../../state/AuthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -57,6 +59,16 @@ type ConfirmForm = {
 // Column names from HR_SEPERATION_CONFIRMATION_PAGE
 const COL_LC_DATE = "LABOUR_CARD_CANCEL_DATE";
 const COL_VISA_DATE = "VISA_CANCELLED_DATE";
+
+/** Proc API (dynamic lookup) that returns the employee master list — same one useEmployeeList uses. */
+const EMPLOYEE_LOOKUP_PARAMETER = "MSEHR_TRANSACTIONS_MS_HR_EMPLOYEE";
+
+/**
+ * The proc returns ALL employees. When true, the Employee lookup is narrowed to employees that
+ * already have a HR_EMP_SEPARATIONS row (separation initiated). Set to false to list everyone;
+ * picking a non-initiated employee still shows "Separation is not initiated for this employee".
+ */
+const ONLY_SEPARATION_INITIATED = false;
 
 // TODO: confirm against prod: SELECT DISTINCT STATUS_FLAG / SETTLEMENT_STATUS FROM HR_EMP_SEPARATIONS
 const STATUS_OPTIONS = [
@@ -137,6 +149,24 @@ async function runSql(sql: string): Promise<Row[]> {
 
 /** Blank / null criteria behave like '%' in the lookups (same as the PB script). */
 const likeValue = (v: string) => (v && v.trim() ? sqlEscape(v.trim()) : "%");
+
+/** Upper-cases every key so the proc's row (employee_code, rpt_name, …) matches the lookup columns. */
+const upperKeys = (row: Row): Row => {
+  const out: Row = {};
+  Object.keys(row).forEach((k) => {
+    out[k.toUpperCase()] = row[k];
+  });
+  return out;
+};
+
+/** "00763" and "763" are the same employee id (leading zeros differ between tables). */
+const normId = (v: string) => v.trim().replace(/^0+(?=\d)/, "");
+
+const str = (row: Row, key: string) => (row[key] == null ? "" : String(row[key]).trim());
+
+/** Cascade filter. If the proc does not return that column at all, the filter is skipped. */
+const matchesLevel = (row: Row, key: string, selected: string) =>
+  !selected || !(key in row) || str(row, key) === selected.trim();
 
 /* ── queries ── */
 function buildSeparationQuery(companyCode: string, employeeId: string) {
@@ -346,7 +376,7 @@ export default function SeparationConfirmationPage() {
     resetEmployee();
   };
 
-  /* ── lookups (all raw SQL) ── */
+  /* ── lookups ── */
   const loadDivisions = useCallback(
     async (query?: string) => {
       const term = query
@@ -402,31 +432,50 @@ export default function SeparationConfirmationPage() {
     [companyCode, divCode, deptCode],
   );
 
-  // Only employees whose separation was already initiated can be confirmed
+  /** Employee ids that already have a separation row (null = could not load → don't narrow the list). */
+  const loadInitiatedIds = useCallback(async (): Promise<Set<string> | null> => {
+    try {
+      const rows = await runSql(`
+        SELECT DISTINCT s.EMPLOYEE_ID
+        FROM HR_EMP_SEPARATIONS s
+        WHERE s.COMPANY_CODE = '${sqlEscape(companyCode)}'
+      `);
+      return new Set(rows.map((r) => normId(pick(r, "EMPLOYEE_ID"))));
+    } catch {
+      return null;
+    }
+  }, [companyCode]);
+
+  // Employee lookup → proc API (same source as the Employee Master list), narrowed client-side
   const loadEmployees = useCallback(
     async (query?: string) => {
-      const term = query
-        ? `AND (EMPLOYEE_CODE LIKE '%${sqlEscape(query)}%' OR UPPER(RPT_NAME) LIKE UPPER('%${sqlEscape(query)}%'))`
-        : "";
-      return runSql(`
-        SELECT * FROM (
-          SELECT EMPLOYEE_CODE, ALTERNATE_ID, RPT_NAME, COMP_NAME, DIV_NAME, DEPT_NAME, SECTION_NAME,
-                 COMPANY_CODE, DIV_CODE, DEPT_CODE, SECTION_CODE, EMPLOYEE_ID
-          FROM VW_HR_EMP_MASTER e
-          WHERE e.COMPANY_CODE = '${sqlEscape(companyCode)}'
-            AND e.DIV_CODE LIKE '${likeValue(divCode)}'
-            AND e.DEPT_CODE LIKE '${likeValue(deptCode)}'
-            AND e.SECTION_CODE LIKE '${likeValue(sectCode)}'
-            AND e.emp_status <> 'S'
-            AND EXISTS (
-              SELECT 1 FROM HR_EMP_SEPARATIONS s
-              WHERE s.COMPANY_CODE = e.COMPANY_CODE AND s.EMPLOYEE_ID = e.EMPLOYEE_ID
-            ) ${term}
-          ORDER BY COMPANY_CODE, EMPLOYEE_CODE
-        ) WHERE ROWNUM <= 200
-      `);
+      const [response, initiated] = await Promise.all([
+        getDynamicLookup({
+          parameter: EMPLOYEE_LOOKUP_PARAMETER,
+          loginid,
+          code1: companyCode,
+        }),
+        ONLY_SEPARATION_INITIATED ? loadInitiatedIds() : Promise.resolve(null),
+      ]);
+
+      const term = (query ?? "").trim().toLowerCase();
+
+      return ((Array.isArray(response) ? response : []) as Row[])
+        .map(upperKeys)
+        .filter((r) => {
+          if (!matchesLevel(r, "DIV_CODE", divCode)) return false;
+          if (!matchesLevel(r, "DEPT_CODE", deptCode)) return false;
+          if (!matchesLevel(r, "SECTION_CODE", sectCode)) return false;
+          if (initiated && !initiated.has(normId(str(r, "EMPLOYEE_ID")))) return false;
+          if (term) {
+            const hay = `${str(r, "EMPLOYEE_CODE")} ${str(r, "RPT_NAME")} ${str(r, "ALTERNATE_ID")}`.toLowerCase();
+            if (!hay.includes(term)) return false;
+          }
+          return true;
+        })
+        .sort((a, b) => str(a, "EMPLOYEE_CODE").localeCompare(str(b, "EMPLOYEE_CODE"), undefined, { numeric: true }));
     },
-    [companyCode, divCode, deptCode, sectCode],
+    [companyCode, loginid, divCode, deptCode, sectCode, loadInitiatedIds],
   );
 
   /* ── cascade handlers ── */
@@ -479,7 +528,7 @@ export default function SeparationConfirmationPage() {
     [companyCode, toast],
   );
 
-  /* ── employee pick → load separation record + final settlement ── */
+  /* ── employee pick → back-fill Division/Dept/Section, load separation record + final settlement ── */
   const handleEmployeeChange = async (value: string, row?: Parameters<typeof getLookupValue>[0] | null) => {
     if (!row) {
       resetEmployee();
@@ -491,15 +540,46 @@ export default function SeparationConfirmationPage() {
     setEmpCode(value);
     setEmpId(pickedEmpId);
     setEmpDisplay(lv(row, "RPT_NAME"));
-    setDivCode(lv(row, "DIV_CODE"));
-    setDivDisplay(lv(row, "DIV_NAME"));
-    setDeptCode(lv(row, "DEPT_CODE"));
-    setDeptDisplay(lv(row, "DEPT_NAME"));
-    setSectCode(lv(row, "SECTION_CODE"));
-    setSectDisplay(lv(row, "SECTION_NAME"));
 
     setLoadingRecord(true);
     try {
+      // The proc row may not carry the org hierarchy → fetch it from the employee view when missing
+      // (Draft Figure needs the Division code).
+      let div = { code: lv(row, "DIV_CODE"), name: lv(row, "DIV_NAME") };
+      let dept = { code: lv(row, "DEPT_CODE"), name: lv(row, "DEPT_NAME") };
+      let sect = { code: lv(row, "SECTION_CODE"), name: lv(row, "SECTION_NAME") };
+
+      if (!div.code || !dept.code || !sect.code) {
+        try {
+          const extra = (
+            await runSql(`
+              SELECT DIV_CODE, DIV_NAME, DEPT_CODE, DEPT_NAME, SECTION_CODE, SECTION_NAME
+              FROM VW_HR_EMP_MASTER
+              WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+                AND EMPLOYEE_ID = '${sqlEscape(pickedEmpId)}'
+                AND ROWNUM = 1
+            `)
+          )[0];
+          if (extra) {
+            div = { code: div.code || pick(extra, "DIV_CODE"), name: div.name || pick(extra, "DIV_NAME") };
+            dept = { code: dept.code || pick(extra, "DEPT_CODE"), name: dept.name || pick(extra, "DEPT_NAME") };
+            sect = {
+              code: sect.code || pick(extra, "SECTION_CODE"),
+              name: sect.name || pick(extra, "SECTION_NAME"),
+            };
+          }
+        } catch {
+          /* hierarchy is a convenience; the separation load below still decides success */
+        }
+      }
+
+      setDivCode(div.code);
+      setDivDisplay(div.name);
+      setDeptCode(dept.code);
+      setDeptDisplay(dept.name);
+      setSectCode(sect.code);
+      setSectDisplay(sect.name);
+
       const rows = await runSql(buildSeparationQuery(companyCode, pickedEmpId));
       if (rows.length === 0) {
         toast.warning("Separation is not initiated for this employee");
