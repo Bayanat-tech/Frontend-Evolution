@@ -2309,11 +2309,11 @@ const limitProps = (f: keyof FormState) => ({
                             <div
                               className="finance-allocation-panel my-0.5 mx-1 overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs"
                               style={{
-                                width: "1080px",
-                                minWidth: "960px",
+                                width: "940px",
+                                minWidth: "900px",
                                 maxWidth: "100%",
-                                "--allocation-panel-width": "1080px",
-                                "--allocation-panel-min-width": "960px",
+                                "--allocation-panel-width": "940px",
+                                "--allocation-panel-min-width": "900px",
                               } as CSSProperties}
                             >
                               {/* Compact Allocations Toolbar */}

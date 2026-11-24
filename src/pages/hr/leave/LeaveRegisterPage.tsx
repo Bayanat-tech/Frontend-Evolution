@@ -455,7 +455,12 @@ function leaveBalanceSql(employeeId: string) {
     SELECT EMPLOYEE_ID, LEAVE_TYPE, LEAVE_TYPE_DESC,
       NVL(NO_OF_LEAVES_AVAILABLE, 0) AS NO_OF_LEAVES_AVAILABLE
     FROM VW_HR_LEAVE_YEARLY_BAL_SYSDATE_AWARE
-    WHERE EMPLOYEE_ID = '${escapeSql(employeeId)}'
+    WHERE EMPLOYEE_ID = (
+        SELECT EMPLOYEE_ID
+        FROM MS_HR_EMPLOYEE
+        WHERE EMPLOYEE_CODE = '${escapeSql(employeeId)}'
+           OR EMPLOYEE_ID = '${escapeSql(employeeId)}'
+    )
       AND LEAVE_TYPE NOT IN ('001', '008', 'ABS' )
   `;
 }

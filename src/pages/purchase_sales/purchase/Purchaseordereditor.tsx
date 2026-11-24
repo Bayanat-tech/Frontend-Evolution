@@ -58,6 +58,7 @@ import { createPortal } from "react-dom";
 
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { PurchaseOrderPrintDialog } from "./purchaseOrderPrintDialoge";
 
 
 export type { PurchaseOrderEditorState };
@@ -106,6 +107,7 @@ export function PurchaseOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
 
   // ---- Report Preview state ----
@@ -873,9 +875,9 @@ export function PurchaseOrderEditor({
                 </div>
                 {form.doc_no && (
                   <>
-                    <Button type="button" variant="secondary" onClick={handlePrint}>
-                      <Printer size={15} /> Print
-                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+  <Printer size={15} /> Print
+</Button>
                     {/* <Button
                       aria-label="Excel"
                       title="Excel"
@@ -1097,7 +1099,13 @@ export function PurchaseOrderEditor({
         flowLevel={effectiveFlowLevel}
         readOnly={!isPendingTab || isCancelled}
       />
-
+<PurchaseOrderPrintDialog
+  open={printOpen}
+  onClose={() => setPrintOpen(false)}
+  form={form}
+  companyCode={user?.company_code || ""}
+  docType={PO_DOC_TYPE.LPO}
+/>
 
       <PurchaseReportPreview />
     </>

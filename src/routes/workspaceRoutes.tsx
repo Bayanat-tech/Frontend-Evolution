@@ -254,6 +254,10 @@ import PurchaseQuotationListing from "../pages/purchase_sales/Reports/PurchaseQu
 import PayrollClosing from "../pages/hr/payroll_closing/PayrollClosingPage";
 import PayrollLock from "../pages/hr/payroll_closing/PayrollLockPage";
 import EmployeeMasterListPage from "../pages/hr/Employee/EmployeeMasterPage";
+import PurchaseInvoiceListing from "../pages/purchase_sales/Reports/PurchaseInvoiceListing";
+import PurchaseGrnListing from "../pages/purchase_sales/Reports/PurchaseGrnListing";
+import SalesDnListing from "../pages/purchase_sales/Reports/SalesDNListingReport";
+import SalesOrderListing from "../pages/purchase_sales/Reports/SalesOrderListingReport";
 import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
   type WorkspaceRouteContext = {
     pathname: string;
@@ -1974,6 +1978,33 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       element: () => <PurchaseQuotationListing />,
     },
 
+    {
+      name: "Sales DN Register Report",
+      match: ({ pathname }) => isSalesDNListingRoute(pathname),
+      element: () => <SalesDnListing />,
+    },
+
+
+     {
+      name: "Sales Order Register Report",
+      match: ({ pathname }) => isSalesOrderListingRoute(pathname),
+      element: () => <SalesOrderListing />,
+    },
+
+
+
+    {
+      name: "PI Register Report",
+      match: ({ pathname }) => isPIRegisterRoute(pathname),
+      element: () => <PurchaseInvoiceListing />,
+    },
+
+    {
+      name: "Purchase GRN Register Report",
+      match: ({ pathname }) => isPurchaseGrnRegisterRoute(pathname),
+      element: () => <PurchaseGrnListing />,
+    },
+
 
     {
       name: "Purchase Request Register(old) Report",
@@ -2195,6 +2226,35 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       "/workspace/ims/ims/reports/purchase_quotation_listing"
     );
   }
+
+  function isSalesDNListingRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return normalized.includes(
+      "/workspace/ims/ims/reports/sales_dn_listing"
+    );
+  }
+
+   function isSalesOrderListingRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return normalized.includes(
+      "/workspace/ims/ims/reports/sales_order_listing"
+    );
+  }
+  
+  function isPIRegisterRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return normalized.includes(
+      "/workspace/ims/ims/reports/purchase_invoice_listing"
+    );
+  }
+
+function isPurchaseGrnRegisterRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return normalized.includes(
+      "/workspace/ims/ims/reports/purchase_grn_listing"
+    );
+  }
+
 
   function isPurchaseRequestRegisterOldRoute(pathname: string) {
     const normalized = pathname.toLowerCase();

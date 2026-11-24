@@ -1,3 +1,4 @@
+import { RegistrationSettingsPanel } from './RegistrationSettingsPanel';
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   ShieldCheck,
@@ -196,7 +197,7 @@ export function PlatformAdminPage() {
   useEffect(() => {
     if (
       !allowed ||
-      mode === "billing" ||
+      (mode === "billing" || mode === "registration") ||
       (mode === "records" && !table) ||
       ((mode === "screens" || mode === "access") && !company)
     )
@@ -268,7 +269,7 @@ export function PlatformAdminPage() {
       </section>
     );
   const title =
-    mode === "billing" ? "Subscription & billing" : mode === "access"
+    mode === "registration" ? "Public registration" : mode === "billing" ? "Subscription & billing" : mode === "access"
       ? "User screen access"
       : mode === "screens"
         ? "Company screen availability"
@@ -533,7 +534,8 @@ export function PlatformAdminPage() {
               (c.name === "COMPANY_CODE" && table === "MS_COMPANY") ||
               (c.name === "COMPANY_NAME" && table === "MS_COMPANY")
             }
-            maxLength={c.maxLength}
+            minLength={c.secret && /^(USERPASS|SEC_PASSWD|PASSWORD)$/.test(c.name) ? 8 : undefined}
+            maxLength={c.secret && /^(USERPASS|SEC_PASSWD|PASSWORD)$/.test(c.name) ? 20 : c.maxLength}
             step="any"
             value={
               /DATE|TIMESTAMP/.test(c.type)
@@ -643,7 +645,7 @@ export function PlatformAdminPage() {
           Refresh
         </Button>
       </header>
-      <div className="platform-scope">
+      {mode !== "registration" && <div className="platform-scope">
         <label>
           Tenant
           <select
@@ -720,8 +722,9 @@ export function PlatformAdminPage() {
               : "Changes apply to the selected tenant and company"}
           </span>
         </div>
-      </div>
+      </div>}
       <nav className="platform-tabs" aria-label="Administration views">
+        {!scoped && <button aria-current={mode === "registration" ? "page" : undefined} disabled={saving || loading} onClick={()=>{setMode("registration");setEditor(null);setNewUser(false);setError("");setNotice("");}}><Building2 size={16}/> Registration</button>}
         <button
           aria-current={mode === "records" ? "page" : undefined}
           disabled={saving}
@@ -772,7 +775,7 @@ export function PlatformAdminPage() {
           {notice}
         </p>
       )}
-      {readiness && (readiness.companyNeedsModules || (mode === "access" && loginid && !readiness.users?.some((u: Row) => u.LOGINID === loginid && Number(u.MODULE_COUNT) > 0))) && (
+      {mode !== "registration" && readiness && (readiness.companyNeedsModules || (mode === "access" && loginid && !readiness.users?.some((u: Row) => u.LOGINID === loginid && Number(u.MODULE_COUNT) > 0))) && (
         <div className="platform-assignment-warning" role="status">
           <div><strong>Operational module assignment required</strong><p>{mode === "access" && loginid ? `User ${loginid} has no operational module assigned.` : `Company ${company} has no operational modules assigned to its users.`} General masters are view/search defaults. Select a user, choose a module and grant transaction permissions. Billing selection does not grant access.</p></div>
           <Button variant="outline" onClick={() => { setMode("access"); setNewUser(!readiness.userCount); }}>Assign modules</Button>
@@ -802,7 +805,7 @@ export function PlatformAdminPage() {
             </select>
           </label>
         )}
-        {mode !== "audit" && (
+        {!["audit","registration"].includes(mode) && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -954,7 +957,7 @@ export function PlatformAdminPage() {
                 ["loginid", "Login ID", "text"],
                 ["username", "User name", "text"],
                 ["email", "Email", "email"],
-                ["password", "Password (12+ characters)", "password"],
+                ["password", "Password (8 to 20 characters)", "password"],
               ] as const
             ).map(([key, text, type]) => {
               const InputControl =
@@ -966,8 +969,8 @@ export function PlatformAdminPage() {
                     type={type}
                     disabled={saving}
                     required
-                    maxLength={key === "loginid" ? 15 : undefined}
-                    minLength={key === "password" ? 12 : undefined}
+                    maxLength={key === "loginid" ? 15 : key === "password" ? 20 : undefined}
+                    minLength={key === "password" ? 8 : undefined}
                     autoComplete={key === "password" ? "new-password" : "off"}
                     value={userDraft[key]}
                     onChange={(e) =>
@@ -1121,7 +1124,7 @@ export function PlatformAdminPage() {
         </form>
       )}
       <div className="platform-grid" aria-busy={loading && mode !== "billing"}>
-        {mode === "billing" ? <CompanySubscriptionPanel key={`${tenant}/${company}`} tenant={tenant} company={company} /> : loading ? (
+        {mode === "registration" ? <RegistrationSettingsPanel key={version} /> : mode === "billing" ? <CompanySubscriptionPanel key={`${tenant}/${company}`} tenant={tenant} company={company} /> : loading ? (
           <p className="platform-empty" role="status">
             Loading security records…
           </p>
