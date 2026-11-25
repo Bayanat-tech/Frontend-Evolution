@@ -1,3 +1,5 @@
+
+
 import { ReactNode, useEffect, useRef, useState } from "react"; // CHANGED: + useEffect, useState
 import { Briefcase, Building2, FileText, Percent, Receipt, Truck } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
@@ -106,6 +108,13 @@ export function PurchaseOrderHeaderForm({
   const docTypeUpper = String(docType ?? "").trim().toUpperCase();
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const prLoadSeq = useRef(0);
+
+  // ADDED: LPO only - whichever of Quotation / PR has a value locks the other one. Both empty = both open.
+  const hasQuotation = !!String(form.ref_no ?? "").trim();
+  const hasPR = !!String(form.pr_req_no ?? "").trim();
+  const lockQuotation = docTypeUpper === "LPO" && hasPR;
+  const lockPR = docTypeUpper === "LPO" && hasQuotation;
+
   // light placeholder on empty date inputs (Chrome/Edge/Safari)
   const dateCls = (v?: string | null) =>
     `h-7 text-xs ${v ? "" : "[&::-webkit-datetime-edit]:text-slate-400"}`;
@@ -259,7 +268,7 @@ export function PurchaseOrderHeaderForm({
 
 
             {docTypeUpper === "LPO" && (
-              <div className="col-span-4">
+              <div className="col-span-2">
                 <LookupField
                   label="Reference No"
                   placeholder="Quotation No"
@@ -268,6 +277,7 @@ export function PurchaseOrderHeaderForm({
                   columns={[
                     { field: "doc_no", header: "Quotation No" },
                     { field: "doc_date", header: "Quotation Date" },
+                    { field: "pr_req_no", header: "PR Request No" },
                     { field: "party_name", header: "Supplier Name" },
                   ]}
                   valueField="doc_no"
@@ -282,8 +292,14 @@ export function PurchaseOrderHeaderForm({
                       code4: form.ac_code
                     })
                   }
-                  disabled={disabled}
+                  disabled={disabled || lockQuotation} // CHANGED: + lockQuotation (PR already selected)
                   onChange={async (value, row) => {
+                    // ADDED: quotation cleared -> unlock PR, drop the lines
+                    if (!value) {
+                      updateField("ref_no", "");
+                      setdetails?.([]);
+                      return;
+                    }
                     const selectedAcCode = text(getLookupValue(row || {}, "ac_code"));
                     let accountRow: Record<string, unknown> | undefined;
                     if (selectedAcCode) {
@@ -430,7 +446,7 @@ export function PurchaseOrderHeaderForm({
                 <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} value={form.ref_no || ""} onChange={(e) => updateField("ref_no", e.target.value)} />
               </CField>
             )}
-            {docTypeUpper === "PQO" && (
+            {(docTypeUpper === "PQO" || docTypeUpper === "LPO") && (
               <div className="col-span-2">
                 <LookupField
                   label="Purchase Req No"
@@ -449,7 +465,7 @@ export function PurchaseOrderHeaderForm({
                       loginid: loginIdOrAdmin,
                     })
                   }
-                  disabled={headerAndLineDisabled}
+                  disabled={headerAndLineDisabled || lockPR} // CHANGED: + lockPR (LPO only, quotation already selected)
                   onChange={async (value) => {
                     updateField("pr_req_no", value);
                     const seq = ++prLoadSeq.current;
@@ -634,7 +650,7 @@ export function PurchaseOrderHeaderForm({
           </HeaderBlock>
 
           <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-4">
-            {(docTypeUpper === "LPO" || docTypeUpper === "SO" || docTypeUpper === "PQO" || docTypeUpper === "JO") && (
+            {(docTypeUpper === "LPO" || docTypeUpper === "SO" || docTypeUpper === "PQO" || docTypeUpper === "JO" || docTypeUpper === "LPR" || docTypeUpper === "SOR") && (
               <>
                 <CField label="Delivery Contact Person"><Input className="h-7 text-xs" maxLength={70} disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
                 {(docTypeUpper === "JO" && <CField label="Delivery Date" ><Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.dlvr_date} onChange={(e) => updateField("dlvr_date", e.target.value)} /></CField>)}

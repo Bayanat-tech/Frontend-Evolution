@@ -745,7 +745,7 @@ export function PlatformAdminPage() {
         </div>
       </div>}
       <nav className="platform-tabs" aria-label="Administration views">
-        {!scoped && <button aria-current={mode === "registration" ? "page" : undefined} disabled={saving || loading} onClick={()=>{setMode("registration");setEditor(null);setNewUser(false);setError("");setNotice("");}}><Building2 size={16}/> Registration</button>}
+        {((user?.loginid?.toLowerCase()==="prodadmin"&&!scoped)||(user?.loginid?.toLowerCase()==="qaadmin"&&scoped)) && <button aria-current={mode === "registration" ? "page" : undefined} disabled={saving || loading} onClick={()=>{setMode("registration");setEditor(null);setNewUser(false);setError("");setNotice("");}}><Building2 size={16}/> Registration</button>}
         <button
           aria-current={mode === "records" ? "page" : undefined}
           disabled={saving}
@@ -1145,7 +1145,7 @@ export function PlatformAdminPage() {
           </div>
         </form>
       )}
-      <div className="platform-grid" aria-busy={loading && mode !== "billing"}>
+      <div className={mode === "registration" ? "platform-registration-surface" : "platform-grid"} aria-busy={loading && !["billing","registration"].includes(mode)}>
         {mode === "registration" ? <RegistrationSettingsPanel key={version} /> : mode === "billing" ? <CompanySubscriptionPanel key={`${tenant}/${company}`} tenant={tenant} company={company} /> : loading ? (
           <p className="platform-empty" role="status">
             Loading security records…

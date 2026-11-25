@@ -4,7 +4,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -41,7 +41,7 @@ import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "../../purchase_sales/sales/SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "../../purchase_sales/sales/SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
+import { getCompanyInfo, getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
@@ -64,6 +64,12 @@ export function PurchaseReturnEditor({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const amountDecimals = Number.isInteger(user?.amount_decimal_nos)
+    ? Math.min(Math.max(Number(user?.amount_decimal_nos), 0), 20)
+    : 2;
+  const priceDecimals = Number.isInteger(user?.price_decimal_nos)
+    ? Math.min(Math.max(Number(user?.price_decimal_nos), 0), 20)
+    : 2;
   const editMode = editor?.mode === "edit";
   // const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor) as unknown as PurchaseOrderForm);
@@ -101,8 +107,66 @@ export function PurchaseReturnEditor({
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const submitBtnRef = useRef<HTMLDivElement>(null);
-const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: user?.company_code })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [user?.company_code]);
 
+  // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
+
+  const prevHeaderTaxRef = useRef<{ type: string; cat: string } | null>(null);
+
+  useEffect(() => {
+    if (loading) return; // wait until saved lines are loaded
+    // Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
+
+    const curType = form.tx_compnt_1_expmt || "";
+    const curCat = form.tx_cat_code || "";
+    const prev = prevHeaderTaxRef.current;
+    // true only when the HEADER Tax Type / Category really changed (not on load, not on line edits)
+    const headerTaxChanged = !!prev && (prev.type !== curType || prev.cat !== curCat);
+    prevHeaderTaxRef.current = { type: curType, cat: curCat };
+
+    const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
+
+    setRows((current) =>
+      current.map((row) => ({
+        ...row,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        ...(headerTaxChanged
+          ? {
+            tx_cat_code: `${form.tx_cat_code || ""}`,
+            tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+            tx_compnt_perc_1: taxPerc,
+            tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100),
+          }
+          : {}),
+      }))
+    );
+  }, [
+    loading,
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1,
+    taxCats,
+  ]);
 
 
   useEffect(() => {
@@ -114,6 +178,49 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
     setError("");
     setLoading(editor.mode === "edit");
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor || editor.mode === "edit") return;
+    let alive = true;
+    const initialCurr = text(emptyForm(editor).curr_code);
+    (async () => {
+      try {
+        const res: any = await getCompanyInfo();
+        const info = res?.data ?? res;
+        const code = text(info?.base_curr_code || info?.currency);
+        if (!alive || !code) return;
+
+        // resolve name / ex rate from the same lookup the Currency field uses
+        let name = "";
+        let rate = 1;
+        try {
+          const list: any[] = await getDynamicLookup({
+            parameter: "Account_Currency_CODE_Serach",
+            code1: user?.company_code,
+            loginid: user?.loginid || user?.username || "ADMIN",
+          });
+          const match = (list || []).find(
+            (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+          );
+          if (match) {
+            name = text(getLookupValue(match, "curr_name"));
+            rate = Number(getLookupValue(match, "ex_rate")) || 1;
+          }
+        } catch { /* keep code only */ }
+
+        if (!alive) return;
+        // fill unless the user already picked a different currency
+        setForm((current) =>
+          current.curr_code && current.curr_code !== initialCurr
+            ? current
+            : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+        );
+      } catch (e) {
+        console.warn("Company info load failed", e);
+      }
+    })();
+    return () => { alive = false; };
   }, [editor]);
   useEffect(() => {
     const taxPerc =
@@ -156,6 +263,22 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           fetchSalesOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
           fetchSalesOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
+        let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -169,14 +292,21 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
           party_address: text(headerRaw.address || current.party_address),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
+          curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           party_phone: text(headerRaw.tel || current.party_phone),
           party_fax: text(headerRaw.fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
+
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
@@ -205,7 +335,7 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load Sales Order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Purchase return");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -250,10 +380,10 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-    
+
   })();
-      const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
-    const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
   const updateField = (
     field: keyof PurchaseOrderForm,
     value: string | number
@@ -356,34 +486,34 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   // ── Print now opens the in-app NewReportDialog (raw HTML, no blob URL) ──
   const openReport = async () => {
-  if (!form.doc_no) {
-    setError("Save the Purchase Return before printing");
-    return;
-  }
+    if (!form.doc_no) {
+      setError("Save the Purchase Return before printing");
+      return;
+    }
 
-  const params = {
-    company_code: user?.company_code,
-    doc_type: SO_DOC_TYPE.LPR,
-    doc_no: form.doc_no,
+    const params = {
+      company_code: user?.company_code,
+      doc_type: SO_DOC_TYPE.LPR,
+      doc_no: form.doc_no,
+    };
+    const preview = openPurchaseReport(`Purchase Return ${form.doc_no}`.trim());
+
+    try {
+      const html = await getSOrderReportHtml(params);
+      preview.ready({
+        html,
+        filename: `purchase_return_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await getSoOrderReportExcel(params);
+        },
+      });
+    } catch (printError) {
+      preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
+    }
   };
-  const preview = openPurchaseReport(`Purchase Return ${form.doc_no}`.trim());
 
-  try {
-    const html = await getSOrderReportHtml(params);
-    preview.ready({
-      html,
-      filename: `purchase_return_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await getSoOrderReportExcel(params);
-      },
-    });
-  } catch (printError) {
-    preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
-  }
-};
 
-  
 
   const handleExportExcel = async () => {
     if (!form.doc_no) {
@@ -410,9 +540,26 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", SO_DOC_TYPE.LPR, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase Quotation saved as draft");
+    }, "Purchase return saved as draft");
   };
 
   // const handleSubmitClick = () => {
@@ -427,43 +574,43 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-    const invalidRow = rows.find((row) => {
-      const qtyPuom = numberOrZero(row.qty_puom);
-      const uppp = numberOrZero(row.uppp);
-      const qtyLuom = numberOrZero(row.qty_luom);
-      const unitPrice = numberOrZero(row.unit_price);
-      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
-      return !(total > 0);
-    });
-    if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-const rect = submitBtnRef.current?.getBoundingClientRect();
-if (rect) {
-  setSubmitConfirmPos({
-    top: rect.bottom + 8,
-    right: window.innerWidth - rect.right,
-  });
-}
-    setShowSubmitConfirm(true);
+
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", SO_DOC_TYPE.LPR, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
+    }, editMode ? "Purchase return updated successfully" : "Purchase return created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", SO_DOC_TYPE.LPR, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order cancelled");
+    }, "Purchase return cancelled");
 
   // ---- Reject handlers ----
   const openRejectDialog = () => {
@@ -485,7 +632,7 @@ if (rect) {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
       await runWorkflow("REJECTED", SO_DOC_TYPE.LPR, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
-    }, "Sales Order rejected");
+    }, "Purchase return rejected");
   };
 
   // ---- Send Back handlers ----
@@ -542,7 +689,7 @@ if (rect) {
       };
       await runWorkflow("SENTBACK", SO_DOC_TYPE.LPR, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
-    }, "Sales Order sent back");
+    }, "Purchase return sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
@@ -559,9 +706,9 @@ if (rect) {
               {/* <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Sales Order" : "New Sales Order"}
+                  {editMode ? "Edit Purchase return" : "New Purchase return"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Sales Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase return</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -582,7 +729,7 @@ if (rect) {
                 title="Purchase Return"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(grandTotal)}
+                total={formatAmount(finalTotal, amountDecimals)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -591,35 +738,15 @@ if (rect) {
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={() => void openReport()}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleExportExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
-                     <div className="flex items-center gap-2">
+              
+                <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
                       {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
                       {actionLoading === "draft" ? "Saving..." : "Save Draft"}
                     </Button>
                   )}
-                  <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
-                      {isPendingTab && (
+                  {isPendingTab && (
                     <Button
                       type="button"
                       onClick={handleSubmitClick}
@@ -632,26 +759,7 @@ if (rect) {
                       )}
                       {actionLoading === "submit" ? "Submitting..." : "Submit"}
                     </Button>
-   )}
-                    {showSubmitConfirm &&
-                      createPortal(
-                        <div
-                          style={{ position: "fixed", top: submitConfirmPos.top, right: submitConfirmPos.right }}
-                          className="z-[9999] w-56 rounded-lg border border-slate-200 bg-white p-3 text-black shadow-xl"
-                        >
-                          <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
-                          <div className="flex justify-end gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>
-                              No
-                            </Button>
-                            <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>
-                              Yes
-                            </Button>
-                          </div>
-                        </div>,
-                        document.body
-                      )}
-                  </div>
+                  )}
 
                   {isPendingTab && canSendBackOrReject && (
                     <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
@@ -669,9 +777,30 @@ if (rect) {
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
+                    {form.doc_no && (
+                    <>
+                      {/* <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                        <Printer size={15} /> Print
+                      </Button> */}
+
+                      <Button type="button" variant="secondary" onClick={() => void openReport()}>
+                        <Printer size={15} /> Print
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void handleExportExcel()}
+                      >
+                        <Download size={15} />
+                        Excel
+                      </Button>
+                    </>
+                  )}
+                  <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                    <Paperclip size={15} /> Files
+                  </Button>
 
                 </div>
-                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
               </div>
             </div>
           </CardHeader>
@@ -680,15 +809,15 @@ if (rect) {
             <div className="cancelled-document-banner" role="status">
               <div>
                 <span className="cancelled-document-kicker">Cancelled Document</span>
-                <strong>{form.doc_no || "Sales Order"}</strong>
+                <strong>{form.doc_no || "Purchase return"}</strong>
               </div>
-              <p>This Sales Order is cancelled and opened in read-only mode.</p>
+              <p>This Purchase return is cancelled and opened in read-only mode.</p>
             </div>
           )}
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase return...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -737,6 +866,7 @@ if (rect) {
                       loginid={user?.loginid || user?.username}
                       rows={rows}
                       calculateDiscount={applyDiscountCalculation}
+                      amountDecimals={amountDecimals}
                     />
                   </div>
                 )}
@@ -754,6 +884,8 @@ if (rect) {
                   discAmt={form.disc_price}
                   companyCode={user?.company_code}
                   loginid={user?.loginid || user?.username}
+                  amountDecimals={amountDecimals}
+                  priceDecimals={priceDecimals}
 
                 />
               </div>
@@ -784,7 +916,7 @@ if (rect) {
                   </Button>
                   {showSubmitConfirm && (
                     <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
-                      <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                      <p className="mb-2 text-sm text-gray-700">Submit this Purchase return?</p>
                       <div className="flex justify-end gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
                         <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
@@ -852,9 +984,9 @@ if (rect) {
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}
-        title="Sales Order Attachments"
+        title="Purchase return Attachments"
         module="SO"
-        type="Sales Order"
+        type="Purchase return"
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}

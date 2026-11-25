@@ -22,6 +22,10 @@ export interface CreatedAccountResult {
   ac_name: string;
   l4_code: string;
   curr_code?: string;
+  phone?: string;
+  address_1?: string;
+  contact_person?: string;
+  trn_no?: string;
 }
 
 export interface QuickAddAccountModalProps {
@@ -306,8 +310,11 @@ export function QuickAddAccountModal({
   }, [treeData, accountType, defaultL4Code]);
 
   // Form submission
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (e?: React.MouseEvent | React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setErrorMsg(null);
     setSuccessMsg(null);
 
@@ -356,7 +363,7 @@ export function QuickAddAccountModal({
         l4_code: targetL4,
         ac_name: trimmedName,
         curr_code: currCode || defaultCurrency,
-        ac_active: acActive,
+        ac_active: acActive || "Y",
         ac_status: "A",
         ac_type: acType,
         contact_person: contactPerson.trim() || undefined,
@@ -367,9 +374,9 @@ export function QuickAddAccountModal({
         city_name: cityName.trim() || undefined,
         address_1: address1.trim() || undefined,
         trn_no: trnNo.trim() || undefined,
-        tax_registrd: taxRegistered,
-        credit_period: creditPeriod ? Number(creditPeriod) : undefined,
-        credit_amount: creditAmount ? Number(creditAmount) : undefined,
+        tax_registrd: taxRegistered || "Y",
+        credit_period: creditPeriod && !isNaN(Number(creditPeriod)) ? Number(creditPeriod) : undefined,
+        credit_amount: creditAmount && !isNaN(Number(creditAmount)) ? Number(creditAmount) : undefined,
         contract_expry_date: contractExpryDate || undefined,
         bank_name: bankName.trim() || undefined,
         bank_ac_code: bankAcCode.trim() || undefined,
@@ -391,6 +398,10 @@ export function QuickAddAccountModal({
         ac_name: trimmedName,
         l4_code: targetL4,
         curr_code: currCode,
+        phone: mobileNo.trim() || phone.trim() || undefined,
+        address_1: address1.trim() || cityName.trim() || undefined,
+        contact_person: contactPerson.trim() || undefined,
+        trn_no: trnNo.trim() || undefined,
       });
 
       setTimeout(() => {
@@ -478,9 +489,7 @@ export function QuickAddAccountModal({
         </div>
 
         {/* Scrollable Form Body */}
-        <form
-          id="quick-add-party-form"
-          onSubmit={handleSave}
+        <div
           className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 text-slate-800"
         >
           {/* Notification Banners */}
@@ -960,7 +969,7 @@ export function QuickAddAccountModal({
               </div>
             </div>
           </div>
-        </form>
+        </div>
 
         {/* Footer Bar matching user's preferred layout */}
         <div className="border-t border-slate-200 bg-slate-50/60 px-6 py-4 flex items-center justify-between shrink-0">
@@ -974,8 +983,8 @@ export function QuickAddAccountModal({
           </button>
 
           <button
-            type="submit"
-            form="quick-add-party-form"
+            type="button"
+            onClick={(e) => void handleSave(e)}
             disabled={saving || !acName.trim()}
             className="px-7 py-2.5 rounded-xl bg-[#00378C] hover:bg-[#002b6e] active:scale-98 text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-2 shadow-md transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
