@@ -47,6 +47,7 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { SalesInvoicePrintDialog } from "./SalesInvoicePrintReport";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
+import { getCompanyInfo } from "../../../api/transactions";
 
 export type { PurchaseOrderEditorState };
 
@@ -198,6 +199,49 @@ export function SalesInvoiceEditor({
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
     setError("");
     setLoading(editor.mode === "edit");
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor || editor.mode === "edit") return;
+    let alive = true;
+    const initialCurr = text(emptyForm(editor).curr_code);
+    (async () => {
+      try {
+        const res: any = await getCompanyInfo();
+        const info = res?.data ?? res;
+        const code = text(info?.base_curr_code || info?.currency);
+        if (!alive || !code) return;
+  
+        // resolve name / ex rate from the same lookup the Currency field uses
+        let name = "";
+        let rate = 1;
+        try {
+          const list: any[] = await getDynamicLookup({
+            parameter: "Account_Currency_CODE_Serach",
+            code1: user?.company_code,
+            loginid: user?.loginid || user?.username || "ADMIN",
+          });
+          const match = (list || []).find(
+            (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+          );
+          if (match) {
+            name = text(getLookupValue(match, "curr_name"));
+            rate = Number(getLookupValue(match, "ex_rate")) || 1;
+          }
+        } catch { /* keep code only */ }
+  
+        if (!alive) return;
+        // fill unless the user already picked a different currency
+        setForm((current) =>
+          current.curr_code && current.curr_code !== initialCurr
+            ? current
+            : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+        );
+      } catch (e) {
+        console.warn("Company info load failed", e);
+      }
+    })();
+    return () => { alive = false; };
   }, [editor]);
 
   const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {

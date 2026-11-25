@@ -4,7 +4,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -49,6 +49,7 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import {
   getPoOrderReportHtml,
   getPoOrderReportExcel,
+  getCompanyInfo,
 } from "../../../api/transactions";
 
 import { NewReportDialog } from "../../../components/new_report_format";
@@ -74,7 +75,13 @@ export function SalesReturnEditor({
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
 }) {
-  const { user } = useAuth();
+   const { user } = useAuth();
+  const amountDecimals = Number.isInteger(user?.amount_decimal_nos)
+    ? Math.min(Math.max(Number(user?.amount_decimal_nos), 0), 20)
+    : 2;
+  const priceDecimals = Number.isInteger(user?.price_decimal_nos)
+    ? Math.min(Math.max(Number(user?.price_decimal_nos), 0), 20)
+    : 2;
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
@@ -111,6 +118,65 @@ export function SalesReturnEditor({
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const submitBtnRef = useRef<HTMLDivElement>(null);
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+    const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: user?.company_code })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [user?.company_code]);
+
+  // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
+
+  const prevHeaderTaxRef = useRef<{ type: string; cat: string } | null>(null);
+
+  useEffect(() => {
+    if (loading) return; // wait until saved lines are loaded
+    // Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
+
+    const curType = form.tx_compnt_1_expmt || "";
+    const curCat = form.tx_cat_code || "";
+    const prev = prevHeaderTaxRef.current;
+    // true only when the HEADER Tax Type / Category really changed (not on load, not on line edits)
+    const headerTaxChanged = !!prev && (prev.type !== curType || prev.cat !== curCat);
+    prevHeaderTaxRef.current = { type: curType, cat: curCat };
+
+    const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
+
+    setRows((current) =>
+      current.map((row) => ({
+        ...row,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        ...(headerTaxChanged
+          ? {
+              tx_cat_code: `${form.tx_cat_code || ""}`,
+              tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+              tx_compnt_perc_1: taxPerc,
+              tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100),
+            }
+          : {}),
+      }))
+    );
+  }, [
+    loading,
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1,
+    taxCats,
+  ]);
 
   useEffect(() => {
     if (!editor) return;
@@ -122,30 +188,115 @@ export function SalesReturnEditor({
   }, [editor]);
 
   useEffect(() => {
-    const taxPerc =
-      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+  if (!editor || editor.mode === "edit") return;
+  let alive = true;
+  const initialCurr = text(emptyForm(editor).curr_code);
+  (async () => {
+    try {
+      const res: any = await getCompanyInfo();
+      const info = res?.data ?? res;
+      const code = text(info?.base_curr_code || info?.currency);
+      if (!alive || !code) return;
 
-    setRows((current) =>
-      current.map((row) => {
-        const updatedRow = {
-          ...row,
+      // resolve name / ex rate from the same lookup the Currency field uses
+      let name = "";
+      let rate = 1;
+      try {
+        const list: any[] = await getDynamicLookup({
+          parameter: "Account_Currency_CODE_Serach",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+        const match = (list || []).find(
+          (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+        );
+        if (match) {
+          name = text(getLookupValue(match, "curr_name"));
+          rate = Number(getLookupValue(match, "ex_rate")) || 1;
+        }
+      } catch { /* keep code only */ }
 
-          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
-          tx_cat_code: `${form.tx_cat_code || ""}`,
-          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
-        };
+      if (!alive) return;
+      // fill unless the user already picked a different currency
+      setForm((current) =>
+        current.curr_code && current.curr_code !== initialCurr
+          ? current
+          : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+      );
+    } catch (e) {
+      console.warn("Company info load failed", e);
+    }
+  })();
+  return () => { alive = false; };
+}, [editor]);
 
-        return updatedRow;
-      })
-    );
-  }, [
-    form.tx_compntcat_code_1,
-    form.tx_cat_code,
-    form.tx_compnt_1_expmt,
-    form.tx_compnt_perc_1
+  // useEffect(() => {
+  //   const taxPerc =
+  //     form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
-  ]);
+  //   setRows((current) =>
+  //     current.map((row) => {
+  //       const updatedRow = {
+  //         ...row,
+
+  //         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+  //         tx_cat_code: `${form.tx_cat_code || ""}`,
+  //         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+  //         tx_compnt_perc_1: taxPerc,
+  //       };
+
+  //       return updatedRow;
+  //     })
+  //   );
+  // }, [
+  //   form.tx_compntcat_code_1,
+  //   form.tx_cat_code,
+  //   form.tx_compnt_1_expmt,
+  //   form.tx_compnt_perc_1
+
+  // ]);
+  useEffect(() => {
+  if (!editor || editor.mode === "edit") return;
+  let alive = true;
+  const initialCurr = text(emptyForm(editor).curr_code);
+  (async () => {
+    try {
+      const res: any = await getCompanyInfo();
+      const info = res?.data ?? res;
+      const code = text(info?.base_curr_code || info?.currency);
+      if (!alive || !code) return;
+
+      // resolve name / ex rate from the same lookup the Currency field uses
+      let name = "";
+      let rate = 1;
+      try {
+        const list: any[] = await getDynamicLookup({
+          parameter: "Account_Currency_CODE_Serach",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+        const match = (list || []).find(
+          (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+        );
+        if (match) {
+          name = text(getLookupValue(match, "curr_name"));
+          rate = Number(getLookupValue(match, "ex_rate")) || 1;
+        }
+      } catch { /* keep code only */ }
+
+      if (!alive) return;
+      // fill unless the user already picked a different currency
+      setForm((current) =>
+        current.curr_code && current.curr_code !== initialCurr
+          ? current
+          : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+      );
+    } catch (e) {
+      console.warn("Company info load failed", e);
+    }
+  })();
+  return () => { alive = false; };
+}, [editor]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -472,9 +623,27 @@ export function SalesReturnEditor({
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+      for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
+
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.SOR, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase Quotation saved as draft");
+    }, "sales return saved as draft");
   };
 
   // const handleSubmitClick = () => {
@@ -489,32 +658,32 @@ export function SalesReturnEditor({
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-    const invalidRow = rows.find((row) => {
-      const qtyPuom = numberOrZero(row.qty_puom);
-      const uppp = numberOrZero(row.uppp);
-      const qtyLuom = numberOrZero(row.qty_luom);
-      const unitPrice = numberOrZero(row.unit_price);
-      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
-      return !(total > 0);
-    });
-    if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setShowSubmitConfirm(true);
+
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
@@ -652,7 +821,7 @@ export function SalesReturnEditor({
                 title="Sales Return"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(grandTotal)}
+                    total={formatAmount(finalTotal, amountDecimals)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -661,27 +830,7 @@ export function SalesReturnEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={handlePrint}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      title="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleReportPreviewExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      <Download size={15} />
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+                
 
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
@@ -690,40 +839,20 @@ export function SalesReturnEditor({
                       {actionLoading === "draft" ? "Saving..." : "Save Draft"}
                     </Button>
                   )}
-                  <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
-                    {isPendingTab && (
-                      <Button
-                        type="button"
-                        onClick={handleSubmitClick}
-                        disabled={actionDisabled || actionBarBusy}
-                      >
-                        {actionLoading === "submit" ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Send className="mr-2 h-4 w-4" />
-                        )}
-                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                      </Button>
-                    )}
-                    {showSubmitConfirm &&
-                      createPortal(
-                        <div
-                          style={{ position: "fixed", top: submitConfirmPos.top, right: submitConfirmPos.right }}
-                          className="z-[9999] w-56 rounded-lg border border-slate-200 bg-white p-3 text-black shadow-xl"
-                        >
-                          <p className="mb-2 text-sm text-gray-700">Submit this Sales Return?</p>
-                          <div className="flex justify-end gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>
-                              No
-                            </Button>
-                            <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>
-                              Yes
-                            </Button>
-                          </div>
-                        </div>,
-                        document.body
+                   {isPendingTab && (
+                    <Button
+                      type="button"
+                      onClick={handleSubmitClick}
+                      disabled={actionDisabled || actionBarBusy}
+                    >
+                      {actionLoading === "submit" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="mr-2 h-4 w-4" />
                       )}
-                  </div>
+                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                    </Button>
+                  )}
 
                   {isPendingTab && canSendBackOrReject && (
                     <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
@@ -741,9 +870,26 @@ export function SalesReturnEditor({
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
+                  {form.doc_no && (
+                  <>
+                    <Button type="button" variant="secondary" onClick={handlePrint}>
+                    <Printer size={15} /> Print
+                  </Button>
+                     <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void handleReportPreviewExcel()}
+                      >
+                        <Download size={15} />
+                        Excel
+                      </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
 
                 </div>
-                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
               </div>
             </div>
           </CardHeader>
@@ -760,7 +906,7 @@ export function SalesReturnEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading sales return...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -810,6 +956,7 @@ export function SalesReturnEditor({
                       rows={rows}
                       setdetails={setRows}
                       calculateDiscount={applyDiscountCalculation}
+                        amountDecimals={amountDecimals}
                     />
                   </div>
                 )}
@@ -827,6 +974,8 @@ export function SalesReturnEditor({
                   discAmt={form.disc_price}
                   companyCode={user?.company_code}
                   loginid={user?.loginid || user?.username}
+                       amountDecimals={amountDecimals}
+                  priceDecimals={priceDecimals}
 
                 />
               </div>
@@ -863,7 +1012,7 @@ export function SalesReturnEditor({
                   </Button>
                   {showSubmitConfirm && (
                     <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
-                      <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                      <p className="mb-2 text-sm text-gray-700">Submit this sales return?</p>
                       <div className="flex justify-end gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
                         <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>

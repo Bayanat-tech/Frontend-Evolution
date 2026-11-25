@@ -14,7 +14,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
-import { LPO_CONFIG, PO_DOC_TYPE } from "../../purchase_sales/purchase/Purchaseordertypes";
+import { LPO_CONFIG, PO_DOC_TYPE, SOR_CONFIG } from "../../purchase_sales/purchase/Purchaseordertypes";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { SalesReturnEditor } from "./SalesReturnEditor";
@@ -169,7 +169,7 @@ const loadRows = async (clearNotice = true) => {
       message:
         error instanceof Error
           ? error.message
-          : "Unable to load purchase orders",
+          : "Unable to load sales returns",
     });
   } finally {
     setLoading(false);
@@ -377,6 +377,15 @@ useEffect(() => {
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
 
+  // ADDED: one division -> open the editor directly, otherwise show the division picker
+  const handleAddClick = () => {
+    if (divisions.length === 1) {
+      openCreateForDivision(divisions[0]);
+      return;
+    }
+    setDivisionPicker(true);
+  };
+
   return (
     <section className="finance-list-page grid gap-4">
       {/* <div className="finance-list-heading">
@@ -458,7 +467,7 @@ useEffect(() => {
             tab === "PENDING" && (
               <button
                 title="Add Sales Return"
-                onClick={() => setDivisionPicker(true)}
+                onClick={handleAddClick} // CHANGED: was () => setDivisionPicker(true)
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
               >
                 <Plus size={14} />
@@ -504,7 +513,7 @@ useEffect(() => {
         <div className="fixed inset-0 z-50 bg-background">
           <SalesReturnEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={LPO_CONFIG}
+            config={SOR_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
@@ -522,7 +531,7 @@ useEffect(() => {
       <DivisionPickerDialog
         open={divisionPicker}
         divisions={divisions}
-        description="Choose the division before opening the purchase order form."
+        description="Choose the division before opening the sales return form."
         onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
       />

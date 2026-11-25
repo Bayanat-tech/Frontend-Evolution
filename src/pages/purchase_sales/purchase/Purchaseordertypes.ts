@@ -477,3 +477,9 @@ export const PIN_CONFIG: PurchaseConfig = {
   headerParameter: "PS_INVOICE_ENTRY_HEADER_PAGE",
   detailParameter: "PS_INVOICE_ENTRY_DETAIL_PAGE",
 };
+
+export const SOR_CONFIG: PurchaseConfig = {
+  docType: PO_DOC_TYPE.SOR,
+  headerParameter: "PS_POORDER_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_POORDER_ENTRY_DETAIL_PAGE",
+};

@@ -53,7 +53,7 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
-import {  getPurchaseInvoiceReportExcel } from "../../../api/transactions";
+import {  getCompanyInfo, getPurchaseInvoiceReportExcel } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -144,7 +144,48 @@ export function PurchaseInvoiceEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
 
+useEffect(() => {
+  if (!editor || editor.mode === "edit") return;
+  let alive = true;
+  const initialCurr = text(emptyForm(editor).curr_code);
+  (async () => {
+    try {
+      const res: any = await getCompanyInfo();
+      const info = res?.data ?? res;
+      const code = text(info?.base_curr_code || info?.currency);
+      if (!alive || !code) return;
 
+      // resolve name / ex rate from the same lookup the Currency field uses
+      let name = "";
+      let rate = 1;
+      try {
+        const list: any[] = await getDynamicLookup({
+          parameter: "Account_Currency_CODE_Serach",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+        const match = (list || []).find(
+          (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+        );
+        if (match) {
+          name = text(getLookupValue(match, "curr_name"));
+          rate = Number(getLookupValue(match, "ex_rate")) || 1;
+        }
+      } catch { /* keep code only */ }
+
+      if (!alive) return;
+      // fill unless the user already picked a different currency
+      setForm((current) =>
+        current.curr_code && current.curr_code !== initialCurr
+          ? current
+          : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+      );
+    } catch (e) {
+      console.warn("Company info load failed", e);
+    }
+  })();
+  return () => { alive = false; };
+}, [editor]);
   useEffect(() => {
     // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
     if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;

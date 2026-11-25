@@ -42,7 +42,7 @@ import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
+import { getCompanyInfo, getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
@@ -177,7 +177,48 @@ export function SalesOrderEditor({
   //   form.tx_compnt_perc_1
 
   // ]);
+useEffect(() => {
+  if (!editor || editor.mode === "edit") return;
+  let alive = true;
+  const initialCurr = text(emptyForm(editor).curr_code);
+  (async () => {
+    try {
+      const res: any = await getCompanyInfo();
+      const info = res?.data ?? res;
+      const code = text(info?.base_curr_code || info?.currency);
+      if (!alive || !code) return;
 
+      // resolve name / ex rate from the same lookup the Currency field uses
+      let name = "";
+      let rate = 1;
+      try {
+        const list: any[] = await getDynamicLookup({
+          parameter: "Account_Currency_CODE_Serach",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+        const match = (list || []).find(
+          (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+        );
+        if (match) {
+          name = text(getLookupValue(match, "curr_name"));
+          rate = Number(getLookupValue(match, "ex_rate")) || 1;
+        }
+      } catch { /* keep code only */ }
+
+      if (!alive) return;
+      // fill unless the user already picked a different currency
+      setForm((current) =>
+        current.curr_code && current.curr_code !== initialCurr
+          ? current
+          : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+      );
+    } catch (e) {
+      console.warn("Company info load failed", e);
+    }
+  })();
+  return () => { alive = false; };
+}, [editor]);
   useEffect(() => {
     // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
     if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
