@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Eye, EyeOff, LockKeyhole, Moon, Sun } from "lucide-react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { NoticeToast } from "../components/ui/NoticeToast";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -195,6 +195,7 @@ export function LoginPage({ dark, onToggleTheme }: { dark: boolean; onToggleThem
             <Button className="secondary-button" onClick={() => { setIsForgotPassword(true); setNotice(null); }} type="button" variant="outline">
               Forgot or need to change password?
             </Button>
+            <p style={{textAlign:'center',fontSize:14}}>New to Bayanat? <Link to="/register">Create your company account</Link></p>
           </form>
         )}
       </section>

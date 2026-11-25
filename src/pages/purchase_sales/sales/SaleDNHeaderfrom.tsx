@@ -331,8 +331,8 @@ export function SalesDNHeaderForm({
                                         credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount") || accountRow?.credit_amount),
                                         prin_name: text(getLookupValue(row || {}, "prin_name") || accountRow?.prin_name),
 
-                                        party_phone: text(getLookupValue(row || {}, "party_phone")),
-                                        party_fax: text(getLookupValue(row || {}, "party_fax")),
+                                        party_phone: text(getLookupValue(row || {}, "party_phone") || accountRow?.party_phone),
+                                        party_fax: text(getLookupValue(row || {}, "party_fax")|| accountRow?.party_fax ),
                                         delivery_to: text(getLookupValue(row || {}, "delivery_to")),
                                         so_dlvr_contact: text(getLookupValue(row || {}, "so_dlvr_contact")),
                                         so_dlvr_email: text(getLookupValue(row || {}, "so_dlvr_email")),

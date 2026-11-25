@@ -84,6 +84,8 @@ export type TransactionDetail = {
   curr_name?: string;
   ex_rate: number;
   amount: number;
+  qty?: number;
+  price?: number;
   sign_ind: 1 | -1;
   div_code: string;
   tx_compntcat_code_1?: string;
@@ -242,6 +244,10 @@ export type CompanyFinanceSetupData = {
     CURR_CODE: string;
     CURR_NAME: string;
   }[];
+  tax_setup?: {
+    std_sales_tax_perc?: number;
+    std_purchase_tax_perc?: number;
+  };
 };
 
 export type SaveCompanyFinanceSetupPayload = {
@@ -255,6 +261,8 @@ export type SaveCompanyFinanceSetupPayload = {
   amount_decimal_nos?: number;
   price_decimal_nos?: number;
   lcur_decimal_nos?: number;
+  std_sales_tax_perc?: number;
+  std_purchase_tax_perc?: number;
 };
 
 export type SaveFyPeriodPayload = {

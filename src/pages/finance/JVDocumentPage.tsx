@@ -2659,8 +2659,9 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number, decimals = 2) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+function formatAmount(value: number, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
@@ -2669,7 +2670,8 @@ function formatExRate(value: number) {
   return value < 0 ? `(${amount})` : amount;
 }
 
-function formatNumber(value: number, decimals = 2) {
-  if (!Number.isFinite(value)) return (0).toFixed(decimals);
-  return value.toFixed(decimals);
+function formatNumber(value: number, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  if (!Number.isFinite(value)) return (0).toFixed(effectiveDecimals);
+  return value.toFixed(effectiveDecimals);
 }

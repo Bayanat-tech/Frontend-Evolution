@@ -20,6 +20,8 @@ type AuthState = {
   tenantId: string;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  updateUserSetup?: (updates: Partial<UserProfile>) => void;
+  refreshUser?: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -38,8 +40,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 
 function normalizeUser(user: UserProfile, tenantId?: string): UserProfile {
   const decimalsVal = user.decimals ?? user.amount_decimal_nos ?? user.DECIMALS ?? user.AMOUNT_DECIMAL_NOS ?? 2;
+  const baseCurr = user.base_curr_code || user.BASE_CURR_CODE || user.currency || user.CURRENCY || "OMR";
   if (typeof window !== "undefined") {
     (window as any).__APP_DECIMALS__ = Number(decimalsVal);
+    (window as any).__APP_CURRENCY__ = String(baseCurr).trim();
   }
   return {
     ...user,
@@ -56,8 +60,8 @@ function normalizeUser(user: UserProfile, tenantId?: string): UserProfile {
     amount_decimal_nos: user.amount_decimal_nos ?? user.AMOUNT_DECIMAL_NOS ?? user.decimals ?? user.DECIMALS ?? 2,
     price_decimal_nos: user.price_decimal_nos ?? user.PRICE_DECIMAL_NOS ?? 2,
     lcur_decimal_nos: user.lcur_decimal_nos ?? user.LCUR_DECIMAL_NOS ?? 2,
-    base_curr_code: user.base_curr_code || user.BASE_CURR_CODE || user.currency || user.CURRENCY || "OMR",
-    currency: user.currency || user.CURRENCY || user.base_curr_code || user.BASE_CURR_CODE || "OMR",
+    base_curr_code: String(baseCurr).trim(),
+    currency: String(baseCurr).trim(),
   };
 }
 
@@ -132,6 +136,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTenantId("");
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const me = await meRequest();
+      if (me.success && me.data?.user) {
+        setUser(normalizeUser(me.data.user, me.data.tenantId));
+      }
+    } catch (e) {
+      console.warn("Could not refresh user auth info:", e);
+    }
+  }, []);
+
+  const updateUserSetup = useCallback((updates: Partial<UserProfile>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const merged = { ...prev, ...updates };
+      return normalizeUser(merged, merged.tenantId);
+    });
+  }, []);
+
   const value = useMemo<AuthState>(
     () => ({
       isBooting,
@@ -141,8 +164,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tenantId,
       login,
       logout,
+      updateUserSetup,
+      refreshUser,
     }),
-    [isBooting, user, menuTree, tenantId, login, logout],
+    [isBooting, user, menuTree, tenantId, login, logout, updateUserSetup, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
