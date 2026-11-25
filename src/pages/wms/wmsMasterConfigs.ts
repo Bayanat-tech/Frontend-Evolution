@@ -569,7 +569,7 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
 
       // Tax / Branding / Signatories
       { name: "trn_no", label: "TRN No", maxLength: 20, table: false, section: "Tax, Logo & Signatories" },
-      { name: "comp_logo", label: "Company Logo", maxLength: 200, table: false, section: "Tax, Logo & Signatories" },
+      // { name: "comp_logo", label: "Company Logo", maxLength: 200, table: false, section: "Tax, Logo & Signatories" },
       { name: "logo_title", label: "Logo Title", maxLength: 100, table: false, section: "Tax, Logo & Signatories" },
       { name: "signatory_1", label: "Signatory 1", maxLength: 100, table: false, section: "Tax, Logo & Signatories" },
       { name: "signatory_2", label: "Signatory 2", maxLength: 100, table: false, section: "Tax, Logo & Signatories" },

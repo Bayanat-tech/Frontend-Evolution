@@ -133,12 +133,12 @@ const PayUnitDetailForm = ({ formik, disabled = false }: TProps) => {
       size: 50,
       cell: ({ row }) => <span className="text-xs">{row.index + 1}</span>
     },
-    {
-      accessorKey: 'pay_comp_id_depend',
-      header: 'Dependent Pay Comp ID',
-      size: 200,
-      cell: ({ row }) => <span className="text-xs">{row.original.pay_comp_id_depend || '—'}</span>
-    },
+    // {
+    //   accessorKey: 'pay_comp_id_depend',
+    //   header: 'Dependent Pay Comp ID',
+    //   size: 200,
+    //   cell: ({ row }) => <span className="text-xs">{row.original.pay_comp_id_depend || '—'}</span>
+    // },
     {
       accessorKey: 'pay_comp_desc',
       header: 'Description',
