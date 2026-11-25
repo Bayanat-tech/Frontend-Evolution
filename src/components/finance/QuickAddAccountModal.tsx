@@ -7,16 +7,12 @@ import {
   CheckCircle2,
   Layers,
   Building2,
-  Phone,
-  Mail,
   MapPin,
   CreditCard,
-  FileText,
-  ShieldCheck,
-  User,
-  ChevronDown
+  Loader2
 } from "lucide-react";
 import { AccountTreeNode, createAccountTreeNode, getAccountTree } from "../../api/finance";
+import { getMasterLookup } from "../../api/lookups";
 import { useAuth } from "../../state/AuthContext";
 
 export type QuickAccountType = "customer" | "supplier" | "general" | "bank" | "cash" | "expense";
@@ -38,18 +34,6 @@ export interface QuickAddAccountModalProps {
   initialAccountName?: string;
 }
 
-const COMMON_COUNTRIES = [
-  { code: "SA", name: "Saudi Arabia", currency: "SAR" },
-  { code: "OM", name: "Oman", currency: "OMR" },
-  { code: "AE", name: "United Arab Emirates", currency: "AED" },
-  { code: "BH", name: "Bahrain", currency: "BHD" },
-  { code: "KW", name: "Kuwait", currency: "KWD" },
-  { code: "QA", name: "Qatar", currency: "QAR" },
-  { code: "EG", name: "Egypt", currency: "EGP" },
-  { code: "US", name: "United States", currency: "USD" },
-  { code: "OTHER", name: "Other Country", currency: "USD" },
-];
-
 export function QuickAddAccountModal({
   open,
   onClose,
@@ -63,6 +47,11 @@ export function QuickAddAccountModal({
   const modalRef = useRef<HTMLDivElement>(null);
   const effectiveCompany = companyCode || user?.company_code || "AMKSA";
   const defaultCurrency = user?.base_curr_code || user?.currency || "SAR";
+
+  // Dynamic Master Data from Database
+  const [countryList, setCountryList] = useState<Array<{ country_code: string; country_name: string }>>([]);
+  const [currencyList, setCurrencyList] = useState<Array<{ curr_code: string; curr_name: string }>>([]);
+  const [mastersLoading, setMastersLoading] = useState(false);
 
   // Chart of accounts tree state
   const [treeLoading, setTreeLoading] = useState(false);
@@ -129,7 +118,7 @@ export function QuickAddAccountModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  // Reset form when opened
+  // Load dynamic Country and Currency masters from database
   useEffect(() => {
     if (open) {
       setErrorMsg(null);
@@ -155,9 +144,45 @@ export function QuickAddAccountModal({
       setShowHierarchyCustomizer(false);
       setIsCreatingNewL4(false);
       setNewL4Description("");
+
+      void loadDynamicMasters();
       void loadTree();
     }
   }, [open, initialAccountName]);
+
+  const loadDynamicMasters = async () => {
+    setMastersLoading(true);
+    try {
+      const [countries, currencies] = await Promise.all([
+        getMasterLookup("wms", "country"),
+        getMasterLookup("wms", "currency"),
+      ]);
+
+      if (Array.isArray(countries)) {
+        const formatted = countries
+          .map((r: any) => ({
+            country_code: String(r.country_code || r.COUNTRY_CODE || "").trim(),
+            country_name: String(r.country_name || r.COUNTRY_NAME || r.country_code || "").trim(),
+          }))
+          .filter((r) => r.country_code);
+        setCountryList(formatted);
+      }
+
+      if (Array.isArray(currencies)) {
+        const formatted = currencies
+          .map((r: any) => ({
+            curr_code: String(r.curr_code || r.CURR_CODE || "").trim(),
+            curr_name: String(r.curr_name || r.CURR_NAME || r.curr_code || "").trim(),
+          }))
+          .filter((r) => r.curr_code);
+        setCurrencyList(formatted);
+      }
+    } catch (err: any) {
+      console.warn("Could not load dynamic country/currency masters:", err);
+    } finally {
+      setMastersLoading(false);
+    }
+  };
 
   const loadTree = async () => {
     setTreeLoading(true);
@@ -433,7 +458,7 @@ export function QuickAddAccountModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-1 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
               title="Back / Close"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -445,7 +470,7 @@ export function QuickAddAccountModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             title="Close"
           >
             <X className="w-5 h-5" />
@@ -637,24 +662,26 @@ export function QuickAddAccountModal({
                 />
               </div>
 
-              {/* Currency */}
+              {/* DYNAMIC CURRENCY MASTER FROM DATABASE */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Currency *
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Currency *</span>
+                  {mastersLoading && <span className="text-[10px] text-blue-600 font-normal">Loading...</span>}
                 </label>
                 <select
                   value={currCode}
                   onChange={(e) => setCurrCode(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 >
-                  <option value="SAR">SAR - Saudi Arabia Riyal</option>
-                  <option value="OMR">OMR - Omani Rial</option>
-                  <option value="AED">AED - UAE Dirham</option>
-                  <option value="USD">USD - US Dollar</option>
-                  <option value="EUR">EUR - Euro</option>
-                  <option value="BHD">BHD - Bahraini Dinar</option>
-                  <option value="KWD">KWD - Kuwaiti Dinar</option>
-                  <option value="QAR">QAR - Qatari Riyal</option>
+                  {currencyList.length > 0 ? (
+                    currencyList.map((c) => (
+                      <option key={c.curr_code} value={c.curr_code}>
+                        {c.curr_code} - {c.curr_name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value={currCode}>{currCode}</option>
+                  )}
                 </select>
               </div>
 
@@ -771,24 +798,21 @@ export function QuickAddAccountModal({
                 />
               </div>
 
-              {/* Country */}
+              {/* DYNAMIC COUNTRY MASTER FROM DATABASE */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Country *
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Country *</span>
+                  {mastersLoading && <span className="text-[10px] text-emerald-600 font-normal">Loading...</span>}
                 </label>
                 <select
                   value={countryCode}
-                  onChange={(e) => {
-                    const sel = e.target.value;
-                    setCountryCode(sel);
-                    const matched = COMMON_COUNTRIES.find((c) => c.code === sel);
-                    if (matched) setCurrCode(matched.currency);
-                  }}
+                  onChange={(e) => setCountryCode(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 >
-                  {COMMON_COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.name}
+                  <option value="">-- Select Country --</option>
+                  {countryList.map((c) => (
+                    <option key={c.country_code} value={c.country_code}>
+                      {c.country_name} ({c.country_code})
                     </option>
                   ))}
                 </select>
