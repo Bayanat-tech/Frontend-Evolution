@@ -259,6 +259,7 @@ import PurchaseGrnListing from "../pages/purchase_sales/Reports/PurchaseGrnListi
 import SalesDnListing from "../pages/purchase_sales/Reports/SalesDNListingReport";
 import SalesOrderListing from "../pages/purchase_sales/Reports/SalesOrderListingReport";
 import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
+import ManReqMasterPage from "../pages/hr/ManReqMasterPage";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -1724,9 +1725,15 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
     },
 
     {
-      name: "HR Manpower Requisition",
+      name: "HR Review Manpower Requisition Form",
       match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/forms/review_confirm_form"),
       element: () => <HrManpowerPage />,
+    },
+
+    {
+      name: "HR Manpower Requisition",
+      match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/manpower_requisition"),
+      element: () => <ManReqMasterPage />,
     },
 
     {
