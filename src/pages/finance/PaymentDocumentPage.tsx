@@ -62,6 +62,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
+import { QuickAddAccountModal, QuickAccountType, CreatedAccountResult } from "../../components/finance/QuickAddAccountModal";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
@@ -526,6 +527,15 @@ function PaymentDocumentEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [quickAddModal, setQuickAddModal] = useState<{
+    open: boolean;
+    accountType: QuickAccountType;
+    targetDetailId: string | null;
+  }>({
+    open: false,
+    accountType: "general",
+    targetDetailId: null,
+  });
   const [error, setError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const [lineSearch, setLineSearch] = useState("");
@@ -1783,6 +1793,16 @@ function PaymentDocumentEditor({
                           displayFields={["ac_code", "ac_name", 'curr_code']}
                           loadOptions={() => getDocAccounts(form.doc_type, "H", form.div_code)}
                           disabled={disabled || !form.div_code}
+                          onQuickAdd={() => {
+                            const isBankDoc = form.doc_type === "BP" || form.doc_type === "BR" || form.doc_type === "PJV";
+                            const isCashDoc = form.doc_type === "CP" || form.doc_type === "CR";
+                            setQuickAddModal({
+                              open: true,
+                              accountType: isBankDoc ? "bank" : isCashDoc ? "cash" : "general",
+                              targetDetailId: null,
+                            });
+                          }}
+                          quickAddTooltip="Quick Add Account"
                           onChange={async (value, row) => {
                             const expTypeCode = text(getLookupValue(row || {}, "exp_type_code"));
                             if (expTypeCode) {
@@ -1990,6 +2010,16 @@ function PaymentDocumentEditor({
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
                                 loadOptions={() => getDocAccounts(form.doc_type, "D", form.div_code)}
                                 disabled={disabled}
+                                onQuickAdd={() => {
+                                  const isPayment = form.doc_type === "BP" || form.doc_type === "CP";
+                                  const isReceipt = form.doc_type === "BR" || form.doc_type === "CR";
+                                  setQuickAddModal({
+                                    open: true,
+                                    accountType: isPayment ? "supplier" : isReceipt ? "customer" : "general",
+                                    targetDetailId: detail.id,
+                                  });
+                                }}
+                                quickAddTooltip="Quick Add Account"
                                 onChange={(value, row) => {
                                   void selectDetailAccount(detail, value, row);
                                   if (value) {
@@ -2421,6 +2451,27 @@ function PaymentDocumentEditor({
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
         readOnly={form.canceled === "Y"}
+      />
+      <QuickAddAccountModal
+        open={quickAddModal.open}
+        onClose={() => setQuickAddModal((prev) => ({ ...prev, open: false }))}
+        accountType={quickAddModal.accountType}
+        companyCode={user?.company_code}
+        onAccountCreated={(newAcc: CreatedAccountResult) => {
+          if (quickAddModal.targetDetailId) {
+            updateDetail(quickAddModal.targetDetailId, {
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || form.curr_code,
+            });
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+            }));
+          }
+        }}
       />
       <ConfirmDialog
         open={cancelConfirmOpen}
