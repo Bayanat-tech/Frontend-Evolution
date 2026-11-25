@@ -3,16 +3,18 @@ import {
   ArrowLeft,
   X,
   Plus,
-  Calendar,
   AlertCircle,
   CheckCircle2,
   Layers,
-  ChevronDown,
-  Sparkles,
   Building2,
-  Globe,
+  Phone,
+  Mail,
+  MapPin,
+  CreditCard,
   FileText,
-  UserCheck
+  ShieldCheck,
+  User,
+  ChevronDown
 } from "lucide-react";
 import { AccountTreeNode, createAccountTreeNode, getAccountTree } from "../../api/finance";
 import { useAuth } from "../../state/AuthContext";
@@ -48,25 +50,6 @@ const COMMON_COUNTRIES = [
   { code: "OTHER", name: "Other Country", currency: "USD" },
 ];
 
-const COMMON_REGIONS = [
-  "Central Region",
-  "Western Region",
-  "Eastern Region",
-  "Southern Region",
-  "Northern Region",
-  "Gulf Region",
-  "International"
-];
-
-const CUSTOMER_TYPES = [
-  "Walk-In",
-  "Corporate",
-  "Trade / Credit",
-  "Wholesale",
-  "Retail",
-  "Government / Semi-Gov"
-];
-
 export function QuickAddAccountModal({
   open,
   onClose,
@@ -91,30 +74,42 @@ export function QuickAddAccountModal({
   const [selectedL3, setSelectedL3] = useState<string>("");
   const [selectedL4, setSelectedL4] = useState<string>("");
 
-  // Hierarchy view toggle for customer/supplier (hidden by default since pre-locked)
+  // Hierarchy view toggle for customer/supplier (pre-locked by default)
   const [showHierarchyCustomizer, setShowHierarchyCustomizer] = useState(false);
   const [isCreatingNewL4, setIsCreatingNewL4] = useState(false);
   const [newL4Description, setNewL4Description] = useState("");
 
-  // Section 1: Core Details
+  // =========================================================================
+  // Section 1: Core / Account Details (As per our MS_ACCODES Master Form)
+  // =========================================================================
   const [acName, setAcName] = useState<string>(initialAccountName);
-  const [mobile, setMobile] = useState<string>("");
-  const [dob, setDob] = useState<string>("");
   const [currCode, setCurrCode] = useState<string>(defaultCurrency);
+  const [acActive, setAcActive] = useState<string>("Y");
+  const [acType, setAcType] = useState<string>(
+    accountType === "customer" ? "C" : accountType === "supplier" ? "S" : "G"
+  );
+
+  // =========================================================================
+  // Section 2: Contact & Address Details (As per our MS_ACCODES Master Form)
+  // =========================================================================
   const [contactPerson, setContactPerson] = useState<string>("");
-
-  // Section 2: Regional Details
-  const [country, setCountry] = useState<string>("Saudi Arabia");
-  const [nationality, setNationality] = useState<string>("Saudi");
-  const [region, setRegion] = useState<string>("Central Region");
+  const [phone, setPhone] = useState<string>("");
+  const [mobileNo, setMobileNo] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
+  const [countryCode, setCountryCode] = useState<string>(effectiveCompany.includes("OM") ? "OM" : "SA");
   const [cityName, setCityName] = useState<string>("");
-  const [customerType, setCustomerType] = useState<string>("Walk-In");
-  const [isNonResident, setIsNonResident] = useState<boolean>(false);
+  const [address1, setAddress1] = useState<string>("");
 
-  // Section 3: Legal & Tax Details
-  const [nationalIdOrVat, setNationalIdOrVat] = useState<string>("");
-  const [idExpiryDate, setIdExpiryDate] = useState<string>("");
-  const [otherDetails, setOtherDetails] = useState<string>("");
+  // =========================================================================
+  // Section 3: Tax & Commercial / Bank Details (As per our MS_ACCODES Master Form)
+  // =========================================================================
+  const [trnNo, setTrnNo] = useState<string>("");
+  const [taxRegistered, setTaxRegistered] = useState<string>("Y");
+  const [creditPeriod, setCreditPeriod] = useState<string>("30");
+  const [creditAmount, setCreditAmount] = useState<string>("");
+  const [contractExpryDate, setContractExpryDate] = useState<string>("");
+  const [bankName, setBankName] = useState<string>("");
+  const [bankAcCode, setBankAcCode] = useState<string>("");
 
   // Submission & Alert state
   const [saving, setSaving] = useState(false);
@@ -140,18 +135,23 @@ export function QuickAddAccountModal({
       setErrorMsg(null);
       setSuccessMsg(null);
       setAcName(initialAccountName);
-      setMobile("");
-      setDob("");
       setCurrCode(defaultCurrency);
-      setCountry(effectiveCompany.includes("OM") ? "Oman" : "Saudi Arabia");
-      setNationality(effectiveCompany.includes("OM") ? "Omani" : "Saudi");
-      setRegion("Central Region");
+      setAcActive("Y");
+      setAcType(accountType === "customer" ? "C" : accountType === "supplier" ? "S" : "G");
+      setContactPerson("");
+      setPhone("");
+      setMobileNo("");
+      setEmail("");
+      setCountryCode(effectiveCompany.includes("OM") ? "OM" : "SA");
       setCityName("");
-      setCustomerType("Walk-In");
-      setIsNonResident(false);
-      setNationalIdOrVat("");
-      setIdExpiryDate("");
-      setOtherDetails("");
+      setAddress1("");
+      setTrnNo("");
+      setTaxRegistered("Y");
+      setCreditPeriod("30");
+      setCreditAmount("");
+      setContractExpryDate("");
+      setBankName("");
+      setBankAcCode("");
       setShowHierarchyCustomizer(false);
       setIsCreatingNewL4(false);
       setNewL4Description("");
@@ -290,9 +290,9 @@ export function QuickAddAccountModal({
     if (!trimmedName) {
       setErrorMsg(
         accountType === "customer"
-          ? "Customer Name is required."
+          ? "Customer Account Name is required."
           : accountType === "supplier"
-          ? "Supplier Name is required."
+          ? "Supplier Account Name is required."
           : "Account Name is required."
       );
       return;
@@ -326,17 +326,28 @@ export function QuickAddAccountModal({
         throw new Error("Please select or specify a Level 4 parent group.");
       }
 
-      // 2. Prepare payload for Oracle PROC_MANAGE_ACCODES
+      // 2. Prepare payload for Oracle PROC_MANAGE_ACCODES (Real fields from our Master Form)
       const payload: Record<string, unknown> = {
         l4_code: targetL4,
         ac_name: trimmedName,
         curr_code: currCode || defaultCurrency,
-        ac_active: "Y",
+        ac_active: acActive,
         ac_status: "A",
-        trn_no: nationalIdOrVat.trim() || undefined,
-        city_name: cityName.trim() || nationality.trim() || undefined,
-        phone: mobile.trim() || undefined,
-        contact_person: contactPerson.trim() || otherDetails.trim() || undefined,
+        ac_type: acType,
+        contact_person: contactPerson.trim() || undefined,
+        phone: phone.trim() || undefined,
+        mobile_no: mobileNo.trim() || undefined,
+        e_mail: email.trim() || undefined,
+        country_code: countryCode.trim() || undefined,
+        city_name: cityName.trim() || undefined,
+        address_1: address1.trim() || undefined,
+        trn_no: trnNo.trim() || undefined,
+        tax_registrd: taxRegistered,
+        credit_period: creditPeriod ? Number(creditPeriod) : undefined,
+        credit_amount: creditAmount ? Number(creditAmount) : undefined,
+        contract_expry_date: contractExpryDate || undefined,
+        bank_name: bankName.trim() || undefined,
+        bank_ac_code: bankAcCode.trim() || undefined,
       };
 
       const accountRes = (await createAccountTreeNode(5, payload)) as any;
@@ -388,6 +399,20 @@ export function QuickAddAccountModal({
 
   const isPreLockedGroup = accountType === "customer" || accountType === "supplier";
 
+  // Friendly L4 group description
+  const activeL4Name =
+    selectedL4 === "10203"
+      ? "10203 - Trade Receivables (Customers)"
+      : selectedL4 === "20201"
+      ? "20201 - Trade Creditors (Suppliers)"
+      : selectedL4 === "10202"
+      ? "10202 - Bank Accounts"
+      : selectedL4 === "10201"
+      ? "10201 - Cash in Hand"
+      : selectedL4
+      ? `Group ${selectedL4}`
+      : "Auto";
+
   return (
     <div
       className="fixed inset-0 z-[9999] grid place-items-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-[2px] overflow-y-auto"
@@ -400,9 +425,9 @@ export function QuickAddAccountModal({
         aria-label={headerTitle}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="w-[min(96vw,890px)] my-auto max-h-[94vh] flex flex-col rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden"
+        className="w-[min(96vw,940px)] my-auto max-h-[94vh] flex flex-col rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden"
       >
-        {/* Navy Header Bar matching user's image */}
+        {/* Navy Header Bar matching user's preferred layout */}
         <div className="bg-[#00378C] text-white px-5 py-3.5 flex items-center justify-between shrink-0 select-none">
           <div className="flex items-center gap-3">
             <button
@@ -449,21 +474,22 @@ export function QuickAddAccountModal({
           )}
 
           {/* =========================================================================
-              SECTION 1: CORE DETAILS
+              SECTION 1: CORE / ACCOUNT DETAILS (Real Master Form Fields)
              ========================================================================= */}
           <div>
             <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-4">
-              <h3 className="text-xs font-extrabold tracking-wider text-[#00378C] uppercase">
-                CORE DETAILS
+              <h3 className="text-xs font-extrabold tracking-wider text-[#00378C] uppercase flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-[#00378C]" />
+                CORE ACCOUNT DETAILS
               </h3>
               {isPreLockedGroup && (
                 <button
                   type="button"
                   onClick={() => setShowHierarchyCustomizer(!showHierarchyCustomizer)}
-                  className="text-[11px] text-[#00378C] hover:underline font-semibold flex items-center gap-1"
+                  className="text-[11px] text-[#00378C] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                 >
-                  <Layers className="w-3 h-3" />
-                  {showHierarchyCustomizer ? "Hide Account Hierarchy" : "View / Change Account Tree"}
+                  <Layers className="w-3.5 h-3.5" />
+                  {showHierarchyCustomizer ? "Hide Account Tree" : "View / Change Account Tree"}
                 </button>
               )}
             </div>
@@ -476,9 +502,9 @@ export function QuickAddAccountModal({
                     <Layers className="w-3.5 h-3.5 text-[#00378C]" />
                     Chart of Accounts Hierarchy (Levels 1 - 4)
                   </span>
-                  <span className="text-slate-500">
-                    {accountType === "customer" && "Defaults to 10203 Trade Receivables"}
-                    {accountType === "supplier" && "Defaults to 20201 Trade Creditors"}
+                  <span className="text-slate-500 font-medium">
+                    {accountType === "customer" && "Default: 10203 Trade Receivables"}
+                    {accountType === "supplier" && "Default: 20201 Trade Creditors"}
                   </span>
                 </div>
 
@@ -581,78 +607,34 @@ export function QuickAddAccountModal({
               </div>
             )}
 
-            {/* Core Details Inputs Grid (Exact layout from image) */}
+            {/* Core Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* SR No. */}
+              {/* Account Code (Auto) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  SR No.
+                  Account Code
                 </label>
                 <input
                   type="text"
                   readOnly
                   disabled
-                  value="Auto"
+                  value="Auto Generated"
                   className="w-full text-xs rounded-xl border border-slate-300 bg-slate-50/80 px-3.5 py-2.5 text-slate-400 cursor-not-allowed select-none"
                 />
               </div>
 
-              {/* Customer ID / Account ID */}
-              <div>
+              {/* Parent Group / Level 4 */}
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  {accountType === "customer" ? "Customer ID" : accountType === "supplier" ? "Supplier ID" : "Account ID"}
+                  Parent Account Group (L4)
                 </label>
                 <input
                   type="text"
                   readOnly
                   disabled
-                  value={selectedL4 ? `Auto (${selectedL4}...)` : "Auto"}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-slate-50/80 px-3.5 py-2.5 text-slate-400 cursor-not-allowed select-none"
+                  value={activeL4Name}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-slate-50/80 px-3.5 py-2.5 text-slate-600 font-semibold cursor-not-allowed select-none"
                 />
-              </div>
-
-              {/* Customer Name * */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  {accountType === "customer" ? "Customer Name *" : accountType === "supplier" ? "Supplier Name *" : "Account Name *"}
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Name"
-                  value={acName}
-                  onChange={(e) => setAcName(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                />
-              </div>
-
-              {/* Mobile * */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Mobile*
-                </label>
-                <input
-                  type="tel"
-                  placeholder="Mobile"
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                />
-              </div>
-
-              {/* Date Of Birth / Registration Date */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Date Of Birth *
-                </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={dob}
-                    onChange={(e) => setDob(e.target.value)}
-                    className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                  />
-                </div>
               </div>
 
               {/* Currency */}
@@ -663,7 +645,7 @@ export function QuickAddAccountModal({
                 <select
                   value={currCode}
                   onChange={(e) => setCurrCode(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 >
                   <option value="SAR">SAR - Saudi Arabia Riyal</option>
                   <option value="OMR">OMR - Omani Rial</option>
@@ -672,9 +654,67 @@ export function QuickAddAccountModal({
                   <option value="EUR">EUR - Euro</option>
                   <option value="BHD">BHD - Bahraini Dinar</option>
                   <option value="KWD">KWD - Kuwaiti Dinar</option>
+                  <option value="QAR">QAR - Qatari Riyal</option>
                 </select>
               </div>
 
+              {/* WIDE ACCOUNT NAME FIELD (User Requested: Increased Width & Prominent!) */}
+              <div className="sm:col-span-3">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>
+                    {accountType === "customer"
+                      ? "Customer Account Name *"
+                      : accountType === "supplier"
+                      ? "Supplier Account Name *"
+                      : "Account Name *"}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal">Full Legal / Company Name</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder={
+                    accountType === "customer"
+                      ? "e.g. Al Wafi Al Takamul International for Food Products"
+                      : accountType === "supplier"
+                      ? "e.g. Saudi Logistics Services Co."
+                      : "e.g. General Ledger Account Description"
+                  }
+                  value={acName}
+                  onChange={(e) => setAcName(e.target.value)}
+                  className="w-full text-sm font-semibold rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/20 transition-all shadow-2xs"
+                />
+              </div>
+
+              {/* Active Status */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Account Status
+                </label>
+                <select
+                  value={acActive}
+                  onChange={(e) => setAcActive(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                >
+                  <option value="Y">Active</option>
+                  <option value="N">Inactive</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* =========================================================================
+              SECTION 2: ADDRESS & CONTACT DETAILS (Real Master Form Fields)
+             ========================================================================= */}
+          <div>
+            <div className="border-b border-slate-200 pb-2 mb-4">
+              <h3 className="text-xs font-extrabold tracking-wider text-[#15803d] uppercase flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-[#15803d]" />
+                ADDRESS & CONTACT DETAILS
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Contact Person */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -682,117 +722,80 @@ export function QuickAddAccountModal({
                 </label>
                 <input
                   type="text"
-                  placeholder="Full name of contact person"
+                  placeholder="Full name of representative"
                   value={contactPerson}
                   onChange={(e) => setContactPerson(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 />
               </div>
-            </div>
-          </div>
 
-          {/* =========================================================================
-              SECTION 2: REGIONAL
-             ========================================================================= */}
-          <div>
-            <div className="border-b border-slate-200 pb-2 mb-4">
-              <h3 className="text-xs font-extrabold tracking-wider text-[#15803d] uppercase">
-                REGIONAL
-              </h3>
-            </div>
+              {/* Mobile No */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Mobile No *
+                </label>
+                <input
+                  type="tel"
+                  placeholder="e.g. +966 50 123 4567"
+                  value={mobileNo}
+                  onChange={(e) => setMobileNo(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                />
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Country * */}
+              {/* Phone / Landline */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Phone (Landline / Office)
+                </label>
+                <input
+                  type="tel"
+                  placeholder="Office phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                />
+              </div>
+
+              {/* Email */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  placeholder="accounts@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                />
+              </div>
+
+              {/* Country */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Country *
                 </label>
                 <select
-                  value={country}
+                  value={countryCode}
                   onChange={(e) => {
                     const sel = e.target.value;
-                    setCountry(sel);
-                    const matched = COMMON_COUNTRIES.find((c) => c.name === sel);
+                    setCountryCode(sel);
+                    const matched = COMMON_COUNTRIES.find((c) => c.code === sel);
                     if (matched) setCurrCode(matched.currency);
                   }}
                   className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 >
                   {COMMON_COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.name}>
+                    <option key={c.code} value={c.code}>
                       {c.name}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Nationality * */}
+              {/* City */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Nationality *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Select nationality"
-                  value={nationality}
-                  onChange={(e) => setNationality(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                />
-              </div>
-
-              {/* Region * */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Region *
-                </label>
-                <select
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                >
-                  {COMMON_REGIONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Customer Type */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Customer Type
-                </label>
-                <select
-                  value={customerType}
-                  onChange={(e) => setCustomerType(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                >
-                  {CUSTOMER_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Resident / Non-Resident Pill */}
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Resident
-                </label>
-                <label className="inline-flex items-center gap-3 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer select-none transition-all">
-                  <input
-                    type="checkbox"
-                    checked={isNonResident}
-                    onChange={(e) => setIsNonResident(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-[#00378C] focus:ring-[#00378C]"
-                  />
-                  <span className="text-xs font-bold text-slate-700">Non-Resident</span>
-                </label>
-              </div>
-
-              {/* City Name */}
-              <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   City / Location
                 </label>
@@ -804,57 +807,130 @@ export function QuickAddAccountModal({
                   className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 />
               </div>
+
+              {/* Address Line 1 */}
+              <div className="col-span-full">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Street Address / Building Details
+                </label>
+                <input
+                  type="text"
+                  placeholder="Street, District, Building No, Postal Code..."
+                  value={address1}
+                  onChange={(e) => setAddress1(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                />
+              </div>
             </div>
           </div>
 
           {/* =========================================================================
-              SECTION 3: LEGAL
+              SECTION 3: TAX & CREDIT DETAILS (Real Master Form Fields)
              ========================================================================= */}
           <div>
             <div className="border-b border-slate-200 pb-2 mb-4">
-              <h3 className="text-xs font-extrabold tracking-wider text-[#b45309] uppercase">
-                LEGAL
+              <h3 className="text-xs font-extrabold tracking-wider text-[#b45309] uppercase flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-[#b45309]" />
+                TAX, CREDIT & BANKING DETAILS
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* National ID / Passport Number / VAT No * */}
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* TRN / VAT Number */}
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  National ID / Passport Number *
+                  Tax / VAT Registration No (TRN No)
                 </label>
                 <input
                   type="text"
-                  placeholder="Enter National ID / Passport Number"
-                  value={nationalIdOrVat}
-                  onChange={(e) => setNationalIdOrVat(e.target.value)}
+                  placeholder="15-digit VAT / Tax Registration Number"
+                  value={trnNo}
+                  onChange={(e) => setTrnNo(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 />
               </div>
 
-              {/* ID / Passport Expiry Date * */}
+              {/* Tax Registered */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  ID / Passport Expiry Date *
+                  Tax Registered?
+                </label>
+                <select
+                  value={taxRegistered}
+                  onChange={(e) => setTaxRegistered(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                >
+                  <option value="Y">Yes - Tax Registered</option>
+                  <option value="N">No - Not Registered</option>
+                </select>
+              </div>
+
+              {/* Contract / CR Expiry Date */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  CR / Contract Expiry Date
                 </label>
                 <input
                   type="date"
-                  value={idExpiryDate}
-                  onChange={(e) => setIdExpiryDate(e.target.value)}
+                  value={contractExpryDate}
+                  onChange={(e) => setContractExpryDate(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                />
+              </div>
+
+              {/* Credit Period (Days) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Credit Period (Days)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 30"
+                  value={creditPeriod}
+                  onChange={(e) => setCreditPeriod(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 />
               </div>
 
-              {/* Other Details */}
+              {/* Credit Limit Amount */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Other Details
+                  Credit Limit ({currCode})
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g. 50000.00"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                />
+              </div>
+
+              {/* Bank Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Bank Name
                 </label>
                 <input
                   type="text"
-                  placeholder="Notes..."
-                  value={otherDetails}
-                  onChange={(e) => setOtherDetails(e.target.value)}
+                  placeholder="e.g. Al Rajhi / SNB / Bank Muscat"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                />
+              </div>
+
+              {/* Bank IBAN / Account No */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Bank IBAN / Account No
+                </label>
+                <input
+                  type="text"
+                  placeholder="SA... or OM..."
+                  value={bankAcCode}
+                  onChange={(e) => setBankAcCode(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
                 />
               </div>
@@ -862,13 +938,13 @@ export function QuickAddAccountModal({
           </div>
         </form>
 
-        {/* Footer Bar matching user's image */}
+        {/* Footer Bar matching user's preferred layout */}
         <div className="border-t border-slate-200 bg-slate-50/60 px-6 py-4 flex items-center justify-between shrink-0">
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-extrabold text-slate-700 uppercase tracking-wider hover:bg-slate-50 active:scale-98 transition-all disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-extrabold text-slate-700 uppercase tracking-wider hover:bg-slate-50 active:scale-98 transition-all disabled:opacity-50 cursor-pointer"
           >
             DISCARD
           </button>
