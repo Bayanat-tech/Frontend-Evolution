@@ -174,7 +174,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     const isPo = table.classList.contains("po-two-col");
     table.setAttribute("data-pdfmake", JSON.stringify({
      widths: isPo ? (table.classList.contains("po-two-wide") ? ["60%", "40%"] : ["70%", "30%"]) : ["50%", "50%"],
-      layout: "noBorders",
+     layout: table.classList.contains("grn-flush") ? "twoColFlush" : "noBorders",
       ...(isPo ? { margin: [0, 4, 0, 8] } : {}),
     }));
   });
@@ -279,10 +279,12 @@ else if (table.classList.contains("sdl-items")) {
   // SDN Listing: Product / Description | Unit | Qty
   widths = ["66%", "14%", "20%"];
 }
-else if (table.classList.contains("so-items")) {
-  // SO Listing: Product | Unit | Qty | Unit Rate | Disc | Amount
-  widths = ["40%", "9%", "12%", "13%", "12%", "14%"];
+ else if (table.classList.contains("so-items")) {
+  // S.No | Product | P.Qty | P.UOM | L.Qty | L.UOM | Unit Price | Line Value | Disc | Net | VAT % | VAT Amt | Grand Total
+  // widths = ["4%", "20%", "6%", "6%", "6%", "6%", "8%", "9%", "7%", "9%", "5%", "7%", "7%"];
+widths = ["5%", "20%", "5%", "6%", "5%", "6%", "8%", "9%", "7%", "7%", "6%", "7%", "9%"];
 }
+
 else if (table.classList.contains("pqr-items")) {
   // PQ Register: Product | UOM | Qty | Unit Rate | Disc Amt | Amount
   widths = ["38%", "8%", "12%", "14%", "13%", "15%"];
@@ -316,9 +318,7 @@ else if (table.classList.contains("pls-std")) {
       widths = ["14%", "10%", "36%", "12%", "14%", "14%"];
     }
 
-    // else if (!details && table.rows[0]) {
-    //   widths = ["4%", "18%", "6%", "6%", "6%", "6%", "6%", "5%", "5%", "9%", "7%", "6%", "4%", "6%", "7%"];
-    // } else if (!details && table.rows[0]) {
+  
     else if (!details && table.rows[0]) {
       const isGrnKvTable = !!table.closest(".grn-two-col");
       if (isGrnKvTable) {
@@ -694,6 +694,14 @@ export async function createPurchasePdf(report: PurchaseReportDocument, identity
       paddingTop: () => 2.5,
       paddingBottom: () => 2.5,
     },
+    twoColFlush: {
+  hLineWidth: () => 0,
+  vLineWidth: () => 0,
+  paddingLeft: (i: number) => (i === 0 ? 0 : 6),
+  paddingRight: (i: number, node: any) => (i === node.table.widths.length - 1 ? 0 : 6),
+  paddingTop: () => 2.5,
+  paddingBottom: () => 2.5,
+},
 
 
     kvBox: {
