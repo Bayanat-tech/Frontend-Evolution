@@ -215,7 +215,7 @@ const AddPayUnitsForm = forwardRef<PayUnitFormHandle, TProps>(function AddPayUni
       const payload = {
         header: {
           company_code: user?.company_code ?? '',
-          pay_comp_id: isEdit ? values.pay_comp_id : '',
+          pay_comp_id:  values.pay_comp_id ?? '',
           pay_comp_desc: values.pay_comp_desc,
           pay_comp_short_desc: values.pay_comp_short_desc,
           pay_comp_type: values.pay_comp_type,
