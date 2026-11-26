@@ -2373,11 +2373,11 @@ function isPurchaseGrnRegisterRoute(pathname: string) {
   }
   function isPurchaseReturnSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return (normalized.includes("purchase_sales/purchase/purchase_return"))
+    return (normalized.includes("/ims/ims/purchase/purchase_return"))
   }
   function isSalesReturnSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
-    return (normalized.includes("purchase_sales/sales/sales_return"))
+    return (normalized.includes("/ims/ims/sales/sales_return"))
   }
 
 

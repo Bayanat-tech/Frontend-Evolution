@@ -365,3 +365,10 @@ export const SIN_CONFIG: SalesConfig = {
   headerParameter: "PS_SALE_PURCHASE_ENTRY_SINV_HEADER_PAGE",
   detailParameter: "PS_SALE_PURCHASE_ENTRY_SINV_DETAIL_PAGE",
 };
+
+
+export const LPR_CONFIG: SalesConfig = {
+  docType: SO_DOC_TYPE.LPR,
+  headerParameter: "PS_SORDER_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_SORDER_ENTRY_DETAIL_PAGE",
+};

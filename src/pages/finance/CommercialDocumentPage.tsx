@@ -2641,6 +2641,9 @@ const limitProps = (f: keyof FormState) => ({
               ...prev,
               ac_code: newAcc.ac_code,
               ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || prev.curr_code,
+              party_address: newAcc.address_1 || prev.party_address,
+              party_phone: (newAcc.phone || prev.party_phone || "").slice(0, 30),
             }));
           }
         }}
