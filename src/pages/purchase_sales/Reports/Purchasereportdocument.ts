@@ -233,13 +233,17 @@ else if (table.classList.contains("pi-items")) {
   widths = ["7%", "49%", "6%", "8%", "10%", "9%", "11%"];
 }
     else if (table.classList.contains("si-items")) {
-      // S.No | Product/Description | Unit | Qty | Unit Rate | Disc | Amount
-      widths = ["7%", "53%", "6%", "6%", "10%", "8%", "10%"];
-      //  widths = ["8%", "32%", "8%", "10%", "14%", "13%", "15%"];
-    } else if (table.classList.contains("si-items-tax")) {
-      // S.No | Product | Unit | Qty | Rate | Disc | Amount | VAT % | Tax Amt | Amount (Inc. Tax)
-      widths = ["4%", "37%", "5%", "5%", "7%", "7%", "8%", "6%", "9%", "12%"];
-      //  widths = ["6%", "24%", "6%", "8%", "10%", "9%", "10%", "7%", "10%", "10%"];
+  // 11 Columns: S.No | Product | P.Qty | P.UOM | L.Qty | L.UOM |
+  // Unit Price | Line Value | Disc Amt | Net Amt | Grand Total
+  widths = ["5%", "26%", "6%", "7%", "6%", "7%", "8%", "9%", "8%", "8%", "10%"];
+
+    }else if (table.classList.contains("si-items-tax")) {
+  // 13 Columns: Same as Sales Order
+  // S.No | Product | P.Qty | P.UOM | L.Qty | L.UOM |
+  // Unit Price | Line Value | Disc Amt | Net Amt |
+  // VAT % | VAT Amt | Grand Total
+  widths = ["5%", "20%", "5%", "6%", "5%", "6%", "8%", "9%", "7%", "7%", "6%", "7%", "9%"];
+
     } else if (table.classList.contains("pr-reg-summary")) {
       // Request No | Request Date | Create User | Description | Currency | EX Rate | Amount
       // widths = ["15%", "12%", "12%", "35%", "5%", "8%", "14%"];
@@ -282,7 +286,7 @@ else if (table.classList.contains("sdl-items")) {
  else if (table.classList.contains("so-items")) {
   // S.No | Product | P.Qty | P.UOM | L.Qty | L.UOM | Unit Price | Line Value | Disc | Net | VAT % | VAT Amt | Grand Total
   // widths = ["4%", "20%", "6%", "6%", "6%", "6%", "8%", "9%", "7%", "9%", "5%", "7%", "7%"];
-widths = ["5%", "20%", "5%", "6%", "5%", "6%", "8%", "9%", "7%", "7%", "6%", "7%", "9%"];
+widths = ["5%", "20%", "5%", "6%", "5%", "6%", "7.5%", "9%", "7%", "8%", "5.5%", "7%", "9%"];
 }
 
 else if (table.classList.contains("pqr-items")) {

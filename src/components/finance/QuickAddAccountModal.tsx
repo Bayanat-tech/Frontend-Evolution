@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import "flag-icons/css/flag-icons.min.css";
 import {
   ArrowLeft,
   X,
@@ -9,7 +11,12 @@ import {
   Building2,
   MapPin,
   CreditCard,
-  Loader2
+  Loader2,
+  Search,
+  ChevronDown,
+  Check,
+  Globe,
+  Coins,
 } from "lucide-react";
 import { AccountTreeNode, createAccountTreeNode, getAccountTree } from "../../api/finance";
 import { getMasterLookup } from "../../api/lookups";
@@ -38,6 +45,242 @@ export interface QuickAddAccountModalProps {
   initialAccountName?: string;
 }
 
+// =========================================================================
+// Country & Currency ISO / Flag / Dial Code Helpers
+// =========================================================================
+
+interface CountryMeta {
+  iso2: string;
+  dialCode: string;
+}
+
+const COUNTRY_LOOKUP_MAP: Record<string, CountryMeta> = {
+  // GCC & Middle East
+  SA: { iso2: "sa", dialCode: "+966" },
+  KSA: { iso2: "sa", dialCode: "+966" },
+  SAU: { iso2: "sa", dialCode: "+966" },
+  OM: { iso2: "om", dialCode: "+968" },
+  OMA: { iso2: "om", dialCode: "+968" },
+  OMN: { iso2: "om", dialCode: "+968" },
+  AE: { iso2: "ae", dialCode: "+971" },
+  ARE: { iso2: "ae", dialCode: "+971" },
+  UAE: { iso2: "ae", dialCode: "+971" },
+  QA: { iso2: "qa", dialCode: "+974" },
+  QAT: { iso2: "qa", dialCode: "+974" },
+  KW: { iso2: "kw", dialCode: "+965" },
+  KWT: { iso2: "kw", dialCode: "+965" },
+  BH: { iso2: "bh", dialCode: "+973" },
+  BHR: { iso2: "bh", dialCode: "+973" },
+  EG: { iso2: "eg", dialCode: "+20" },
+  EGY: { iso2: "eg", dialCode: "+20" },
+  JO: { iso2: "jo", dialCode: "+962" },
+  JOR: { iso2: "jo", dialCode: "+962" },
+  LB: { iso2: "lb", dialCode: "+961" },
+  LBN: { iso2: "lb", dialCode: "+961" },
+  IQ: { iso2: "iq", dialCode: "+964" },
+  IRQ: { iso2: "iq", dialCode: "+964" },
+  YE: { iso2: "ye", dialCode: "+967" },
+  YEM: { iso2: "ye", dialCode: "+967" },
+  TR: { iso2: "tr", dialCode: "+90" },
+  TUR: { iso2: "tr", dialCode: "+90" },
+  SY: { iso2: "sy", dialCode: "+963" },
+  SYR: { iso2: "sy", dialCode: "+963" },
+
+  // South / East / Southeast Asia
+  IN: { iso2: "in", dialCode: "+91" },
+  IND: { iso2: "in", dialCode: "+91" },
+  PK: { iso2: "pk", dialCode: "+92" },
+  PAK: { iso2: "pk", dialCode: "+92" },
+  BD: { iso2: "bd", dialCode: "+880" },
+  BGD: { iso2: "bd", dialCode: "+880" },
+  LK: { iso2: "lk", dialCode: "+94" },
+  LKA: { iso2: "lk", dialCode: "+94" },
+  NP: { iso2: "np", dialCode: "+977" },
+  NPL: { iso2: "np", dialCode: "+977" },
+  PH: { iso2: "ph", dialCode: "+63" },
+  PHL: { iso2: "ph", dialCode: "+63" },
+  CN: { iso2: "cn", dialCode: "+86" },
+  CHN: { iso2: "cn", dialCode: "+86" },
+  JP: { iso2: "jp", dialCode: "+81" },
+  JPN: { iso2: "jp", dialCode: "+81" },
+  KR: { iso2: "kr", dialCode: "+82" },
+  KOR: { iso2: "kr", dialCode: "+82" },
+  SG: { iso2: "sg", dialCode: "+65" },
+  SGP: { iso2: "sg", dialCode: "+65" },
+  MY: { iso2: "my", dialCode: "+60" },
+  MYS: { iso2: "my", dialCode: "+60" },
+  TH: { iso2: "th", dialCode: "+66" },
+  THA: { iso2: "th", dialCode: "+66" },
+  ID: { iso2: "id", dialCode: "+62" },
+  IDN: { iso2: "id", dialCode: "+62" },
+  VN: { iso2: "vn", dialCode: "+84" },
+  VNM: { iso2: "vn", dialCode: "+84" },
+
+  // Americas & Europe & Oceania & Africa
+  US: { iso2: "us", dialCode: "+1" },
+  USA: { iso2: "us", dialCode: "+1" },
+  GB: { iso2: "gb", dialCode: "+44" },
+  GBR: { iso2: "gb", dialCode: "+44" },
+  UK: { iso2: "gb", dialCode: "+44" },
+  CA: { iso2: "ca", dialCode: "+1" },
+  CAN: { iso2: "ca", dialCode: "+1" },
+  DE: { iso2: "de", dialCode: "+49" },
+  DEU: { iso2: "de", dialCode: "+49" },
+  FR: { iso2: "fr", dialCode: "+33" },
+  FRA: { iso2: "fr", dialCode: "+33" },
+  IT: { iso2: "it", dialCode: "+39" },
+  ITA: { iso2: "it", dialCode: "+39" },
+  ES: { iso2: "es", dialCode: "+34" },
+  ESP: { iso2: "es", dialCode: "+34" },
+  NL: { iso2: "nl", dialCode: "+31" },
+  NLD: { iso2: "nl", dialCode: "+31" },
+  CH: { iso2: "ch", dialCode: "+41" },
+  CHE: { iso2: "ch", dialCode: "+41" },
+  AU: { iso2: "au", dialCode: "+61" },
+  AUS: { iso2: "au", dialCode: "+61" },
+  NZ: { iso2: "nz", dialCode: "+64" },
+  NZL: { iso2: "nz", dialCode: "+64" },
+  ZA: { iso2: "za", dialCode: "+27" },
+  ZAF: { iso2: "za", dialCode: "+27" },
+  SD: { iso2: "sd", dialCode: "+249" },
+  SDN: { iso2: "sd", dialCode: "+249" },
+  ET: { iso2: "et", dialCode: "+251" },
+  ETH: { iso2: "et", dialCode: "+251" },
+  KE: { iso2: "ke", dialCode: "+254" },
+  KEN: { iso2: "ke", dialCode: "+254" },
+  NG: { iso2: "ng", dialCode: "+234" },
+  NGA: { iso2: "ng", dialCode: "+234" },
+  BR: { iso2: "br", dialCode: "+55" },
+  BRA: { iso2: "br", dialCode: "+55" },
+  MX: { iso2: "mx", dialCode: "+52" },
+  MEX: { iso2: "mx", dialCode: "+52" },
+  RU: { iso2: "ru", dialCode: "+7" },
+  RUS: { iso2: "ru", dialCode: "+7" },
+};
+
+function getCountryMeta(code: string, name?: string, shortDesc?: string): CountryMeta {
+  const upperCode = String(code || "").trim().toUpperCase();
+  const upperShort = String(shortDesc || "").trim().toUpperCase();
+
+  if (COUNTRY_LOOKUP_MAP[upperCode]) return COUNTRY_LOOKUP_MAP[upperCode];
+  if (upperShort && COUNTRY_LOOKUP_MAP[upperShort]) return COUNTRY_LOOKUP_MAP[upperShort];
+
+  if (name) {
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes("saudi")) return COUNTRY_LOOKUP_MAP["SA"];
+    if (lowerName.includes("oman")) return COUNTRY_LOOKUP_MAP["OM"];
+    if (lowerName.includes("emirates") || lowerName.includes("uae")) return COUNTRY_LOOKUP_MAP["AE"];
+    if (lowerName.includes("qatar")) return COUNTRY_LOOKUP_MAP["QA"];
+    if (lowerName.includes("kuwait")) return COUNTRY_LOOKUP_MAP["KW"];
+    if (lowerName.includes("bahrain")) return COUNTRY_LOOKUP_MAP["BH"];
+    if (lowerName.includes("egypt")) return COUNTRY_LOOKUP_MAP["EG"];
+    if (lowerName.includes("jordan")) return COUNTRY_LOOKUP_MAP["JO"];
+    if (lowerName.includes("india")) return COUNTRY_LOOKUP_MAP["IN"];
+    if (lowerName.includes("pakistan")) return COUNTRY_LOOKUP_MAP["PK"];
+    if (lowerName.includes("bangladesh")) return COUNTRY_LOOKUP_MAP["BD"];
+    if (lowerName.includes("china")) return COUNTRY_LOOKUP_MAP["CN"];
+    if (lowerName.includes("united states") || lowerName.includes("usa")) return COUNTRY_LOOKUP_MAP["US"];
+    if (lowerName.includes("united kingdom") || lowerName.includes("britain")) return COUNTRY_LOOKUP_MAP["GB"];
+  }
+
+  if (upperCode.length === 2) {
+    return { iso2: upperCode.toLowerCase(), dialCode: "" };
+  }
+
+  return { iso2: "un", dialCode: "" };
+}
+
+function getCurrencyFlag(currCode: string): string {
+  const upper = String(currCode || "").trim().toUpperCase();
+  const CURR_MAP: Record<string, string> = {
+    SAR: "sa",
+    OMR: "om",
+    AED: "ae",
+    QAR: "qa",
+    KWD: "kw",
+    BHD: "bh",
+    EGP: "eg",
+    JOD: "jo",
+    USD: "us",
+    EUR: "eu",
+    GBP: "gb",
+    INR: "in",
+    PKR: "pk",
+    BDT: "bd",
+    LKR: "lk",
+    PHP: "ph",
+    CNY: "cn",
+    JPY: "jp",
+    KRW: "kr",
+    SGD: "sg",
+    MYR: "my",
+    THB: "th",
+    IDR: "id",
+    VND: "vn",
+    CAD: "ca",
+    AUD: "au",
+    NZD: "nz",
+    CHF: "ch",
+    TRY: "tr",
+    ZAR: "za",
+    BRL: "br",
+    RUB: "ru",
+  };
+
+  if (CURR_MAP[upper]) return CURR_MAP[upper];
+  if (upper.length >= 2) return upper.slice(0, 2).toLowerCase();
+  return "un";
+}
+
+// Hook to position fixed popovers reliably above modal overflow
+function usePopoverPosition(triggerRef: React.RefObject<HTMLElement | null>, isOpen: boolean) {
+  const [style, setStyle] = useState<React.CSSProperties>({});
+
+  const update = useCallback(() => {
+    if (!triggerRef.current || !isOpen) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    const width = Math.min(Math.max(rect.width, 320), viewportWidth - 24);
+    const spaceBelow = viewportHeight - rect.bottom - 6;
+    const spaceAbove = rect.top - 6;
+    const openAbove = spaceBelow < 240 && spaceAbove > spaceBelow;
+
+    let left = rect.left;
+    if (left + width > viewportWidth - 12) {
+      left = Math.max(12, viewportWidth - width - 12);
+    }
+
+    setStyle({
+      position: "fixed",
+      left,
+      top: openAbove ? undefined : rect.bottom + 4,
+      bottom: openAbove ? viewportHeight - rect.top + 4 : undefined,
+      width,
+      maxHeight: 280,
+      zIndex: 10050,
+    });
+  }, [triggerRef, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [isOpen, update]);
+
+  return style;
+}
+
+// =========================================================================
+// Main QuickAddAccountModal Component
+// =========================================================================
+
 export function QuickAddAccountModal({
   open,
   onClose,
@@ -50,12 +293,28 @@ export function QuickAddAccountModal({
   const { user } = useAuth();
   const modalRef = useRef<HTMLDivElement>(null);
   const effectiveCompany = companyCode || user?.company_code || "AMKSA";
-  const defaultCurrency = user?.base_curr_code || user?.currency || "SAR";
+  const defaultCurrency = user?.base_curr_code || user?.currency || (effectiveCompany.includes("OM") ? "OMR" : "SAR");
 
   // Dynamic Master Data from Database
-  const [countryList, setCountryList] = useState<Array<{ country_code: string; country_name: string }>>([]);
+  const [countryList, setCountryList] = useState<Array<{ country_code: string; country_name: string; short_desc?: string }>>([]);
   const [currencyList, setCurrencyList] = useState<Array<{ curr_code: string; curr_name: string }>>([]);
   const [mastersLoading, setMastersLoading] = useState(false);
+
+  // Dropdown UI states for Country & Currency
+  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
+  const countryTriggerRef = useRef<HTMLButtonElement>(null);
+  const countryMenuRef = useRef<HTMLDivElement>(null);
+  const countrySearchInputRef = useRef<HTMLInputElement>(null);
+
+  const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState("");
+  const currencyTriggerRef = useRef<HTMLButtonElement>(null);
+  const currencyMenuRef = useRef<HTMLDivElement>(null);
+  const currencySearchInputRef = useRef<HTMLInputElement>(null);
+
+  const countryMenuStyle = usePopoverPosition(countryTriggerRef, countryDropdownOpen);
+  const currencyMenuStyle = usePopoverPosition(currencyTriggerRef, currencyDropdownOpen);
 
   // Chart of accounts tree state
   const [treeLoading, setTreeLoading] = useState(false);
@@ -67,13 +326,23 @@ export function QuickAddAccountModal({
   const [selectedL3, setSelectedL3] = useState<string>("");
   const [selectedL4, setSelectedL4] = useState<string>("");
 
-  // Hierarchy view toggle for customer/supplier (pre-locked by default)
+  // Hierarchy view toggle and dynamic creation states for L2, L3, L4
   const [showHierarchyCustomizer, setShowHierarchyCustomizer] = useState(false);
+  const [isCreatingNewL2, setIsCreatingNewL2] = useState(false);
+  const [newL2Description, setNewL2Description] = useState("");
+  const [isCreatingNewL3, setIsCreatingNewL3] = useState(false);
+  const [newL3Description, setNewL3Description] = useState("");
   const [isCreatingNewL4, setIsCreatingNewL4] = useState(false);
   const [newL4Description, setNewL4Description] = useState("");
+  const [newL4Bill, setNewL4Bill] = useState("N"); // Invoice Splitting
+  const [newL4Job, setNewL4Job] = useState("N");   // Job Splitting
+  const [newL4Type, setNewL4Type] = useState("N"); // Expense / Type Flag
+
+  // Account level flags
+  const [expAlloc, setExpAlloc] = useState("N");   // Expense Allocation to Job/Project
 
   // =========================================================================
-  // Section 1: Core / Account Details (As per our MS_ACCODES Master Form)
+  // Section 1: Core / Account Details
   // =========================================================================
   const [acName, setAcName] = useState<string>(initialAccountName);
   const [currCode, setCurrCode] = useState<string>(defaultCurrency);
@@ -83,18 +352,18 @@ export function QuickAddAccountModal({
   );
 
   // =========================================================================
-  // Section 2: Contact & Address Details (As per our MS_ACCODES Master Form)
+  // Section 2: Contact & Address Details
   // =========================================================================
   const [contactPerson, setContactPerson] = useState<string>("");
-  const [phone, setPhone] = useState<string>("");
-  const [mobileNo, setMobileNo] = useState<string>("");
+  const [phoneDigits, setPhoneDigits] = useState<string>("");
+  const [mobileDigits, setMobileDigits] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [countryCode, setCountryCode] = useState<string>(effectiveCompany.includes("OM") ? "OM" : "SA");
+  const [countryCode, setCountryCode] = useState<string>(effectiveCompany.includes("OM") ? "OM" : "KSA");
   const [cityName, setCityName] = useState<string>("");
   const [address1, setAddress1] = useState<string>("");
 
   // =========================================================================
-  // Section 3: Tax & Commercial / Bank Details (As per our MS_ACCODES Master Form)
+  // Section 3: Tax & Commercial / Bank Details
   // =========================================================================
   const [trnNo, setTrnNo] = useState<string>("");
   const [taxRegistered, setTaxRegistered] = useState<string>("Y");
@@ -109,20 +378,76 @@ export function QuickAddAccountModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Close on Escape key
+  // Close popovers on click outside
+  useEffect(() => {
+    if (!countryDropdownOpen && !currencyDropdownOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        countryDropdownOpen &&
+        countryTriggerRef.current &&
+        !countryTriggerRef.current.contains(target) &&
+        countryMenuRef.current &&
+        !countryMenuRef.current.contains(target)
+      ) {
+        setCountryDropdownOpen(false);
+      }
+
+      if (
+        currencyDropdownOpen &&
+        currencyTriggerRef.current &&
+        !currencyTriggerRef.current.contains(target) &&
+        currencyMenuRef.current &&
+        !currencyMenuRef.current.contains(target)
+      ) {
+        setCurrencyDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [countryDropdownOpen, currencyDropdownOpen]);
+
+  // Focus search inputs when opened
+  useEffect(() => {
+    if (countryDropdownOpen) {
+      const timer = setTimeout(() => countrySearchInputRef.current?.focus(), 30);
+      return () => clearTimeout(timer);
+    }
+  }, [countryDropdownOpen]);
+
+  useEffect(() => {
+    if (currencyDropdownOpen) {
+      const timer = setTimeout(() => currencySearchInputRef.current?.focus(), 30);
+      return () => clearTimeout(timer);
+    }
+  }, [currencyDropdownOpen]);
+
+  // Close modal on Escape key
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (countryDropdownOpen) {
+          e.preventDefault();
+          setCountryDropdownOpen(false);
+          return;
+        }
+        if (currencyDropdownOpen) {
+          e.preventDefault();
+          setCurrencyDropdownOpen(false);
+          return;
+        }
         e.preventDefault();
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, countryDropdownOpen, currencyDropdownOpen]);
 
-  // Load dynamic Country and Currency masters from database
+  // Initialize modal state on open
   useEffect(() => {
     if (open) {
       setErrorMsg(null);
@@ -132,10 +457,10 @@ export function QuickAddAccountModal({
       setAcActive("Y");
       setAcType(accountType === "customer" ? "C" : accountType === "supplier" ? "S" : "G");
       setContactPerson("");
-      setPhone("");
-      setMobileNo("");
+      setPhoneDigits("");
+      setMobileDigits("");
       setEmail("");
-      setCountryCode(effectiveCompany.includes("OM") ? "OM" : "SA");
+      setCountryCode(effectiveCompany.includes("OM") ? "OM" : "KSA");
       setCityName("");
       setAddress1("");
       setTrnNo("");
@@ -145,9 +470,21 @@ export function QuickAddAccountModal({
       setContractExpryDate("");
       setBankName("");
       setBankAcCode("");
-      setShowHierarchyCustomizer(false);
+      setShowHierarchyCustomizer(accountType === "expense" || accountType === "general");
+      setIsCreatingNewL2(false);
+      setNewL2Description("");
+      setIsCreatingNewL3(false);
+      setNewL3Description("");
       setIsCreatingNewL4(false);
       setNewL4Description("");
+      setNewL4Bill("N");
+      setNewL4Job("N");
+      setNewL4Type(accountType === "expense" ? "Y" : "N");
+      setExpAlloc(accountType === "expense" ? "Y" : "N");
+      setCountryDropdownOpen(false);
+      setCurrencyDropdownOpen(false);
+      setCountrySearch("");
+      setCurrencySearch("");
 
       void loadDynamicMasters();
       void loadTree();
@@ -167,9 +504,29 @@ export function QuickAddAccountModal({
           .map((r: any) => ({
             country_code: String(r.country_code || r.COUNTRY_CODE || "").trim(),
             country_name: String(r.country_name || r.COUNTRY_NAME || r.country_code || "").trim(),
+            short_desc: String(r.short_desc || r.SHORT_DESC || "").trim(),
           }))
           .filter((r) => r.country_code);
+
         setCountryList(formatted);
+
+        // Auto-select initial country code based on company & available list
+        setCountryCode((prev) => {
+          if (prev && formatted.some((c) => c.country_code.toUpperCase() === prev.toUpperCase())) {
+            return prev;
+          }
+          if (effectiveCompany.includes("OM")) {
+            const omMatch = formatted.find(
+              (c) => c.country_code.toUpperCase() === "OM" || c.country_code.toUpperCase() === "OMA"
+            );
+            if (omMatch) return omMatch.country_code;
+          }
+          const ksaMatch = formatted.find(
+            (c) => c.country_code.toUpperCase() === "KSA" || c.country_code.toUpperCase() === "SA"
+          );
+          if (ksaMatch) return ksaMatch.country_code;
+          return formatted[0]?.country_code || "KSA";
+        });
       }
 
       if (Array.isArray(currencies)) {
@@ -260,92 +617,268 @@ export function QuickAddAccountModal({
     }
 
     if (accountType === "customer") {
-      const path = findL4Path("10203");
-      if (path) {
-        setSelectedL1(path.l1);
-        setSelectedL2(path.l2);
-        setSelectedL3(path.l3);
-        setSelectedL4(path.l4);
+      const custPath = findL4Path("10203");
+      if (custPath) {
+        setSelectedL1(custPath.l1);
+        setSelectedL2(custPath.l2);
+        setSelectedL3(custPath.l3);
+        setSelectedL4(custPath.l4);
+        return;
       }
     } else if (accountType === "supplier") {
-      const path = findL4Path("20201");
-      if (path) {
-        setSelectedL1(path.l1);
-        setSelectedL2(path.l2);
-        setSelectedL3(path.l3);
-        setSelectedL4(path.l4);
+      const suppPath = findL4Path("20201");
+      if (suppPath) {
+        setSelectedL1(suppPath.l1);
+        setSelectedL2(suppPath.l2);
+        setSelectedL3(suppPath.l3);
+        setSelectedL4(suppPath.l4);
+        return;
       }
     } else if (accountType === "bank") {
-      const path = findL4Path("10202");
-      if (path) {
-        setSelectedL1(path.l1);
-        setSelectedL2(path.l2);
-        setSelectedL3(path.l3);
-        setSelectedL4(path.l4);
+      const bankPath = findL4Path("10202");
+      if (bankPath) {
+        setSelectedL1(bankPath.l1);
+        setSelectedL2(bankPath.l2);
+        setSelectedL3(bankPath.l3);
+        setSelectedL4(bankPath.l4);
+        return;
       }
     } else if (accountType === "cash") {
-      const path = findL4Path("10201");
-      if (path) {
-        setSelectedL1(path.l1);
-        setSelectedL2(path.l2);
-        setSelectedL3(path.l3);
-        setSelectedL4(path.l4);
+      const cashPath = findL4Path("10201");
+      if (cashPath) {
+        setSelectedL1(cashPath.l1);
+        setSelectedL2(cashPath.l2);
+        setSelectedL3(cashPath.l3);
+        setSelectedL4(cashPath.l4);
+        return;
       }
-    } else {
-      if (!selectedL1 && treeData.length > 0) {
-        const l1 = treeData[0];
-        setSelectedL1(l1.id);
-        const l2 = (l1.children || [])[0];
-        if (l2) {
-          setSelectedL2(l2.id);
-          const l3 = (l2.children || [])[0];
-          if (l3) {
-            setSelectedL3(l3.id);
-            const l4 = (l3.children || [])[0];
-            if (l4) setSelectedL4(l4.id);
+    } else if (accountType === "expense") {
+      const expNode = treeData.find((n) => n.id === "5");
+      if (expNode) {
+        setSelectedL1("5");
+        const firstL2 = expNode.children?.[0];
+        if (firstL2) {
+          setSelectedL2(firstL2.id);
+          const firstL3 = firstL2.children?.[0];
+          if (firstL3) {
+            setSelectedL3(firstL3.id);
+            const firstL4 = firstL3.children?.[0];
+            if (firstL4) setSelectedL4(firstL4.id);
+          }
+        }
+        return;
+      }
+    }
+
+    if (!selectedL1 && treeData.length > 0) {
+      const firstL1 = treeData[0];
+      setSelectedL1(firstL1.id);
+      if (firstL1.children?.length) {
+        const firstL2 = firstL1.children[0];
+        setSelectedL2(firstL2.id);
+        if (firstL2.children?.length) {
+          const firstL3 = firstL2.children[0];
+          setSelectedL3(firstL3.id);
+          if (firstL3.children?.length) {
+            setSelectedL4(firstL3.children[0].id);
           }
         }
       }
     }
   }, [treeData, accountType, defaultL4Code]);
 
-  // Form submission
-  const handleSave = async (e?: React.MouseEvent | React.FormEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+  // Selected Country & Currency Metadata
+  const selectedCountry = useMemo(() => {
+    return countryList.find((c) => c.country_code.toUpperCase() === countryCode.toUpperCase());
+  }, [countryList, countryCode]);
+
+  const selectedCountryMeta = useMemo(() => {
+    return getCountryMeta(countryCode, selectedCountry?.country_name, selectedCountry?.short_desc);
+  }, [countryCode, selectedCountry]);
+
+  const selectedCurrency = useMemo(() => {
+    return currencyList.find((c) => c.curr_code.toUpperCase() === currCode.toUpperCase());
+  }, [currencyList, currCode]);
+
+  const selectedCurrencyFlag = useMemo(() => {
+    return getCurrencyFlag(currCode);
+  }, [currCode]);
+
+  // Filtered dropdown lists for search
+  const filteredCountries = useMemo(() => {
+    if (!countrySearch.trim()) return countryList;
+    const q = countrySearch.toLowerCase().trim();
+    return countryList.filter((c) => {
+      const meta = getCountryMeta(c.country_code, c.country_name, c.short_desc);
+      return (
+        c.country_name.toLowerCase().includes(q) ||
+        c.country_code.toLowerCase().includes(q) ||
+        (meta.dialCode && meta.dialCode.includes(q)) ||
+        (c.short_desc && c.short_desc.toLowerCase().includes(q))
+      );
+    });
+  }, [countryList, countrySearch]);
+
+  const filteredCurrencies = useMemo(() => {
+    if (!currencySearch.trim()) return currencyList;
+    const q = currencySearch.toLowerCase().trim();
+    return currencyList.filter((c) => {
+      return c.curr_code.toLowerCase().includes(q) || c.curr_name.toLowerCase().includes(q);
+    });
+  }, [currencyList, currencySearch]);
+
+  // Country selection handler
+  const handleCountrySelect = (newCode: string) => {
+    setCountryCode(newCode);
+    setCountryDropdownOpen(false);
+    setCountrySearch("");
+  };
+
+  // Phone number input handlers (strictly cleans accidental dial codes, spaces, non-digits)
+  const onMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    const dial = selectedCountryMeta.dialCode;
+    if (dial && val.includes(dial)) {
+      val = val.split(dial).join("");
     }
-    setErrorMsg(null);
-    setSuccessMsg(null);
+    val = val.replace(/^\+\d+\s*/, "");
+    val = val.replace(/[^\d\s-]/g, "");
+    if (val.startsWith("0")) {
+      val = val.slice(1);
+    }
+    setMobileDigits(val);
+  };
+
+  const onPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    const dial = selectedCountryMeta.dialCode;
+    if (dial && val.includes(dial)) {
+      val = val.split(dial).join("");
+    }
+    val = val.replace(/^\+\d+\s*/, "");
+    val = val.replace(/[^\d\s-]/g, "");
+    if (val.startsWith("0")) {
+      val = val.slice(1);
+    }
+    setPhoneDigits(val);
+  };
+
+  // Level change cascading
+  const handleL1Change = (l1: string) => {
+    setSelectedL1(l1);
+    const l1Node = treeData.find((n) => n.id === l1);
+    const l2Node = l1Node?.children?.[0];
+    const nextL2 = l2Node?.id || "";
+    setSelectedL2(nextL2);
+    const l3Node = l2Node?.children?.[0];
+    const nextL3 = l3Node?.id || "";
+    setSelectedL3(nextL3);
+    const nextL4 = l3Node?.children?.[0]?.id || "";
+    setSelectedL4(nextL4);
+  };
+
+  const handleL2Change = (l2: string) => {
+    setSelectedL2(l2);
+    const l1Node = treeData.find((n) => n.id === selectedL1);
+    const l2Node = l1Node?.children?.find((n) => n.id === l2);
+    const l3Node = l2Node?.children?.[0];
+    const nextL3 = l3Node?.id || "";
+    setSelectedL3(nextL3);
+    const nextL4 = l3Node?.children?.[0]?.id || "";
+    setSelectedL4(nextL4);
+  };
+
+  const handleL3Change = (l3: string) => {
+    setSelectedL3(l3);
+    const l1Node = treeData.find((n) => n.id === selectedL1);
+    const l2Node = l1Node?.children?.find((n) => n.id === selectedL2);
+    const l3Node = l2Node?.children?.find((n) => n.id === l3);
+    const nextL4 = l3Node?.children?.[0]?.id || "";
+    setSelectedL4(nextL4);
+  };
+
+  // Handle Save
+  const handleSave = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
 
     const trimmedName = acName.trim();
     if (!trimmedName) {
-      setErrorMsg(
-        accountType === "customer"
-          ? "Customer Account Name is required."
-          : accountType === "supplier"
-          ? "Supplier Account Name is required."
-          : "Account Name is required."
-      );
+      setErrorMsg("Please enter an Account Name.");
       return;
     }
 
-    let targetL4 = selectedL4;
+    if ((accountType === "customer" || accountType === "supplier") && !mobileDigits.trim()) {
+      setErrorMsg("Please enter the Mobile Number.");
+      return;
+    }
 
     setSaving(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
     try {
-      // 1. If user chose to create a new Level 4 sub-group first
-      if (isCreatingNewL4) {
-        if (!newL4Description.trim()) {
-          throw new Error("Level 4 Group Description is required when creating a new group.");
+      // 1. Resolve Level 2 category code
+      let targetL2 = selectedL2;
+      if (isCreatingNewL2) {
+        if (!selectedL1) {
+          throw new Error("Cannot create a Level 2 category without selecting a Level 1 parent.");
         }
-        if (!selectedL3) {
-          throw new Error("Please select a Level 3 parent group.");
+        if (!newL2Description.trim()) {
+          throw new Error("Please enter a description for the new Level 2 category.");
+        }
+
+        const l2Res = (await createAccountTreeNode(2, {
+          l1_code: selectedL1,
+          l2_description: newL2Description.trim(),
+          l2_name: newL2Description.trim(),
+        })) as any;
+
+        targetL2 = l2Res?.data?.l2_code || l2Res?.l2_code || "";
+        if (!targetL2) {
+          throw new Error("Created Level 2 category code could not be determined.");
+        }
+      }
+
+      // 2. Resolve Level 3 group code
+      let targetL3 = selectedL3;
+      if (isCreatingNewL3) {
+        if (!targetL2) {
+          throw new Error("Cannot create a Level 3 group without a Level 2 parent.");
+        }
+        if (!newL3Description.trim()) {
+          throw new Error("Please enter a description for the new Level 3 group.");
+        }
+
+        const l3Res = (await createAccountTreeNode(3, {
+          l2_code: targetL2,
+          l3_description: newL3Description.trim(),
+          l3_name: newL3Description.trim(),
+        })) as any;
+
+        targetL3 = l3Res?.data?.l3_code || l3Res?.l3_code || "";
+        if (!targetL3) {
+          throw new Error("Created Level 3 group code could not be determined.");
+        }
+      }
+
+      // 3. Resolve Level 4 sub-group code with transactional flags
+      let targetL4 = selectedL4;
+      if (isCreatingNewL4) {
+        if (!targetL3) {
+          throw new Error("Cannot create a Level 4 group without selecting a Level 3 parent.");
+        }
+        if (!newL4Description.trim()) {
+          throw new Error("Please enter a description for the new Level 4 sub-group.");
         }
 
         const l4Res = (await createAccountTreeNode(4, {
-          l3_code: selectedL3,
+          l3_code: targetL3,
           l4_description: newL4Description.trim(),
+          l4_name: newL4Description.trim(),
+          l4_type: newL4Type || "N",
+          l4_job: newL4Job || "N",
+          l4_bill: newL4Bill || "N",
         })) as any;
 
         targetL4 = l4Res?.data?.l4_code || l4Res?.l4_code || "";
@@ -358,7 +891,16 @@ export function QuickAddAccountModal({
         throw new Error("Please select or specify a Level 4 parent group.");
       }
 
-      // 2. Prepare payload for Oracle PROC_MANAGE_ACCODES (Real fields from our Master Form)
+      // Format international phone numbers using selected country dial code
+      const resolvedMobile = mobileDigits.trim()
+        ? (selectedCountryMeta.dialCode ? `${selectedCountryMeta.dialCode} ${mobileDigits.trim()}` : mobileDigits.trim())
+        : undefined;
+
+      const resolvedPhone = phoneDigits.trim()
+        ? (selectedCountryMeta.dialCode ? `${selectedCountryMeta.dialCode} ${phoneDigits.trim()}` : phoneDigits.trim())
+        : undefined;
+
+      // 4. Prepare payload for Oracle PROC_MANAGE_ACCODES
       const payload: Record<string, unknown> = {
         l4_code: targetL4,
         ac_name: trimmedName,
@@ -366,9 +908,10 @@ export function QuickAddAccountModal({
         ac_active: acActive || "Y",
         ac_status: "A",
         ac_type: acType,
+        exp_alloc: expAlloc || "N",
         contact_person: contactPerson.trim() || undefined,
-        phone: phone.trim() || undefined,
-        mobile_no: mobileNo.trim() || undefined,
+        phone: resolvedPhone,
+        mobile_no: resolvedMobile,
         e_mail: email.trim() || undefined,
         country_code: countryCode.trim() || undefined,
         city_name: cityName.trim() || undefined,
@@ -392,13 +935,16 @@ export function QuickAddAccountModal({
 
       setSuccessMsg(`Created "${trimmedName}" (${generatedAcCode || "Success"}) successfully!`);
 
+      // Refresh cached tree
+      void loadTree();
+
       // Notify parent to auto-select
       onAccountCreated({
         ac_code: generatedAcCode,
         ac_name: trimmedName,
         l4_code: targetL4,
         curr_code: currCode,
-        phone: mobileNo.trim() || phone.trim() || undefined,
+        phone: resolvedMobile || resolvedPhone,
         address_1: address1.trim() || cityName.trim() || undefined,
         contact_person: contactPerson.trim() || undefined,
         trn_no: trnNo.trim() || undefined,
@@ -437,7 +983,9 @@ export function QuickAddAccountModal({
 
   // Friendly L4 group description
   const activeL4Name =
-    selectedL4 === "10203"
+    (isCreatingNewL4 && newL4Description.trim() ? `(New) ${newL4Description.trim()}` : null) ||
+    level4Options.find((o) => o.id === selectedL4)?.label ||
+    (selectedL4 === "10203"
       ? "10203 - Trade Receivables (Customers)"
       : selectedL4 === "20201"
       ? "20201 - Trade Creditors (Suppliers)"
@@ -447,7 +995,9 @@ export function QuickAddAccountModal({
       ? "10201 - Cash in Hand"
       : selectedL4
       ? `Group ${selectedL4}`
-      : "Auto";
+      : isCreatingNewL4
+      ? "New Sub-group"
+      : "Auto");
 
   return (
     <div
@@ -463,8 +1013,8 @@ export function QuickAddAccountModal({
         onClick={(e) => e.stopPropagation()}
         className="w-[min(96vw,940px)] my-auto max-h-[94vh] flex flex-col rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden"
       >
-        {/* Navy Header Bar matching user's preferred layout */}
-        <div className="bg-[#00378C] text-white px-5 py-3.5 flex items-center justify-between shrink-0 select-none">
+        {/* Navy Header Bar */}
+        <div className="bg-[#00378C] text-white px-5 py-3.5 flex items-center justify-between shrink-0 select-none shadow-xs">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -478,6 +1028,7 @@ export function QuickAddAccountModal({
               {headerTitle}
             </h2>
           </div>
+
           <button
             type="button"
             onClick={onClose}
@@ -489,9 +1040,7 @@ export function QuickAddAccountModal({
         </div>
 
         {/* Scrollable Form Body */}
-        <div
-          className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 text-slate-800"
-        >
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 text-slate-800">
           {/* Notification Banners */}
           {errorMsg && (
             <div className="flex items-start gap-2.5 p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-medium">
@@ -508,7 +1057,7 @@ export function QuickAddAccountModal({
           )}
 
           {/* =========================================================================
-              SECTION 1: CORE / ACCOUNT DETAILS (Real Master Form Fields)
+              SECTION 1: CORE / ACCOUNT DETAILS
              ========================================================================= */}
           <div>
             <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-4">
@@ -528,122 +1077,256 @@ export function QuickAddAccountModal({
               )}
             </div>
 
-            {/* If user toggled custom tree or if general account */}
+            {/* Collapsible Chart of Accounts Customizer */}
             {(!isPreLockedGroup || showHierarchyCustomizer) && (
-              <div className="mb-4 bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-bold text-slate-700 flex items-center gap-1.5 uppercase">
-                    <Layers className="w-3.5 h-3.5 text-[#00378C]" />
+              <div className="mb-5 p-4 rounded-xl border border-blue-100 bg-blue-50/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-[#00378C] flex items-center gap-1.5 uppercase">
+                    <Layers className="w-3.5 h-3.5" />
                     Chart of Accounts Hierarchy (Levels 1 - 4)
                   </span>
-                  <span className="text-slate-500 font-medium">
-                    {accountType === "customer" && "Default: 10203 Trade Receivables"}
-                    {accountType === "supplier" && "Default: 20201 Trade Creditors"}
-                  </span>
+                  {treeLoading && (
+                    <span className="text-[11px] text-blue-600 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Loading tree...
+                    </span>
+                  )}
+                  {isPreLockedGroup && (
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      Default: {activeL4Name}
+                    </span>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                  {/* L1 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  {/* Level 1 */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Level 1 (Major)</label>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      Level 1 (Major)
+                    </label>
                     <select
-                      disabled={saving || treeLoading}
                       value={selectedL1}
-                      onChange={(e) => {
-                        setSelectedL1(e.target.value);
-                        setSelectedL2("");
-                        setSelectedL3("");
-                        setSelectedL4("");
-                      }}
-                      className="w-full text-xs rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00378C]"
+                      onChange={(e) => handleL1Change(e.target.value)}
+                      className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
                     >
-                      <option value="">-- Select L1 --</option>
                       {level1Options.map((opt) => (
-                        <option key={opt.id} value={opt.id}>{opt.label}</option>
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
                       ))}
                     </select>
                   </div>
 
-                  {/* L2 */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Level 2 (Category)</label>
-                    <select
-                      disabled={saving || !selectedL1 || treeLoading}
-                      value={selectedL2}
-                      onChange={(e) => {
-                        setSelectedL2(e.target.value);
-                        setSelectedL3("");
-                        setSelectedL4("");
-                      }}
-                      className="w-full text-xs rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00378C]"
-                    >
-                      <option value="">-- Select L2 --</option>
-                      {level2Options.map((opt) => (
-                        <option key={opt.id} value={opt.id}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* L3 */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Level 3 (Group)</label>
-                    <select
-                      disabled={saving || !selectedL2 || treeLoading}
-                      value={selectedL3}
-                      onChange={(e) => {
-                        setSelectedL3(e.target.value);
-                        setSelectedL4("");
-                      }}
-                      className="w-full text-xs rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00378C]"
-                    >
-                      <option value="">-- Select L3 --</option>
-                      {level3Options.map((opt) => (
-                        <option key={opt.id} value={opt.id}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* L4 */}
+                  {/* Level 2 */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-semibold text-slate-600">Level 4 (Sub-group)*</label>
+                      <label className="text-[11px] font-bold text-slate-600">
+                        Level 2 (Category)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextState = !isCreatingNewL2;
+                          setIsCreatingNewL2(nextState);
+                          if (nextState) {
+                            setIsCreatingNewL3(true);
+                            setIsCreatingNewL4(true);
+                          }
+                        }}
+                        className="text-[10px] text-[#00378C] hover:underline font-bold cursor-pointer"
+                      >
+                        {isCreatingNewL2 ? "Select Existing" : "+ New L2"}
+                      </button>
+                    </div>
+                    {isCreatingNewL2 ? (
+                      <input
+                        type="text"
+                        placeholder="New L2 Category Name..."
+                        value={newL2Description}
+                        onChange={(e) => setNewL2Description(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-blue-400 bg-white px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] shadow-2xs"
+                      />
+                    ) : (
+                      <select
+                        value={selectedL2}
+                        onChange={(e) => handleL2Change(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
+                      >
+                        {level2Options.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Level 3 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-600">
+                        Level 3 (Group)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextState = !isCreatingNewL3;
+                          setIsCreatingNewL3(nextState);
+                          if (nextState) {
+                            setIsCreatingNewL4(true);
+                          }
+                        }}
+                        className="text-[10px] text-[#00378C] hover:underline font-bold cursor-pointer"
+                      >
+                        {isCreatingNewL3 ? "Select Existing" : "+ New L3"}
+                      </button>
+                    </div>
+                    {isCreatingNewL3 ? (
+                      <input
+                        type="text"
+                        placeholder="New L3 Group Name..."
+                        value={newL3Description}
+                        onChange={(e) => setNewL3Description(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-blue-400 bg-white px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] shadow-2xs"
+                      />
+                    ) : (
+                      <select
+                        value={selectedL3}
+                        onChange={(e) => handleL3Change(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
+                      >
+                        {level3Options.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Level 4 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-600">
+                        Level 4 (Sub-group)*
+                      </label>
                       <button
                         type="button"
                         onClick={() => setIsCreatingNewL4(!isCreatingNewL4)}
-                        className="text-[10px] text-[#00378C] hover:underline font-semibold"
+                        className="text-[10px] text-[#00378C] hover:underline font-bold cursor-pointer"
                       >
                         {isCreatingNewL4 ? "Select Existing" : "+ New L4"}
                       </button>
                     </div>
+
                     {isCreatingNewL4 ? (
                       <input
                         type="text"
-                        placeholder="New L4 Name..."
+                        placeholder="Enter new L4 description..."
                         value={newL4Description}
                         onChange={(e) => setNewL4Description(e.target.value)}
-                        className="w-full text-xs rounded-lg border border-blue-400 bg-blue-50/50 px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00378C]"
+                        className="w-full text-xs rounded-xl border border-blue-400 bg-white px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] shadow-2xs"
                       />
                     ) : (
                       <select
-                        disabled={saving || !selectedL3 || treeLoading}
                         value={selectedL4}
                         onChange={(e) => setSelectedL4(e.target.value)}
-                        className="w-full text-xs rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#00378C]"
+                        className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
                       >
-                        <option value="">-- Select L4 --</option>
                         {level4Options.map((opt) => (
-                          <option key={opt.id} value={opt.id}>{opt.label}</option>
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
                         ))}
                       </select>
                     )}
                   </div>
                 </div>
+
+                {/* Sub-Group / Level 4 Posting & Splitting Flags */}
+                {isCreatingNewL4 && (
+                  <div className="mt-3 p-3 rounded-xl border border-blue-200/80 bg-white/95 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#00378C]"></span>
+                        Level 4 Posting &amp; Splitting Flags
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Configure transactional behavior for this new sub-group
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      {/* Job Splitting Flag */}
+                      <div className="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-slate-50/70">
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-800">Job Splitting</div>
+                          <div className="text-[9.5px] text-slate-500">Split cost across jobs</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewL4Job(newL4Job === "Y" ? "N" : "Y")}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            newL4Job === "Y" ? "bg-[#00378C]" : "bg-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              newL4Job === "Y" ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Invoice Splitting Flag */}
+                      <div className="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-slate-50/70">
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-800">Invoice Splitting</div>
+                          <div className="text-[9.5px] text-slate-500">Split across bills/invoices</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewL4Bill(newL4Bill === "Y" ? "N" : "Y")}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            newL4Bill === "Y" ? "bg-[#00378C]" : "bg-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              newL4Bill === "Y" ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Expense / Account Type Flag */}
+                      <div className="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-slate-50/70">
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-800">Expense Type</div>
+                          <div className="text-[9.5px] text-slate-500">Active expense classification</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewL4Type(newL4Type === "Y" ? "N" : "Y")}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            newL4Type === "Y" ? "bg-[#00378C]" : "bg-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              newL4Type === "Y" ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Core Details Grid */}
+            {/* Standard Core Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Account Code (Auto) */}
+              {/* Account Code */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Account Code
@@ -653,11 +1336,11 @@ export function QuickAddAccountModal({
                   readOnly
                   disabled
                   value="Auto Generated"
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-slate-50/80 px-3.5 py-2.5 text-slate-400 cursor-not-allowed select-none"
+                  className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-slate-500 font-mono font-medium cursor-not-allowed select-none shadow-2xs"
                 />
               </div>
 
-              {/* Parent Group / Level 4 */}
+              {/* Parent Group L4 Display */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Parent Account Group (L4)
@@ -667,34 +1350,59 @@ export function QuickAddAccountModal({
                   readOnly
                   disabled
                   value={activeL4Name}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-slate-50/80 px-3.5 py-2.5 text-slate-600 font-semibold cursor-not-allowed select-none"
+                  className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-slate-700 font-semibold cursor-not-allowed select-none shadow-2xs"
                 />
               </div>
 
-              {/* DYNAMIC CURRENCY MASTER FROM DATABASE */}
+              {/* CURRENCY MASTER LOOK FIELD WITH FLAG */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
                   <span>Currency *</span>
-                  {mastersLoading && <span className="text-[10px] text-blue-600 font-normal">Loading...</span>}
-                </label>
-                <select
-                  value={currCode}
-                  onChange={(e) => setCurrCode(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                >
-                  {currencyList.length > 0 ? (
-                    currencyList.map((c) => (
-                      <option key={c.curr_code} value={c.curr_code}>
-                        {c.curr_code} - {c.curr_name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value={currCode}>{currCode}</option>
+                  {mastersLoading && (
+                    <span className="text-[10px] text-blue-600 font-normal">Loading...</span>
                   )}
-                </select>
+                </label>
+
+                {/* ERP-Styled Currency Trigger Button */}
+                <button
+                  ref={currencyTriggerRef}
+                  type="button"
+                  onClick={() => {
+                    setCurrencyDropdownOpen(!currencyDropdownOpen);
+                    setCountryDropdownOpen(false);
+                    setCurrencySearch("");
+                  }}
+                  className="w-full flex items-center justify-between gap-2 text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all text-left shadow-2xs cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {selectedCurrency ? (
+                      <>
+                        <span
+                          className={`fi fi-${selectedCurrencyFlag} shrink-0 rounded-[2px] shadow-2xs border border-slate-200/60`}
+                          style={{ width: 18, height: 13.5 }}
+                        />
+                        <span className="font-mono font-bold text-slate-900">
+                          {selectedCurrency.curr_code}
+                        </span>
+                        <span className="truncate text-slate-600 text-xs">
+                          - {selectedCurrency.curr_name}
+                        </span>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <Coins className="w-4 h-4 text-slate-400" />
+                        <span>-- Select Currency --</span>
+                      </div>
+                    )}
+                  </div>
+                  <ChevronDown
+                    className="w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200"
+                    style={{ transform: currencyDropdownOpen ? "rotate(180deg)" : "none" }}
+                  />
+                </button>
               </div>
 
-              {/* WIDE ACCOUNT NAME FIELD (User Requested: Increased Width & Prominent!) */}
+              {/* WIDE ACCOUNT NAME FIELD */}
               <div className="sm:col-span-3">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
                   <span>
@@ -704,7 +1412,9 @@ export function QuickAddAccountModal({
                       ? "Supplier Account Name *"
                       : "Account Name *"}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-normal">Full Legal / Company Name</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    Full Legal / Company Name
+                  </span>
                 </label>
                 <input
                   type="text"
@@ -718,7 +1428,7 @@ export function QuickAddAccountModal({
                   }
                   value={acName}
                   onChange={(e) => setAcName(e.target.value)}
-                  className="w-full text-sm font-semibold rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/20 transition-all shadow-2xs"
+                  className="w-full text-sm font-semibold rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
 
@@ -730,17 +1440,64 @@ export function QuickAddAccountModal({
                 <select
                   value={acActive}
                   onChange={(e) => setAcActive(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all cursor-pointer shadow-2xs"
                 >
                   <option value="Y">Active</option>
                   <option value="N">Inactive</option>
                 </select>
               </div>
+
+              {/* Account Classification & Job Allocation (For General / Expense Accounts) */}
+              {!isPreLockedGroup && (
+                <>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span>Account Classification (Type)</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Posting Category</span>
+                    </label>
+                    <select
+                      value={acType}
+                      onChange={(e) => setAcType(e.target.value)}
+                      className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <option value="G">G - General / Expense Account</option>
+                      <option value="S">S - Supplier (Creditor)</option>
+                      <option value="C">C - Customer (Debtor)</option>
+                      <option value="B">B - Bank Account</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span>Expense / Job Allocation</span>
+                      <span className="text-[10px] text-slate-400 font-normal">exp_alloc</span>
+                    </label>
+                    <div className="flex items-center justify-between h-[38px] px-3.5 rounded-xl border border-slate-300 bg-white shadow-2xs">
+                      <span className="text-xs font-semibold text-slate-700">
+                        {expAlloc === "Y" ? "Yes — Allocate to Jobs/Projects" : "No — General Posting"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setExpAlloc(expAlloc === "Y" ? "N" : "Y")}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          expAlloc === "Y" ? "bg-[#00378C]" : "bg-slate-300"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            expAlloc === "Y" ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           {/* =========================================================================
-              SECTION 2: ADDRESS & CONTACT DETAILS (Real Master Form Fields)
+              SECTION 2: ADDRESS & CONTACT DETAILS (Attractive Inputs & No Overlap)
              ========================================================================= */}
           <div>
             <div className="border-b border-slate-200 pb-2 mb-4">
@@ -751,6 +1508,75 @@ export function QuickAddAccountModal({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* COUNTRY MASTER LOOK FIELD WITH FLAG */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Country *</span>
+                  {mastersLoading && (
+                    <span className="text-[10px] text-emerald-600 font-normal">Loading...</span>
+                  )}
+                </label>
+
+                {/* ERP-Styled Country Trigger Button */}
+                <button
+                  ref={countryTriggerRef}
+                  type="button"
+                  onClick={() => {
+                    setCountryDropdownOpen(!countryDropdownOpen);
+                    setCurrencyDropdownOpen(false);
+                    setCountrySearch("");
+                  }}
+                  className="w-full flex items-center justify-between gap-2 text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all text-left shadow-2xs cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {selectedCountry ? (
+                      <>
+                        <span
+                          className={`fi fi-${selectedCountryMeta.iso2} shrink-0 rounded-[2px] shadow-2xs border border-slate-200/60`}
+                          style={{ width: 18, height: 13.5 }}
+                        />
+                        <span className="truncate font-semibold text-slate-900">
+                          {selectedCountry.country_name}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono font-bold shrink-0">
+                          {selectedCountry.country_code}
+                        </span>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <Globe className="w-4 h-4 text-slate-400" />
+                        <span>-- Select Country --</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                    {selectedCountryMeta.dialCode && (
+                      <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200/80">
+                        {selectedCountryMeta.dialCode}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className="w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200"
+                      style={{ transform: countryDropdownOpen ? "rotate(180deg)" : "none" }}
+                    />
+                  </div>
+                </button>
+              </div>
+
+              {/* City / Location */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  City / Location
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Riyadh, Jeddah, Dammam, Muscat, Dubai..."
+                  value={cityName}
+                  onChange={(e) => setCityName(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
+                />
+              </div>
+
               {/* Contact Person */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -761,35 +1587,7 @@ export function QuickAddAccountModal({
                   placeholder="Full name of representative"
                   value={contactPerson}
                   onChange={(e) => setContactPerson(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                />
-              </div>
-
-              {/* Mobile No */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Mobile No *
-                </label>
-                <input
-                  type="tel"
-                  placeholder="e.g. +966 50 123 4567"
-                  value={mobileNo}
-                  onChange={(e) => setMobileNo(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                />
-              </div>
-
-              {/* Phone / Landline */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Phone (Landline / Office)
-                </label>
-                <input
-                  type="tel"
-                  placeholder="Office phone"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
 
@@ -803,45 +1601,66 @@ export function QuickAddAccountModal({
                   placeholder="accounts@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
 
-              {/* DYNAMIC COUNTRY MASTER FROM DATABASE */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                  <span>Country *</span>
-                  {mastersLoading && <span className="text-[10px] text-emerald-600 font-normal">Loading...</span>}
-                </label>
-                <select
-                  value={countryCode}
-                  onChange={(e) => setCountryCode(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                >
-                  <option value="">-- Select Country --</option>
-                  {countryList.map((c) => (
-                    <option key={c.country_code} value={c.country_code}>
-                      {c.country_name} ({c.country_code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* City */}
-              <div>
+              {/* MOBILE NUMBER WITH FLEX INPUT GROUP (ZERO OVERLAP EVER) */}
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  City / Location
+                  Mobile No *
                 </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Riyadh, Jeddah, Dammam, Muscat..."
-                  value={cityName}
-                  onChange={(e) => setCityName(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
-                />
+                <div className="flex items-center rounded-xl border border-slate-300 bg-white shadow-2xs hover:border-slate-400 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/15 transition-all overflow-hidden">
+                  {/* Pinned Country Flag & Dial Code Pill */}
+                  <div className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-50/90 border-r border-slate-200 select-none shrink-0">
+                    <span
+                      className={`fi fi-${selectedCountryMeta.iso2} shrink-0 rounded-[2px] shadow-2xs border border-slate-200/60`}
+                      style={{ width: 18, height: 13.5 }}
+                    />
+                    <span className="font-mono text-xs font-bold text-slate-700">
+                      {selectedCountryMeta.dialCode || "+"}
+                    </span>
+                  </div>
+                  {/* Clean Input Field */}
+                  <input
+                    type="tel"
+                    required
+                    placeholder={selectedCountryMeta.iso2 === "sa" ? "50 123 4567" : "9123 4567"}
+                    value={mobileDigits}
+                    onChange={onMobileChange}
+                    className="flex-1 w-full px-3.5 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 bg-transparent border-0 outline-none font-mono font-medium focus:ring-0"
+                  />
+                </div>
               </div>
 
-              {/* Address Line 1 */}
+              {/* PHONE (LANDLINE / OFFICE) WITH FLEX INPUT GROUP (ZERO OVERLAP EVER) */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Phone (Landline / Office)
+                </label>
+                <div className="flex items-center rounded-xl border border-slate-300 bg-white shadow-2xs hover:border-slate-400 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/15 transition-all overflow-hidden">
+                  {/* Pinned Country Flag & Dial Code Pill */}
+                  <div className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-50/90 border-r border-slate-200 select-none shrink-0">
+                    <span
+                      className={`fi fi-${selectedCountryMeta.iso2} shrink-0 rounded-[2px] shadow-2xs border border-slate-200/60`}
+                      style={{ width: 18, height: 13.5 }}
+                    />
+                    <span className="font-mono text-xs font-bold text-slate-700">
+                      {selectedCountryMeta.dialCode || "+"}
+                    </span>
+                  </div>
+                  {/* Clean Input Field */}
+                  <input
+                    type="tel"
+                    placeholder={selectedCountryMeta.iso2 === "sa" ? "11 234 5678" : "24 123 456"}
+                    value={phoneDigits}
+                    onChange={onPhoneChange}
+                    className="flex-1 w-full px-3.5 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 bg-transparent border-0 outline-none font-mono font-medium focus:ring-0"
+                  />
+                </div>
+              </div>
+
+              {/* Street Address / Building Details */}
               <div className="col-span-full">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Street Address / Building Details
@@ -851,14 +1670,14 @@ export function QuickAddAccountModal({
                   placeholder="Street, District, Building No, Postal Code..."
                   value={address1}
                   onChange={(e) => setAddress1(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
             </div>
           </div>
 
           {/* =========================================================================
-              SECTION 3: TAX & CREDIT DETAILS (Real Master Form Fields)
+              SECTION 3: TAX & CREDIT DETAILS
              ========================================================================= */}
           <div>
             <div className="border-b border-slate-200 pb-2 mb-4">
@@ -879,7 +1698,7 @@ export function QuickAddAccountModal({
                   placeholder="15-digit VAT / Tax Registration Number"
                   value={trnNo}
                   onChange={(e) => setTrnNo(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
 
@@ -891,7 +1710,7 @@ export function QuickAddAccountModal({
                 <select
                   value={taxRegistered}
                   onChange={(e) => setTaxRegistered(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all cursor-pointer shadow-2xs"
                 >
                   <option value="Y">Yes - Tax Registered</option>
                   <option value="N">No - Not Registered</option>
@@ -907,7 +1726,7 @@ export function QuickAddAccountModal({
                   type="date"
                   value={contractExpryDate}
                   onChange={(e) => setContractExpryDate(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs cursor-pointer"
                 />
               </div>
 
@@ -921,7 +1740,7 @@ export function QuickAddAccountModal({
                   placeholder="e.g. 30"
                   value={creditPeriod}
                   onChange={(e) => setCreditPeriod(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
 
@@ -936,7 +1755,7 @@ export function QuickAddAccountModal({
                   placeholder="e.g. 50000.00"
                   value={creditAmount}
                   onChange={(e) => setCreditAmount(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
 
@@ -950,7 +1769,7 @@ export function QuickAddAccountModal({
                   placeholder="e.g. Al Rajhi / SNB / Bank Muscat"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
 
@@ -964,20 +1783,20 @@ export function QuickAddAccountModal({
                   placeholder="SA... or OM..."
                   value={bankAcCode}
                   onChange={(e) => setBankAcCode(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] transition-all"
+                  className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all shadow-2xs"
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Footer Bar matching user's preferred layout */}
-        <div className="border-t border-slate-200 bg-slate-50/60 px-6 py-4 flex items-center justify-between shrink-0">
+        {/* Footer Bar */}
+        <div className="border-t border-slate-200 bg-slate-50/70 px-6 py-4 flex items-center justify-between shrink-0">
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-extrabold text-slate-700 uppercase tracking-wider hover:bg-slate-50 active:scale-98 transition-all disabled:opacity-50 cursor-pointer"
+            className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-extrabold text-slate-700 uppercase tracking-wider hover:bg-slate-50 active:scale-98 transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
           >
             DISCARD
           </button>
@@ -999,6 +1818,161 @@ export function QuickAddAccountModal({
           </button>
         </div>
       </div>
+
+      {/* =========================================================================
+          PORTALED SEARCHABLE COUNTRY LOOK FIELD POPOVER
+         ========================================================================= */}
+      {countryDropdownOpen &&
+        createPortal(
+          <div
+            ref={countryMenuRef}
+            style={countryMenuStyle}
+            className="bg-white border border-slate-200 rounded-xl shadow-2xl p-2.5 flex flex-col text-xs text-slate-800 animate-in fade-in zoom-in-95 duration-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Search Input Bar */}
+            <div className="relative mb-2 shrink-0">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={countrySearchInputRef}
+                type="text"
+                placeholder="Search country or code..."
+                value={countrySearch}
+                onChange={(e) => setCountrySearch(e.target.value)}
+                className="w-full pl-8 pr-7 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]"
+              />
+              {countrySearch && (
+                <button
+                  type="button"
+                  onClick={() => setCountrySearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Scrollable Results List */}
+            <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 max-h-56">
+              {filteredCountries.map((c) => {
+                const isSelected = c.country_code.toUpperCase() === countryCode.toUpperCase();
+                const meta = getCountryMeta(c.country_code, c.country_name, c.short_desc);
+                return (
+                  <button
+                    key={c.country_code}
+                    type="button"
+                    onClick={() => handleCountrySelect(c.country_code)}
+                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg transition-colors text-left cursor-pointer ${
+                      isSelected
+                        ? "bg-[#00378C]/10 text-[#00378C] font-semibold"
+                        : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        className={`fi fi-${meta.iso2} shrink-0 rounded-[2px] shadow-2xs border border-slate-200/60`}
+                        style={{ width: 18, height: 13.5 }}
+                      />
+                      <span className="truncate">{c.country_name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-mono font-bold shrink-0">
+                        {c.country_code}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {meta.dialCode && (
+                        <span className="text-[11px] font-mono text-slate-400 font-medium">
+                          {meta.dialCode}
+                        </span>
+                      )}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-[#00378C]" />}
+                    </div>
+                  </button>
+                );
+              })}
+              {filteredCountries.length === 0 && (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  No matching countries found
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* =========================================================================
+          PORTALED SEARCHABLE CURRENCY LOOK FIELD POPOVER
+         ========================================================================= */}
+      {currencyDropdownOpen &&
+        createPortal(
+          <div
+            ref={currencyMenuRef}
+            style={currencyMenuStyle}
+            className="bg-white border border-slate-200 rounded-xl shadow-2xl p-2.5 flex flex-col text-xs text-slate-800 animate-in fade-in zoom-in-95 duration-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Search Input Bar */}
+            <div className="relative mb-2 shrink-0">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={currencySearchInputRef}
+                type="text"
+                placeholder="Search currency or name..."
+                value={currencySearch}
+                onChange={(e) => setCurrencySearch(e.target.value)}
+                className="w-full pl-8 pr-7 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]"
+              />
+              {currencySearch && (
+                <button
+                  type="button"
+                  onClick={() => setCurrencySearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Scrollable Results List */}
+            <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 max-h-56">
+              {filteredCurrencies.map((c) => {
+                const isSelected = c.curr_code.toUpperCase() === currCode.toUpperCase();
+                const flagIso = getCurrencyFlag(c.curr_code);
+                return (
+                  <button
+                    key={c.curr_code}
+                    type="button"
+                    onClick={() => {
+                      setCurrCode(c.curr_code);
+                      setCurrencyDropdownOpen(false);
+                      setCurrencySearch("");
+                    }}
+                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg transition-colors text-left cursor-pointer ${
+                      isSelected
+                        ? "bg-[#00378C]/10 text-[#00378C] font-semibold"
+                        : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        className={`fi fi-${flagIso} shrink-0 rounded-[2px] shadow-2xs border border-slate-200/60`}
+                        style={{ width: 18, height: 13.5 }}
+                      />
+                      <span className="font-mono font-bold text-slate-900">{c.curr_code}</span>
+                      <span className="truncate text-slate-600">{c.curr_name}</span>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-[#00378C] shrink-0 ml-2" />}
+                  </button>
+                );
+              })}
+              {filteredCurrencies.length === 0 && (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  No matching currencies found
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
