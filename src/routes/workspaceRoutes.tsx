@@ -259,6 +259,7 @@ import PurchaseGrnListing from "../pages/purchase_sales/Reports/PurchaseGrnListi
 import SalesDnListing from "../pages/purchase_sales/Reports/SalesDNListingReport";
 import SalesOrderListing from "../pages/purchase_sales/Reports/SalesOrderListingReport";
 import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
+import HcmDashboardTabs from "../pages/pams/HcmDashboardTabs";
   type WorkspaceRouteContext = {
     pathname: string;
     activeApp?: MenuNode;
@@ -332,11 +333,11 @@ import { KpiAssignmentPage } from "../pages/pams/KpiAssignmentpage";
       element : () => <HrMasterPage config={hrMasterConfigs.skills} />
     },
       {
-      name: "HR Dashboard",
-      // Matches exactly /workspace/hcm/hcm (ignoring trailing slashes)
-      match: ({ pathname }) => pathname.toLowerCase().replace(/\/+$/, "") === "/workspace/hcm/hcm",
-      element: () => <HrDashboard />,
-    },
+  name: "HR Dashboard",
+  // Matches exactly /workspace/hcm/hcm (ignoring trailing slashes)
+  match: ({ pathname }) => pathname.toLowerCase().replace(/\/+$/, "") === "/workspace/hcm/hcm",
+  element: () => <HcmDashboardTabs />,
+},
     {
       name : 'Attendance Register Report',
       match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/attendance_register"),
