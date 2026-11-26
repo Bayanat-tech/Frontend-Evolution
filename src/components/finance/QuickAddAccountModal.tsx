@@ -326,10 +326,20 @@ export function QuickAddAccountModal({
   const [selectedL3, setSelectedL3] = useState<string>("");
   const [selectedL4, setSelectedL4] = useState<string>("");
 
-  // Hierarchy view toggle for customer/supplier (pre-locked by default)
+  // Hierarchy view toggle and dynamic creation states for L2, L3, L4
   const [showHierarchyCustomizer, setShowHierarchyCustomizer] = useState(false);
+  const [isCreatingNewL2, setIsCreatingNewL2] = useState(false);
+  const [newL2Description, setNewL2Description] = useState("");
+  const [isCreatingNewL3, setIsCreatingNewL3] = useState(false);
+  const [newL3Description, setNewL3Description] = useState("");
   const [isCreatingNewL4, setIsCreatingNewL4] = useState(false);
   const [newL4Description, setNewL4Description] = useState("");
+  const [newL4Bill, setNewL4Bill] = useState("N"); // Invoice Splitting
+  const [newL4Job, setNewL4Job] = useState("N");   // Job Splitting
+  const [newL4Type, setNewL4Type] = useState("N"); // Expense / Type Flag
+
+  // Account level flags
+  const [expAlloc, setExpAlloc] = useState("N");   // Expense Allocation to Job/Project
 
   // =========================================================================
   // Section 1: Core / Account Details
@@ -460,9 +470,17 @@ export function QuickAddAccountModal({
       setContractExpryDate("");
       setBankName("");
       setBankAcCode("");
-      setShowHierarchyCustomizer(false);
+      setShowHierarchyCustomizer(accountType === "expense" || accountType === "general");
+      setIsCreatingNewL2(false);
+      setNewL2Description("");
+      setIsCreatingNewL3(false);
+      setNewL3Description("");
       setIsCreatingNewL4(false);
       setNewL4Description("");
+      setNewL4Bill("N");
+      setNewL4Job("N");
+      setNewL4Type(accountType === "expense" ? "Y" : "N");
+      setExpAlloc(accountType === "expense" ? "Y" : "N");
       setCountryDropdownOpen(false);
       setCurrencyDropdownOpen(false);
       setCountrySearch("");
@@ -634,6 +652,22 @@ export function QuickAddAccountModal({
         setSelectedL4(cashPath.l4);
         return;
       }
+    } else if (accountType === "expense") {
+      const expNode = treeData.find((n) => n.id === "5");
+      if (expNode) {
+        setSelectedL1("5");
+        const firstL2 = expNode.children?.[0];
+        if (firstL2) {
+          setSelectedL2(firstL2.id);
+          const firstL3 = firstL2.children?.[0];
+          if (firstL3) {
+            setSelectedL3(firstL3.id);
+            const firstL4 = firstL3.children?.[0];
+            if (firstL4) setSelectedL4(firstL4.id);
+          }
+        }
+        return;
+      }
     }
 
     if (!selectedL1 && treeData.length > 0) {
@@ -774,7 +808,7 @@ export function QuickAddAccountModal({
       return;
     }
 
-    if (!mobileDigits.trim()) {
+    if ((accountType === "customer" || accountType === "supplier") && !mobileDigits.trim()) {
       setErrorMsg("Please enter the Mobile Number.");
       return;
     }
@@ -784,19 +818,67 @@ export function QuickAddAccountModal({
     setSuccessMsg(null);
 
     try {
-      // 1. Resolve Level 4 group code
+      // 1. Resolve Level 2 category code
+      let targetL2 = selectedL2;
+      if (isCreatingNewL2) {
+        if (!selectedL1) {
+          throw new Error("Cannot create a Level 2 category without selecting a Level 1 parent.");
+        }
+        if (!newL2Description.trim()) {
+          throw new Error("Please enter a description for the new Level 2 category.");
+        }
+
+        const l2Res = (await createAccountTreeNode(2, {
+          l1_code: selectedL1,
+          l2_description: newL2Description.trim(),
+          l2_name: newL2Description.trim(),
+        })) as any;
+
+        targetL2 = l2Res?.data?.l2_code || l2Res?.l2_code || "";
+        if (!targetL2) {
+          throw new Error("Created Level 2 category code could not be determined.");
+        }
+      }
+
+      // 2. Resolve Level 3 group code
+      let targetL3 = selectedL3;
+      if (isCreatingNewL3) {
+        if (!targetL2) {
+          throw new Error("Cannot create a Level 3 group without a Level 2 parent.");
+        }
+        if (!newL3Description.trim()) {
+          throw new Error("Please enter a description for the new Level 3 group.");
+        }
+
+        const l3Res = (await createAccountTreeNode(3, {
+          l2_code: targetL2,
+          l3_description: newL3Description.trim(),
+          l3_name: newL3Description.trim(),
+        })) as any;
+
+        targetL3 = l3Res?.data?.l3_code || l3Res?.l3_code || "";
+        if (!targetL3) {
+          throw new Error("Created Level 3 group code could not be determined.");
+        }
+      }
+
+      // 3. Resolve Level 4 sub-group code with transactional flags
       let targetL4 = selectedL4;
       if (isCreatingNewL4) {
-        if (!selectedL3) {
+        if (!targetL3) {
           throw new Error("Cannot create a Level 4 group without selecting a Level 3 parent.");
         }
         if (!newL4Description.trim()) {
-          throw new Error("Please enter a description for the new Level 4 group.");
+          throw new Error("Please enter a description for the new Level 4 sub-group.");
         }
 
         const l4Res = (await createAccountTreeNode(4, {
-          l3_code: selectedL3,
+          l3_code: targetL3,
+          l4_description: newL4Description.trim(),
           l4_name: newL4Description.trim(),
+          l4_type: newL4Type || "N",
+          l4_job: newL4Job || "N",
+          l4_bill: newL4Bill || "N",
         })) as any;
 
         targetL4 = l4Res?.data?.l4_code || l4Res?.l4_code || "";
@@ -818,7 +900,7 @@ export function QuickAddAccountModal({
         ? (selectedCountryMeta.dialCode ? `${selectedCountryMeta.dialCode} ${phoneDigits.trim()}` : phoneDigits.trim())
         : undefined;
 
-      // 2. Prepare payload for Oracle PROC_MANAGE_ACCODES
+      // 4. Prepare payload for Oracle PROC_MANAGE_ACCODES
       const payload: Record<string, unknown> = {
         l4_code: targetL4,
         ac_name: trimmedName,
@@ -826,6 +908,7 @@ export function QuickAddAccountModal({
         ac_active: acActive || "Y",
         ac_status: "A",
         ac_type: acType,
+        exp_alloc: expAlloc || "N",
         contact_person: contactPerson.trim() || undefined,
         phone: resolvedPhone,
         mobile_no: resolvedMobile,
@@ -851,6 +934,9 @@ export function QuickAddAccountModal({
         "";
 
       setSuccessMsg(`Created "${trimmedName}" (${generatedAcCode || "Success"}) successfully!`);
+
+      // Refresh cached tree
+      void loadTree();
 
       // Notify parent to auto-select
       onAccountCreated({
@@ -897,7 +983,9 @@ export function QuickAddAccountModal({
 
   // Friendly L4 group description
   const activeL4Name =
-    selectedL4 === "10203"
+    (isCreatingNewL4 && newL4Description.trim() ? `(New) ${newL4Description.trim()}` : null) ||
+    level4Options.find((o) => o.id === selectedL4)?.label ||
+    (selectedL4 === "10203"
       ? "10203 - Trade Receivables (Customers)"
       : selectedL4 === "20201"
       ? "20201 - Trade Creditors (Suppliers)"
@@ -907,7 +995,9 @@ export function QuickAddAccountModal({
       ? "10201 - Cash in Hand"
       : selectedL4
       ? `Group ${selectedL4}`
-      : "Auto";
+      : isCreatingNewL4
+      ? "New Sub-group"
+      : "Auto");
 
   return (
     <div
@@ -1028,38 +1118,89 @@ export function QuickAddAccountModal({
 
                   {/* Level 2 */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      Level 2 (Category)
-                    </label>
-                    <select
-                      value={selectedL2}
-                      onChange={(e) => handleL2Change(e.target.value)}
-                      className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
-                    >
-                      {level2Options.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-600">
+                        Level 2 (Category)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextState = !isCreatingNewL2;
+                          setIsCreatingNewL2(nextState);
+                          if (nextState) {
+                            setIsCreatingNewL3(true);
+                            setIsCreatingNewL4(true);
+                          }
+                        }}
+                        className="text-[10px] text-[#00378C] hover:underline font-bold cursor-pointer"
+                      >
+                        {isCreatingNewL2 ? "Select Existing" : "+ New L2"}
+                      </button>
+                    </div>
+                    {isCreatingNewL2 ? (
+                      <input
+                        type="text"
+                        placeholder="New L2 Category Name..."
+                        value={newL2Description}
+                        onChange={(e) => setNewL2Description(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-blue-400 bg-white px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] shadow-2xs"
+                      />
+                    ) : (
+                      <select
+                        value={selectedL2}
+                        onChange={(e) => handleL2Change(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
+                      >
+                        {level2Options.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   {/* Level 3 */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      Level 3 (Group)
-                    </label>
-                    <select
-                      value={selectedL3}
-                      onChange={(e) => handleL3Change(e.target.value)}
-                      className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
-                    >
-                      {level3Options.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-600">
+                        Level 3 (Group)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextState = !isCreatingNewL3;
+                          setIsCreatingNewL3(nextState);
+                          if (nextState) {
+                            setIsCreatingNewL4(true);
+                          }
+                        }}
+                        className="text-[10px] text-[#00378C] hover:underline font-bold cursor-pointer"
+                      >
+                        {isCreatingNewL3 ? "Select Existing" : "+ New L3"}
+                      </button>
+                    </div>
+                    {isCreatingNewL3 ? (
+                      <input
+                        type="text"
+                        placeholder="New L3 Group Name..."
+                        value={newL3Description}
+                        onChange={(e) => setNewL3Description(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-blue-400 bg-white px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] shadow-2xs"
+                      />
+                    ) : (
+                      <select
+                        value={selectedL3}
+                        onChange={(e) => handleL3Change(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
+                      >
+                        {level3Options.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   {/* Level 4 */}
@@ -1100,6 +1241,86 @@ export function QuickAddAccountModal({
                     )}
                   </div>
                 </div>
+
+                {/* Sub-Group / Level 4 Posting & Splitting Flags */}
+                {isCreatingNewL4 && (
+                  <div className="mt-3 p-3 rounded-xl border border-blue-200/80 bg-white/95 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#00378C]"></span>
+                        Level 4 Posting &amp; Splitting Flags
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Configure transactional behavior for this new sub-group
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      {/* Job Splitting Flag */}
+                      <div className="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-slate-50/70">
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-800">Job Splitting</div>
+                          <div className="text-[9.5px] text-slate-500">Split cost across jobs</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewL4Job(newL4Job === "Y" ? "N" : "Y")}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            newL4Job === "Y" ? "bg-[#00378C]" : "bg-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              newL4Job === "Y" ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Invoice Splitting Flag */}
+                      <div className="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-slate-50/70">
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-800">Invoice Splitting</div>
+                          <div className="text-[9.5px] text-slate-500">Split across bills/invoices</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewL4Bill(newL4Bill === "Y" ? "N" : "Y")}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            newL4Bill === "Y" ? "bg-[#00378C]" : "bg-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              newL4Bill === "Y" ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Expense / Account Type Flag */}
+                      <div className="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-slate-50/70">
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-800">Expense Type</div>
+                          <div className="text-[9.5px] text-slate-500">Active expense classification</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewL4Type(newL4Type === "Y" ? "N" : "Y")}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            newL4Type === "Y" ? "bg-[#00378C]" : "bg-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              newL4Type === "Y" ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1225,6 +1446,53 @@ export function QuickAddAccountModal({
                   <option value="N">Inactive</option>
                 </select>
               </div>
+
+              {/* Account Classification & Job Allocation (For General / Expense Accounts) */}
+              {!isPreLockedGroup && (
+                <>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span>Account Classification (Type)</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Posting Category</span>
+                    </label>
+                    <select
+                      value={acType}
+                      onChange={(e) => setAcType(e.target.value)}
+                      className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-slate-800 font-medium hover:border-slate-400 focus:outline-none focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/15 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <option value="G">G - General / Expense Account</option>
+                      <option value="S">S - Supplier (Creditor)</option>
+                      <option value="C">C - Customer (Debtor)</option>
+                      <option value="B">B - Bank Account</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span>Expense / Job Allocation</span>
+                      <span className="text-[10px] text-slate-400 font-normal">exp_alloc</span>
+                    </label>
+                    <div className="flex items-center justify-between h-[38px] px-3.5 rounded-xl border border-slate-300 bg-white shadow-2xs">
+                      <span className="text-xs font-semibold text-slate-700">
+                        {expAlloc === "Y" ? "Yes — Allocate to Jobs/Projects" : "No — General Posting"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setExpAlloc(expAlloc === "Y" ? "N" : "Y")}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          expAlloc === "Y" ? "bg-[#00378C]" : "bg-slate-300"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            expAlloc === "Y" ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
