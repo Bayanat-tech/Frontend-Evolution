@@ -218,26 +218,25 @@ export default function CreditRequestRegisterPage() {
               </span>
             )}
           </Field>
-
-          <Field label="Request Number">
-            <LookupField
-              label=""
-              value={requestNo}
-              displayValue={requestNo}
-              columns={[{ field: "REQUEST_NUMBER", header: "Request Number" }]}
-              valueField="REQUEST_NUMBER"
-              displayFields={["REQUEST_NUMBER"]}
-              loadOptions={() =>
-                getDynamicLookup({
-                  parameter: "PS_CREDITREQUEST_ENTRY_REQUEST_NO",
-                  loginid: loginId,
-                  code1: companyCode,
-                })
-              }
-              disabled={false}
-              onChange={(value: string) => setRequestNo(value ?? "")}
-            />
-          </Field>
+<Field label="Request Number">
+  <LookupField
+    label=""
+    value={requestNo}
+    displayValue={requestNo || "All"}
+    columns={[{ field: "REQUEST_NUMBER", header: "Request Number" }]}
+    valueField="REQUEST_NUMBER"
+    displayFields={["REQUEST_NUMBER"]}
+    loadOptions={() =>
+      getDynamicLookup({
+        parameter: "PS_CREDITREQUEST_ENTRY_REQUEST_NO",
+        loginid: loginId,
+        code1: companyCode,
+      })
+    }
+    disabled={false}
+    onChange={(value: string) => setRequestNo(value ?? "")}
+  />
+</Field>
 
           <Field label="Current Status">
             <select

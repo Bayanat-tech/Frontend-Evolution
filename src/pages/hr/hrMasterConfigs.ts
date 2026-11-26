@@ -291,6 +291,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     ],
     defaults: { status: "A" },
     deleteMode: "master",
+    ediKey: "MAINBANK", // shows the Import button; must match a key in the procedure's table mapping
   },
 
   // ── Bank (branch) ──────────────────────────────────────────────────────────
@@ -719,6 +720,7 @@ hrbank: {
     ],
     defaults: { status: "A" },
     deleteMode: "master",
+    ediKey: "SKILLS",
   },
 
   document_types: {
@@ -825,32 +827,43 @@ hrbank: {
     ediKey : 'DESIGNATION'
   },
 
-  formaldesignation: {
-    title: "Formal Designation Master",
-    subtitle: "Maintain labour/formal designation codes used on HR documents.",
-    master: "formaldesignation",
-    gmEndpoint: "formaldesignation",
-    routeKeys: ["formaldesignation", "formal_designation", "labour_designation"],
-    keyField: "labour_desg_code",
-    stripEditKeyOnSave: true,
-    buildSave: (form) => ({
-      // Only the fields the backend accepts (no company_code / user_id / user_dt)
-      labour_desg_code: text(form, "labour_desg_code"),
-      labour_desg_name: text(form, "labour_desg_name"),
-      labour_desg_short_name: text(form, "labour_desg_short_name"),
-      status: text(form, "status", "A"),
-      remarks: text(form, "remarks"),
-    }),
-    fields: [
-      { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150, section: "General" },
-      { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280, colSpan: 2, section: "General" },
-      { name: "labour_desg_short_name", label: "Short Name", width: 140, section: "General" },
-      { name: "status", label: "Status", type: "select", required: true, options: activeInactive, width: 120, section: "General" },
-      { name: "remarks", label: "Remarks", width: 260, colSpan: 2, section: "General" },
-    ],
-    defaults: { status: "A" },
-    deleteMode: "master",
-  },
+formaldesignation: {
+  title: "Formal Designation Master",
+  subtitle: "Maintain labour/formal designation codes used on HR documents.",
+  master: "formaldesignation",
+  gmEndpoint: "formaldesignation",
+  routeKeys: ["formaldesignation", "formal_designation", "labour_designation"],
+  keyField: "labour_desg_code",
+  source: "dynamic",
+  // mutationMode omitted -> executeDynamicMutation (/proc_build_dynamic_ins_upd_common)
+  listQuery: dynamicList("MST_HR_LABOUR_DESIGNATION", true),
+  buildSave: (form, context) => ({
+    parameter: "MST_HR_LABOUR_DESIGNATION",
+    loginid: context.loginid,
+    val1s1: context.companyCode,
+    val1s2: text(form, "labour_desg_code"),
+    val1s3: text(form, "labour_desg_name"),
+    val1s4: text(form, "labour_desg_short_name"),
+    val1s5: text(form, "remarks"),
+    val1s6: text(form, "status", "A"),
+  }),
+  buildDelete: (row, context) => ({
+    parameter: "MST_HR_DEL_LABOUR_DESIGNATION",
+    loginid: context.loginid,
+    code1: context.companyCode,
+    code2: text(row, "labour_desg_code"),
+  }),
+  fields: [
+    { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150, maxLength: 5, section: "General" },
+    { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280, maxLength: 50, colSpan: 2, section: "General" },
+    { name: "labour_desg_short_name", label: "Short Name", width: 140, maxLength: 10, section: "General" },
+    { name: "status", label: "Status", type: "select", required: true, options: activeInactive, width: 120, section: "General" },
+    { name: "remarks", label: "Remarks", width: 260, maxLength: 100, colSpan: 2, section: "General" },
+  ],
+  defaults: { status: "A" },
+  deleteMode: "master",
+  ediKey: "FORMALDESIGNATION"
+},
 
   leavetype: {
     title: "Leave Type Master",

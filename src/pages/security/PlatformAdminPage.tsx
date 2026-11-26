@@ -1,3 +1,6 @@
+import {CompanyDeletionDialog} from './CompanyDeletionDialog';
+import {moduleHierarchyFields,moduleHierarchyOptions,changeModuleHierarchy} from './moduleEditor';
+import { RegistrationSettingsPanel } from './RegistrationSettingsPanel';
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   ShieldCheck,
@@ -99,6 +102,7 @@ export function PlatformAdminPage() {
     rows: [],
     count: 0,
   });
+  const [moduleRows,setModuleRows]=useState<Row[]>([]);
   const [screens, setScreens] = useState<Row[]>([]);
   const [audit, setAudit] = useState<Row[]>([]);
   const [access, setAccess] = useState<{
@@ -133,6 +137,7 @@ export function PlatformAdminPage() {
   const [version, setVersion] = useState(0);
   const [readiness, setReadiness] = useState<Row | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [purgeTarget,setPurgeTarget]=useState<{tenant:string;company:string;name:string}|null>(null);
   const [statusChange, setStatusChange] = useState<{ row: Row; table: string; tenant: string; company: string; enabled: boolean } | null>(null);
   const editorContext = useRef("");
   const editorInstance = useRef(0);
@@ -196,7 +201,7 @@ export function PlatformAdminPage() {
   useEffect(() => {
     if (
       !allowed ||
-      mode === "billing" ||
+      (mode === "billing" || mode === "registration") ||
       (mode === "records" && !table) ||
       ((mode === "screens" || mode === "access") && !company)
     )
@@ -260,6 +265,13 @@ export function PlatformAdminPage() {
     if (editor) editorHeading.current?.focus();
   }, [editor]);
 
+  useEffect(()=>{
+    if(!allowed||!editor||table!=='SEC_MODULE_DATA'||deleting)return;
+    let live=true;setModuleRows([]);
+    request(`${scope}/module-editor`).then(rows=>{if(live)setModuleRows(rows);}).catch(e=>{if(live)setError(errorText(e));});
+    return()=>{live=false;};
+  },[allowed,tenant,company,Boolean(editor),table,deleting,version]);
+
   if (!allowed)
     return (
       <section className="platform-console">
@@ -268,7 +280,7 @@ export function PlatformAdminPage() {
       </section>
     );
   const title =
-    mode === "billing" ? "Subscription & billing" : mode === "access"
+    mode === "registration" ? "Public registration" : mode === "billing" ? "Subscription & billing" : mode === "access"
       ? "User screen access"
       : mode === "screens"
         ? "Company screen availability"
@@ -289,6 +301,7 @@ export function PlatformAdminPage() {
       if (row._rowid) initial[c.name] = row[c.name] ?? "";
       else if (c.name === "COMPANY_CODE")
         initial[c.name] = table === "MS_COMPANY" ? "" : company;
+      else if(table==="SEC_MODULE_DATA"&&c.name==="POSITION") initial[c.name]=1;
       else if (c.name === "ACTIVE_FLAG" || c.name === "IS_ACTIVE")
         initial[c.name] = "Y";
       else if (c.name === "STATUS" && table === "MS_COMPANY") initial[c.name] = "A";
@@ -406,8 +419,17 @@ export function PlatformAdminPage() {
   const readOnly =
     catalog.tables.find((t) => t.name === table)?.readonly === true;
   const scoped = user?.platformAccess?.scope === "SCOPED";
+  const deletionLogin=user?.loginid?.trim().toLowerCase();
+  const canDeleteCompany=(deletionLogin==='prodadmin'&&user?.platformAccess?.scope==='ALL')||(deletionLogin==='qaadmin'&&scoped&&tenant==='WMSTST_TENANT');
   const renderField = (c: Column) => {
     const InputControl = c.secret ? PlatformPasswordInput : "input";
+    if(table==='SEC_MODULE_DATA'&&moduleHierarchyFields.includes(c.name)){
+      const choices=moduleHierarchyOptions(c.name,draft,moduleRows),id='module-options-'+c.name;
+      return <label key={c.name}><span>{label(c.name)}{['APP_CODE','LEVEL1'].includes(c.name)&&<b className="platform-required"> *</b>}</span><input list={id} required={['APP_CODE','LEVEL1'].includes(c.name)} value={draft[c.name]??''} maxLength={c.maxLength} disabled={saving} autoComplete="off" placeholder="Choose existing or type a new value" onChange={e=>setDraft(d=>changeModuleHierarchy(d,c.name,e.target.value,moduleRows,Boolean(editor?._rowid)))}/><datalist id={id}>{choices.map(value=><option key={value} value={value}/>)}</datalist></label>;
+    }
+    if(table==='SEC_MODULE_DATA'&&c.name==='POSITION')return <label key={c.name}><span>Position <b className="platform-required"> *</b></span><input type="number" min={1} step={1} required disabled={saving} value={draft.POSITION??1} onChange={e=>setDraft(d=>({...d,POSITION:e.target.value}))}/><small>Menu sequence within the selected application.</small></label>;
+    if(table==='SEC_MODULE_DATA'&&c.name==='URL_PATH')return <label className="platform-field-wide" key={c.name}><span>Route path (automatic)</span><input readOnly value={draft.URL_PATH||''} placeholder="Built from App Code and Levels 1 to 3"/><small>Uses the same route format as the Security Screen Module page. The matching application page must already exist.</small></label>;
+
     const locked =
       (["SEC_LOGIN", "SEC_LOGINTEST"].includes(table) &&
         c.name === "LOGINID" &&
@@ -533,7 +555,8 @@ export function PlatformAdminPage() {
               (c.name === "COMPANY_CODE" && table === "MS_COMPANY") ||
               (c.name === "COMPANY_NAME" && table === "MS_COMPANY")
             }
-            maxLength={c.maxLength}
+            minLength={c.secret && /^(USERPASS|SEC_PASSWD|PASSWORD)$/.test(c.name) ? 8 : undefined}
+            maxLength={c.secret && /^(USERPASS|SEC_PASSWD|PASSWORD)$/.test(c.name) ? 20 : c.maxLength}
             step="any"
             value={
               /DATE|TIMESTAMP/.test(c.type)
@@ -643,7 +666,7 @@ export function PlatformAdminPage() {
           Refresh
         </Button>
       </header>
-      <div className="platform-scope">
+      {mode !== "registration" && <div className="platform-scope">
         <label>
           Tenant
           <select
@@ -720,8 +743,9 @@ export function PlatformAdminPage() {
               : "Changes apply to the selected tenant and company"}
           </span>
         </div>
-      </div>
+      </div>}
       <nav className="platform-tabs" aria-label="Administration views">
+        {((user?.loginid?.toLowerCase()==="prodadmin"&&!scoped)||(user?.loginid?.toLowerCase()==="qaadmin"&&scoped)) && <button aria-current={mode === "registration" ? "page" : undefined} disabled={saving || loading} onClick={()=>{setMode("registration");setEditor(null);setNewUser(false);setError("");setNotice("");}}><Building2 size={16}/> Registration</button>}
         <button
           aria-current={mode === "records" ? "page" : undefined}
           disabled={saving}
@@ -772,7 +796,7 @@ export function PlatformAdminPage() {
           {notice}
         </p>
       )}
-      {readiness && (readiness.companyNeedsModules || (mode === "access" && loginid && !readiness.users?.some((u: Row) => u.LOGINID === loginid && Number(u.MODULE_COUNT) > 0))) && (
+      {mode !== "registration" && readiness && (readiness.companyNeedsModules || (mode === "access" && loginid && !readiness.users?.some((u: Row) => u.LOGINID === loginid && Number(u.MODULE_COUNT) > 0))) && (
         <div className="platform-assignment-warning" role="status">
           <div><strong>Operational module assignment required</strong><p>{mode === "access" && loginid ? `User ${loginid} has no operational module assigned.` : `Company ${company} has no operational modules assigned to its users.`} General masters are view/search defaults. Select a user, choose a module and grant transaction permissions. Billing selection does not grant access.</p></div>
           <Button variant="outline" onClick={() => { setMode("access"); setNewUser(!readiness.userCount); }}>Assign modules</Button>
@@ -802,7 +826,7 @@ export function PlatformAdminPage() {
             </select>
           </label>
         )}
-        {mode !== "audit" && (
+        {!["audit","registration"].includes(mode) && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -954,7 +978,7 @@ export function PlatformAdminPage() {
                 ["loginid", "Login ID", "text"],
                 ["username", "User name", "text"],
                 ["email", "Email", "email"],
-                ["password", "Password (12+ characters)", "password"],
+                ["password", "Password (8 to 20 characters)", "password"],
               ] as const
             ).map(([key, text, type]) => {
               const InputControl =
@@ -966,8 +990,8 @@ export function PlatformAdminPage() {
                     type={type}
                     disabled={saving}
                     required
-                    maxLength={key === "loginid" ? 15 : undefined}
-                    minLength={key === "password" ? 12 : undefined}
+                    maxLength={key === "loginid" ? 15 : key === "password" ? 20 : undefined}
+                    minLength={key === "password" ? 8 : undefined}
                     autoComplete={key === "password" ? "new-password" : "off"}
                     value={userDraft[key]}
                     onChange={(e) =>
@@ -1072,6 +1096,7 @@ export function PlatformAdminPage() {
                     : "Essential details"}
                 </legend>
                 <div className="platform-form">
+                  {table === "SEC_MODULE_DATA" && <label><span>Serial No</span><input readOnly value={editor?._rowid ? editor.SERIAL_NO : "Auto generated on save"}/></label>}
                   {mainFields.map(renderField)}
                 </div>
               </fieldset>
@@ -1120,8 +1145,8 @@ export function PlatformAdminPage() {
           </div>
         </form>
       )}
-      <div className="platform-grid" aria-busy={loading && mode !== "billing"}>
-        {mode === "billing" ? <CompanySubscriptionPanel key={`${tenant}/${company}`} tenant={tenant} company={company} /> : loading ? (
+      <div className={mode === "registration" ? "platform-registration-surface" : "platform-grid"} aria-busy={loading && !["billing","registration"].includes(mode)}>
+        {mode === "registration" ? <RegistrationSettingsPanel key={version} /> : mode === "billing" ? <CompanySubscriptionPanel key={`${tenant}/${company}`} tenant={tenant} company={company} /> : loading ? (
           <p className="platform-empty" role="status">
             Loading security records…
           </p>
@@ -1263,6 +1288,8 @@ export function PlatformAdminPage() {
                         >
                           Delete
                         </Button>}
+                        {table==='MS_COMPANY'&&canDeleteCompany&&<Button size="sm" variant="destructive" disabled={saving||![row.STATUS,row.ACTIVE_FLAG,row.IS_ACTIVE].some(value=>['N','I','INACTIVE','DISABLED','0'].includes(String(value??'').trim().toUpperCase()))||String(tenants.find(item=>item.TENANT_ID===tenant)?.COMPANY_CODE||'')===String(row.COMPANY_CODE)} title="Deactivate the company first. The tenant default/template company is protected." onClick={()=>setPurgeTarget({tenant,company:String(row.COMPANY_CODE).trim(),name:String(row.COMPANY_NAME||row.COMPANY_CODE)})}>Delete company</Button>}
+
                       </>
                     )}
                   </td>
@@ -1305,6 +1332,10 @@ export function PlatformAdminPage() {
           </Button>
         </footer>
       )}
+      {purgeTarget&&<CompanyDeletionDialog tenant={purgeTarget.tenant} company={purgeTarget.company} name={purgeTarget.name} onClose={()=>setPurgeTarget(null)} onDeleted={()=>{
+        const removed=purgeTarget;setPurgeTarget(null);setEditor(null);setNotice(`Company ${removed.company} and its associated database records were permanently deleted.`);setVersion(value=>value+1);
+        void request(`/${encodeURIComponent(removed.tenant)}/catalog`).then((data:Catalog)=>{setCatalog(data);if(company===removed.company)setCompany(data.companies[0]?.COMPANY_CODE||'');}).catch(e=>setError(errorText(e)));
+      }}/>}
       <ConfirmDialog open={Boolean(statusChange)} title={`${statusChange?.enabled ? "Activate" : "Deactivate"} ${statusChange?.table === "MS_COMPANY" ? "company" : "user"}?`}
         description={String(statusChange?.row.COMPANY_NAME || statusChange?.row.USERNAME || statusChange?.row.LOGINID || "")}
         actionLabel={statusChange?.enabled ? "Activate" : "Deactivate"} tone={statusChange?.enabled ? "default" : "danger"} onClose={() => setStatusChange(null)} onConfirm={() => {

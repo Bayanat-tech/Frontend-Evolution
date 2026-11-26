@@ -1,4 +1,4 @@
-import { Building2, Calendar, CheckCircle2, Clock, DollarSign, Edit2, FileText, Lock, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
+import { Building2, Calendar, CheckCircle2, Clock, Coins, DollarSign, Edit2, FileText, Lock, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   CompanyFinanceSetupData,
@@ -31,7 +31,7 @@ const inputClass =
 const labelClass = "block text-[11px] font-semibold text-slate-600 mb-1";
 
 export function CompanyFinanceSetupPage() {
-  const { user } = useAuth();
+  const { user, updateUserSetup, refreshUser } = useAuth();
   const companyCode = useMemo(() => String(user?.company_code || "BSG").trim().toUpperCase(), [user]);
 
   const [loading, setLoading] = useState(true);
@@ -56,6 +56,8 @@ export function CompanyFinanceSetupPage() {
     amount_decimal_nos: number;
     price_decimal_nos: number;
     lcur_decimal_nos: number;
+    std_sales_tax_perc: number;
+    std_purchase_tax_perc: number;
   }>({
     ac_fy_period: "",
     opn_fy_period: "",
@@ -66,6 +68,8 @@ export function CompanyFinanceSetupPage() {
     amount_decimal_nos: 2,
     price_decimal_nos: 2,
     lcur_decimal_nos: 2,
+    std_sales_tax_perc: 15,
+    std_purchase_tax_perc: 15,
   });
 
   // Period Dialog state
@@ -129,6 +133,8 @@ export function CompanyFinanceSetupPage() {
           amount_decimal_nos: res.ac_setup?.AMOUNT_DECIMAL_NOS ?? 2,
           price_decimal_nos: res.ac_setup?.PRICE_DECIMAL_NOS ?? 2,
           lcur_decimal_nos: res.ac_setup?.LCUR_DECIMAL_NOS ?? 2,
+          std_sales_tax_perc: res.tax_setup?.std_sales_tax_perc ?? 15,
+          std_purchase_tax_perc: res.tax_setup?.std_purchase_tax_perc ?? 15,
         });
       }
     } catch (err: any) {
@@ -316,7 +322,25 @@ export function CompanyFinanceSetupPage() {
         amount_decimal_nos: Number(form.amount_decimal_nos),
         price_decimal_nos: Number(form.price_decimal_nos),
         lcur_decimal_nos: Number(form.lcur_decimal_nos),
+        std_sales_tax_perc: Number(form.std_sales_tax_perc),
+        std_purchase_tax_perc: Number(form.std_purchase_tax_perc),
       });
+
+      // Update global currency and decimal precision immediately across the entire application
+      const newDecimals = Number(form.amount_decimal_nos);
+      if (typeof window !== "undefined") {
+        (window as any).__APP_DECIMALS__ = newDecimals;
+        (window as any).__APP_CURRENCY__ = form.base_curr_code;
+      }
+      updateUserSetup?.({
+        amount_decimal_nos: newDecimals,
+        decimals: newDecimals,
+        price_decimal_nos: Number(form.price_decimal_nos),
+        lcur_decimal_nos: Number(form.lcur_decimal_nos),
+        base_curr_code: form.base_curr_code,
+        currency: form.base_curr_code,
+      });
+      void refreshUser?.();
 
       setNotice({
         type: "success",
@@ -435,6 +459,8 @@ export function CompanyFinanceSetupPage() {
         amount_decimal_nos: Number(form.amount_decimal_nos),
         price_decimal_nos: Number(form.price_decimal_nos),
         lcur_decimal_nos: Number(form.lcur_decimal_nos),
+        std_sales_tax_perc: Number(form.std_sales_tax_perc),
+        std_purchase_tax_perc: Number(form.std_purchase_tax_perc),
       });
 
       setNotice({
@@ -827,6 +853,80 @@ export function CompanyFinanceSetupPage() {
                   onChange={(e) => setForm((prev) => ({ ...prev, lcur_decimal_nos: Number(e.target.value) }))}
                   className={inputClass}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2.5: Standard Tax & VAT Configuration */}
+          <div className="bg-slate-50/60 rounded-xl p-4 border border-slate-200/80 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-emerald-600" />
+                  Standard Tax & VAT Configuration (%)
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Configure default standard VAT percentages for Local Sales and Local Purchases. Applies to Sales/Service Invoices, Purchase Invoices, and Credit/Debit Notes.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, std_sales_tax_perc: 15, std_purchase_tax_perc: 15 }))}
+                  className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800 rounded-md hover:bg-emerald-200 transition-colors"
+                >
+                  15% (KSA)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, std_sales_tax_perc: 5, std_purchase_tax_perc: 5 }))}
+                  className="px-2 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 transition-colors"
+                >
+                  5% (Oman/UAE)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, std_sales_tax_perc: 0, std_purchase_tax_perc: 0 }))}
+                  className="px-2 py-0.5 text-[10px] font-semibold bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300 transition-colors"
+                >
+                  0% (Zero)
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Standard Sales Tax % (Output VAT - Local Sales)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    max={100}
+                    value={form.std_sales_tax_perc}
+                    onChange={(e) => setForm((prev) => ({ ...prev, std_sales_tax_perc: Number(e.target.value) }))}
+                    className={`${inputClass} pr-7 font-bold text-slate-800`}
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                </div>
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Category 11100 (LOCAL SALES - SRV)</span>
+              </div>
+
+              <div>
+                <label className={labelClass}>Standard Purchase Tax % (Input VAT - Local Purchase)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    max={100}
+                    value={form.std_purchase_tax_perc}
+                    onChange={(e) => setForm((prev) => ({ ...prev, std_purchase_tax_perc: Number(e.target.value) }))}
+                    className={`${inputClass} pr-7 font-bold text-slate-800`}
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                </div>
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Category 10100 (LOCAL PURCHASE - SRV)</span>
               </div>
             </div>
           </div>

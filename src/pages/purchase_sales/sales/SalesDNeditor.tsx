@@ -46,6 +46,7 @@ import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { downloadSalesDNExcel, getSalesDNReportHtml } from "./SalesDNReport";
+import { getCompanyInfo } from "../../../api/transactions";
 
 export type { PurchaseOrderEditorState };
 
@@ -174,6 +175,51 @@ export function SalesDNEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
+
+
+  useEffect(() => {
+    if (!editor || editor.mode === "edit") return;
+    let alive = true;
+    const initialCurr = text(emptyForm(editor).curr_code);
+    (async () => {
+      try {
+        const res: any = await getCompanyInfo();
+        const info = res?.data ?? res;
+        const code = text(info?.base_curr_code || info?.currency);
+        if (!alive || !code) return;
+  
+        // resolve name / ex rate from the same lookup the Currency field uses
+        let name = "";
+        let rate = 1;
+        try {
+          const list: any[] = await getDynamicLookup({
+            parameter: "Account_Currency_CODE_Serach",
+            code1: user?.company_code,
+            loginid: user?.loginid || user?.username || "ADMIN",
+          });
+          const match = (list || []).find(
+            (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+          );
+          if (match) {
+            name = text(getLookupValue(match, "curr_name"));
+            rate = Number(getLookupValue(match, "ex_rate")) || 1;
+          }
+        } catch { /* keep code only */ }
+  
+        if (!alive) return;
+        // fill unless the user already picked a different currency
+        setForm((current) =>
+          current.curr_code && current.curr_code !== initialCurr
+            ? current
+            : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+        );
+      } catch (e) {
+        console.warn("Company info load failed", e);
+      }
+    })();
+    return () => { alive = false; };
+  }, [editor]);
+
  useEffect(() => {
     // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
     if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
@@ -236,6 +282,22 @@ export function SalesDNEditor({
             user?.loginid || user?.username,
           ),
         ]);
+        let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -254,15 +316,22 @@ export function SalesDNEditor({
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
+           address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           party_address: text(headerRaw.address || current.party_address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
-          party_phone: text(headerRaw.tel || current.party_phone),
-          party_fax: text(headerRaw.fax || current.party_fax),
+                    party_phone: text(headerRaw.tel || acRow?.party_phone || current.party_phone),
+          party_fax: text(headerRaw.fax || acRow?.party_fax || current.party_fax),
+             curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),

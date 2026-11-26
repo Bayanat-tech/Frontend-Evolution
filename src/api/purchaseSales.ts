@@ -117,6 +117,8 @@ const endpoint =
     ? "/api/purchase-sales/insUpdTtePInvoiceBulk"
      : docType === PO_DOC_TYPE.MRT
     ? "/api/purchase-sales/insUpdTtePGrnBulk"
+   : docType === PO_DOC_TYPE.SOR
+    ? "/api/purchase-sales/insUpdTtePOrderBulk"
     :""
     
 
@@ -158,6 +160,8 @@ const endpoint =
     ?"/api/purchase-sales/insUpdTteSinvoice"
          :docType === SO_DOC_TYPE.MIS
     ?"/api/purchase-sales/insUpdTteSdnBulk"
+     :docType === SO_DOC_TYPE.LPR
+    ?"/api/purchase-sales/insUpdTteSOrderBulk"
     :""
     
 

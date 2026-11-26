@@ -81,6 +81,22 @@ export async function deleteAccountTreeNode(level: number, code: string) {
   return response.data;
 }
 
+export async function downloadAccountTemplate() {
+  const response = await api.get("/api/finance/master/ac_tree/download_template", {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+export async function importAccounts(payload: { accounts?: any[]; fileData?: string }) {
+  const response = await api.post<ApiResponse<{ total: number; imported: number; failed: number; errors?: any[] }>>(
+    "/api/finance/master/ac_tree/import",
+    payload
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Failed to import accounts");
+  return response.data;
+}
+
 function normalizeAccountTree(raw: unknown): AccountTreeNode[] {
   const source = unwrapTreePayload(raw);
   if (!Array.isArray(source)) return [];

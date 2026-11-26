@@ -114,7 +114,7 @@ const FIELD_MAX: Partial<Record<keyof TCRHeader, number>> = {
   WEBSITE: 50,
   EMAIL: 50,
   FIN_CONTACT_PERSON: 50,
-  FIN_CONTACT_NUMBER: 10,
+  FIN_CONTACT_NUMBER: 15,
   FIN_CONTACT_EMAIL: 50,
   COMMERCIAL_REG_NO: 20,
   BUSINESS_SECTOR: 50,
@@ -527,8 +527,8 @@ const AddCRRequestPage = ({
       errs.push("Fax No can contain only digits, +, -, spaces and brackets");
     if (text("WEBSITE") && !WEB_RE.test(text("WEBSITE")))
       errs.push("Website is not valid (example: www.company.com)");
-    if (text("FIN_CONTACT_NUMBER") && text("FIN_CONTACT_NUMBER").length !== 10)
-      errs.push("Finance Tel No must be exactly 10 digits");
+    // if (text("FIN_CONTACT_NUMBER") && text("FIN_CONTACT_NUMBER").length !== 15)
+    //   errs.push("Finance Tel No must be exactly 15 digits");
 
     // Numbers
     const postal = num("POSTAL_CODE");
@@ -983,16 +983,12 @@ const AddCRRequestPage = ({
                       disabled={disabled}
                       type="tel"
                       inputMode="numeric"
-                      maxLength={10}
                       value={header.FIN_CONTACT_NUMBER || ""}
                       onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+                        const digitsOnly = e.target.value.replace(/\D/g, "");
                         setHdr("FIN_CONTACT_NUMBER", digitsOnly);
                       }}
                     />
-                    {header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10 && (
-                      <p className="mt-1 text-xs text-destructive">Tel No must be exactly 10 digits</p>
-                    )}
                   </label>
                   <label className="field"><span>Finance Email<Required /></span><Input disabled={disabled} type="email" value={header.FIN_CONTACT_EMAIL || ""} onChange={(e) => setHdr("FIN_CONTACT_EMAIL", e.target.value)} /></label>
                   <label className="field"><span>Commercial Reg No<Required /></span><Input disabled={disabled} value={header.COMMERCIAL_REG_NO || ""} onChange={(e) => setHdr("COMMERCIAL_REG_NO", e.target.value)} /></label>
@@ -1251,7 +1247,7 @@ const AddCRRequestPage = ({
             OK
           </Button>
         }
-       >
+      >
         <div className="w-[min(920px,92vw)] max-w-full">
           {/* ── Important fields ── */}
           <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border bg-slate-50 p-3 text-sm md:grid-cols-3">
@@ -1391,7 +1387,7 @@ const AddCRRequestPage = ({
               {/* Main Vertical Line (Tree Trunk) */}
               <div className="absolute left-[26px] top-6 bottom-8 w-0.5 bg-gray-200 z-0" />
               {approvalFlowData.map((item, idx) => {
-            
+
                 const statusStr = String(item.STATUS).toUpperCase();
                 const isApproved = statusStr.includes("APPROV") || statusStr.includes("SUBMIT");
                 const isSentBack = statusStr.includes("BACK") || statusStr.includes("REJECT") || statusStr.includes("CANCEL");
@@ -1430,7 +1426,7 @@ const AddCRRequestPage = ({
                             </div>
                           )}
 
-                    
+
                           {item.DATE && (
                             <div className="flex items-center gap-1.5 text-xs text-gray-400 pl-1 mt-0.5">
                               <Clock size={12} />

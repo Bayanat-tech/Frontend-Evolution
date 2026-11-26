@@ -43,6 +43,7 @@ import { CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { QuickAddAccountModal, QuickAccountType, CreatedAccountResult } from "../../components/finance/QuickAddAccountModal";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
@@ -380,12 +381,41 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       ),
     },
     {
+      accessorKey: "ref_no",
+      header: () => <div className="font-bold">Ref No.*</div>,
+      cell: ({ getValue }) => <div className="font-mono text-slate-700">{String(getValue() || "")}</div>,
+      size: 130,
+      minSize: 110,
+    },
+    {
       accessorKey: "doc_date",
       header: () => <div className="text-center w-full font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
+      size: 100,
+      minSize: 90,
     },
-    { accessorKey: "ac_name", header: "Party" },
-    { accessorKey: "remarks", header: "Description" },
+    {
+      accessorKey: "ac_name",
+      header: () => <div className="font-bold">Party</div>,
+      cell: ({ getValue }) => (
+        <div className="font-medium text-slate-900" title={String(getValue() || "")}>
+          {String(getValue() || "")}
+        </div>
+      ),
+      size: 320,
+      minSize: 260,
+    },
+    {
+      accessorKey: "remarks",
+      header: () => <div className="font-bold">Description</div>,
+      cell: ({ getValue }) => (
+        <div className="text-slate-600 truncate max-w-[200px]" title={String(getValue() || "")}>
+          {String(getValue() || "")}
+        </div>
+      ),
+      size: 190,
+      minSize: 150,
+    },
     {
       accessorKey: "div_code",
       header: () => <div className="text-center w-full font-bold">Div</div>,
@@ -669,6 +699,15 @@ function CommercialEditor({
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [settledPaidAmount, setSettledPaidAmount] = useState<number>(0);
+  const [quickAddModal, setQuickAddModal] = useState<{
+    open: boolean;
+    accountType: QuickAccountType;
+    targetLineId: string | null;
+  }>({
+    open: false,
+    accountType: "general",
+    targetLineId: null,
+  });
 
   const [activeTab, setActiveTab] = useState<"lines" | "allocations">("lines");
   const [allocLoading, setAllocLoading] = useState(false);
@@ -1501,6 +1540,14 @@ const limitProps = (f: keyof FormState) => ({
                         displayFields={["ac_code", "ac_name"]}
                         loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
                         disabled={isCancelled || Boolean(settledPaidAmount > 0)}
+                        onQuickAdd={() => {
+                          setQuickAddModal({
+                            open: true,
+                            accountType: isSales ? "customer" : "supplier",
+                            targetLineId: null,
+                          });
+                        }}
+                        quickAddTooltip={isSales ? "Quick Add Customer Account" : "Quick Add Supplier Account"}
                         onChange={(value, row) => {
                           const r = row || {} as Record<string, unknown>;
                           const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -1785,7 +1832,7 @@ const limitProps = (f: keyof FormState) => ({
                             detail: c.detail.map((l) => {
                               if (!l.curr_code || l.curr_code === c.curr_code) {
                                 const baseLcur = Number(l.lcur_amount != null && Number(l.lcur_amount) > 0 ? l.lcur_amount : (Math.abs(Number(l.amount || 0)) * prevRate));
-                                const newAmt = newRate > 0 ? Number((baseLcur / newRate).toFixed(3)) : baseLcur;
+                                const newAmt = newRate > 0 ? Number((baseLcur / newRate).toFixed(getAppDecimals())) : baseLcur;
                                 return {
                                   ...l,
                                   curr_code: value,
@@ -2117,6 +2164,14 @@ const limitProps = (f: keyof FormState) => ({
                             displayFields={["ac_code", "ac_name"]}
                             loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
                             disabled={isCancelled}
+                            onQuickAdd={() => {
+                              setQuickAddModal({
+                                open: true,
+                                accountType: "general",
+                                targetLineId: line.id,
+                              });
+                            }}
+                            quickAddTooltip="Quick Add Account"
                             onChange={(value, row) => updateLine(line.id, { ac_code: value, ac_name: text(getLookupValue(row || {}, "ac_name")) })}
                           />
                           {lineErrors[line.id]?.ac_code && (
@@ -2242,7 +2297,7 @@ const limitProps = (f: keyof FormState) => ({
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
                         <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" type="number" 
-                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
+                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(getAppDecimals(line.curr_code || form.curr_code))} /></td>
                        {showAllColumns && (
                         <td className="w-28 max-w-[115px] px-1 py-1">
                           <LookupField
@@ -2309,11 +2364,11 @@ const limitProps = (f: keyof FormState) => ({
                             <div
                               className="finance-allocation-panel my-0.5 mx-1 overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs"
                               style={{
-                                width: "1080px",
-                                minWidth: "960px",
+                                width: "940px",
+                                minWidth: "900px",
                                 maxWidth: "100%",
-                                "--allocation-panel-width": "1080px",
-                                "--allocation-panel-min-width": "960px",
+                                "--allocation-panel-width": "940px",
+                                "--allocation-panel-min-width": "900px",
                               } as CSSProperties}
                             >
                               {/* Compact Allocations Toolbar */}
@@ -2569,6 +2624,30 @@ const limitProps = (f: keyof FormState) => ({
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
       />
+      <QuickAddAccountModal
+        open={quickAddModal.open}
+        onClose={() => setQuickAddModal((prev) => ({ ...prev, open: false }))}
+        accountType={quickAddModal.accountType}
+        companyCode={user?.company_code}
+        onAccountCreated={(newAcc: CreatedAccountResult) => {
+          if (quickAddModal.targetLineId) {
+            updateLine(quickAddModal.targetLineId, {
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || form.curr_code,
+            });
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || prev.curr_code,
+              party_address: newAcc.address_1 || prev.party_address,
+              party_phone: (newAcc.phone || prev.party_phone || "").slice(0, 30),
+            }));
+          }
+        }}
+      />
       <Dialog
         open={cancelConfirmOpen}
         title="Cancel Document"
@@ -2638,15 +2717,15 @@ const limitProps = (f: keyof FormState) => ({
                     lineAmt = expAmt;
                   } else if (docCurr === "OMR" || docEx === 1) {
                     // Invoice is in base currency: use the local currency amount
-                    lineAmt = Number(expLcurAmt.toFixed(3));
+                    lineAmt = Number(expLcurAmt.toFixed(getAppDecimals()));
                     remarksExtra = ` [Orig: ${expAmt} ${expCurr} @ ${expEx}]`;
                   } else {
                     // Invoice is in foreign currency: convert base amount using invoice exchange rate
-                    lineAmt = docEx > 0 ? Number((expLcurAmt / docEx).toFixed(3)) : expAmt;
+                    lineAmt = docEx > 0 ? Number((expLcurAmt / docEx).toFixed(getAppDecimals())) : expAmt;
                     remarksExtra = ` [Orig: ${expAmt} ${expCurr} @ ${expEx}]`;
                   }
 
-                  const lcurAmt = Number((lineAmt * docEx).toFixed(3));
+                  const lcurAmt = Number((lineAmt * docEx).toFixed(getAppDecimals()));
 
                   return {
                     ...emptyLine("PI", serial, docCurr, current.curr_name, docEx),
@@ -3150,4 +3229,17 @@ function formatAmount(value: number, decimals?: number) {
   const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
   const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
   return value < 0 ? `(${amount})` : amount;
+}
+
+function getCurrencyDecimals(currCode?: string): number {
+  if (currCode) {
+    const c = String(currCode).trim().toUpperCase();
+    if (c === "OMR" || c === "BHD" || c === "KWD") return 3;
+    if (c === "SAR" || c === "AED" || c === "USD" || c === "EUR" || c === "INR" || c === "QAR") return 2;
+  }
+  return typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? Number((window as any).__APP_DECIMALS__) : 2;
+}
+
+function getAppDecimals(currCode?: string): number {
+  return getCurrencyDecimals(currCode);
 }
