@@ -26,15 +26,24 @@ import {
   FileWarning,
   Shield,
   AlertTriangle,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  X,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   AccountTreeNode,
   createAccountTreeNode,
   deleteAccountTreeNode,
+  downloadAccountTemplate,
   getAccountTree,
   getAccountTreeNode,
+  importAccounts,
   updateAccountTreeNode,
 } from "../../api/finance";
 import { getDynamicLookup, getLookupText, getMasterLookup } from "../../api/lookups";
@@ -258,6 +267,75 @@ export function AccountTreePage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsNode, setDetailsNode] = useState<AccountTreeNode | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [parsedAccounts, setParsedAccounts] = useState<any[]>([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [importResult, setImportResult] = useState<{ total: number; imported: number; failed: number; errors?: any[] } | null>(null);
+
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    try {
+      const blob = await downloadAccountTemplate();
+      const url = window.URL.createObjectURL(new Blob([blob as BlobPart]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Chart_of_Accounts_Template_${user?.company_code || "CO"}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setNotice({ type: "success", message: "Account Excel template downloaded successfully" });
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Failed to download template" });
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportResult(null);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data: any[] = XLSX.utils.sheet_to_json(ws);
+        setParsedAccounts(data);
+      } catch (err: any) {
+        setNotice({ type: "error", message: "Failed to parse Excel file: " + err.message });
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleExecuteImport = async () => {
+    if (!parsedAccounts.length) {
+      setNotice({ type: "error", message: "No account rows found in selected file" });
+      return;
+    }
+    setImporting(true);
+    try {
+      const res = await importAccounts({ accounts: parsedAccounts });
+      setImportResult(res.data || null);
+      setNotice({
+        type: "success",
+        message: res.message || `Imported ${res.data?.imported || 0} accounts successfully!`
+      });
+      await loadTree(false);
+    } catch (err: any) {
+      setNotice({ type: "error", message: err.message || "Import failed" });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const loadTree = async (clearNotice = true) => {
     setLoading(true);
@@ -345,6 +423,36 @@ export function AccountTreePage() {
           <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">A/C Tree</h1>
         </div>
         <div className="toolbar-actions flex flex-wrap items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={handleDownloadTemplate}
+            disabled={downloadingTemplate}
+            className="inline-flex items-center gap-1.5 h-8 text-xs font-semibold text-emerald-800 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-900 cursor-pointer shadow-2xs"
+            title="Download standard Excel template with instructions and available Level 3 groups"
+          >
+            <FileSpreadsheet size={14} className="text-emerald-700" />
+            <span>{downloadingTemplate ? "Downloading..." : "Download Template"}</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => {
+              setImportModalOpen(true);
+              setImportFileName("");
+              setParsedAccounts([]);
+              setImportResult(null);
+            }}
+            className="inline-flex items-center gap-1.5 h-8 text-xs font-semibold text-blue-800 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-900 cursor-pointer shadow-2xs"
+            title="Bulk import accounts from Excel (.xlsx / .csv)"
+          >
+            <Upload size={14} className="text-blue-700" />
+            <span>Import Accounts</span>
+          </Button>
+
           {selectedNode && selectedNode.level < 5 && (
             <Button onClick={() => setDialog({ mode: "create", level: selectedNode.level + 1, parent: selectedNode })}>
               <Plus size={15} /> Add Child
@@ -650,6 +758,150 @@ export function AccountTreePage() {
           <p className="modal-copy">
             Delete <strong>{deleteTarget.label}</strong> ({deleteTarget.id})?
           </p>
+        </Dialog>
+      )}
+
+      {importModalOpen && (
+        <Dialog
+          open
+          title="Import Accounts from Excel"
+          description="Upload your account list using the template. Level 4 groups and Level 5 ledger accounts will be created automatically via database stored procedure."
+          onClose={() => {
+            if (!importing) {
+              setImportModalOpen(false);
+              setParsedAccounts([]);
+              setImportFileName("");
+              setImportResult(null);
+            }
+          }}
+          footer={
+            <div className="flex items-center justify-between w-full">
+              <button
+                type="button"
+                onClick={handleDownloadTemplate}
+                className="text-xs text-blue-700 hover:text-blue-900 font-semibold underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <FileSpreadsheet size={13} /> Download Template (.xlsx)
+              </button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  disabled={importing}
+                  onClick={() => {
+                    setImportModalOpen(false);
+                    setParsedAccounts([]);
+                    setImportFileName("");
+                    setImportResult(null);
+                  }}
+                >
+                  {importResult ? "Close" : "Cancel"}
+                </Button>
+                {!importResult && (
+                  <Button
+                    onClick={handleExecuteImport}
+                    disabled={importing || !parsedAccounts.length}
+                    className="bg-[#00378C] hover:bg-[#002b6d] text-white font-semibold cursor-pointer"
+                  >
+                    {importing ? "Importing to Database..." : `Import ${parsedAccounts.length} Accounts`}
+                  </Button>
+                )}
+              </div>
+            </div>
+          }
+        >
+          <div className="space-y-3.5 py-1 text-xs">
+            {/* File upload zone */}
+            {!importResult && (
+              <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50/70 p-4 text-center hover:bg-slate-100/70 transition-colors">
+                <input
+                  type="file"
+                  id="excel-account-file"
+                  accept=".xlsx, .xls, .csv"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <label htmlFor="excel-account-file" className="cursor-pointer flex flex-col items-center gap-1.5">
+                  <Upload size={24} className="text-blue-600 mb-0.5" />
+                  <span className="font-semibold text-slate-800">
+                    {importFileName ? importFileName : "Click or Drag & Drop Excel file (.xlsx, .xls, .csv)"}
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Columns: L3_CODE, L4_CODE, L4_DESCRIPTION, AC_CODE, AC_NAME, AC_TYPE, CURR_CODE
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {/* Results or Preview */}
+            {importResult ? (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+                  <CheckCircle2 size={18} className="text-emerald-600" />
+                  <span>Import Completed</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="rounded border bg-white p-2">
+                    <p className="text-slate-500 text-[11px]">Total Rows</p>
+                    <p className="text-base font-bold text-slate-900">{importResult.total}</p>
+                  </div>
+                  <div className="rounded border bg-emerald-50 border-emerald-200 p-2">
+                    <p className="text-emerald-700 text-[11px]">Imported</p>
+                    <p className="text-base font-bold text-emerald-800">{importResult.imported}</p>
+                  </div>
+                  <div className="rounded border bg-rose-50 border-rose-200 p-2">
+                    <p className="text-rose-700 text-[11px]">Errors</p>
+                    <p className="text-base font-bold text-rose-800">{importResult.failed}</p>
+                  </div>
+                </div>
+
+                {importResult.errors && importResult.errors.length > 0 && (
+                  <div className="mt-2 max-h-36 overflow-y-auto rounded border border-rose-200 bg-rose-50/50 p-2 text-[11px] space-y-1">
+                    <p className="font-bold text-rose-800">Errors encountered:</p>
+                    {importResult.errors.map((err, idx) => (
+                      <div key={idx} className="text-rose-700 font-mono">
+                        Row {err.row} ({err.account}): {err.error}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : parsedAccounts.length > 0 ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">Preview ({parsedAccounts.length} rows detected)</span>
+                  <span className="text-[11px] text-slate-500 font-mono">Showing first 5 rows</span>
+                </div>
+                <div className="max-h-48 overflow-auto rounded border border-slate-200 bg-white">
+                  <table className="w-full text-left text-[11px] border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-semibold sticky top-0">
+                      <tr>
+                        <th className="p-1.5 border-b">#</th>
+                        <th className="p-1.5 border-b">L3 Code</th>
+                        <th className="p-1.5 border-b">L4 Code</th>
+                        <th className="p-1.5 border-b">Account Code</th>
+                        <th className="p-1.5 border-b">Account Name</th>
+                        <th className="p-1.5 border-b">Type</th>
+                        <th className="p-1.5 border-b">Currency</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parsedAccounts.slice(0, 5).map((row, idx) => (
+                        <tr key={idx} className="border-b last:border-b-0 hover:bg-slate-50">
+                          <td className="p-1.5 text-slate-400">{idx + 1}</td>
+                          <td className="p-1.5 font-mono">{row.L3_CODE || row.l3_code || "—"}</td>
+                          <td className="p-1.5 font-mono">{row.L4_CODE || row.l4_code || "—"}</td>
+                          <td className="p-1.5 font-mono font-bold text-blue-900">{row.AC_CODE || row.ac_code || "—"}</td>
+                          <td className="p-1.5 font-medium">{row.AC_NAME || row.ac_name || row.ACCOUNT_NAME || "—"}</td>
+                          <td className="p-1.5 font-mono text-center">{row.AC_TYPE || row.ac_type || "N"}</td>
+                          <td className="p-1.5 font-mono">{row.CURR_CODE || row.curr_code || "INR"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </Dialog>
       )}
     </section>

@@ -671,7 +671,7 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
 
   const actionButtons = (
     <>
-      <Button
+      {/* <Button
         type="button"
         variant="outline"
         onClick={() => void handleSave("SAVEASDRAFT")}
@@ -680,7 +680,7 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
       >
         {saving === "SAVEASDRAFT" ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
         <span>Save As Draft</span>
-      </Button>
+      </Button> */}
 
       <Button
         type="button"
@@ -692,7 +692,7 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
         <span>Submit</span>
       </Button>
 
-      <Button
+      {/* <Button
         type="button"
         variant="outline"
         onClick={() => void handleSave("CANCELLED")}
@@ -701,7 +701,7 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
       >
         {saving === "CANCELLED" ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
         <span>Cancel Request</span>
-      </Button>
+      </Button> */}
 
       <Button
         type="button"
@@ -777,18 +777,18 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
         </div>
       </div>
 
-      {data?.LAST_ACTION === "SENTBACK" && data?.SENTBACK_HISTORY && (
+      {/* {data?.LAST_ACTION === "SENTBACK" && data?.SENTBACK_HISTORY && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Sent back with remarks</p>
           <p className="m-0 mt-0.5 text-sm text-amber-900">{data.SENTBACK_HISTORY}</p>
         </div>
-      )}
-      {data?.LAST_ACTION === "REJECTED" && data?.CANCEL_REMARK && (
+      )} */}
+      {/* {data?.LAST_ACTION === "REJECTED" && data?.CANCEL_REMARK && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-red-800">Rejected with remarks</p>
           <p className="m-0 mt-0.5 text-sm text-red-900">{data.CANCEL_REMARK}</p>
         </div>
-      )}
+      )} */}
 
       {/* Three columns side-by-side with bordered section cards */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">

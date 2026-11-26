@@ -7,7 +7,7 @@ export function CompanyLogoField({ value, disabled, busy, onBusy, onChange, onEr
   const input = useRef<HTMLInputElement>(null);
   async function upload(file?: File) {
     if (!file) return;
-    if (!["image/png", "image/jpeg"].includes(file.type) || file.size > 4 * 1024 * 1024) { onError("Select a PNG or JPEG logo up to 2 MB."); return; }
+    if (!["image/png", "image/jpeg"].includes(file.type) || file.size > 2 * 1024 * 1024) { onError("Select a PNG or JPEG logo up to 2 MB."); return; }
     onBusy(true);
     try {
       const body = new FormData(); body.append("file", file);
@@ -24,7 +24,7 @@ export function CompanyLogoField({ value, disabled, busy, onBusy, onChange, onEr
         {value ? <img src={value} alt="Company logo preview" className="max-h-full max-w-full object-contain" /> : <span className="text-xs text-slate-500">No logo selected</span>}
       </div>
       <div className="grid gap-2">
-        <p className="text-xs text-slate-500">PNG or JPEG, up to 4 MB. Used on company reports.</p>
+        <p className="text-xs text-slate-500">PNG or JPEG, up to 2 MB. Used on company reports.</p>
         <div className="flex gap-2">
           <Button type="button" disabled={disabled || busy} onClick={() => input.current?.click()}><Upload size={14} />{busy ? "Uploading..." : value ? "Replace Logo" : "Upload Logo"}</Button>
           {value && <Button type="button" variant="outline" disabled={disabled || busy} onClick={() => onChange("")}><X size={14} />Remove</Button>}

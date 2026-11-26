@@ -193,6 +193,21 @@ function commentForLevel(
   return row?.COMMENT_TEXT ?? "";
 }
 
+function commentForPerson(
+  log: AppraisalCommentLogRow[],
+  actionBy: string,
+  level: number,
+  type: "APPRAISER" | "APPRAISEE"
+): string {
+  const n = (v: unknown) => String(v ?? "").trim().toUpperCase();
+  const t = (r: AppraisalCommentLogRow) => new Date(r.COMMENT_DATE || 0).getTime() || 0;
+  const mine = log
+    .filter((r) => n(r.COMMENT_TYPE) === type && n(r.COMMENT_BY) === n(actionBy))
+    .sort((a, b) => t(b) - t(a));
+  if (mine.length > 0) return mine[0].COMMENT_TEXT ?? "";
+  return commentForLevel(log, level, type); // fallback
+}
+
 /* ─────────────── ReportContent ─────────────── */
 
 const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
@@ -418,41 +433,41 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             <tbody>
               {groupedKpis.length === 0
                 ? Array.from({ length: 5 }).map((_, idx: number) => (
-                    <tr key={`empty-${idx}`}>
-                      <td className="c-center">{idx + 1}</td>
-                      <td colSpan={2}>&nbsp;</td>
-                      <td className="c-center">&nbsp;</td>
-                      <td className="c-center">&nbsp;</td>
-                      <td className="c-center">&nbsp;</td>
-                    </tr>
-                  ))
+                  <tr key={`empty-${idx}`}>
+                    <td className="c-center">{idx + 1}</td>
+                    <td colSpan={2}>&nbsp;</td>
+                    <td className="c-center">&nbsp;</td>
+                    <td className="c-center">&nbsp;</td>
+                    <td className="c-center">&nbsp;</td>
+                  </tr>
+                ))
                 : groupedKpis.map((kpi: KpiGroup, groupIdx: number) => (
-                    <React.Fragment key={kpi.kpiCode || groupIdx}>
-                      <tr>
-                        <td className="c-center c-bold">{groupIdx + 1}</td>
-                        <td colSpan={2} className="c-kpi-merged">
-                          <span className="prf-kpi-name-text">{kpi.kpiDesc}</span>
+                  <React.Fragment key={kpi.kpiCode || groupIdx}>
+                    <tr>
+                      <td className="c-center c-bold">{groupIdx + 1}</td>
+                      <td colSpan={2} className="c-kpi-merged">
+                        <span className="prf-kpi-name-text">{kpi.kpiDesc}</span>
+                      </td>
+                      <td className="c-center c-bold">
+                        {kpi.standardWeightage !== "" ? `${kpi.standardWeightage}%` : ""}
+                      </td>
+                      <td className="c-center c-bold">{kpi.rating}</td>
+                      <td className="c-center c-bold">{kpi.total}</td>
+                    </tr>
+                    {kpi.subItems.map((line: string, lineIdx: number) => (
+                      <tr key={`${kpi.kpiCode}-sub-${lineIdx}`}>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td className="c-subitem">
+                          {String.fromCharCode(97 + lineIdx)})&nbsp;&nbsp;{line}
                         </td>
-                        <td className="c-center c-bold">
-                          {kpi.standardWeightage !== "" ? `${kpi.standardWeightage}%` : ""}
-                        </td>
-                        <td className="c-center c-bold">{kpi.rating}</td>
-                        <td className="c-center c-bold">{kpi.total}</td>
+                        <td className="c-center">&nbsp;</td>
+                        <td className="c-center">&nbsp;</td>
+                        <td className="c-center">&nbsp;</td>
                       </tr>
-                      {kpi.subItems.map((line: string, lineIdx: number) => (
-                        <tr key={`${kpi.kpiCode}-sub-${lineIdx}`}>
-                          <td>&nbsp;</td>
-                          <td>&nbsp;</td>
-                          <td className="c-subitem">
-                            {String.fromCharCode(97 + lineIdx)})&nbsp;&nbsp;{line}
-                          </td>
-                          <td className="c-center">&nbsp;</td>
-                          <td className="c-center">&nbsp;</td>
-                          <td className="c-center">&nbsp;</td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  ))}
+                    ))}
+                  </React.Fragment>
+                ))}
               <tr>
                 <td colSpan={3} className="c-total-top-blank">&nbsp;</td>
                 <td className="c-total-top">{totalWeightageDisplay}</td>
@@ -478,23 +493,23 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
               </tr>
               {characteristics.length === 0
                 ? Array.from({ length: 4 }).map((_, idx: number) => (
-                    <tr key={`char-empty-${idx}`}>
-                      <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
-                      <td>&nbsp;</td>
-                      <td className="c-center">&nbsp;</td>
-                    </tr>
-                  ))
+                  <tr key={`char-empty-${idx}`}>
+                    <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
+                    <td>&nbsp;</td>
+                    <td className="c-center">&nbsp;</td>
+                  </tr>
+                ))
                 : characteristics.map((c: AppraisalCharacteristic, idx: number) => (
-                    <tr key={c.KPI_CODE ?? idx}>
-                      <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
-                      <td>{c.KPI_DESC ?? c.KPI_ITEM_DESC ?? ""}</td>
-                      <td className="c-right" style={{ width: "12%" }}>
-                        {c.RATING !== undefined && c.RATING !== ""
-                          ? Number(c.RATING).toFixed(2)
-                          : ""}
-                      </td>
-                    </tr>
-                  ))}
+                  <tr key={c.KPI_CODE ?? idx}>
+                    <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
+                    <td>{c.KPI_DESC ?? c.KPI_ITEM_DESC ?? ""}</td>
+                    <td className="c-right" style={{ width: "12%" }}>
+                      {c.RATING !== undefined && c.RATING !== ""
+                        ? Number(c.RATING).toFixed(2)
+                        : ""}
+                    </td>
+                  </tr>
+                ))}
               <tr>
                 <td colSpan={2} className="c-right">&nbsp;</td>
                 <td className="c-right c-total-top c-bold">{charTotal}</td>
@@ -518,23 +533,23 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
               </tr>
               {skills.length === 0
                 ? Array.from({ length: 4 }).map((_, idx: number) => (
-                    <tr key={`skill-empty-${idx}`}>
-                      <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
-                      <td>&nbsp;</td>
-                      <td className="c-center">&nbsp;</td>
-                    </tr>
-                  ))
+                  <tr key={`skill-empty-${idx}`}>
+                    <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
+                    <td>&nbsp;</td>
+                    <td className="c-center">&nbsp;</td>
+                  </tr>
+                ))
                 : skills.map((c: AppraisalCharacteristic, idx: number) => (
-                    <tr key={c.KPI_CODE ?? idx}>
-                      <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
-                      <td>{c.KPI_DESC ?? c.KPI_ITEM_DESC ?? ""}</td>
-                      <td className="c-right" style={{ width: "12%" }}>
-                        {c.RATING !== undefined && c.RATING !== ""
-                          ? Number(c.RATING).toFixed(2)
-                          : ""}
-                      </td>
-                    </tr>
-                  ))}
+                  <tr key={c.KPI_CODE ?? idx}>
+                    <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
+                    <td>{c.KPI_DESC ?? c.KPI_ITEM_DESC ?? ""}</td>
+                    <td className="c-right" style={{ width: "12%" }}>
+                      {c.RATING !== undefined && c.RATING !== ""
+                        ? Number(c.RATING).toFixed(2)
+                        : ""}
+                    </td>
+                  </tr>
+                ))}
               <tr>
                 <td colSpan={2} className="c-right">&nbsp;</td>
                 <td className="c-right c-total-top c-bold">{skillTotal}</td>
@@ -558,23 +573,23 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
               </tr>
               {goals.length === 0
                 ? Array.from({ length: 4 }).map((_, idx: number) => (
-                    <tr key={`goal-empty-${idx}`}>
-                      <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
-                      <td>&nbsp;</td>
-                      <td className="c-center">&nbsp;</td>
-                    </tr>
-                  ))
+                  <tr key={`goal-empty-${idx}`}>
+                    <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
+                    <td>&nbsp;</td>
+                    <td className="c-center">&nbsp;</td>
+                  </tr>
+                ))
                 : goals.map((c: AppraisalCharacteristic, idx: number) => (
-                    <tr key={c.KPI_CODE ?? idx}>
-                      <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
-                      <td>{c.KPI_DESC ?? c.KPI_ITEM_DESC ?? ""}</td>
-                      <td className="c-right" style={{ width: "12%" }}>
-                        {c.RATING !== undefined && c.RATING !== ""
-                          ? Number(c.RATING).toFixed(2)
-                          : ""}
-                      </td>
-                    </tr>
-                  ))}
+                  <tr key={c.KPI_CODE ?? idx}>
+                    <td className="c-center" style={{ width: "5%" }}>{idx + 1}</td>
+                    <td>{c.KPI_DESC ?? c.KPI_ITEM_DESC ?? ""}</td>
+                    <td className="c-right" style={{ width: "12%" }}>
+                      {c.RATING !== undefined && c.RATING !== ""
+                        ? Number(c.RATING).toFixed(2)
+                        : ""}
+                    </td>
+                  </tr>
+                ))}
               <tr>
                 <td colSpan={2} className="c-right">&nbsp;</td>
                 <td className="c-right c-total-top c-bold">{goalTotal}</td>
@@ -582,7 +597,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-      
+
           <table className="prf-tbl prf-sec4">
             <tbody>
               <tr>
@@ -621,7 +636,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             </tbody>
           </table>
 
-          
+
           <table className="prf-tbl prf-sec5">
             <tbody>
               <tr>
@@ -661,7 +676,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
               ) : (
                 flowHistory.map((f: AppraisalFlowHistory, idx: number) => {
                   const level = Number(f.FLOW_LEVEL);
-                  const comment = commentForLevel(commentLog, level, "APPRAISER");
+                  const comment = commentForPerson(commentLog, f.ACTION_BY, level, "APPRAISER");
                   const appraiseeComment = commentForLevel(commentLog, 0, "APPRAISEE");
                   const isEmployeeSelfRow =
                     level === 0 && f.ACTION_BY === appraisal.EMPLOYEE_CODE;
@@ -804,10 +819,10 @@ const PerformanceReportDesign: React.FC<Props> = ({
         const row = res?.[0] ?? {};
         const url = String(
           row["COMPANY_LOGO_AWSURL"] ??
-            row["company_logo_awsurl"] ??
-            row["COMPANY_LOGO"] ??
-            row["company_logo"] ??
-            ""
+          row["company_logo_awsurl"] ??
+          row["COMPANY_LOGO"] ??
+          row["company_logo"] ??
+          ""
         ).trim();
         if (url) setCompanyLogoUrl(url);
       })
@@ -906,7 +921,17 @@ const PerformanceReportDesign: React.FC<Props> = ({
             seen.add(level);
             return true;
           });
-          setFlowHistory(uniqueFlow);
+          const lastByPerson = new Map<string, AppraisalFlowHistory>();
+          uniqueFlow.forEach((f) => {
+            const key = String(f.ACTION_BY ?? "").trim().toUpperCase() || `lvl-${f.FLOW_LEVEL}`;
+            const ex = lastByPerson.get(key);
+            if (!ex || Number(f.FLOW_LEVEL) > Number(ex.FLOW_LEVEL)) lastByPerson.set(key, f);
+          });
+          setFlowHistory(
+            Array.from(lastByPerson.values()).sort(
+              (a, b) => Number(a.FLOW_LEVEL) - Number(b.FLOW_LEVEL)
+            )
+          );
 
           // Dept Head ne jis din submit/approve kiya, wo date
           const dhName = String(

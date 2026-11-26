@@ -4,6 +4,7 @@ import type { MasterField, MasterFormTab } from "../../components/ui/MasterPage"
 import { executeDynamicMutationColumn90 } from "../../api/lookups";
 import { useAuth } from "../../state/AuthContext";
 import { executeWmsInboundSql } from "../../api/wms";
+import { saveCompanyFinanceSetup } from "../../api/transactions";
 
 const yesNo = [
   { label: "Yes", value: "Y" },
@@ -11,7 +12,7 @@ const yesNo = [
 ];
 
 export default function CompanyInfo() {
-  const { user } = useAuth();
+  const { user, updateUserSetup, refreshUser } = useAuth();
 
   const formTabs = useMemo<MasterFormTab[]>(
     () => [
@@ -256,6 +257,41 @@ export default function CompanyInfo() {
       val1s76: s(form.test_val),
       val1s77: s(form.tax_num),
     });
+
+    // ── Auto-sync MS_AC_SETUP and global decimal precision across entire app ──
+    if (form.currency) {
+      const currCode = String(form.currency).trim().toUpperCase();
+      const derivedDecimals = (currCode === "OMR" || currCode === "BHD" || currCode === "KWD") ? 3 : 2;
+      if (typeof window !== "undefined") {
+        (window as any).__APP_DECIMALS__ = derivedDecimals;
+        (window as any).__APP_CURRENCY__ = currCode;
+      }
+      updateUserSetup?.({
+        amount_decimal_nos: derivedDecimals,
+        decimals: derivedDecimals,
+        price_decimal_nos: derivedDecimals,
+        lcur_decimal_nos: derivedDecimals,
+        base_curr_code: currCode,
+        currency: currCode,
+      });
+
+      try {
+        await saveCompanyFinanceSetup({
+          company_code: s(form.company_code) || typedUser.company_code,
+          base_curr_code: currCode,
+          amount_decimal_nos: derivedDecimals,
+          price_decimal_nos: derivedDecimals,
+          lcur_decimal_nos: derivedDecimals,
+          ac_fy_period: s(form.ac_fy_period) || "226",
+          opn_fy_period: s(form.opn_fy_period) || s(form.ac_fy_period) || "226",
+          doc_date_editable: "Y",
+        });
+      } catch (syncErr) {
+        console.warn("Could not sync MS_AC_SETUP from CompanyInfo:", syncErr);
+      }
+
+      void refreshUser?.();
+    }
   };
 
   // ── Delete ──────────────────────────────────────────────────────────

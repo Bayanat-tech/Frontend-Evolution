@@ -1,0 +1,586 @@
+"use client";
+
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { Loader2, Search, X } from "lucide-react";
+import { useAuth } from "../../../state/AuthContext";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
+import { LookupField } from "../../../components/ui/LookupField";
+import { Button } from "../../../components/ui/Button";
+import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+import {
+    getPurchaseQuotationRegisterReportHtml,
+    getPurchaseQuotationRegisterReportExcel,
+} from "../../../api/transactions";
+import { openPurchaseReport } from "./PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "./Purchasereportpreview";
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
+
+// TODO: Purchase Quotation doc type lookup cha parameter naav ithe taak
+// const DOC_TYPE_LOOKUP_PARAM = "PQ_DOC_TYPE_LIST";
+
+interface PqRegisterParams {
+    loginid: string;
+    company_code: string;
+    doc_type: string;
+    fromdate: string;
+    todate: string;
+    ac_code: string;
+    prod_codes: string;
+    [key: string]: any;
+}
+
+interface DocTypeOption {
+    value: string;
+    label: string;
+}
+
+type LookupRowLike = Record<string, any>;
+
+const text = (v: any) => (v === null || v === undefined ? "" : String(v));
+
+
+const extractNoDataMessage = (payload: any): string | null => {
+    let data = payload;
+    if (typeof data === "string") {
+        const t = data.trim();
+        if (!t.startsWith("{")) return null; // normal HTML report
+        try {
+            data = JSON.parse(t);
+        } catch {
+            return null;
+        }
+    }
+    if (data && typeof data === "object" && data.success === false) {
+        return data.message || "No records found for the selected filters.";
+    }
+    return null;
+};
+
+
+// ─── Field (label + child wrapper) ──────────────────────────────────────────
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+            {label}
+            {children}
+        </div>
+    );
+}
+
+// ─── Date helper ────────────────────────────────────────────────────────────
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+// Converts whatever BiscDatePicker gives (string / Date / event) into yyyy-mm-dd.
+const pickValue = (v: any): string => {
+    if (v === null || v === undefined || v === "") return "";
+
+    if (v instanceof Date) {
+        return isNaN(v.getTime()) ? "" : `${v.getFullYear()}-${pad2(v.getMonth() + 1)}-${pad2(v.getDate())}`;
+    }
+
+    if (typeof v === "object") return pickValue(v?.target?.value);
+
+    const s = String(v).trim();
+
+    let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (m) return `${m[1]}-${pad2(+m[2])}-${pad2(+m[3])}`;
+
+    m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (m) return `${m[3]}-${pad2(+m[2])}-${pad2(+m[1])}`;
+
+    return "";
+};
+
+// ─── ClearableDate ──────────────────────────────────────────────────────────
+
+function ClearableDate({
+    value,
+    onClear,
+    children,
+}: {
+    value: string;
+    onClear: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="relative">
+            {children}
+            {value && (
+                <button
+                    type="button"
+                    aria-label="Clear date"
+                    title="Clear"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onClear();
+                    }}
+                    className="absolute right-9 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-black transition-colors hover:bg-slate-200"
+                >
+                    <X size={14} strokeWidth={2.5} />
+                </button>
+            )}
+        </div>
+    );
+}
+
+// ─── Product Multi-Select (checkbox list, self-contained) ───────────────────
+
+function ProductMultiSelectField({
+    label,
+    value,
+    onChange,
+    valueField,
+    displayFields,
+    columns,
+    loadOptions,
+    disabled,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    valueField: string;
+    displayFields: string[];
+    columns: { field: string; header: string }[];
+    loadOptions: () => Promise<LookupRowLike[]>;
+    disabled?: boolean;
+}) {
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [rows, setRows] = useState<LookupRowLike[]>([]);
+    const [query, setQuery] = useState("");
+    const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
+    const triggerRef = useRef<HTMLDivElement | null>(null);
+    const popoverRef = useRef<HTMLDivElement | null>(null);
+    const selectAllRef = useRef<HTMLInputElement | null>(null);
+
+    const selectedValues = React.useMemo(
+        () => value.split(",").map((v) => v.trim()).filter(Boolean),
+        [value]
+    );
+
+    const getVal = (row: LookupRowLike) => String(row?.[valueField] ?? "");
+    const getText = (row: LookupRowLike) =>
+        displayFields.map((f) => row?.[f]).filter(Boolean).join(" - ");
+
+    const filteredRows = React.useMemo(() => {
+        const term = query.trim().toLowerCase();
+        if (!term) return rows;
+        return rows.filter((row) =>
+            Object.values(row).some((item) => String(item ?? "").toLowerCase().includes(term))
+        );
+    }, [query, rows]);
+
+    const allLoadedValues = React.useMemo(() => rows.map(getVal).filter(Boolean), [rows]);
+    const allSelected = allLoadedValues.length > 0 && allLoadedValues.every((v) => selectedValues.includes(v));
+    const someSelected = allLoadedValues.some((v) => selectedValues.includes(v));
+
+    useEffect(() => {
+        if (selectAllRef.current) {
+            selectAllRef.current.indeterminate = someSelected && !allSelected;
+        }
+    }, [someSelected, allSelected]);
+
+    useEffect(() => {
+        if (!open) return;
+        const place = () => {
+            const trigger = triggerRef.current;
+            if (!trigger) return;
+            const rect = trigger.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const width = Math.min(Math.max(rect.width, 380), Math.min(560, vw - 24));
+            const belowSpace = vh - rect.bottom - 10;
+            const aboveSpace = rect.top - 10;
+            const maxHeight = Math.max(220, Math.min(360, belowSpace >= 200 ? belowSpace : Math.max(belowSpace, aboveSpace)));
+            const opensAbove = belowSpace < 200 && aboveSpace > belowSpace;
+            const left = Math.min(Math.max(12, rect.left), vw - width - 12);
+            const top = opensAbove
+                ? Math.max(10, rect.top - maxHeight - 8)
+                : Math.min(rect.bottom + 6, vh - maxHeight - 10);
+            setPopoverStyle({ position: "fixed", left, top, width, maxHeight, zIndex: 9999 });
+        };
+        const close = () => setOpen(false);
+        const onDown = (e: MouseEvent) => {
+            const t = e.target as Node;
+            if (triggerRef.current?.contains(t) || popoverRef.current?.contains(t)) return;
+            close();
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+        place();
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
+        document.addEventListener("mousedown", onDown);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            window.removeEventListener("resize", place);
+            window.removeEventListener("scroll", place, true);
+            document.removeEventListener("mousedown", onDown);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [open]);
+
+    const openPopover = async () => {
+        if (disabled) return;
+        setOpen(true);
+        setLoading(true);
+        try {
+            setRows(await loadOptions());
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const toggleRow = (row: LookupRowLike) => {
+        const v = getVal(row);
+        const isSelected = selectedValues.includes(v);
+        const next = isSelected ? selectedValues.filter((x) => x !== v) : [...selectedValues, v];
+        onChange(next.join(","));
+    };
+
+    const toggleSelectAll = () => {
+        if (allSelected) {
+            const next = selectedValues.filter((v) => !allLoadedValues.includes(v));
+            onChange(next.join(","));
+        } else {
+            const next = Array.from(new Set([...selectedValues, ...allLoadedValues]));
+            onChange(next.join(","));
+        }
+    };
+
+    const displayText = rows
+        .filter((row) => selectedValues.includes(getVal(row)))
+        .map(getText)
+        .join(", ");
+
+    return (
+        <div className="freight-product-select" style={{ position: "relative" }}>
+            <label className="mb-1 block text-[11px] font-semibold uppercase text-muted-foreground">
+                {label}
+            </label>
+            <div
+                ref={triggerRef}
+                onClick={openPopover}
+                className="h-8 rounded-md px-2 text-sm font-medium text-foreground shadow-sm"
+                style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1,
+                    border: "1px solid #aebdce", background: "#f4f7fb",
+                }}
+            >
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: displayText ? "inherit" : "#9ca3af" }}>
+                    {displayText || "All"}
+                </span>
+                {selectedValues.length > 0 && (
+                    <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", padding: "2px 8px", borderRadius: 10, fontWeight: 600, marginLeft: 6, flexShrink: 0 }}>
+                        {selectedValues.length}
+                    </span>
+                )}
+            </div>
+            <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 4 }}>Click to select multiple</div>
+
+            {open && createPortal(
+                <div
+                    ref={popoverRef}
+                    style={{ ...popoverStyle, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}
+                >
+                    <div style={{ borderBottom: "1px solid #e5e7eb", background: "#f8fbff", padding: "10px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                            <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b7280", fontWeight: 600 }}>
+                                {label}
+                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontSize: 11, background: "#dbeafe", color: "#1d4ed8", padding: "3px 10px", borderRadius: 10, fontWeight: 600 }}>
+                                    {selectedValues.length} selected
+                                </span>
+                                <span style={{ fontSize: 11, background: "#dbeafe", color: "#1d4ed8", padding: "3px 10px", borderRadius: 10, fontWeight: 600 }}>
+                                    {rows.length} total
+                                </span>
+                                <button type="button" onClick={() => setOpen(false)} style={{ border: "none", background: "none", cursor: "pointer", color: "#6b7280", fontSize: 14, lineHeight: 1, padding: 2 }}>✕</button>
+                            </div>
+                        </div>
+                        <input
+                            type="text" autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+                            placeholder="Search products..."
+                            style={{ width: "100%", fontSize: 12, padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", boxSizing: "border-box" }}
+                        />
+                    </div>
+                    <div style={{ overflow: "auto", flex: 1 }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead style={{ position: "sticky", top: 0, background: "#1e3a8a", color: "#fff", zIndex: 1 }}>
+                                <tr>
+                                    <th style={{ width: 34, padding: "8px 10px", textAlign: "center" }}>
+                                        <input
+                                            ref={selectAllRef} type="checkbox" checked={allSelected} onChange={toggleSelectAll}
+                                            disabled={loading || allLoadedValues.length === 0}
+                                            style={{ width: 14, height: 14, cursor: "pointer" }}
+                                        />
+                                    </th>
+                                    {columns.map((c) => (
+                                        <th key={c.field} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600 }}>{c.header}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr><td colSpan={columns.length + 1} style={{ padding: 20, textAlign: "center", color: "#9ca3af" }}>Loading...</td></tr>
+                                ) : filteredRows.length === 0 ? (
+                                    <tr><td colSpan={columns.length + 1} style={{ padding: 20, textAlign: "center", color: "#9ca3af" }}>No records found</td></tr>
+                                ) : (
+                                    filteredRows.map((row, idx) => {
+                                        const v = getVal(row);
+                                        const isSelected = selectedValues.includes(v);
+                                        return (
+                                            <tr key={v || idx} onClick={() => toggleRow(row)} style={{ cursor: "pointer", background: isSelected ? "#eff6ff" : idx % 2 ? "#fafafa" : "#fff" }}>
+                                                <td style={{ padding: "6px 10px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                                                    <input type="checkbox" checked={isSelected} onChange={() => toggleRow(row)} style={{ width: 14, height: 14, cursor: "pointer" }} />
+                                                </td>
+                                                {columns.map((c) => (
+                                                    <td key={c.field} style={{ padding: "6px 10px", color: isSelected ? "#1d4ed8" : "#374151" }}>{row?.[c.field] ?? ""}</td>
+                                                ))}
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
+
+export default function PurchaseQuotationListing() {
+    const { user } = useAuth();
+    const userRecord = (user || {}) as Record<string, unknown>;
+    const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "");
+    const loginId = String(userRecord.loginid || userRecord.username || "ADMIN");
+
+    const [acCode, setAcCode] = useState("");
+    const [acName, setAcName] = useState("");
+    const [fromDate, setFromDate] = useState(""); // yyyy-mm-dd
+    const [toDate, setToDate] = useState("");     // yyyy-mm-dd
+    const [docType, setDocType] = useState("");
+    const [prodCodes, setProdCodes] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState("Select filters and run the report.");
+    const [docTypeOptions, setDocTypeOptions] = useState<DocTypeOption[]>([]);
+    const [docTypeLoading, setDocTypeLoading] = useState(false);
+
+    const lastRequestRef = useRef<PqRegisterParams | null>(null);
+
+    const dateRangeValid = !fromDate || !toDate || fromDate <= toDate;
+
+    // Doc Type lookup
+    // useEffect(() => {
+    //     let cancelled = false;
+
+    //     async function loadDocTypes() {
+    //         setDocTypeLoading(true);
+    //         try {
+    //             const rows = await getDynamicLookup({
+    //                 parameter: DOC_TYPE_LOOKUP_PARAM,
+    //                 code1: companyCode,
+    //                 loginid: loginId,
+    //             });
+    //             if (cancelled) return;
+
+    //             const seen = new Set<string>();
+    //             const options: DocTypeOption[] = [];
+    //             (rows || []).forEach((r: any) => {
+    //                 const value = String(r?.DOC_TYPE ?? r?.doc_type ?? "").trim();
+    //                 if (!value || seen.has(value)) return;
+    //                 seen.add(value);
+    //                 const name = String(r?.DOC_NAME ?? r?.doc_name ?? r?.DESCRIPTION ?? r?.description ?? "").trim();
+    //                 options.push({ value, label: name ? `${value} - ${name}` : value });
+    //             });
+    //             setDocTypeOptions(options);
+    //         } catch (err) {
+    //             if (!cancelled) {
+    //                 console.error("Failed to load doc types:", err);
+    //                 setDocTypeOptions([]);
+    //             }
+    //         } finally {
+    //             if (!cancelled) setDocTypeLoading(false);
+    //         }
+    //     }
+
+    //     loadDocTypes();
+    //     return () => { cancelled = true; };
+    // }, [companyCode, loginId]);
+
+    const buildRequestParams = (): PqRegisterParams => ({
+        loginid: loginId,
+        company_code: companyCode,
+        doc_type: docType || "All",
+        fromdate: fromDate || "All",
+        todate: toDate || "All",
+        ac_code: acCode || "All",
+        prod_codes: prodCodes || "All",
+    });
+
+    const runReport = useCallback(async () => {
+        if (!dateRangeValid) return;
+        const params = buildRequestParams();
+        lastRequestRef.current = params;
+
+        setLoading(true);
+        setMessage("");
+
+        const preview = openPurchaseReport("Purchase Quotation Register");
+
+        try {
+            const html = await getPurchaseQuotationRegisterReportHtml(params);
+                        const noData = extractNoDataMessage(html);
+            if (noData) {
+                preview.fail(new Error(noData));
+                setMessage(noData);
+                return;
+            }
+            preview.ready({
+                html,
+                filename: `purchase_quotation_register_${new Date().toISOString().slice(0, 10)}`,
+               orientation: "portrait",
+                onExcel: async () => {
+                    await getPurchaseQuotationRegisterReportExcel(params);
+                },
+            });
+            setMessage("Report generated.");
+        } catch (err: any) {
+            const errorMessage =
+                err?.response?.data?.details ||
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to load report. Please try again.";
+            preview.fail(new Error(errorMessage));
+            setMessage(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRangeValid, fromDate, toDate, acCode, docType, prodCodes, companyCode, loginId]);
+
+    function resetFilters() {
+        setFromDate("");
+        setToDate("");
+        setAcCode("");
+        setAcName("");
+        setDocType("");
+        setProdCodes("");
+        setMessage("Select filters and run the report.");
+    }
+
+    return (
+        <section className="freight-ui-standard freight-report-screen">
+            <div className="freight-report-card">
+                <div className="freight-report-titlebar">
+                    <h1>Purchase Quotation Register</h1>
+                    <span className="freight-report-title-dot" aria-hidden="true" />
+                </div>
+
+                <ReportFilterHeader onClear={resetFilters} />
+
+                <div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <Field label="From">
+                        <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
+                            <BiscDatePicker
+                                value={fromDate}
+                                onChange={(v: any) => setFromDate(pickValue(v))}
+                            />
+                        </ClearableDate>
+                    </Field>
+
+                    <Field label="To">
+                        <ClearableDate value={toDate} onClear={() => setToDate("")}>
+                            <BiscDatePicker
+                                value={toDate}
+                                onChange={(v: any) => setToDate(pickValue(v))}
+                            />
+                        </ClearableDate>
+                        {!dateRangeValid && (
+                            <span className="text-[11px] normal-case text-red-600">
+                                "To" date must be on or after "From" date
+                            </span>
+                        )}
+                    </Field>
+
+                    <Field label="Supplier">
+                        <LookupField
+                            label=""
+                            value={acCode}
+                            // displayValue={acName ? `${acCode} - ${acName}` : acCode}
+                            displayValue={acCode ? (acName ? `${acCode} - ${acName}` : acCode) : "All"}
+                            columns={[
+                                { field: "ac_code", header: "Code" },
+                                { field: "ac_name", header: "Name" },
+                                { field: "address", header: "Address" },
+                                { field: "tel", header: "Tel" },
+                                { field: "fax", header: "Fax" },
+                            ]}
+                            valueField="ac_code"
+                            displayFields={["ac_code", "ac_name"]}
+                            loadOptions={() =>
+                                getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginId })
+                            }
+                            disabled={false}
+                            onChange={(value, row) => {
+                                setAcCode(value);
+                                setAcName(text(getLookupValue(row || {}, "ac_name")));
+                            }}
+                        />
+                    </Field>
+
+                    {/* <Field label="Doc Type">
+                        <select
+                            className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                            value={docType}
+                            onChange={(e) => setDocType(e.target.value)}
+                            disabled={docTypeLoading}
+                        >
+                            <option value="">{docTypeLoading ? "Loading..." : "All"}</option>
+                            {docTypeOptions.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                    {o.label}
+                                </option>
+                            ))}
+                        </select>
+                    </Field> */}
+
+                    <ProductMultiSelectField
+                        label="Product"
+                        value={prodCodes}
+                        onChange={setProdCodes}
+                        valueField="prod_code"
+                        displayFields={["prod_code", "prod_name"]}
+                        columns={[
+                            { field: "prod_code", header: "Code" },
+                            { field: "prod_name", header: "Name" },
+                            { field: "p_uom", header: "P Uom" },
+                            { field: "unit_price", header: "Unit Price" },
+                        ]}
+                        loadOptions={() =>
+                            getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginId })
+                        }
+                        disabled={false}
+                    />
+                </div>
+
+                <div className="freight-report-actions">
+                    <Button type="button" size="sm" onClick={runReport} disabled={loading || !dateRangeValid}>
+                        {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
+                    </Button>
+                </div>
+                {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
+            </div>
+
+            <PurchaseReportPreview />
+        </section>
+    );
+}

@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, FileText,
-  Save, Send, CheckCircle2, XCircle, Undo2, Printer,
+  Save, Send, CheckCircle2, XCircle, Undo2, Printer, Loader2, X, History
 } from "lucide-react";
+import AppraisalLogDialog from "./AppraisalLogDialog";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsUpdateRatings } from "../../api/pams";
 import TaskDetailsAppraisalTab from "./Taskdetailsappraisaltab";
@@ -13,8 +14,10 @@ import TaskSkillAppraisalTab from "./Taskskillappraisaltab";
 import AppraiserCommentsTab from "./Appraisercommentstab";
 import PerformanceReportDesign from "./Performancereportdesign";
 import { NoticeToast } from "../../components/ui/NoticeToast";
+import { Dialog } from "../../components/ui/Dialog";
+import { Button } from "../../components/ui/Button";
+import { Select } from "../../components/ui/Select";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type SelectedTab = "task_details" | "characteristics" | "goals" | "skill" | "comments";
 type Row = Record<string, unknown>;
 
@@ -32,6 +35,19 @@ interface SentBackLevel {
   RPT_NAME: string;
 }
 
+interface DocInfo {
+  lastAction: string;
+  sentBackReason: string;
+  sentBackBy: string;
+  rejectReason: string;
+  rejectBy: string;
+  nextActionByName: string;
+}
+
+// Same button look as Purchase Request
+const BTN_BLUE = "rounded-full bg-blue-600 text-white shadow-md disabled:opacity-60 px-1.5 py-0.5 text-[11px] gap-1";
+const scrollTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
@@ -39,6 +55,9 @@ function text(val: unknown): string {
 function num(val: unknown): number {
   const n = Number(val);
   return isFinite(n) ? n : 0;
+}
+function normAction(val: unknown): string {
+  return text(val).toUpperCase().replace(/[\s_]/g, "");
 }
 
 function calcFinalRating(
@@ -173,21 +192,6 @@ const S = {
     gap: "8px",
     flexWrap: "wrap" as const,
   },
-  actionBtn: {
-    display: "inline-flex" as const,
-    alignItems: "center" as const,
-    gap: "6px",
-    padding: "7px 14px",
-    background: "#082A89",
-    color: "#fff",
-    border: "none",
-    borderRadius: "7px",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer" as const,
-    whiteSpace: "nowrap" as const,
-    transition: "background 0.18s, transform 0.1s",
-  },
   tabBar: {
     background: "#f8fafc",
     borderBottom: "1px solid #e5e7eb",
@@ -219,96 +223,11 @@ const S = {
     boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
     marginBottom: "10px",
   },
-  solidBtn: (color = "#E8F0FF"): React.CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "6px 14px",
-    background: color,
-    color: "#082A89",
-    border: "none",
-    borderRadius: "5px",
-    fontSize: "12.5px",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap" as const,
-    transition: "background 0.18s, transform 0.1s",
-  }),
-  outlineBtn: {
-    display: "inline-flex" as const,
-    alignItems: "center" as const,
-    gap: "5px",
-    padding: "6px 13px",
-    background: "#fff",
-    color: "#374151",
-    border: "1px solid #d1d5db",
-    borderRadius: "5px",
-    fontSize: "12.5px",
-    fontWeight: 500,
-    cursor: "pointer" as const,
-    whiteSpace: "nowrap" as const,
-    transition: "background 0.18s, transform 0.1s",
-  },
-  overlay: {
-    position: "fixed" as const,
-    inset: 0,
-    background: "rgba(0,0,0,0.35)",
-    display: "flex" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    zIndex: 9999,
-  },
-  modal: {
-    background: "#fff",
-    borderRadius: "10px",
-    padding: "20px",
-    width: "400px",
-    maxWidth: "95vw",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-    display: "flex" as const,
-    flexDirection: "column" as const,
-    gap: "14px",
-  },
-  modalTitle: { fontSize: "16px", fontWeight: 700, color: "#111827", marginBottom: "4px" },
-  label: {
-    fontSize: "12px",
-    color: "#6b7280",
-    fontWeight: 600,
-    marginBottom: "4px",
-    display: "block" as const,
-  },
-  select: {
-    width: "100%",
-    padding: "8px 10px",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    fontSize: "13px",
-    background: "#fff",
-    color: "#111827",
-  },
-  textarea: {
-    width: "100%",
-    padding: "8px 10px",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    fontSize: "13px",
-    resize: "vertical" as const,
-    minHeight: "80px",
-    fontFamily: "inherit",
-    color: "#111827",
-    boxSizing: "border-box" as const,
-  },
-  modalBtnRow: {
-    display: "flex" as const,
-    justifyContent: "flex-end" as const,
-    gap: "8px",
-  },
 };
 
 
 const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }> = ({
   rating,
-  weightageConfig,
 }) => {
   const safeRating = Math.round(Number(rating || 0));
   const meta = getRatingMeta(safeRating);
@@ -328,11 +247,6 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
       <span style={{ fontSize: "0.72rem", fontWeight: 700, color: meta.labelColor, borderLeft: "1px solid rgba(8,42,137,0.20)", paddingLeft: "8px", letterSpacing: "0.02em" }}>
         {meta.label}
       </span>
-      {/* <span style={{ fontSize: "0.62rem", color: "#082A89", opacity: 0.55, borderLeft: "1px solid rgba(8,42,137,0.15)", paddingLeft: "8px" }}>
-        {weightageConfig.isHrDefined
-          ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}% / G${weightageConfig.goalPct}% / S${weightageConfig.skillPct}%`
-          : ""}
-      </span> */}
     </div>
   );
 };
@@ -369,23 +283,45 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [createdBy, setCreatedBy] = useState<string>(
     prefetchedRow ? text(prefetchedRow.CREATED_BY) : ""
   );
+  const [hasActedBefore, setHasActedBefore] = useState(false);
 
   // ─── Totals (all four categories) ───
   const [taskTotal, setTaskTotal] = useState<number>(0);
   const [characterTotal, setCharacterTotal] = useState<number>(0);
   const [goalTotal, setGoalTotal] = useState<number>(0);
   const [skillTotal, setSkillTotal] = useState<number>(0);
+
+  // ─── Send back dialog ───
   const [sentBackPopup, setSentBackPopup] = useState(false);
   const [sentBackLevel, setSentBackLevel] = useState<string>("");
   const [sentBackReason, setSentBackReason] = useState("");
   const [sentBackLevels, setSentBackLevels] = useState<SentBackLevel[]>([]);
+  const [sentBackLoading, setSentBackLoading] = useState(false);
+
+  // ─── Reject dialog ───
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
+  // D | S | A | R | SB  (used for spinners / disabling buttons)
+  const [savingAction, setSavingAction] = useState<string | null>(null);
+
+  // ─── Document info (for Sent Back / Rejected banners) ───
+  const [docInfo, setDocInfo] = useState<DocInfo>({
+    lastAction: prefetchedRow ? text(prefetchedRow.LAST_ACTION) : "",
+    sentBackReason: prefetchedRow ? text(prefetchedRow.SENT_BACK_REASON) : "",
+    sentBackBy: prefetchedRow ? text(prefetchedRow.SENT_BACK_BY) : "",
+    rejectReason: prefetchedRow ? text(prefetchedRow.REJECT_REASON) : "",
+    rejectBy: prefetchedRow ? text(prefetchedRow.REJECT_BY) : "",
+    nextActionByName: prefetchedRow ? text(prefetchedRow.NEXT_ACTION_BY_NAME) : "",
+  });
+
   const [deptHead, setDeptHead] = useState("");
   const [APPRAISAL_DOC_NO, setAppraisalDocNo] = useState("");
-  const [sentBackLoading, setSentBackLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [loading, setLoading] = useState(!prefetchedRow);
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showLogDialog, setShowLogDialog] = useState(false);
   const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
   const APPROVER_IDS = ["2018030473", "2010090086", "2010080001", "2021060535"];
   const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
@@ -402,10 +338,10 @@ const AppraisalViewTabsPage: React.FC = () => {
   const skillRowsRef = useRef<Row[]>([]);
   const appraiserCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
   const appraiseeCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
-
+  const [isSelfRating, setIsSelfRating] = useState<string>(
+    prefetchedRow ? text(prefetchedRow.IS_SELF_RATING).trim().toUpperCase() : ""
+  );
   const isFinalized = finalApproved === "YES";
-  const employeeIsHOD =
-    !!createdBy && createdBy.trim().toUpperCase() === employeeCode.trim().toUpperCase();
   const [nextActionBy, setNextActionBy] = useState<string>(
     prefetchedRow ? text(prefetchedRow.NEXT_ACTION_BY).trim().toUpperCase() : ""
   );
@@ -421,6 +357,11 @@ const AppraisalViewTabsPage: React.FC = () => {
     showActionButtons && !isFinalized && !showApproveRejectButtons && !APPROVER_IDS.includes(loginKey) && isMyTurn;
   const finalRating = calcFinalRating(taskTotal, characterTotal, goalTotal, skillTotal, weightageConfig);
   const showFinalRating = finalRating !== null;
+  const showSendBack = flowLevel > 0;
+  const busy = savingAction !== null;
+
+  const isSentBackDoc = normAction(docInfo.lastAction) === "SENTBACK";
+  const isRejectedDoc = normAction(docInfo.lastAction) === "REJECTED";
 
   useEffect(() => {
     if (!docNo || !employeeCode) { setLoading(false); return; }
@@ -440,15 +381,24 @@ const AppraisalViewTabsPage: React.FC = () => {
         });
         let currentFlowLevel = 0, nextActionBy = "";
         if (flowRes.length > 0) {
-
-          currentFlowLevel = num(flowRes[0].FLOW_LEVEL_RUNNING);
-          nextActionBy = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
-          setDeptHead(text(flowRes[0].DEPT_HEAD));
-          setAppraisalDocNo(text(flowRes[0].APPRAISAL_DOC_NO));
+          const f = flowRes[0] as Row;
+          currentFlowLevel = num(f.FLOW_LEVEL_RUNNING);
+          nextActionBy = text(f.NEXT_ACTION_BY).trim().toUpperCase();
+          setDeptHead(text(f.DEPT_HEAD));
+          setAppraisalDocNo(text(f.APPRAISAL_DOC_NO));
           setNextActionBy(nextActionBy);
           setFlowLevel(currentFlowLevel);
-          setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
-          setCreatedBy(text(flowRes[0].CREATED_BY));
+          setFinalApproved(text(f.FINAL_APPROVED) || "NO");
+          setCreatedBy(text(f.CREATED_BY));
+          setIsSelfRating(text(f.IS_SELF_RATING).trim().toUpperCase());
+          setDocInfo((p) => ({
+            lastAction: text(f.LAST_ACTION) || p.lastAction,
+            sentBackReason: text(f.SENT_BACK_REASON) || p.sentBackReason,
+            sentBackBy: text(f.SENT_BACK_BY) || p.sentBackBy,
+            rejectReason: text(f.REJECT_REASON) || p.rejectReason,
+            rejectBy: text(f.REJECT_BY) || p.rejectBy,
+            nextActionByName: text(f.NEXT_ACTION_BY_NAME) || p.nextActionByName,
+          }));
         }
 
         if (weightageRes.length > 0) {
@@ -469,6 +419,15 @@ const AppraisalViewTabsPage: React.FC = () => {
             });
           }
         }
+
+        const me = loginid.trim().toUpperCase();
+        setHasActedBefore(
+          (historyRes as Row[]).some(
+            (h) =>
+              text(h.ACTION_BY).trim().toUpperCase() === me &&
+              /SUBMIT|APPROV/i.test(text(h.ACTION))
+          )
+        );
 
         const isMyTurn = nextActionBy === loginid.trim().toUpperCase();
         if (isMyTurn) setUserFlowLevel(0);
@@ -538,9 +497,11 @@ const AppraisalViewTabsPage: React.FC = () => {
     return missing;
   };
 
-  const handleAction = async (action: "D" | "S" | "A" | "R") => {
+  // reason is only used for Reject ("R") — sent in code4 of update_appraisal_status
+  const handleAction = async (action: "D" | "S" | "A" | "R", reason = "") => {
     if (isReadOnly) return;
     setNotice(null);
+    setSavingAction(action);
     try {
       if (action === "D" || action === "S" || action === "A") {
         const allRows = [...taskRowsRef.current, ...charRowsRef.current, ...goalRowsRef.current, ...skillRowsRef.current];
@@ -548,69 +509,108 @@ const AppraisalViewTabsPage: React.FC = () => {
 
         const appraiserText = appraiserCommentRef.current.text?.trim() || "";
         const appraiserLevel = Number(appraiserCommentRef.current.level || flowLevel || 0);
-        if (appraiserText) {
+        if (appraiserText && !hasActedBefore) {
           await pamsSelect({ parameter: "save_appraisal_comment", loginid, code1: docNo, code2: employeeCode, code3: String(appraiserLevel), code4: "APPRAISER", code5: appraiserText });
         }
         const appraiseeText = appraiseeCommentRef.current.text?.trim() || "";
-        if (appraiseeText) {
+        if (appraiseeText && !hasActedBefore) {
           await pamsSelect({ parameter: "save_appraisal_comment", loginid, code1: docNo, code2: employeeCode, code3: "0", code4: "APPRAISEE", code5: appraiseeText });
         }
       }
       const ratingToSend = (action === "S" || action === "A" || action === "D") ? (finalRating ?? 0) : 0;
-      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: action, code4: "", number1: ratingToSend });
+      await pamsSelect({
+        parameter: "update_appraisal_status", loginid,
+        code1: docNo, code2: employeeCode, code3: action,
+        code4: action === "R" ? reason : "",
+        number1: ratingToSend,
+      });
       const msg = action === "D" ? "Saved as draft" : action === "S" ? "Submitted successfully" : action === "A" ? "Approved successfully" : "Rejected successfully";
       setNotice({ type: "success", message: msg });
       setTimeout(() => navigate(-1), 900);
     } catch (err: unknown) {
       console.error("handleAction error:", err);
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
+    } finally {
+      setSavingAction(null);
     }
   };
 
-  const openSentBackPopup = async () => {
-  setSentBackPopup(true);
-  setSentBackLoading(true);
-  setSentBackLevels([]);
-  setSentBackLevel("");
-
-  
-  const docNoToSend = APPRAISAL_DOC_NO || docNo;
-  if (!docNoToSend) {
-    setNotice({
-      type: "error",
-      message: "Appraisal document number not available. Please refresh and try again.",
-    });
-    setSentBackLoading(false);
-    return;
-  }
-
-  try {
-    const res = await pamsSelect({
-      parameter: "Trn_appraisal",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: employeeCode,
-      code4: String(flowLevel),
-      code5: docNoToSend,          
-      code6: "SENTBACK",
-    });
-
-    const list = (res as unknown as SentBackLevel[]) ?? [];
-    setSentBackLevels(list);
-
-    if (list.length > 0) {
-      setSentBackLevel(String(list[0].LEVEL_NO));
+  const handleSubmitClick = async () => {
+    try {
+      setNotice(null);
+      const missing = await validateBeforeSubmit();
+      if (missing.length > 0) {
+        setNotice({ type: "warning", message: `Please fill before submitting: ` + missing.join(" | ") });
+        return;
+      }
+      await handleAction("S");
+    } catch (error) {
+      console.error("Submit validation error:", error);
+      setNotice({ type: "error", message: "Unable to validate appraisal comments. Please try again." });
     }
-  } catch (err: unknown) {
-    setNotice({
-      type: "error",
-      message: err instanceof Error ? err.message : "Unable to load send back levels",
-    });
-  } finally {
-    setSentBackLoading(false);
-  }
-};
+  };
+
+  const openRejectDialog = () => {
+    setRejectReason("");
+    setRejectOpen(true);
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectReason.trim()) {
+      setNotice({ type: "warning", message: "Please enter a rejection reason" });
+      return;
+    }
+    const reason = rejectReason.trim();
+    setRejectOpen(false);
+    await handleAction("R", reason);
+    setRejectReason("");
+  };
+
+  const openSentBackPopup = async () => {
+    setSentBackReason("");
+    setSentBackPopup(true);
+    setSentBackLoading(true);
+    setSentBackLevels([]);
+    setSentBackLevel("");
+
+
+    const docNoToSend = APPRAISAL_DOC_NO || docNo;
+    if (!docNoToSend) {
+      setNotice({
+        type: "error",
+        message: "Appraisal document number not available. Please refresh and try again.",
+      });
+      setSentBackLoading(false);
+      return;
+    }
+
+    try {
+      const res = await pamsSelect({
+        parameter: "Trn_appraisal",
+        loginid,
+        code1: companyCode,
+        code2: loginid,
+        code3: employeeCode,
+        code4: String(flowLevel),
+        code5: docNoToSend,
+        code6: "SENTBACK",
+      });
+
+      const list = (res as unknown as SentBackLevel[]) ?? [];
+      setSentBackLevels(list);
+
+      if (list.length > 0) {
+        setSentBackLevel(String(list[0].LEVEL_NO));
+      }
+    } catch (err: unknown) {
+      setNotice({
+        type: "error",
+        message: err instanceof Error ? err.message : "Unable to load send back levels",
+      });
+    } finally {
+      setSentBackLoading(false);
+    }
+  };
 
   const handleSentBack = async () => {
     if (isReadOnly) return;
@@ -643,17 +643,17 @@ const AppraisalViewTabsPage: React.FC = () => {
       return;
     }
 
+    setSavingAction("SB");
     try {
       await pamsSelect({
         parameter: "sent_back_appraisal",
         loginid,
-        code1: docNo,                              
-        code2: employeeCode,                      
-        code3: String(selectedLevel.LEVEL_NO),     
-        code4: selectedLevel.EMPLOYEE_CODE_ID,     
-        code5: sentBackReason.trim(),             
-        code6: periodNumber,                       
-
+        code1: docNo,
+        code2: employeeCode,
+        code3: String(selectedLevel.LEVEL_NO),
+        code4: selectedLevel.EMPLOYEE_CODE_ID,
+        code5: sentBackReason.trim(),
+        code6: periodNumber,
       });
 
       setNotice({
@@ -663,7 +663,7 @@ const AppraisalViewTabsPage: React.FC = () => {
 
       setSentBackPopup(false);
       setSentBackReason("");
-      setSentBackLevel("1");
+      setSentBackLevel("");
 
       setTimeout(() => navigate(-1), 900);
     } catch (err: unknown) {
@@ -671,6 +671,8 @@ const AppraisalViewTabsPage: React.FC = () => {
         type: "error",
         message: err instanceof Error ? err.message : "Something went wrong",
       });
+    } finally {
+      setSavingAction(null);
     }
   };
 
@@ -742,100 +744,124 @@ const AppraisalViewTabsPage: React.FC = () => {
           <div style={S.actions}>
             {showSaveSubmitButtons && (
               <>
-                <button
-                  style={S.actionBtn}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                  onClick={() => void handleAction("D")}
-                >
-                  <Save size={13} /> Save Draft
-                </button>
-                <button
-                  style={S.actionBtn}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                  onClick={async () => {
-                    try {
-                      setNotice(null);
-                      const missing = await validateBeforeSubmit();
-                      if (missing.length > 0) {
-                        setNotice({ type: "warning", message: `Please fill before submitting: ` + missing.join(" | ") });
-                        return;
-                      }
-                      await handleAction("S");
-                    } catch (error) {
-                      console.error("Submit validation error:", error);
-                      setNotice({ type: "error", message: "Unable to validate appraisal comments. Please try again." });
-                    }
+                <Button
+                  type="button"
+                  className={BTN_BLUE}
+                  disabled={busy}
+                  onClick={async (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    scrollTop();
+                    await handleAction("D");
                   }}
                 >
-                  <Send size={13} /> Submit
-                </button>
-                <button
-                  style={S.actionBtn}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                  onClick={() => void openSentBackPopup()}
+                  {savingAction === "D" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={13} />}
+                  {savingAction === "D" ? "Saving..." : "Save Draft"}
+                </Button>
+                <Button
+                  type="button"
+                  className={BTN_BLUE}
+                  disabled={busy}
+                  onClick={async (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    scrollTop();
+                    await handleSubmitClick();
+                  }}
                 >
-                  <Undo2 size={13} /> Send Back
-                </button>
+                  {savingAction === "S" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send size={13} />}
+                  {savingAction === "S" ? "Submitting..." : "Submit"}
+                </Button>
+                {showSendBack && (
+                  <Button
+                    type="button"
+                    className={BTN_BLUE}
+                    disabled={busy}
+                    onClick={() => { scrollTop(); void openSentBackPopup(); }}
+                  >
+                    <Undo2 size={13} /> Send Back
+                  </Button>
+                )}
               </>
             )}
 
             {showApproveRejectButtons && (
               <>
-                <button
-                  style={S.actionBtn}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                  onClick={() => void handleAction("A")}
+                <Button
+                  type="button"
+                  className={BTN_BLUE}
+                  disabled={busy}
+                  onClick={async (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    scrollTop();
+                    await handleAction("A");
+                  }}
                 >
-                  <CheckCircle2 size={13} /> Approve
-                </button>
-                <button
-                  style={S.actionBtn}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                  onClick={() => void handleAction("R")}
-                >
-                  <XCircle size={13} /> Reject
-                </button>
-                <button
-                  style={S.actionBtn}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-                  onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                  onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                  onClick={() => void openSentBackPopup()}
+                  {savingAction === "A" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 size={15} />}
+                  {savingAction === "A" ? "Approving..." : "Approve"}
+                </Button>
+                <Button
+                  type="button"
+                  className={BTN_BLUE}
+                  disabled={busy}
+                  onClick={() => { scrollTop(); void openSentBackPopup(); }}
                 >
                   <Undo2 size={13} /> Send Back
-                </button>
+                </Button>
+                <Button
+                  type="button"
+                  className={BTN_BLUE}
+                  disabled={busy}
+                  onClick={() => { scrollTop(); openRejectDialog(); }}
+                >
+                  <XCircle size={13} /> Reject
+                </Button>
               </>
             )}
+            <Button type="button" className={BTN_BLUE} onClick={() => { scrollTop(); setShowLogDialog(true); }}>
+  <History size={13} /> Log
+</Button>
 
-            <button
-              style={S.actionBtn}
-              onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-              onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-              onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-              onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-              onClick={() => setShowReportModal(true)}
+            <Button
+              type="button"
+              className={BTN_BLUE}
+              onClick={() => { scrollTop(); setShowReportModal(true); }}
             >
               <Printer size={13} /> Print
-            </button>
+            </Button>
           </div>
         </div>
       </div>
+
+      {/* ─── Sent Back banner (same as Purchase Request) ─── */}
+      {isSentBackDoc && (
+        <div
+          className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-2 text-xs text-yellow-800 shadow-sm"
+          role="alert"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded bg-yellow-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Sent Back</span>
+            <span><strong>Reason:</strong> {docInfo.sentBackReason || "—"}</span>
+          </div>
+          <div>
+            <strong>Next Action By:</strong> {docInfo.nextActionByName || nextActionBy || "—"}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Rejected banner ─── */}
+      {isRejectedDoc && (
+        <div
+          className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-300 bg-red-50 px-4 py-2 text-xs text-red-800 shadow-sm"
+          role="status"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Rejected</span>
+            <span><strong>Reason:</strong> {docInfo.rejectReason || "—"}</span>
+            {docInfo.rejectBy && (
+              <span className="ml-2"><strong>Rejected By:</strong> {docInfo.rejectBy}</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={S.tabBar}>
         {(
@@ -892,15 +918,21 @@ const AppraisalViewTabsPage: React.FC = () => {
           </div>
           <div style={{ display: selectedTab === "comments" ? "block" : "none" }}>
             <AppraiserCommentsTab
-              docNo={docNo} employeeCode={employeeCode}
+              docNo={docNo}
+              employeeCode={employeeCode}
               isVisible={selectedTab === "comments"}
               taskTotal={taskTotal}
               characterTotal={characterTotal}
               goalTotal={goalTotal}
               skillTotal={skillTotal}
-              flowLevel={flowLevel} userFlowLevel={userFlowLevel}
+              flowLevel={flowLevel}
+              userFlowLevel={userFlowLevel}
               weightageConfig={weightageConfig}
-              showAllComments={true}
+              createdBy={createdBy}
+              nextActionBy={nextActionBy}
+              isSelfRating={isSelfRating}
+              finalApproved={finalApproved}
+              hasActedBefore={hasActedBefore}
               onAppraiserCommentChange={handleAppraiserCommentChange}
               onAppraiseeCommentChange={handleAppraiseeCommentChange}
             />
@@ -908,49 +940,105 @@ const AppraisalViewTabsPage: React.FC = () => {
         </fieldset>
       </div>
 
-      {sentBackPopup && (
-        <div style={S.overlay} onClick={() => setSentBackPopup(false)}>
-          <div style={S.modal} onClick={e => e.stopPropagation()}>
-            <div style={S.modalTitle}>Send Back Appraisal</div>
-            <div>
-              <label style={S.label}>Send Back To</label>
-              <select
-                style={S.select}
-                value={sentBackLevel}
-                disabled={sentBackLoading || sentBackLevels.length === 0}
-                onChange={e => setSentBackLevel(e.target.value)}
-              >
-                {sentBackLoading ? (
-                  <option value="">Loading...</option>
-                ) : sentBackLevels.length === 0 ? (
-                  <option value="">No previous level found</option>
-                ) : (
-                  sentBackLevels.map((lvl, i) => (
-                    <option key={i} value={text(lvl.LEVEL_NO)}>
-                      {text(lvl.RPT_NAME)} ({text(lvl.EMPLOYEE_CODE_ID)})
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-            <div>
-              <label style={S.label}>Reason</label>
-              <textarea
-                style={S.textarea}
-                value={sentBackReason}
-                onChange={e => setSentBackReason(e.target.value)}
-                placeholder="Enter reason for sending back..."
-              />
-            </div>
-            <div style={S.modalBtnRow}>
-              <button type="button" style={S.outlineBtn} onClick={() => setSentBackPopup(false)}>Cancel</button>
-              <button type="button" style={S.solidBtn()} disabled={sentBackLoading || !sentBackLevel} onClick={() => void handleSentBack()}>
-                Confirm Send Back
-              </button>
-            </div>
-          </div>
+      {/* ─── Send Back dialog (same as Purchase Request) ─── */}
+      <Dialog
+        open={sentBackPopup}
+        title="Send Back Appraisal"
+        description="Select who to send this back to, and enter the reason."
+        onClose={() => setSentBackPopup(false)}
+        footer={<>
+          <Button type="button" onClick={() => setSentBackPopup(false)} className={BTN_BLUE}>Cancel</Button>
+          <Button
+            type="button"
+            disabled={sentBackLoading || !sentBackLevel || savingAction === "SB"}
+            onClick={async (e) => {
+              e.preventDefault(); e.stopPropagation();
+              scrollTop();
+              await handleSentBack();
+            }}
+            className={BTN_BLUE}
+          >
+            {savingAction === "SB" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Undo2 size={15} />}
+            {savingAction === "SB" ? "Sending..." : "Confirm Send Back"}
+          </Button>
+        </>}
+      >
+        <div className="flex flex-col gap-3">
+          <label className="field"><span>Send Back To *</span>
+            <Select
+              value={sentBackLevel}
+              onChange={(e) => setSentBackLevel(e.target.value)}
+              disabled={sentBackLoading || sentBackLevels.length === 0}
+              className="w-full"
+            >
+              {sentBackLoading ? (
+                <option value="">Loading...</option>
+              ) : sentBackLevels.length === 0 ? (
+                <option value="">No previous level found</option>
+              ) : (
+                sentBackLevels.map((lvl, i) => (
+                  <option key={i} value={text(lvl.LEVEL_NO)}>
+                    {text(lvl.RPT_NAME)} ({text(lvl.EMPLOYEE_CODE_ID)})
+                  </option>
+                ))
+              )}
+            </Select>
+          </label>
+          <label className="field"><span>Send Back Reason *</span>
+            <textarea
+              rows={4}
+              value={sentBackReason}
+              onChange={(e) => setSentBackReason(e.target.value)}
+              placeholder="Enter send back reason..."
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          </label>
         </div>
-      )}
+      </Dialog>
+
+      {/* ─── Reject dialog (same as Purchase Request) ─── */}
+      <Dialog
+        open={rejectOpen}
+        title="Reject Appraisal"
+        description="Enter the reason for rejection."
+        onClose={() => setRejectOpen(false)}
+        footer={<>
+          <Button type="button" onClick={() => setRejectOpen(false)} className={BTN_BLUE}>Cancel</Button>
+          <Button
+            type="button"
+            disabled={savingAction === "R"}
+            onClick={async (e) => {
+              e.preventDefault(); e.stopPropagation();
+              scrollTop();
+              await handleRejectConfirm();
+            }}
+            className={BTN_BLUE}
+          >
+            {savingAction === "R" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X size={15} />}
+            {savingAction === "R" ? "Rejecting..." : "Confirm Reject"}
+          </Button>
+        </>}
+      >
+        <div className="flex flex-col gap-2">
+          <label className="field"><span>Rejection Reason *</span>
+            <textarea
+              rows={4}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Enter reject remark..."
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+      </Dialog>
+
+      <AppraisalLogDialog
+  open={showLogDialog}
+  docNo={APPRAISAL_DOC_NO || docNo}
+  employeeName={employeeName}
+  loginid={loginid}
+  onClose={() => setShowLogDialog(false)}
+/>
 
       {showReportModal && (
         <PerformanceReportDesign

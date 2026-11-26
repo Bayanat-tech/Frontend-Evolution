@@ -177,10 +177,10 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
     fields: [
       { name: "id", label: "User ID", type: "number", disabledOnAdd: true, disabledOnEdit: true, placeholder: "Auto generated", table: true, width: 100 },
       { name: "username", label: "User Name", required: true, table: true, width: 220 },
-      { name: "loginid", label: "Login ID", disabledOnEdit: true, table: true, width: 140 },
-      { name: "userpass", label: "Password", type: "password", requiredOnCreate: true, placeholder: "Enter password", editPlaceholder: "Leave blank to keep current password", table: false },
+      { name: "loginid", label: "Login ID", requiredOnCreate: true, disabledOnEdit: true, table: true, width: 140 },
+      { name: "userpass", label: "Password", type: "password", requiredOnCreate: true, maxLength: 20, placeholder: "8 to 20 characters", editPlaceholder: "Leave blank to keep current password", table: false },
       { name: "contact_no", label: "Contact No", table: true, width: 150 },
-      { name: "email_id", label: "Email", type: "email", table: true, width: 260 },
+      { name: "email_id", label: "Email", type: "email", requiredOnCreate: true, table: true, width: 260 },
       { name: "active_flag", label: "Active", type: "select", options: [{ label: "Yes", value: "Y" }, { label: "No", value: "N" }], table: true, width: 100 },
       { name: "company_code", label: "Company", disabledOnEdit: true, table: true, width: 110 },
     ],
@@ -477,6 +477,7 @@ const textareaClass = inputClass.replace("h-7", "min-h-[72px] py-1");
 
 export function SecurityMasterPage({ config }: { config: SecurityMasterConfig }) {
   const { user } = useAuth();
+  const ownCompanyOnly = config.master === "sec_company" && user?.isPlatformAdmin !== true;
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [query, setQuery] = useState("");
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -629,8 +630,8 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
             <Button
               size="icon"
               variant="ghost"
-              className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
-              disabled={!config.deleteEnabled}
+              className="h-7 w-7 text-red-700 hover:text-red-800 hover:bg-red-50 rounded-md"
+              disabled={!config.deleteEnabled || ownCompanyOnly}
               onClick={() => setDeleteTarget(row.original)}
               title="Delete"
             >
@@ -644,6 +645,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
   );
 
   const openAdd = () => {
+    if (ownCompanyOnly) { setNotice({ type: "error", message: "You can edit your own company. Contact PRODADMIN or QAADMIN to create another company." }); return; }
     setEditMode(false);
     setActiveSection(0);
     setShowPassword(false);
@@ -709,7 +711,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
         await saveSecurityMaster(endpoint, buildSecurityPayload(config, form, user?.company_code), method as "post" | "put");
       }
       setFormOpen(false);
-      setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
+      setNotice({ type: "success", message: config.master === "sec_login" && !editMode ? "User created. Assign an application module and screen permissions before sign-in." : `${config.title} ${editMode ? "updated" : "added"} successfully` });
       await loadRows(pageIndex, pageSize, false);
       if (isModuleData) await loadModuleDropdownRows();
     } catch (error) {
@@ -801,7 +803,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
         renderInput(
           field,
           form[field.name],
-          Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (isModuleData && field.name === "url_path")),
+          Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (field.name === "company_code" && user?.isPlatformAdmin !== true) || (isModuleData && field.name === "url_path")),
           editMode,
           showPassword,
           getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
@@ -949,14 +951,14 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
           }}
           actionButton={
             <div className="flex items-center gap-2">
-              <Button
+              {!ownCompanyOnly && <Button
                 type="button"
                 onClick={openAdd}
                 disabled={saving || logoUploading}
                 className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
               >
                 <Plus size={14} strokeWidth={2.5} /> Add
-              </Button>
+              </Button>}
               <FinanceListActionsMenu
                 fyPeriod=""
                 fyPeriods={[]}
@@ -1285,7 +1287,8 @@ function renderInput(
       <div className="relative">
         <input
           disabled={disabled}
-          maxLength={field.maxLength}
+          minLength={field.name.toLowerCase() === "userpass" ? 8 : undefined}
+          maxLength={field.name.toLowerCase() === "userpass" ? 20 : field.maxLength}
           type={showPassword ? "text" : "password"}
           value={String(value ?? "")}
           placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}

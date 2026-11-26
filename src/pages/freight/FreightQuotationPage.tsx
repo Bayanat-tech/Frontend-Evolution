@@ -2460,7 +2460,10 @@ function formatDisplayDate(input: string) { const value = toDateInputValue(input
 function modeLabel(mode: string) { return mode === "S" ? "Sea" : mode === "R" ? "Road" : "Air"; }
 function jobTypeLabel(jobType: string) { return jobType === "IMP" ? "Import" : "Export"; }
 function round3(value: number) { return Number.isFinite(value) ? value.toFixed(3) : "0.000"; }
-function formatAmount(value: number) { return value.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
+function formatAmount(value: number, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  return value.toLocaleString(undefined, { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
+}
 
 // function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) {
 //   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());

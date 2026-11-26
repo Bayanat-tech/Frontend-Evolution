@@ -65,15 +65,21 @@ export function InvoicePage() {
     setFormOpen(true);
   };
 
-  // Filter rows based on active tab
+  // Filter rows based on active tab, then sort descending (latest invoice first)
   const filteredRows = useMemo(() => {
-    if (activeTab === "all") return rows;
-    return rows.filter((row) => {
-      const allocated = val(row, "allocated");
-      if (activeTab === "allocated") return allocated === "Y";
-      if (activeTab === "unallocated") return allocated !== "Y";
-      return true;
-    });
+    const base =
+      activeTab === "all"
+        ? rows
+        : rows.filter((row) => {
+            const allocated = val(row, "allocated");
+            if (activeTab === "allocated") return allocated === "Y";
+            if (activeTab === "unallocated") return allocated !== "Y";
+            return true;
+          });
+
+    return [...base].sort((a, b) =>
+      val(b, "invoice_no").localeCompare(val(a, "invoice_no"), undefined, { numeric: true, sensitivity: "base" })
+    );
   }, [rows, activeTab]);
 
   // Count for tabs

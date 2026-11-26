@@ -1,4 +1,4 @@
-import { ArrowLeft, Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, History, Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, Undo2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -24,6 +24,7 @@ import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate
 import { getDynamicLookupaccount, type LookupRow } from "../../../api/lookups";
 import { api } from "../../../api/client";
 import { HrLeaveAttachmentPanel } from "./HrLeaveAttachmentPanel";
+import { LeaveLogPanel } from "./LeaveLogPanel";
 
 const LEAVE_TYPES_SKIP_VALIDATION = new Set(["SL"]);
 
@@ -225,7 +226,7 @@ export function LeaveRequestDialog({
   const [approverInfo, setApproverInfo] = useState<Record<string, unknown> | null>(null);
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [requestNumber, setRequestNumber] = useState("");
-  const [activeTab, setActiveTab] = useState<"details" | "attachments">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "attachments" | "log">("details");
   const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
   const [notice, setNotice] = useState<ToastNotice>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof LeaveForm, string>>>({});
@@ -275,6 +276,15 @@ export function LeaveRequestDialog({
   // For every other leave type the attachment is optional.
   const isSickLeave = form.leaveType === "002" || (form.leaveTypeDesc || "").toUpperCase().includes("SICK");
   const sickLeaveNeedsAttachment = isCreator && isSickLeave && (attachmentCount ?? 0) === 0;
+
+  // Resumption is waiting for approval: DUTY_RESUME_DATE and ACTUAL_RESUME_DATE are both filled
+  // and RESUME_DATE_APPROVED is "NO". Read from the saved row (not the editable form) so that
+  // unsaved edits in the date pickers do not make the Approve button appear.
+  const resumeRow = { ...(initialRow || {}), ...(workflowRow || {}) };
+  const resumeApprovalPending =
+    Boolean(getRowString(resumeRow, "DUTY_RESUME_DATE", "duty_resume_date").trim()) &&
+    Boolean(getRowString(resumeRow, "ACTUAL_RESUME_DATE", "actual_resume_date").trim()) &&
+    getRowString(resumeRow, "RESUME_DATE_APPROVED", "resume_date_approved").trim().toUpperCase() === "NO";
 
   // Always start on the details tab when the dialog / page opens.
   useEffect(() => {
@@ -864,9 +874,24 @@ export function LeaveRequestDialog({
   const actionBtn = "!w-auto shrink-0 whitespace-nowrap h-8 gap-1.5 text-xs font-semibold px-3 rounded-lg cursor-pointer";
   const dangerBtn = `${actionBtn} !text-red-600 !border-red-200 hover:!bg-red-50`;
 
+  // View Log: only once the request exists (there is nothing to log before the first save).
+  // Switches the inner tab to the Log view.
+  const viewLogButton = requestNumber ? (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => setActiveTab("log")}
+      className={`${actionBtn} ${activeTab === "log" ? "!border-[#00378C] !text-[#00378C]" : ""}`}
+      title="View Log"
+    >
+      <History size={14} />
+      <span>View Log</span>
+    </Button>
+  ) : null;
+
   // All action buttons in one flat group (rendered in the page header, or in the modal footer)
   const actionButtons =
-    readOnly || (!createMode && !canPrimary) ? (
+    readOnly || (!createMode && !canPrimary && !resumeApprovalPending) ? (
       <>
         {!inline && (
           <Button type="button" variant="outline" onClick={onClose} className={actionBtn}>
@@ -894,8 +919,10 @@ export function LeaveRequestDialog({
 
         {/* Before the first save only "Save As Draft" is shown. Once the request number exists,
             Submit/Approve appears for other leave types straight away, and for sick leave only
-            after at least one file is uploaded in the Attachments tab. */}
-        {requestNumber && !sickLeaveNeedsAttachment && (
+            after at least one file is uploaded in the Attachments tab.
+            When a leave resumption is pending approval (duty + actual resume dates filled and
+            RESUME_DATE_APPROVED = NO) the "Approve Resumption" button is always shown. */}
+        {requestNumber && (!sickLeaveNeedsAttachment || resumeApprovalPending) && (
           <Button
             type="button"
             onClick={() => void save("SUBMITTED")}
@@ -903,7 +930,13 @@ export function LeaveRequestDialog({
             className={`${actionBtn} bg-[#00378C] text-white hover:bg-[#002d72]`}
           >
             {savingAction === "SUBMITTED" ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
-            <span>{permissions.mode === "resumption" ? "Approve Resumption" : isCreator ? "Submit" : "Approve"}</span>
+            <span>
+              {resumeApprovalPending || permissions.mode === "resumption"
+                ? "Approve Resumption"
+                : isCreator
+                ? "Submit"
+                : "Approve"}
+            </span>
           </Button>
         )}
 
@@ -936,7 +969,12 @@ export function LeaveRequestDialog({
       </>
     );
 
-  const footerNode = <div className="flex w-full flex-wrap items-center justify-end gap-2 p-2">{actionButtons}</div>;
+  const footerNode = (
+    <div className="flex w-full flex-wrap items-center justify-end gap-2 p-2">
+      {viewLogButton}
+      {actionButtons}
+    </div>
+  );
 
   /* ---------------- main (left) column: the form ---------------- */
   const mainNode = (
@@ -961,7 +999,7 @@ export function LeaveRequestDialog({
           Checking the current approver and available actions…
         </p>
       )}
-      {!readOnly && permissions.mode === "resumption" && (
+      {!readOnly && (permissions.mode === "resumption" || resumeApprovalPending) && (
         <p className="m-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
           This request is waiting for your leave-resumption approval.
         </p>
@@ -974,12 +1012,14 @@ export function LeaveRequestDialog({
         </p>
       )}
 
-      {/* Tabs: Attachments is required for sick leave and optional for every other leave type */}
+      {/* Tabs: Attachments is required for sick leave and optional for every other leave type.
+          The Log tab is also opened by the View Log button. */}
       <div className="flex gap-1 border-b border-slate-200">
         {(
           [
             { id: "details", label: "Leave Details" },
             { id: "attachments", label: "Attachments" },
+            { id: "log", label: "Log" },
           ] as const
         ).map((tab) => (
           <button
@@ -993,6 +1033,7 @@ export function LeaveRequestDialog({
             }`}
           >
             {tab.id === "attachments" && <Paperclip size={13} />}
+            {tab.id === "log" && <History size={13} />}
             {tab.label}
             {tab.id === "attachments" && (
               <span className={`text-[10px] font-medium ${isSickLeave ? "text-red-500" : "text-slate-400"}`}>
@@ -1021,6 +1062,15 @@ export function LeaveRequestDialog({
           </p>
         ))}
 
+      {activeTab === "log" &&
+        (requestNumber ? (
+          <LeaveLogPanel requestNumber={requestNumber} loginId={loginId} height="calc(100dvh - 430px)" />
+        ) : (
+          <p className="m-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Save As Draft first, then the activity log will be available here.
+          </p>
+        ))}
+
       {showSendBackRemark && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Sent back with remarks</p>
@@ -1033,9 +1083,47 @@ export function LeaveRequestDialog({
           <p className="m-0 mt-0.5 text-sm text-red-900">{rejectRemark}</p>
         </div>
       )}
+      
+      {hasActualResumeDate(initialRow) && activeTab === "details" && (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
+            <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-col justify-end">
+              <label className="flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-[#f8f9fb] px-2.5 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-[#00378C]"
+                  checked={form.actualresumedate ? true : form.resumework === "Y"}
+                  onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
+                  disabled={fieldsDisabled}
+                />
+                Resume Work
+              </label>
+            </div>
+            <Field label="Actual Resume Date">
+              <BiscDatePicker
+                value={form.actualresumedate}
+                onChange={(value) => update("actualresumedate", value)}
+                disabled={fieldsDisabled}
+              />
+            </Field>
+            {tenantName === "ALMS" && (
+              <Field label="Duty Resume Date">
+                <BiscDatePicker
+                  value={form.dutyresumedate}
+                  onChange={(value) => update("dutyresumedate", value)}
+                  disabled={fieldsDisabled}
+                />
+              </Field>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Three columns side-by-side with bordered section cards */}
-      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${activeTab === "attachments" ? "hidden" : ""}`}>
+      <div className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${activeTab !== "details" ? "hidden" : ""}`}>
         {/* ---------- Column 1: Leave Details ---------- */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
           <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
@@ -1272,44 +1360,6 @@ export function LeaveRequestDialog({
           </div>
         </div>
       </div>
-
-      {hasActualResumeDate(initialRow) && activeTab !== "attachments" && (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-          <div className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5">
-            <h3 className="m-0 text-sm font-semibold text-slate-900">Leave Resumption</h3>
-          </div>
-          <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex flex-col justify-end">
-              <label className="flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-[#f8f9fb] px-2.5 text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-[#00378C]"
-                  checked={form.actualresumedate ? true : form.resumework === "Y"}
-                  onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
-                  disabled={fieldsDisabled}
-                />
-                Resume Work
-              </label>
-            </div>
-            <Field label="Actual Resume Date">
-              <BiscDatePicker
-                value={form.actualresumedate}
-                onChange={(value) => update("actualresumedate", value)}
-                disabled={fieldsDisabled}
-              />
-            </Field>
-            {tenantName === "ALMS" && (
-              <Field label="Duty Resume Date">
-                <BiscDatePicker
-                  value={form.dutyresumedate}
-                  onChange={(value) => update("dutyresumedate", value)}
-                  disabled={fieldsDisabled}
-                />
-              </Field>
-            )}
-          </div>
-        </div>
-      )}
     </>
   );
 
@@ -1446,7 +1496,10 @@ export function LeaveRequestDialog({
               <span className={statusBadgeTone(statusLabel)}>{statusLabel}</span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">{actionButtons}</div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {viewLogButton}
+              {actionButtons}
+            </div>
           </div>
         </div>
 

@@ -4,7 +4,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -42,7 +42,7 @@ import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
+import { getCompanyInfo, getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
@@ -66,6 +66,12 @@ export function SalesOrderEditor({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const amountDecimals = Number.isInteger(user?.amount_decimal_nos)
+    ? Math.min(Math.max(Number(user?.amount_decimal_nos), 0), 20)
+    : 2;
+  const priceDecimals = Number.isInteger(user?.price_decimal_nos)
+    ? Math.min(Math.max(Number(user?.price_decimal_nos), 0), 20)
+    : 2;
   const editMode = editor?.mode === "edit";
   // const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor) as unknown as PurchaseOrderForm);
@@ -105,28 +111,128 @@ export function SalesOrderEditor({
   const submitBtnRef = useRef<HTMLDivElement>(null);
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
   const [printOpen, setPrintOpen] = useState(false);
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: user?.company_code })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [user?.company_code]);
+
+  // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
 
 
 
   useEffect(() => {
     if (!editor) return;
-    // const initialForm = emptyForm(editor);
-    // setForm(initialForm);
-    const initialForm = emptyForm(editor) as unknown as PurchaseOrderForm;
+    const initialForm = emptyForm(editor);
     setForm(initialForm);
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
+
+  // useEffect(() => {
+  //   const taxPerc =
+  //     form.tx_compnt_1_expmt === "S" ? 5 : 0;
+
+  //   setRows((current) =>
+  //     current.map((row) => {
+  //       // Only reset % / amount when the Tax Type really changed for this line.
+  //       // On load (and when only category/code change) keep the saved line %.
+  //       const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
+  //       const updatedRow = {
+  //         ...row,
+
+  //         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+  //         tx_cat_code: `${form.tx_cat_code || ""}`,
+  //         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+  //         tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+  //         ...(typeChanged
+  //           ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+  //           : {}),
+  //       };
+
+  //       return updatedRow;
+  //     })
+  //   );
+
+
+  // }, [
+  //   form.tx_compntcat_code_1,
+  //   form.tx_cat_code,
+  //   form.tx_compnt_1_expmt,
+  //   form.tx_compnt_perc_1
+
+  // ]);
+useEffect(() => {
+  if (!editor || editor.mode === "edit") return;
+  let alive = true;
+  const initialCurr = text(emptyForm(editor).curr_code);
+  (async () => {
+    try {
+      const res: any = await getCompanyInfo();
+      const info = res?.data ?? res;
+      const code = text(info?.base_curr_code || info?.currency);
+      if (!alive || !code) return;
+
+      // resolve name / ex rate from the same lookup the Currency field uses
+      let name = "";
+      let rate = 1;
+      try {
+        const list: any[] = await getDynamicLookup({
+          parameter: "Account_Currency_CODE_Serach",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+        const match = (list || []).find(
+          (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+        );
+        if (match) {
+          name = text(getLookupValue(match, "curr_name"));
+          rate = Number(getLookupValue(match, "ex_rate")) || 1;
+        }
+      } catch { /* keep code only */ }
+
+      if (!alive) return;
+      // fill unless the user already picked a different currency
+      setForm((current) =>
+        current.curr_code && current.curr_code !== initialCurr
+          ? current
+          : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+      );
+    } catch (e) {
+      console.warn("Company info load failed", e);
+    }
+  })();
+  return () => { alive = false; };
+}, [editor]);
   useEffect(() => {
-    const taxPerc =
-      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+    // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
+
+    // CHANGED: from category list instead of hardcoded 5
+    const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
 
     setRows((current) =>
       current.map((row) => {
-        // Only reset % / amount when the Tax Type really changed for this line.
-        // On load (and when only category/code change) keep the saved line %.
+        // Only reset % / amount when the Tax Type or Tax Category really changed for this line.
+        // On load (and when only the tax code changes) keep the saved line %.
         const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+        const catChanged = (row.tx_cat_code || "") !== (form.tx_cat_code || ""); // ADDED
+        const taxChanged = typeChanged || catChanged; // ADDED
 
         const updatedRow = {
           ...row,
@@ -134,8 +240,8 @@ export function SalesOrderEditor({
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
-          ...(typeChanged
+          tx_compnt_perc_1: taxChanged ? taxPerc : row.tx_compnt_perc_1, // CHANGED
+          ...(taxChanged // CHANGED
             ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
             : {}),
         };
@@ -149,9 +255,10 @@ export function SalesOrderEditor({
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
-    form.tx_compnt_perc_1
+    form.tx_compnt_perc_1,
+    taxCats // ADDED
 
-  ]);
+  ])
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -364,8 +471,10 @@ export function SalesOrderEditor({
         ...emptyLineRow(form.div_code),
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+        tx_compnt_perc_1: resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code), // CHANGED: was hardcoded 5
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -672,7 +781,7 @@ export function SalesOrderEditor({
                 title="Sales Order"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(finalTotal)}
+                total={formatAmount(finalTotal, amountDecimals)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -830,6 +939,7 @@ export function SalesOrderEditor({
                       loginid={user?.loginid || user?.username}
                       rows={rows}
                       calculateDiscount={applyDiscountCalculation}
+                      amountDecimals={amountDecimals}
                     />
                   </div>
                 )}
@@ -847,6 +957,8 @@ export function SalesOrderEditor({
                   discAmt={form.disc_price}
                   companyCode={user?.company_code}
                   loginid={user?.loginid || user?.username}
+                  amountDecimals={amountDecimals}
+                  priceDecimals={priceDecimals}
 
                 />
               </div>

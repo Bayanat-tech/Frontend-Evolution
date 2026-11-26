@@ -84,6 +84,8 @@ export type TransactionDetail = {
   curr_name?: string;
   ex_rate: number;
   amount: number;
+  qty?: number;
+  price?: number;
   sign_ind: 1 | -1;
   div_code: string;
   tx_compntcat_code_1?: string;
@@ -242,6 +244,10 @@ export type CompanyFinanceSetupData = {
     CURR_CODE: string;
     CURR_NAME: string;
   }[];
+  tax_setup?: {
+    std_sales_tax_perc?: number;
+    std_purchase_tax_perc?: number;
+  };
 };
 
 export type SaveCompanyFinanceSetupPayload = {
@@ -255,6 +261,8 @@ export type SaveCompanyFinanceSetupPayload = {
   amount_decimal_nos?: number;
   price_decimal_nos?: number;
   lcur_decimal_nos?: number;
+  std_sales_tax_perc?: number;
+  std_purchase_tax_perc?: number;
 };
 
 export type SaveFyPeriodPayload = {
@@ -1382,6 +1390,34 @@ export async function getPurchaseQuotationCompareReportExcel(params: Record<stri
 }
 
 
+export async function getPurchaseQuotationRegisterReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseQuotationRegister/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseQuotationRegisterReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseQuotationRegister/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_Quotation_Register.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
 
 
 
@@ -1414,6 +1450,105 @@ export async function getPurchaseInvoiceTaxReportExcel(params: Record<string, an
   window.URL.revokeObjectURL(url);
 }
 
+
+//Purchase GRN Listing Report HTML and Excel route
+export async function getPurchaseGrnListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getPurchaseGrnListingReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseGrnListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getPurchaseGrnListingReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_GRN_Listing.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+} 
+
+
+
+
+//sales DN Listing Report HTML and Excel route
+
+
+
+export async function getSalesDnListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesDNListingReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getSalesDnListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesDNListingReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Sales_DN_Listing.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+} 
+
+
+
+
+// Sales order Listing Report HTML and Excel route
+
+export async function getSalesOrderListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesOrderRegisterReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getSalesOrderListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesOrderRegisterReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Sales_DN_Listing.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+} 
+
+
+
+
+
+
+
+
 // ─── Purchase Invoice - Account Details ─────────────────────────────────
 
 export async function getPurchaseInvoiceAccountDetailsReportHtml(params: Record<string, any>): Promise<string> {
@@ -1441,6 +1576,41 @@ export async function getPurchaseInvoiceAccountDetailsReportExcel(params: Record
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+
+
+
+// purchase invoice listing report 
+
+
+
+export async function getPurchaseInvoiceListingReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoiceListingReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseInvoiceListingReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoiceListingReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_Invoice_Listing.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
 
 
 // Sales Invoice Report HTML and Excel route
@@ -1615,6 +1785,33 @@ export async function getPoOrderReportExcel(params: Record<string, any>): Promis
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+export async function getPurchaseOrderReportCopyHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseOrderReportCopy/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseOrderReportCopyExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseOrderReportCopy/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "PO_Order_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 
 
 // ─── Add these to api/transactions.ts, alongside getPoOrderRegisterReportHtml/Excel ───
@@ -1859,6 +2056,20 @@ export async function getCRListingReportExcel(params: Record<string, any>): Prom
   a.click();
   a.remove();
   window.URL.revokeObjectURL(url);
+}
+
+export async function getCreditRequestHistory(
+  params: Record<string, any>
+): Promise<any[]> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CreditRequestHistory`,
+    params
+  );
+  const body = response.data;
+  if (body?.success === false) {
+    throw new Error(body.message || "Unable to load history");
+  }
+  return body?.data ?? [];
 }
 
 

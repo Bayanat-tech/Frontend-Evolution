@@ -4,7 +4,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups"; // CHANGED: + getLookupValue
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -26,6 +26,7 @@ import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSDN, PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
 import {
+  amountBeforeDiscPrice,
   computeQuantity,
   emptyForm,
   emptyLineRow,
@@ -45,6 +46,7 @@ import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { downloadSalesDNExcel, getSalesDNReportHtml } from "./SalesDNReport";
+import { getCompanyInfo } from "../../../api/transactions";
 
 export type { PurchaseOrderEditorState };
 
@@ -61,7 +63,13 @@ export function SalesDNEditor({
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
 }) {
-  const { user } = useAuth();
+   const { user } = useAuth();
+  const amountDecimals = Number.isInteger(user?.amount_decimal_nos)
+    ? Math.min(Math.max(Number(user?.amount_decimal_nos), 0), 20)
+    : 2;
+  const priceDecimals = Number.isInteger(user?.price_decimal_nos)
+    ? Math.min(Math.max(Number(user?.price_decimal_nos), 0), 20)
+    : 2;
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [rows, setRows] = useState<SalesOrderLineRow[]>(() =>
@@ -86,12 +94,36 @@ export function SalesDNEditor({
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const submitBtnRef = useRef<HTMLDivElement>(null);
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+ const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+
+  // ADDED: tax category list (code / name / tx_percnt) - Tax % comes from here, not hardcoded
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: user?.company_code })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [user?.company_code]);
+
+  // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
+
   // ---- Report dialog state ----
   const openReport = async () => {
     if (!form.doc_no) {
@@ -144,6 +176,90 @@ export function SalesDNEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
 
+
+  useEffect(() => {
+    if (!editor || editor.mode === "edit") return;
+    let alive = true;
+    const initialCurr = text(emptyForm(editor).curr_code);
+    (async () => {
+      try {
+        const res: any = await getCompanyInfo();
+        const info = res?.data ?? res;
+        const code = text(info?.base_curr_code || info?.currency);
+        if (!alive || !code) return;
+  
+        // resolve name / ex rate from the same lookup the Currency field uses
+        let name = "";
+        let rate = 1;
+        try {
+          const list: any[] = await getDynamicLookup({
+            parameter: "Account_Currency_CODE_Serach",
+            code1: user?.company_code,
+            loginid: user?.loginid || user?.username || "ADMIN",
+          });
+          const match = (list || []).find(
+            (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+          );
+          if (match) {
+            name = text(getLookupValue(match, "curr_name"));
+            rate = Number(getLookupValue(match, "ex_rate")) || 1;
+          }
+        } catch { /* keep code only */ }
+  
+        if (!alive) return;
+        // fill unless the user already picked a different currency
+        setForm((current) =>
+          current.curr_code && current.curr_code !== initialCurr
+            ? current
+            : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+        );
+      } catch (e) {
+        console.warn("Company info load failed", e);
+      }
+    })();
+    return () => { alive = false; };
+  }, [editor]);
+
+ useEffect(() => {
+    // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
+
+    // CHANGED: from category list instead of hardcoded 5
+    const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
+
+    setRows((current) =>
+      current.map((row) => {
+        // Only reset % / amount when the Tax Type or Tax Category really changed for this line.
+        // On load (and when only the tax code changes) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+        const catChanged = (row.tx_cat_code || "") !== (form.tx_cat_code || ""); // ADDED
+        const taxChanged = typeChanged || catChanged; // ADDED
+
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: taxChanged ? taxPerc : row.tx_compnt_perc_1, // CHANGED
+          ...(taxChanged // CHANGED
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
+        };
+
+        return updatedRow;
+      })
+    );
+
+
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1,
+    taxCats // ADDED
+
+  ]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -166,6 +282,22 @@ export function SalesDNEditor({
             user?.loginid || user?.username,
           ),
         ]);
+        let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -184,15 +316,22 @@ export function SalesDNEditor({
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
+           address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           party_address: text(headerRaw.address || current.party_address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
-          party_phone: text(headerRaw.tel || current.party_phone),
-          party_fax: text(headerRaw.fax || current.party_fax),
+                    party_phone: text(headerRaw.tel || acRow?.party_phone || current.party_phone),
+          party_fax: text(headerRaw.fax || acRow?.party_fax || current.party_fax),
+             curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
@@ -213,6 +352,14 @@ export function SalesDNEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+         so_div_code: text(headerRaw.so_div_code || current.so_div_code),
+
+         so_disc_hdr_price: numberOrZero(headerRaw.so_disc_hdr_price),
+         so_disc_hdr_percent: numberOrZero(headerRaw.so_disc_hdr_percent),
+         so_discount_scoope: text(headerRaw.so_discount_scoope) || "ITEM",
+         so_tx_compnt_1_expmt: text(headerRaw.so_tx_compnt_1_expmt),
+         so_tx_cat_code: text(headerRaw.so_tx_cat_code),
+         so_tx_compntcat_code_1: text(headerRaw.so_tx_compntcat_code_1),
         }));
 
         setRows(
@@ -289,14 +436,83 @@ export function SalesDNEditor({
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
+
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
+
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
+   const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
 
   const updateRow = (id: string, patch: Partial<SalesOrderLineRow>) => {
     setRows((current) =>
       current.map((row) => (row.id === id ? { ...row, ...patch } : row)),
     );
   };
+    const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code), // CHANGED: from category %
+      },
+    ]);
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
   const removeRow = (id: string) =>
     setRows((current) => current.filter((row) => row.id !== id));
 
@@ -556,7 +772,7 @@ export function SalesDNEditor({
                 title="Delivery Note"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(finalTotal)}
+                total={formatAmount(finalTotal,amountDecimals)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -714,6 +930,7 @@ export function SalesDNEditor({
                   <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
                     <SalesDNHeaderForm
                       form={form}
+                      rows={rows}
                       setForm={setForm}
                       docType={SO_DOC_TYPE.SDN}
                       updateField={updateField}
@@ -723,6 +940,8 @@ export function SalesDNEditor({
                       companyCode={user?.company_code}
                       loginid={user?.loginid || user?.username}
                       setdetails={setRows}
+                      calculateDiscount={applyDiscountCalculation}
+                      amountDecimals={amountDecimals}
                     />
 
 
@@ -742,6 +961,8 @@ export function SalesDNEditor({
                   discAmt={form.disc_price}
                   companyCode={user?.company_code}
                   loginid={user?.loginid || user?.username}
+                  amountDecimals={amountDecimals}
+                  priceDecimals={priceDecimals}
                 />
               </div>
             )}

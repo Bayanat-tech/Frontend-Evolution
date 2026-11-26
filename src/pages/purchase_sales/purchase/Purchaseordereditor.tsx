@@ -4,7 +4,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -49,6 +49,8 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import {
   getPoOrderReportHtml,
   getPoOrderReportExcel,
+  CompanyInfo,
+  getCompanyInfo,
 } from "../../../api/transactions";
 
 import { NewReportDialog } from "../../../components/new_report_format";
@@ -57,6 +59,7 @@ import { createPortal } from "react-dom";
 
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { PurchaseOrderPrintDialog } from "./purchaseOrderPrintDialoge";
 
 
 export type { PurchaseOrderEditorState };
@@ -75,6 +78,12 @@ export function PurchaseOrderEditor({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const amountDecimals = Number.isInteger(user?.amount_decimal_nos)
+    ? Math.min(Math.max(Number(user?.amount_decimal_nos), 0), 20)
+    : 2;
+  const priceDecimals = Number.isInteger(user?.price_decimal_nos)
+    ? Math.min(Math.max(Number(user?.price_decimal_nos), 0), 20)
+    : 2;
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
@@ -94,12 +103,12 @@ export function PurchaseOrderEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
-
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
 
   // ---- Report Preview state ----
@@ -111,6 +120,65 @@ export function PurchaseOrderEditor({
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const submitBtnRef = useRef<HTMLDivElement>(null);
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [taxCats, setTaxCats] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: user?.company_code })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        if (alive) setTaxCats(list);
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [user?.company_code]);
+
+  // ADDED: only "S" (Std Tax) uses the category %, everything else is 0
+  const resolveTaxPerc = (taxType?: string, catCode?: string): number => {
+    if ((taxType || "N") !== "S") return 0;
+    const cat = taxCats.find((c) => text(getLookupValue(c, "tx_cat_code")) === text(catCode));
+    return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
+  };
+
+  const prevHeaderTaxRef = useRef<{ type: string; cat: string } | null>(null);
+
+  useEffect(() => {
+    if (loading) return; // wait until saved lines are loaded
+    // Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
+
+    const curType = form.tx_compnt_1_expmt || "";
+    const curCat = form.tx_cat_code || "";
+    const prev = prevHeaderTaxRef.current;
+    // true only when the HEADER Tax Type / Category really changed (not on load, not on line edits)
+    const headerTaxChanged = !!prev && (prev.type !== curType || prev.cat !== curCat);
+    prevHeaderTaxRef.current = { type: curType, cat: curCat };
+
+    const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
+
+    setRows((current) =>
+      current.map((row) => ({
+        ...row,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        ...(headerTaxChanged
+          ? {
+              tx_cat_code: `${form.tx_cat_code || ""}`,
+              tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+              tx_compnt_perc_1: taxPerc,
+              tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100),
+            }
+          : {}),
+      }))
+    );
+  }, [
+    loading,
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1,
+    taxCats,
+  ]);
 
   useEffect(() => {
     if (!editor) return;
@@ -121,40 +189,84 @@ export function PurchaseOrderEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
 
-  useEffect(() => {
-    const taxPerc =
-      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+  // useEffect(() => {
+  //   const taxPerc =
+  //     form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
-    setRows((current) =>
-      current.map((row) => {
-        // Only reset % / amount when the Tax Type really changed for this line.
-        // On load (and when only category/code change) keep the saved line %.
-        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+  //   setRows((current) =>
+  //     current.map((row) => {
+  //       // Only reset % / amount when the Tax Type really changed for this line.
+  //       // On load (and when only category/code change) keep the saved line %.
+  //       const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
 
-        const updatedRow = {
-          ...row,
+  //       const updatedRow = {
+  //         ...row,
 
-          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
-          tx_cat_code: `${form.tx_cat_code || ""}`,
-          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
-          ...(typeChanged
-            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
-            : {}),
-        };
+  //         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+  //         tx_cat_code: `${form.tx_cat_code || ""}`,
+  //         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+  //         tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+  //         ...(typeChanged
+  //           ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+  //           : {}),
+  //       };
 
-        return updatedRow;
-      })
-    );
+  //       return updatedRow;
+  //     })
+  //   );
 
 
-  }, [
-    form.tx_compntcat_code_1,
-    form.tx_cat_code,
-    form.tx_compnt_1_expmt,
-    form.tx_compnt_perc_1
+  // }, [
+  //   form.tx_compntcat_code_1,
+  //   form.tx_cat_code,
+  //   form.tx_compnt_1_expmt,
+  //   form.tx_compnt_perc_1
 
-  ]);
+  // ]);
+  // ADDED: new document - default Currency / Ex Rate from company info. User can still change it in the Currency lookup.
+// ADDED: new document - default Currency / Ex Rate from company info. User can still change it in the Currency lookup.
+useEffect(() => {
+  if (!editor || editor.mode === "edit") return;
+  let alive = true;
+  const initialCurr = text(emptyForm(editor).curr_code);
+  (async () => {
+    try {
+      const res: any = await getCompanyInfo();
+      const info = res?.data ?? res;
+      const code = text(info?.base_curr_code || info?.currency);
+      if (!alive || !code) return;
+
+      // resolve name / ex rate from the same lookup the Currency field uses
+      let name = "";
+      let rate = 1;
+      try {
+        const list: any[] = await getDynamicLookup({
+          parameter: "Account_Currency_CODE_Serach",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+        const match = (list || []).find(
+          (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+        );
+        if (match) {
+          name = text(getLookupValue(match, "curr_name"));
+          rate = Number(getLookupValue(match, "ex_rate")) || 1;
+        }
+      } catch { /* keep code only */ }
+
+      if (!alive) return;
+      // fill unless the user already picked a different currency
+      setForm((current) =>
+        current.curr_code && current.curr_code !== initialCurr
+          ? current
+          : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+      );
+    } catch (e) {
+      console.warn("Company info load failed", e);
+    }
+  })();
+  return () => { alive = false; };
+}, [editor]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -231,7 +343,8 @@ export function PurchaseOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
-
+          pr_req_no: text(headerRaw.pr_req_no || current.pr_req_no),
+         tx_compnt_perc_1: Number(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1 || 0),
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
           discount_scoope:
@@ -240,6 +353,7 @@ export function PurchaseOrderEditor({
               ? headerRaw.discount_scoope
               : current.discount_scoope || "ITEM",
         }));
+        
 
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -407,8 +521,10 @@ export function PurchaseOrderEditor({
         ...emptyLineRow(form.div_code),
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+        tx_compnt_perc_1: resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code), // CHANGED: was hardcoded 5
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -696,7 +812,7 @@ export function PurchaseOrderEditor({
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(finalTotal)}</strong>
+                <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(finalTotal, amountDecimals)}</strong>
               </div>
               {form.ac_code && (
                 <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
@@ -717,7 +833,7 @@ export function PurchaseOrderEditor({
                 title="Purchase Order"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(finalTotal)}
+                total={formatAmount(finalTotal, amountDecimals)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -795,7 +911,7 @@ export function PurchaseOrderEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab  && form.doc_no &&  (
+                  {isPendingTab && form.doc_no && (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
@@ -804,9 +920,9 @@ export function PurchaseOrderEditor({
                 </div>
                 {form.doc_no && (
                   <>
-                    <Button type="button" variant="secondary" onClick={handlePrint}>
-                      <Printer size={15} /> Print
-                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+  <Printer size={15} /> Print
+</Button>
                     {/* <Button
                       aria-label="Excel"
                       title="Excel"
@@ -898,6 +1014,7 @@ export function PurchaseOrderEditor({
                       rows={rows}
                       setdetails={setRows}
                       calculateDiscount={applyDiscountCalculation}
+                      amountDecimals={amountDecimals}
                     />
                   </div>
                 )}
@@ -915,6 +1032,8 @@ export function PurchaseOrderEditor({
                   discAmt={form.disc_price}
                   companyCode={user?.company_code}
                   loginid={user?.loginid || user?.username}
+                  amountDecimals={amountDecimals}
+                  priceDecimals={priceDecimals}
 
                 />
               </div>
@@ -930,7 +1049,7 @@ export function PurchaseOrderEditor({
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs shadow-2xs">
                 <span className="text-[11px] font-medium text-slate-500">Total Amount</span>
-                <strong className="font-mono text-xs text-slate-900">{formatAmount(finalTotal)}</strong>
+                <strong className="font-mono text-xs text-slate-900">{formatAmount(finalTotal, amountDecimals)}</strong>
               </div>
 
 
@@ -1023,9 +1142,15 @@ export function PurchaseOrderEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
-          readOnly={!isPendingTab || isCancelled} 
+        readOnly={!isPendingTab || isCancelled}
       />
-
+<PurchaseOrderPrintDialog
+  open={printOpen}
+  onClose={() => setPrintOpen(false)}
+  form={form}
+  companyCode={user?.company_code || ""}
+  docType={PO_DOC_TYPE.LPO}
+/>
 
       <PurchaseReportPreview />
     </>

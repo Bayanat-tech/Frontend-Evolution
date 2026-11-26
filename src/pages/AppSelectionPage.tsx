@@ -29,6 +29,7 @@ import type { CSSProperties, ElementType } from "react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
+import { CompanyBillingNotices } from "../components/CompanyBillingNotices";
 import { useAuth } from "../state/AuthContext";
 import type { MenuNode } from "../types/auth";
 import { firstLeafPath } from "../utils/menu";
@@ -262,18 +263,23 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     navigate("/login", { replace: true });
   };
   const catalogMeta = (code: string) => moduleCatalog.find((entry) => entry.meta.code === code)!.meta;
+  const renderedApps = new Set<MenuNode>();
   const renderApp = (code: string, overrides: Partial<ModuleMeta> = {}) => {
     const app = findApp(code);
     if (!app) return null;
+    renderedApps.add(app);
     return <ModuleCard key={code} meta={{ ...catalogMeta(code), ...overrides }} onClick={() => openApp(app)} />;
   };
   const mastersApp = workspaceApps.find(isBtMastersApp) || workspaceApps.find(isUtilitiesApp);
   const securityApp = findApp("Security");
+  if (securityApp) renderedApps.add(securityApp);
+  if (mastersApp) renderedApps.add(mastersApp);
   const sections = [
     {
       id: "erp", title: "ERP",
       cards: [
         renderApp("Finance"),
+        renderApp("MMS"),
         renderApp("HCM", { description: "Leave management and attendance management." }),
         renderApp("IMS", { description: "Purchases, sales, stock movements, production, inventory and maintenance management." }),
       ],
@@ -303,6 +309,13 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     },
   ].map((section) => ({ ...section, cards: section.cards.filter((card) => card !== null) }))
     .filter((section) => section.cards.length > 0);
+  const remainingApps = workspaceApps.filter(app => !renderedApps.has(app));
+  if (remainingApps.length) {
+    sections.push({
+      id: "additional", title: "Other applications",
+      cards: remainingApps.map((app,index) => <ModuleCard key={`assigned-${app.id || app.title}`} meta={getModuleMeta(app,index)} onClick={() => openApp(app)} />),
+    });
+  }
   const launcherStyle = {
     "--hub-section-count": sections.length || 1,
     "--hub-columns": Math.max(1, ...sections.map((section) => section.cards.length)),
@@ -319,6 +332,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
         <HeaderProfile user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
       </header>
       <main className="selection-main app-launch-main" style={launcherStyle}>
+        <CompanyBillingNotices />
         {sections.length === 0 ? (
           <div className="empty-state"><ShieldCheck size={34} /><h2>No modules available</h2><p>No application modules are assigned to your account.</p></div>
         ) : (
