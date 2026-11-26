@@ -72,10 +72,18 @@ function isSameSoUom(row: any): boolean {
   return !!p && p === l;
 }
 
-function computeSoQuantity(row: any): number {
-  if (isSameSoUom(row)) return numberOrZero(row?.so_qty_luom);
-  return numberOrZero(row?.so_qty_puom) * numberOrZero(row?.uppp) + numberOrZero(row?.so_qty_luom);
+// function computeSoQuantity(row: any): number {
+//   if (isSameSoUom(row)) return numberOrZero(row?.so_qty_luom);
+//   return numberOrZero(row?.so_qty_puom) * numberOrZero(row?.uppp) + numberOrZero(row?.so_qty_luom);
+// }
+
+export function computeSoQuantity(row: SalesOrderLineRow): number {
+  const qtyPuom = numberOrZero(row.so_qty_puom);
+  const qtyLuom = numberOrZero(row.so_qty_luom);
+  const uppp = numberOrZero(row.uppp);
+  return isSameSoUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
+
 
 export function SalesDnDetailsTable({
   rows,
