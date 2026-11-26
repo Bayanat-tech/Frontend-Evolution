@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, FileText,
-  Save, Send, CheckCircle2, XCircle, Undo2, Printer, Loader2, X,
+  Save, Send, CheckCircle2, XCircle, Undo2, Printer, Loader2, X, History
 } from "lucide-react";
+import AppraisalLogDialog from "./AppraisalLogDialog";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsUpdateRatings } from "../../api/pams";
 import TaskDetailsAppraisalTab from "./Taskdetailsappraisaltab";
@@ -320,6 +321,7 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [loading, setLoading] = useState(!prefetchedRow);
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showLogDialog, setShowLogDialog] = useState(false);
   const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
   const APPROVER_IDS = ["2018030473", "2010090086", "2010080001", "2021060535"];
   const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
@@ -814,6 +816,9 @@ const AppraisalViewTabsPage: React.FC = () => {
                 </Button>
               </>
             )}
+            <Button type="button" className={BTN_BLUE} onClick={() => { scrollTop(); setShowLogDialog(true); }}>
+  <History size={13} /> Log
+</Button>
 
             <Button
               type="button"
@@ -1026,6 +1031,14 @@ const AppraisalViewTabsPage: React.FC = () => {
           </label>
         </div>
       </Dialog>
+
+      <AppraisalLogDialog
+  open={showLogDialog}
+  docNo={APPRAISAL_DOC_NO || docNo}
+  employeeName={employeeName}
+  loginid={loginid}
+  onClose={() => setShowLogDialog(false)}
+/>
 
       {showReportModal && (
         <PerformanceReportDesign
