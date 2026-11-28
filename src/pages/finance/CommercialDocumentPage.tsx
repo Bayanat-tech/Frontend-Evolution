@@ -2434,7 +2434,7 @@ const limitProps = (f: keyof FormState) => ({
                               </div>
 
                               {/* Compact Allocations Table */}
-                              <div className="commercial-lines-scroll max-h-[170px] min-h-[70px] overflow-y-auto overflow-x-hidden border-t border-[#bfd1e8] bg-white">
+                              <div className="finance-alloc-table-scroll max-h-[170px] min-h-[70px] overflow-y-auto overflow-x-hidden border-t border-[#bfd1e8] bg-white">
                                 {allocLoading ? (
                                   <div className="flex items-center justify-center p-4 text-[11px] text-muted-foreground gap-2">
                                     <RefreshCw size={12} className="animate-spin text-emerald-600" />

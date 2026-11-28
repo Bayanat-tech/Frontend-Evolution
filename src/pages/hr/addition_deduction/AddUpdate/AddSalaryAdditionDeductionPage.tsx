@@ -263,6 +263,8 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       onSubmit: () => undefined,
     });
 
+    const payCompType = formik.values.docType === "DED" ? "D" : "E";
+
     /* ── lookups ── */
     const loadEmployees = useCallback(async () => {
       const response = await getDynamicLookup({
@@ -275,12 +277,13 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
 
     const loadPayUnits = useCallback(async () => {
       const response = await getDynamicLookup({
-        parameter: "PAY_COMPONENT_DependentPayCompId",
+        parameter: "PAY_COMPONENT_PAY_UNIT_SAL",
         loginid: user?.loginid ?? "",
         code1: user?.company_code ?? "",
+        code2 :  payCompType,
       });
       return Array.isArray(response) ? response : [];
-    }, [user?.loginid, user?.company_code]);
+    }, [user?.loginid, user?.company_code,payCompType]);
 
     /* ── load detail lines on edit / view ── */
     useEffect(() => {
@@ -469,7 +472,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
           recover_from_dt: row.effectiveFrom
             ? new Date(row.effectiveFrom).toISOString()
             : undefined,
-          deduct_from_leave: row.cancel === "Yes" ? "Y" : "N",
+          cancel_status: row.cancel === "Yes" ? "Y" : "N",
         }));
 
         const success = await hrSalaryAdvDedServiceInstance.upsertHrSalaryAdvDed({
@@ -753,7 +756,12 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                     className={CTL}
                     name="docType"
                     value={formik.values.docType}
-                    onChange={formik.handleChange}
+                      onChange={(e) => {
+                      formik.handleChange(e);
+                      setDetailRows((prev) =>
+                        prev.map((row) => ({ ...row, payUnit: "", description: "" })),
+                      );
+                    }}
                     disabled={readonly}
                   >
                     <option value="ADD">Addition</option>

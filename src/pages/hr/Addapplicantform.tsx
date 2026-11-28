@@ -1,12 +1,3 @@
-// Addapplicantform.tsx
-//
-// Applicant Info form — Freight-style:
-//  • forwardRef + useImperativeHandle → page header "Save as Draft" / "Submit"
-//    buttons call saveDraft() / submit()
-//  • SectionPanel / Field from shared Formblocks
-//  • toast for validation / API feedback (no inline alert banners)
-//  • No bottom button row — Close / Save as Draft / Submit live in the page header
-
 import { IdCard, MessageSquare } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
@@ -129,17 +120,6 @@ export const AddApplicantForm = forwardRef<ApplicantFormHandle, Props>(function 
         parameter: "HR_CAM_DEPARTMENT_DEPTCODE",
         loginid: user?.loginid ?? "",
         code1: user?.company_code ?? "",
-        code2: "",
-        code3: "",
-        code4: "",
-        number1: 0,
-        number2: 0,
-        number3: 0,
-        number4: 0,
-        date1: null,
-        date2: null,
-        date3: null,
-        date4: null,
       });
       const list = Array.isArray(res) ? (res as Record<string, unknown>[]) : [];
       setDeptList(
@@ -280,7 +260,7 @@ export const AddApplicantForm = forwardRef<ApplicantFormHandle, Props>(function 
             </Select>
           </Field>
 
-          <Field label="Position Applied">
+          <Field label="Position Applied For">
             <Input {...text("pos_appl_for")} />
           </Field>
           <Field label="Interviewer Name">
@@ -288,8 +268,8 @@ export const AddApplicantForm = forwardRef<ApplicantFormHandle, Props>(function 
           </Field>
           <Field label="Interview Date">
             <Input {...text("intrvw_date", "date")} />
-          </Field>
-          <Field label="Hire">
+          </Field>  
+          <Field label="Hiring Recommendation">
             <Select
               disabled={readonly}
               value={form.hire_flag ?? ""}
@@ -305,28 +285,28 @@ export const AddApplicantForm = forwardRef<ApplicantFormHandle, Props>(function 
 
       <SectionPanel title="Comments & Signatories" icon={MessageSquare}>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Dept Head Comment 1">
+          <Field label="Department Head Comments/Telephonic">
             <Input {...text("dept_head_comment1")} />
           </Field>
-          <Field label="Sign 1">
+          <Field label="Signnature 1">
             <Input {...text("sign_1")} />
           </Field>
-          <Field label="Dept Head Comment 2">
+          <Field label="Department Head Face to Face  ">
             <Input {...text("dept_head_comment2")} />
           </Field>
-          <Field label="Sign 2">
+          <Field label="Signnature 2">
             <Input {...text("sign_2")} />
           </Field>
-          <Field label="Admin HR Comment">
+          <Field label="Admin Department Comment">
             <Input {...text("admin_hr_comment")} />
           </Field>
-          <Field label="Sign 3">
+          <Field label="Signnature 3">
             <Input {...text("sign_3")} />
           </Field>
-          <Field label="CEO Comment">
+          <Field label="CEO Comments Approval">
             <Input {...text("ceo_comment")} />
           </Field>
-          <Field label="Sign 4">
+          <Field label="Signnature 4">
             <Input {...text("sign_4")} />
           </Field>
         </div>

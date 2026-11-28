@@ -34,7 +34,7 @@ type AbsentMemoFormState = {
   docDate: string;
   refNo: string;
   employeeCode: string;
-  employeeId: string; 
+  employeeId: string;
   nameFrom: string;
   addrFrom: string;
   lettrSubject: string;
@@ -55,6 +55,10 @@ const DEFAULT_SIGNATORY_POSITION = "Hr Manager";
 // Stored/saved value is the code ("ABS"); the UI shows the label ("Absent").
 const DOC_TYPE_ABSENT = "ABS";
 const DOC_TYPE_LABELS: Record<string, string> = { ABS: "Absent" };
+
+// Every line on this memo is an "Absent" deduction against pay component 004.
+const FIXED_PAY_UNIT = "004";
+const FIXED_DESCRIPTION = "Absent";
 
 /** Accepts either the code ("ABS") or the old label ("Absent") and returns the code. */
 const toDocTypeCode = (value: unknown): string => {
@@ -319,14 +323,15 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
     return Array.isArray(response) ? response : [];
   }, [user?.loginid, user?.company_code]);
 
-  const loadPayUnits = useCallback(async () => {
-    const response = await getDynamicLookup({
-      parameter: "PAY_COMPONENT_DependentPayCompId",
-      loginid: user?.loginid ?? "",
-      code1: user?.company_code ?? "",
-    });
-    return Array.isArray(response) ? response : [];
-  }, [user?.loginid, user?.company_code]);
+  // ── Pay Unit lookup: disabled — memo always uses pay component 004 ──
+  // const loadPayUnits = useCallback(async () => {
+  //   const response = await getDynamicLookup({
+  //     parameter: "PAY_COMPONENT_DependentPayCompId",
+  //     loginid: user?.loginid ?? "",
+  //     code1: user?.company_code ?? "",
+  //   });
+  //   return Array.isArray(response) ? response : [];
+  // }, [user?.loginid, user?.company_code]);
 
   /** Fixed-component gross salary for an employee (port of the PowerBuilder SELECT). */
   const fetchGrossSalary = useCallback(
@@ -399,8 +404,8 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
         ...prev,
         {
           srNo: nextSrNo,
-          payUnit: "",
-          description: "",
+          payUnit: FIXED_PAY_UNIT,          // default pay component 004
+          description: FIXED_DESCRIPTION,   // default description "Absent"
           effectiveFrom: "",
           absentFromDate: "",
           absentToDate: "",
@@ -536,7 +541,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
             : undefined,
         leave_start_date: row.absentFromDate ,
         leave_end_date: row.absentToDate,
-        deduct_from_leave: row.cancel === "Yes" ? "Y" : "N",
+        cancel_status: row.cancel === "Yes" ? "Y" : "N",
         deduct_noof_leavedays: Number(row.noOfDays || 0),
         ref_leave_doc_no: row.refLeaveDocNo || "",
         remarks: row.description || null, // DTL.REMARKS VARCHAR2(20)
@@ -571,28 +576,14 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       {
         accessorKey: "payUnit",
         header: "Pay Unit *",
-        size: 140,
+        size: 100,
         enableSorting: false,
         cell: ({ row }) => (
-          <LookupField
-            label="Pay Unit"
-            compact
+          <Input
+            className="h-7 px-2 text-sm"
             value={row.original.payUnit}
-            columns={[
-              { field: "value_code", header: "Value Code" },
-              { field: "value_desc", header: "Description" },
-            ]}
-            valueField="value_code"
-            displayFields={["value_code", "value_desc"]}
-            loadOptions={loadPayUnits}
-            onChange={(value, selected) => {
-              updateRow(row.original.srNo, {
-                payUnit: String(value ?? ""),
-                description: String(
-                  selected?.value_desc ?? selected?.VALUE_DESC ?? row.original.description ?? "",
-                ),
-              });
-            }}
+            disabled
+            readOnly
           />
         ),
       },
@@ -734,7 +725,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
         ),
       },
     ],
-    [loadPayUnits, updateRow, removeDetailRow, recalcLine],
+    [updateRow, removeDetailRow, recalcLine],
   );
 
   // No per-column filter icons in this grid (keeps the header clean).

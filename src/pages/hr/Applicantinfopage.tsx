@@ -311,40 +311,42 @@ export function ApplicantInfoPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        {!formOpen && (
           <Button type="button" size="sm" variant="outline" onClick={() => openForm("add")} disabled={saving}>
             <Plus size={14} /> Add
           </Button>
-          {formOpen && (
-            <>
-              <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={saving}>
-                <X size={14} /> Close
-              </Button>
-              {!readonly && (
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void formRef.current?.saveDraft()}
-                    disabled={saving}
-                  >
-                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
-                    {saving ? "Saving" : "Save as Draft"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => formRef.current?.submit()}
-                    disabled={saving}
-                  >
-                    <Send size={14} /> Submit
-                  </Button>
-                </>
-              )}
-            </>
-          )}
-        </div>
+        )}
+        {formOpen && (
+          <>
+            <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={saving}>
+              <X size={14} /> Close
+            </Button>
+            {!readonly && (
+              <>
+                {/* <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void formRef.current?.saveDraft()}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
+                  {saving ? "Saving" : "Save as Draft"}
+                </Button> */}
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => formRef.current?.submit()}
+                  disabled={saving}
+                >
+                  <Send size={14} /> Submit
+                </Button>
+              </>
+            )}
+          </>
+        )}
+      </div>
       </div>
 
       {/* Add / Edit / View form — replaces the grid while open */}

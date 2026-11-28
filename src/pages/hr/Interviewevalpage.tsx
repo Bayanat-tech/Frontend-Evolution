@@ -289,9 +289,6 @@ export function InterviewEvalPage() {
     [],
   );
 
-  /* ─────────────────────────────────────────────────────────
-     EDITOR — Full-page, Freight-style header (with Save button)
-     ───────────────────────────────────────────────────────── */
   if (view === "editor") {
     const isView = editorMode === "view";
     const title =

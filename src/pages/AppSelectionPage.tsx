@@ -98,14 +98,14 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
     },
   },
   {
-    keys: ["progress", "Transport", "tms"],
+    keys: ["transport", "tms"],
     meta: {
       Icon: Route,
-      accent: { gradient: "linear-gradient(135deg, #64748b 0%, #81b454 100%)", light: "#f1f5f9", border: "#cbd5e1", icon: "#334155", text: "#1e293b", glow: "rgba(100, 116, 139, 0.14)" },
+      accent: { gradient: "linear-gradient(135deg, #0284c7 0%, #10b981 100%)", light: "#f0f9ff", border: "#bae6fd", icon: "#0284c7", text: "#0369a1", glow: "rgba(2, 132, 199, 0.14)" },
       code: "TMS",
       fullForm: "Transport Management System",
-      description: "Operational workflows, integrations and reports.",
-      status: "in-progress",
+      description: "Fleet, drivers, trip tickets, fuel filling and vehicle maintenance.",
+      status: "completed",
     },
   },
   {
