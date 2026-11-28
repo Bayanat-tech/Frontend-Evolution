@@ -5,7 +5,7 @@ import {
   Plus, Save, Send, X, CheckCircle,
   ArrowLeft, ChevronLeft, Paperclip, FileText, Printer,
   Receipt, Percent, Columns3, Search, List, ChevronUp, ChevronDown, Trash2,
-  Loader2, Download, MessageSquare, Clock, FileSpreadsheet
+  Loader2, Download, MessageSquare, Clock, FileSpreadsheet, History, GitBranch
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -25,6 +25,8 @@ import { PurchaseDocumentIdentity } from "./PurchaseDocumentIdentity";
 import { openPurchaseReport } from "../purchase_sales/Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../purchase_sales/Reports/Purchasereportpreview";
 import ImportPrItems, { PrImportRow } from "./Importpritems";
+import PRFlowLogDialog from "./PRFlowLogDialog";
+import PRApprovalGraphDialog from "./PRApprovalGraphDialog";
 
 
 const PO_BLUE = "#00378C";
@@ -323,6 +325,8 @@ const AddPRRequestPage = ({
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [flowLogOpen, setFlowLogOpen] = useState(false);
+  const [approvalGraphOpen, setApprovalGraphOpen] = useState(false);
   const [amountExceed, setAmountExceed] = useState<{ open: boolean; message: string; action: "SUBMIT" | "APPROVE" | "" }>({
     open: false, message: "", action: "",
   });
@@ -1607,16 +1611,23 @@ const AddPRRequestPage = ({
                     </Button>
                   )}
 
-                  {requestNumber && (
-                    <Button type="button" onClick={() => setAttachmentOpen(true)} className={BTN_BLUE}>
-                      <Paperclip size={15} /> Files
-                    </Button>
-                  )}
-                  {requestNumber && (
-                    <Button type="button" onClick={handlePrint} className={BTN_BLUE}>
-                      <Printer size={15} /> Print
-                    </Button>
-                  )}
+
+                  <Button type="button" className={BTN_BLUE}
+                    onClick={() => requestNumber ? setAttachmentOpen(true) : toast.warning("Please save the request first to attach files.", 4000)}>
+                    <Paperclip size={15} /> Files
+                  </Button>
+                  <Button type="button" className={BTN_BLUE}
+                    onClick={() => requestNumber ? setFlowLogOpen(true) : toast.warning("Flow log is available after the request is saved.", 4000)}>
+                    <History size={15} /> Flow Log
+                  </Button>
+                  <Button type="button" className={BTN_BLUE}
+                    onClick={() => requestNumber ? setApprovalGraphOpen(true) : toast.warning("Approval graph is available after the request is saved.", 4000)}>
+                    <GitBranch size={15} /> Approval Graph
+                  </Button>
+                  <Button type="button" onClick={handlePrint} className={BTN_BLUE}>
+                    <Printer size={15} /> Print
+                  </Button>
+
                 </div>
               </div>
             </div>
@@ -2545,6 +2556,26 @@ const AddPRRequestPage = ({
           </div>
         </div>
       </Dialog>
+      <PRFlowLogDialog
+        open={flowLogOpen}
+        onClose={() => setFlowLogOpen(false)}
+        requestNumber={requestNumber || ""}
+        companyCode={companyCode}
+        loginid={loginid}
+      />
+      <PRApprovalGraphDialog
+        open={approvalGraphOpen}
+        onClose={() => setApprovalGraphOpen(false)}
+        requestNumber={requestNumber || ""}
+        companyCode={companyCode}
+        loginid={loginid}
+        flowCode={header.FLOW_CODE}
+        flowDescription={header.FLOW_DESCRIPTION}
+        lastAction={header.LAST_ACTION}
+        nextActionBy={header.NEXT_ACTION_BY}
+        nextActionByName={(header as any).NEXT_ACTION_BY_NAME}
+        finalApproved={String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y"}
+      />
 
       <PurchaseReportPreview />
     </>
