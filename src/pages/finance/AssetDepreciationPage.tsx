@@ -170,6 +170,10 @@ export function AssetDepreciationPage() {
       return;
     }
     if (hasRows) {
+      if (!hasActivePostedJv) {
+        await recalculate();
+        return;
+      }
       setNotice({
         type: "success",
         message: `Depreciation document ${docNo} is already generated for ${monthYear} (${rows.length} assets). Click "JV" to post to General Ledger.`,
@@ -201,6 +205,51 @@ export function AssetDepreciationPage() {
       }
     } catch (error) {
       setNotice({ type: "error", message: friendlyError(error, "Unable to save depreciation") });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const recalculate = async () => {
+    if (!year || !month || !division) return;
+    if (hasActivePostedJv) {
+      setNotice({
+        type: "error",
+        message: `Cannot recalculate: Journal Voucher #${postedJvNo} is active in General Ledger. Please cancel the JV in Journal Voucher screen first.`,
+      });
+      return;
+    }
+    if (!confirm(`Are you sure you want to recalculate depreciation for ${monthYear}? This will clear the previous calculation and recalculate all eligible assets.`)) {
+      return;
+    }
+    setLoading(true);
+    setNotice(null);
+    try {
+      const computedDocNo = calculateDocNo(year, month, division) || docNo;
+      await api.post("/api/finance/asset-depreciation/delete", {
+        doc_no: Number(computedDocNo),
+        div_code: division,
+      });
+      await executeCommonProcedure({
+        parameter: "PROC_DOC_NO_DEPRECIATION",
+        loginid: loginId,
+        val1s1: year,
+        val1s2: month,
+        val1s3: division,
+        val1s4: companyCode,
+        val1s5: docType,
+      });
+      setNotice({ type: "success", message: `Depreciation for ${monthYear} recalculated successfully!` });
+      await retrieve();
+      const exc = await checkExceptions(division);
+      if (exc.length > 0) {
+        setNotice({
+          type: "error",
+          message: `Depreciation generated with ${exc.length} exception(s). Please review the Exception Register before posting JV.`,
+        });
+      }
+    } catch (error) {
+      setNotice({ type: "error", message: friendlyError(error, "Unable to recalculate depreciation") });
     } finally {
       setLoading(false);
     }
@@ -324,17 +373,29 @@ export function AssetDepreciationPage() {
             <RefreshCw size={14} /> Retrieve
           </Button>
           <Button
-            disabled={loading || hasRows}
-            onClick={() => void save()}
-            title={hasRows ? "Depreciation already generated for this month. Click JV to post." : "Generate and save depreciation"}
+            disabled={loading || (hasRows && hasActivePostedJv)}
+            onClick={() => (hasRows ? void recalculate() : void save())}
+            title={
+              hasActivePostedJv
+                ? `Depreciation is locked while JV #${postedJvNo} is active in GL`
+                : hasRows
+                ? "Recalculate depreciation for this period (clears old run and recalculates fresh)"
+                : "Generate and save depreciation"
+            }
             className={`h-8 gap-1.5 shadow-xs text-xs font-semibold px-4 rounded-lg transition-colors ${
-              hasRows
+              hasActivePostedJv
                 ? "bg-emerald-700 text-white opacity-85 cursor-not-allowed"
                 : "bg-[#00378C] text-white hover:bg-[#002d72] cursor-pointer"
             }`}
           >
-            {hasRows ? <CheckCircle2 size={14} /> : <Save size={14} />}
-            {hasRows ? "Calculated" : "Save"}
+            {hasActivePostedJv ? (
+              <CheckCircle2 size={14} />
+            ) : hasRows ? (
+              <Calculator size={14} />
+            ) : (
+              <Save size={14} />
+            )}
+            {hasActivePostedJv ? "Calculated" : hasRows ? "Recalculate" : "Save"}
           </Button>
           <Button
             variant={hasActivePostedJv ? "outline" : "secondary"}

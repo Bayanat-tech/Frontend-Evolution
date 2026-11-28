@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, Boxes, Briefcase, FileText, LoaderCircle, Printer,
-  Receipt, Save, Settings2, Sheet, Wallet2,
+  Receipt, Save, Settings2, Wallet2, X,
 } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
@@ -258,12 +258,19 @@ interface InvoiceFormProps {
 }
 
 type InvoiceTab = "setup" | "jobs" | "storage";
+type PrintOption = "grouped" | "activitywise" | "standard";
+
+const PRINT_OPTIONS: Array<{ key: PrintOption; label: string }> = [
+  { key: "activitywise", label: "Activity-wise Report" },
+  { key: "standard", label: "Activity-wise (Base Currency)" },
+  { key: "grouped", label: "Grouped Report" },
+];
 
 export default function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
   const { user } = useAuth();
   const { company_code: authCompanyCode, loginid } = user ?? {};
   const [activeTab, setActiveTab] = useState<InvoiceTab>("setup");
-const [fcRates, setFcRates] = useState<Record<string, string>>({});
+  const [fcRates, setFcRates] = useState<Record<string, string>>({});
   const [invoice, setInvoice] = useState<any>(() => {
     if (existingData && Object.keys(existingData).length > 0) return existingData;
     return { invoice_date: todayStr, from_date: todayStr, to_date: todayStr, desp_date: todayStr, credit_note_date: todayStr, despatched: "N" };
@@ -282,10 +289,11 @@ const [fcRates, setFcRates] = useState<Record<string, string>>({});
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [companyCurrCode, setCompanyCurrCode] = useState<string>("");
-// replace the exRateTouched state
-const [exRateTouched, setExRateTouched] = useState<boolean>(
-  () => !!(existingData && getValue(existingData, "ex_rate"))
-);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  // replace the exRateTouched state
+  const [exRateTouched, setExRateTouched] = useState<boolean>(
+    () => !!(existingData && getValue(existingData, "ex_rate"))
+  );
   const setField = (key: string, value: string) => setInvoice((prev: any) => ({ ...prev, [key]: value }));
 
   const prinCode = getValue(invoice, "prin_code") || "";
@@ -305,14 +313,14 @@ const [exRateTouched, setExRateTouched] = useState<boolean>(
       try {
         const rows = await executeWmsInboundSql(`SELECT CURRENCY FROM MS_COMPANYINFO WHERE COMPANY_CODE = '${authCompanyCode}'`);
         const row = Array.isArray(rows) ? rows[0] : undefined;
-        
+
         // FIXED HERE: looking for "currency" instead of "curr_code"
         const curr = getValue(row, "currency");
-        
+
         if (!cancelled) {
           const currencyStr = String(curr ?? "").trim();
           setCompanyCurrCode(currencyStr);
-          
+
           // Set as default if no curr_code is currently set
           setInvoice((prev: any) => {
             if (!prev.curr_code) {
@@ -363,7 +371,7 @@ const [exRateTouched, setExRateTouched] = useState<boolean>(
     const rate = Number(invoice.ex_rate);
     return rate > 0 ? 1 / rate : 1;
   }, [currCode, companyCurrCode, invoice.ex_rate]);
-const isForeign = exchangeFactor !== 1;
+  const isForeign = exchangeFactor !== 1;
 
   // Job rows
   useEffect(() => {
@@ -413,32 +421,32 @@ const isForeign = exchangeFactor !== 1;
     return () => { cancelled = true; };
   }, [prinCode, consolidatedInvNo, fromDate, toDate, user?.loginid, user?.company_code]);
 
-const displayJobRows = useMemo<NormalizedJobRow[]>(() => {
-  const rate = Number(invoice.ex_rate) || 0;
-  return jobRows.map((row) => {
-    const qty = Number(row.quantity || 0);
-    const inrRate = Number(row.bill_rate || 0);
+  const displayJobRows = useMemo<NormalizedJobRow[]>(() => {
+    const rate = Number(invoice.ex_rate) || 0;
+    return jobRows.map((row) => {
+      const qty = Number(row.quantity || 0);
+      const inrRate = Number(row.bill_rate || 0);
 
-    if (!isForeign || rate <= 0) {
-      const bill = Number(row.bill) > 0 ? Number(row.bill) : qty * inrRate;
-      return { ...row, bill, FC_BILL: bill, FC_BILL_RATE: inrRate };
-    }
+      if (!isForeign || rate <= 0) {
+        const bill = Number(row.bill) > 0 ? Number(row.bill) : qty * inrRate;
+        return { ...row, bill, FC_BILL: bill, FC_BILL_RATE: inrRate };
+      }
 
-    const typed = fcRates[jobRowKey(row)];
-    const fcRate = typed !== undefined && typed !== ""
-      ? Number(typed)
-      : Math.round(inrRate * exchangeFactor * 100) / 100;
-    const newInrRate = fcRate * rate;           // INR = USD × ex_rate
+      const typed = fcRates[jobRowKey(row)];
+      const fcRate = typed !== undefined && typed !== ""
+        ? Number(typed)
+        : Math.round(inrRate * exchangeFactor * 100) / 100;
+      const newInrRate = fcRate * rate;           // INR = USD × ex_rate
 
-    return {
-      ...row,
-      bill_rate: newInrRate,
-      bill: qty * newInrRate,
-      FC_BILL_RATE: fcRate,
-      FC_BILL: qty * fcRate,
-    };
-  });
-}, [jobRows, exchangeFactor, isForeign, fcRates, invoice.ex_rate]);
+      return {
+        ...row,
+        bill_rate: newInrRate,
+        bill: qty * newInrRate,
+        FC_BILL_RATE: fcRate,
+        FC_BILL: qty * fcRate,
+      };
+    });
+  }, [jobRows, exchangeFactor, isForeign, fcRates, invoice.ex_rate]);
 
   const displayStorageRows = useMemo(
     () => storageRows.map((row: any) => ({ ...row, AMOUNT: Number(row.AMOUNT ?? 0) * exchangeFactor })),
@@ -453,11 +461,11 @@ const displayJobRows = useMemo<NormalizedJobRow[]>(() => {
   const selectedJobRows = useMemo(() => displayJobRows.filter((r) => selectedJobKeys.has(jobRowKey(r))), [displayJobRows, selectedJobKeys]);
   const selectedStorageRows = useMemo(() => displayStorageRows.filter((r: any, i: number) => selectedStorageKeys.has(storageRowKey(r, i))), [displayStorageRows, selectedStorageKeys]);
 
-const billingTotals = useMemo(() => {
-  const jobTotal = selectedJobRows.reduce((sum, r) => sum + Number(r.FC_BILL || 0), 0);
-  const storageTotal = selectedStorageRows.reduce((sum: number, r: any) => sum + Number(r.AMOUNT || 0), 0);
-  return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
-}, [selectedJobRows, selectedStorageRows]);
+  const billingTotals = useMemo(() => {
+    const jobTotal = selectedJobRows.reduce((sum, r) => sum + Number(r.FC_BILL || 0), 0);
+    const storageTotal = selectedStorageRows.reduce((sum: number, r: any) => sum + Number(r.AMOUNT || 0), 0);
+    return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
+  }, [selectedJobRows, selectedStorageRows]);
 
   const lineCount = selectedJobRows.length + selectedStorageRows.length;
 
@@ -477,17 +485,17 @@ const billingTotals = useMemo(() => {
         const quantity = Number(row.quantity || 0);
         const billRate = Number(row.bill_rate || 0);
         const costRate = Number(row.cost_rate || 0);
-        
-        return { 
-          invoice_no: invoiceNo, 
-          prin_code: prinCode, 
-          job_no: row.job_no, 
-          act_code: row.act_code, 
-          activity: row.activity, 
-          quantity, 
-          bill_rate: billRate, 
-          cost_rate: costRate, 
-          bill_amount: quantity * billRate, 
+
+        return {
+          invoice_no: invoiceNo,
+          prin_code: prinCode,
+          job_no: row.job_no,
+          act_code: row.act_code,
+          activity: row.activity,
+          quantity,
+          bill_rate: billRate,
+          cost_rate: costRate,
+          bill_amount: quantity * billRate,
           cost_amount: quantity * costRate,
           bill: quantity * billRate,        // add: INR amount
           cost: quantity * costRate,        // add
@@ -511,10 +519,11 @@ const billingTotals = useMemo(() => {
     } finally { setSaving(false); }
   };
 
-  const [printModalOpen, setPrintModalOpen] = useState(false)
+  // -------------------------------------------------------------------------
+  // Printing
+  // -------------------------------------------------------------------------
 
-    const handleStandardPrint = async () => {
-    setPrintModalOpen(false);
+  const handleStandardPrint = async () => {
     if (!prinCode || !invoiceNo) return;
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) { setNotice({ type: "error", text: "Please allow pop-ups for this site to view the report." }); return; }
@@ -527,11 +536,6 @@ const billingTotals = useMemo(() => {
       setNotice({ type: "error", text: "Failed to load standard report. Please try again." });
       if (!reportWindow.closed) reportWindow.close();
     }
-  };
-
-  const handleExistingActivityWisePrint = () => {
-    setPrintModalOpen(false);
-    handlePrint("activitywise");
   };
 
   const handlePrint = async (report_type: "grouped" | "activitywise") => {
@@ -547,6 +551,13 @@ const billingTotals = useMemo(() => {
       setNotice({ type: "error", text: "Failed to load report. Please try again." });
       if (!reportWindow.closed) reportWindow.close();
     }
+  };
+
+  // Single entry point used by the Select Report modal
+  const handleSelectReport = (option: PrintOption) => {
+    setPrintModalOpen(false);
+    if (option === "standard") handleStandardPrint();
+    else handlePrint(option);
   };
 
   return (
@@ -575,10 +586,9 @@ const billingTotals = useMemo(() => {
             <span className={`rounded-md border px-2.5 py-1 text-xs font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</span>
           )}
           {hasExistingData && (
-            <>
-              <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("grouped")}><Printer size={14} /> Grouped</Button>
-<Button type="button" size="sm" variant="outline" onClick={() => setPrintModalOpen(true)}><Sheet size={14} /> Activity-wise</Button>
-            </>
+            <Button type="button" size="sm" variant="outline" onClick={() => setPrintModalOpen(true)}>
+              <Printer size={14} /> Print
+            </Button>
           )}
           <Button type="button" size="sm" variant="outline" onClick={() => onClose(false)}><ArrowLeft size={14} /> Cancel</Button>
           {!viewMode && (
@@ -596,37 +606,39 @@ const billingTotals = useMemo(() => {
           <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
             {/* Row 1: Principal (2 cols), Currency, Exchange Rate, Despatched */}
             <div className="lg:col-span-2">
-<FormLookup label="Principal Code" value={prinCode} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")} onChange={(value) => setInvoice((prev: any) => ({ ...prev, prin_code: value }))} required disabled={viewMode} />            </div>
-<div>
-  <FormLookup 
-    label="Currency" 
-    value={currCode} 
-    valueField="code" 
-    displayFields={["code", "name"]} 
-    columns={[{ field: "code", header: "Code" }, { field: "name", header: "Name" }]} 
-    loadOptions={async () => { 
-      if (currencyOptions.length) return currencyOptions; 
-      try { 
-        const rows = await executeWmsInboundSql(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`); 
-        const opts = (Array.isArray(rows) ? rows : []).map((row: any) => ({ code: row.CURR_CODE ?? row.curr_code ?? "", name: row.CURR_NAME ?? row.curr_name ?? "" })); 
-        if (opts.length) setCurrencyOptions(opts); 
-        return opts; 
-      } catch { return []; } 
-    }} 
-    onChange={(value) => {
-      setExRateTouched(false); // Reset this so the new currency's exchange rate is automatically fetched
-      setInvoice((prev: any) => ({ ...prev, curr_code: value }));
-    }} 
-    disabled={viewMode || loadingCurrencies} 
-  />
-</div>
+              <FormLookup label="Principal Code" value={prinCode} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")} onChange={(value) => setInvoice((prev: any) => ({ ...prev, prin_code: value }))} required disabled={viewMode} />
+            </div>
             <div>
-<FormInput
-  label="Exchange Rate"
-  value={getValue(invoice, "ex_rate") ?? ""}
-  onChange={(v) => { setExRateTouched(true); setField("ex_rate", v); }}
-  placeholder="Auto"
-/>                            </div>
+              <FormLookup
+                label="Currency"
+                value={currCode}
+                valueField="code"
+                displayFields={["code", "name"]}
+                columns={[{ field: "code", header: "Code" }, { field: "name", header: "Name" }]}
+                loadOptions={async () => {
+                  if (currencyOptions.length) return currencyOptions;
+                  try {
+                    const rows = await executeWmsInboundSql(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`);
+                    const opts = (Array.isArray(rows) ? rows : []).map((row: any) => ({ code: row.CURR_CODE ?? row.curr_code ?? "", name: row.CURR_NAME ?? row.curr_name ?? "" }));
+                    if (opts.length) setCurrencyOptions(opts);
+                    return opts;
+                  } catch { return []; }
+                }}
+                onChange={(value) => {
+                  setExRateTouched(false); // Reset this so the new currency's exchange rate is automatically fetched
+                  setInvoice((prev: any) => ({ ...prev, curr_code: value }));
+                }}
+                disabled={viewMode || loadingCurrencies}
+              />
+            </div>
+            <div>
+              <FormInput
+                label="Exchange Rate"
+                value={getValue(invoice, "ex_rate") ?? ""}
+                onChange={(v) => { setExRateTouched(true); setField("ex_rate", v); }}
+                placeholder="Auto"
+              />
+            </div>
             <div><FormSelect label="Despatched" value={getValue(invoice, "despatched") ?? "N"} onChange={(v) => setField("despatched", v)} options={[{ value: "Y", label: "Yes" }, { value: "N", label: "No" }]} /></div>
 
             {/* Row 2: every date field, side by side */}
@@ -687,15 +699,15 @@ const billingTotals = useMemo(() => {
                     <TableHead className="text-[10.5px] uppercase">Activity</TableHead>
                     <TableHead className="text-right text-[10.5px] uppercase">Qty</TableHead>
                     <TableHead className="text-right text-[10.5px] uppercase">Bill Rate</TableHead>
-                    
+
                     {/* NEW HEADERS */}
-                    <TableHead className="text-right text-[10.5px] uppercase text-blue-600">FC Bill Rate</TableHead> 
+                    <TableHead className="text-right text-[10.5px] uppercase text-blue-600">FC Bill Rate</TableHead>
                     <TableHead className="text-right text-[10.5px] uppercase">Cost Rate</TableHead>
                     <TableHead className="text-right text-[10.5px] uppercase">Bill</TableHead>
-                    
+
                     {/* NEW HEADER */}
-                    <TableHead className="text-right text-[10.5px] uppercase text-blue-600">FC Bill</TableHead> 
-                    
+                    <TableHead className="text-right text-[10.5px] uppercase text-blue-600">FC Bill</TableHead>
+
                     <TableHead className="text-[10.5px] uppercase">Job Date</TableHead>
                   </TableRow>
                       </TableHeader>
@@ -717,7 +729,7 @@ const billingTotals = useMemo(() => {
   <TableCell className="text-[11.5px] text-foreground">{row.act_code ? `${row.act_code} - ${row.activity}` : row.activity}</TableCell>
   <TableCell className="text-right text-[11.5px] text-foreground">{row.quantity}</TableCell>
   <TableCell className="text-right text-[11.5px] text-foreground">{row.bill_rate.toFixed(2)}</TableCell>
-  
+
   {/* NEW CELL */}
 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
   {isForeign && !viewMode ? (
@@ -732,15 +744,15 @@ const billingTotals = useMemo(() => {
     <span className="text-[11.5px] font-medium text-blue-600">{row.FC_BILL_RATE.toFixed(2)}</span>
   )}
 </TableCell>
-  
+
   <TableCell className="text-right text-[11.5px] text-foreground">{row.cost_rate.toFixed(2)}</TableCell>
   <TableCell className="text-right text-[11.5px] font-semibold text-foreground">{row.bill.toFixed(2)}</TableCell>
-  
+
   {/* NEW CELL */}
   <TableCell className="text-right text-[11.5px] font-semibold text-blue-600">
     {row.FC_BILL ? row.FC_BILL.toFixed(2) : "0.00"}
   </TableCell>
-  
+
   <TableCell className="text-[11.5px] text-foreground">{row.job_date ? formatDate(row.job_date) : ""}</TableCell>
 </TableRow>
                             );
@@ -817,30 +829,48 @@ const billingTotals = useMemo(() => {
           <Total label="Grand total" value={billingTotals.grandTotal} suffix={currCode} emphasize />
         </div>
       </footer>
-            {/* Print Options Modal */}
+
+      {/* Select Report Modal (same look as the Job Details "Select Report" modal) */}
       {printModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-md bg-background p-4 shadow-lg border">
-            <h3 className="text-lg font-semibold mb-2">Select Report Format</h3>
-            <p className="text-sm text-muted-foreground mb-4">Choose the format for the activity-wise invoice report.</p>
-            <div className="flex flex-col gap-2">
-              <Button type="button" variant="default" onClick={handleExistingActivityWisePrint} className="justify-start">
-                <Sheet size={14} className="mr-2" /> Existing Activity-wise
-              </Button>
-              <Button type="button" variant="default" onClick={handleStandardPrint} className="justify-start">
-                <FileText size={14} className="mr-2" /> Standard (Base Currency)
-              </Button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setPrintModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Select Report"
+            className="w-full max-w-sm overflow-hidden rounded-xl border bg-background shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h3 className="m-0 text-lg font-semibold text-foreground">Select Report</h3>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setPrintModalOpen(false)}
+                className="grid h-7 w-7 place-items-center rounded-md text-primary transition-colors hover:bg-accent"
+              >
+                <X size={16} />
+              </button>
             </div>
-            <div className="mt-4 flex justify-end">
-              <Button type="button" variant="ghost" onClick={() => setPrintModalOpen(false)}>
-                Cancel
-              </Button>
+            <div className="flex flex-col gap-2 p-4">
+              {PRINT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => handleSelectReport(opt.key)}
+                  className="group relative flex w-full items-center justify-center rounded-md border bg-background px-10 py-3 text-center text-sm font-semibold text-foreground transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                >
+                  <Printer size={15} className="absolute left-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary-foreground" />
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       )}
     </form>
-    
   );
 }
 

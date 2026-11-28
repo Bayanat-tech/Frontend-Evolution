@@ -274,6 +274,25 @@ export type DynamicDeleteParams = {
   date4?: string | null;
 };
 
+export type EdiInvalidRow = {
+  row: number;
+  errors: {
+    column: string;
+    value: string | null;
+    message: string;
+  }[];
+};
+
+export class EdiInvalidRowsError extends Error {
+  invalidRows: EdiInvalidRow[];
+
+  constructor(message: string, invalidRows: EdiInvalidRow[]) {
+    super(message);
+    this.name = "EdiInvalidRowsError";
+    this.invalidRows = invalidRows;
+  }
+}
+
 function extractApiErrorMessage(error: unknown, fallback: string) {
   const anyErr = error as any;
   const data = anyErr?.response?.data;
@@ -418,4 +437,66 @@ export function formatLookupDisplayValue(field: string, value: unknown) {
   if (oracleMatch) return `${oracleMatch[1]}-${oracleMatch[2].toUpperCase()}-${oracleMatch[3]}`;
 
   return text;
+}
+
+export async function executeEdiSave(
+  ediKey: string,
+  rows: Record<string, string | null>[],
+  loginid?: string,
+) {
+  try {
+    const response = await api.post<
+      ApiResponse<unknown> & {
+        invalidRows?: EdiInvalidRow[];
+      }
+    >(
+      "/api/wms/common/proc_build_dynamic_edi_save",
+      { ediKey, loginid, rows },
+    );
+
+    const data = response.data;
+
+    if (!data.success) {
+      if (data.invalidRows?.length) {
+        throw new EdiInvalidRowsError(
+          data.message || "Some rows contain invalid values",
+          data.invalidRows,
+        );
+      }
+
+      throw new Error(
+        data.details || data.message || "Unable to save EDI rows",
+      );
+    }
+
+    return data;
+  } catch (error) {
+    // Preserve structured server validation errors.
+    if (error instanceof EdiInvalidRowsError) {
+      throw error;
+    }
+
+    // Also support validation responses returned with HTTP 4xx/5xx.
+    const apiError = error as {
+      response?: {
+        data?: {
+          message?: string;
+          invalidRows?: EdiInvalidRow[];
+        };
+      };
+    };
+
+    const errorData = apiError.response?.data;
+
+    if (errorData?.invalidRows?.length) {
+      throw new EdiInvalidRowsError(
+        errorData.message || "Some rows contain invalid values",
+        errorData.invalidRows,
+      );
+    }
+
+    throw new Error(
+      extractApiErrorMessage(error, "Unable to save EDI rows"),
+    );
+  }
 }

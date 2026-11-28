@@ -4,10 +4,11 @@ import {
   getDivisions,
 } from "../../../api/transactions";
 import { Button } from "../../../components/ui/Button";
-import { Select } from "../../../components/ui/Select";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 // NOTE: use the same import path as your Purchase GRN form
 import { DivisionPickerDialog } from "../../../components/ui/DivisionPickerDialog";
+// NOTE: use the same import path as your Job No form
+import { LookupField } from "../../../components/ui/LookupField";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { formatAmount, numberOrZero, text } from "./Purchaseorderutils";
@@ -31,6 +32,13 @@ interface ComparisonRow {
   amount: number;
 }
 
+/* <input type="date"> gives YYYY-MM-DD, Oracle expects DD-MM-YYYY. Empty stays empty. */
+const toOracleDate = (v: string) => {
+  if (!v) return "";
+  const [y, m, d] = v.split("-");
+  return `${d}-${m}-${y}`;
+};
+
 export function QuotationComparisonPage({
   onClose,
 }: {
@@ -46,11 +54,16 @@ export function QuotationComparisonPage({
   /* Division picker opens as soon as the page opens */
   const [divisionPicker, setDivisionPicker] = useState(true);
 
+  /* dates are optional */
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  const [prNo, setPrNo] = useState("");
+
   const [quotationOptions, setQuotationOptions] = useState<QuotationOption[]>([]);
   const [loadingQuotations, setLoadingQuotations] = useState(false);
 
   const [selectedDocNos, setSelectedDocNos] = useState<string[]>([]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const [comparisonId, setComparisonId] = useState<number | null>(null);
   const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
@@ -65,6 +78,12 @@ export function QuotationComparisonPage({
     message: string;
   } | null>(null);
 
+  /* a range is only invalid when both dates are set and From is after To */
+  const rangeOk = !(fromDate && toDate && fromDate > toDate);
+
+  const divName =
+    divisions.find((d) => d.div_code === divCode)?.div_name || divCode;
+
   /* Load divisions */
   useEffect(() => {
     void getDivisions()
@@ -72,9 +91,9 @@ export function QuotationComparisonPage({
       .catch(() => setDivisions([]));
   }, []);
 
-  /* Load quotations for selected division */
+  /* Load quotations once a PR is selected */
   useEffect(() => {
-    if (!divCode) {
+    if (!divCode || !prNo) {
       setQuotationOptions([]);
       setFilteredQuotationOptions([]);
       return;
@@ -86,11 +105,12 @@ export function QuotationComparisonPage({
     (async () => {
       try {
         const response = await getDynamicLookup({
-          parameter: "PS_POORDER_ENTRY_QUOTATION_NO_DETAIL",
+          parameter: "PS_QUOTATION_ENTRY_PR_DETAIL",
           code1: companyCode,
           loginid,
           code2: divCode,
           code3: "PQO",
+          code4: prNo,
         });
 
         if (mounted) {
@@ -118,11 +138,10 @@ export function QuotationComparisonPage({
     return () => {
       mounted = false;
     };
-  }, [divCode, companyCode, loginid]);
+  }, [divCode, companyCode, loginid, prNo]);
 
-  /* Set division (from picker or select) and reset everything downstream */
-  function changeDivision(code: string) {
-    setDivCode(code);
+  /* Reset everything downstream of the filters */
+  function resetResults() {
     setSelectedDocNos([]);
     setComparisonRows([]);
     setLowestDocNo(null);
@@ -130,11 +149,44 @@ export function QuotationComparisonPage({
     setComparisonId(null);
   }
 
-  function toggleQuotation(docNo: string) {
-    setSelectedDocNos((prev) =>
-      prev.includes(docNo) ? prev.filter((d) => d !== docNo) : [...prev, docNo]
-    );
+  /* Set division (from picker or lookup) and reset everything downstream */
+  function changeDivision(code: string) {
+    setDivCode(code);
+    setPrNo("");
+    resetResults();
+  }
 
+  /* date change -> PR + quotation lists change, so reset PR/selection/results */
+  function changeDates(from: string, to: string) {
+    setFromDate(from);
+    setToDate(to);
+    setPrNo("");
+    resetResults();
+
+    if (from && to && from > to) {
+      setNotice({ type: "error", message: "From date cannot be after To date" });
+    }
+  }
+
+  /* PR change -> quotation list changes, so reset selection/results */
+  function changePr(value: string) {
+    setPrNo(value);
+    resetResults();
+  }
+
+  function addQuotation(docNo: string) {
+    if (!docNo) return;
+    setSelectedDocNos((prev) =>
+      prev.includes(docNo) ? prev : [...prev, docNo]
+    );
+    setLowestDocNo(null);
+    setShowComparison(false);
+    setComparisonId(null);
+    setComparisonRows([]);
+  }
+
+  function removeQuotation(docNo: string) {
+    setSelectedDocNos((prev) => prev.filter((d) => d !== docNo));
     setLowestDocNo(null);
     setShowComparison(false);
     setComparisonId(null);
@@ -207,9 +259,10 @@ export function QuotationComparisonPage({
     const firstProducts = productSets[0].products;
 
     return productSets
-      .filter(({ products }) =>
-        products.size === firstProducts.size &&
-        [...products].every((code) => firstProducts.has(code))
+      .filter(
+        ({ products }) =>
+          products.size === firstProducts.size &&
+          [...products].every((code) => firstProducts.has(code))
       )
       .map(({ quotation }) => quotation);
   }
@@ -220,8 +273,11 @@ export function QuotationComparisonPage({
       return;
     }
 
-    if (selectedDocNos.length === 0) {
-      setNotice({ type: "error", message: "Select at least one quotation" });
+    if (selectedDocNos.length < 2) {
+      setNotice({
+        type: "error",
+        message: "Select at least two quotations to compare",
+      });
       return;
     }
 
@@ -247,7 +303,10 @@ export function QuotationComparisonPage({
       await loadComparisonRows(compId);
 
       setShowComparison(true);
-      setNotice({ type: "success", message: "Quotation comparison created successfully" });
+      setNotice({
+        type: "success",
+        message: "Quotation comparison created successfully",
+      });
     } catch (error: any) {
       console.error("Quotation comparison error:", error);
       setShowComparison(false);
@@ -297,7 +356,10 @@ export function QuotationComparisonPage({
     const cols = selectedDocNos.filter((d) => docNosInData.has(d));
 
     return {
-      products: productOrder.map((code) => ({ code, name: productNames[code] })),
+      products: productOrder.map((code) => ({
+        code,
+        name: productNames[code],
+      })),
       columns: cols,
       amountByProductAndDoc: cellMap,
       totalsByDocNo: totals,
@@ -317,7 +379,10 @@ export function QuotationComparisonPage({
 
   function handleShowLowest() {
     if (columns.length < 2) {
-      setNotice({ type: "error", message: "Select at least 2 quotations to compare" });
+      setNotice({
+        type: "error",
+        message: "Select at least 2 quotations to compare",
+      });
       return;
     }
 
@@ -347,7 +412,8 @@ export function QuotationComparisonPage({
     quotationOptions.find((q) => q.doc_no === docNo)?.ac_name || "";
 
   const quotedCount = (docNo: string) =>
-    products.filter((p) => (amountByProductAndDoc[p.code]?.[docNo] ?? 0) > 0).length;
+    products.filter((p) => (amountByProductAndDoc[p.code]?.[docNo] ?? 0) > 0)
+      .length;
 
   /* Cheapest quoted (non-zero) amount in a product row, to flag the best price per item */
   const bestInRow = (code: string) => {
@@ -359,8 +425,16 @@ export function QuotationComparisonPage({
 
   const lowestTotal = lowestDocNo ? totalsByDocNo[lowestDocNo] ?? 0 : 0;
 
+  /* CHANGED: one bordered group holding both date inputs */
+  const dateGroupClass = `flex h-[38px] w-full items-center rounded-lg border bg-white shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 ${
+    !divCode ? "cursor-not-allowed bg-slate-50" : ""
+  } ${rangeOk ? "border-slate-200" : "border-rose-400"}`;
+
+  const dateInnerClass =
+    "h-full min-w-0 flex-1 bg-transparent px-3 text-sm text-slate-700 focus:outline-none disabled:cursor-not-allowed disabled:text-slate-400";
+
   return (
-    <section className="min-h-full bg-slate-50 p-6">
+    <section className="min-h-full bg-slate-50/80 p-5 md:p-6">
       <DivisionPickerDialog
         open={divisionPicker}
         divisions={divisions}
@@ -377,7 +451,7 @@ export function QuotationComparisonPage({
       />
 
       {/* Page header */}
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold tracking-tight text-slate-900">
             Quotation comparison
@@ -388,137 +462,225 @@ export function QuotationComparisonPage({
         </div>
 
         {showComparison && comparisonId !== null && (
-          <span className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
-            Comparison <span className="font-semibold text-slate-900">#{comparisonId}</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
+            Comparison
+            <span className="font-semibold text-slate-900">#{comparisonId}</span>
           </span>
         )}
       </header>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="mt-4 grid gap-6">
+      <div className="mt-4 grid gap-5">
         {/* ============ TOP: selection bar ============ */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="grid items-end gap-5 lg:grid-cols-[280px_minmax(0,1fr)_auto]">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm md:p-5">
+          {/* CHANGED: 5 columns - the two date columns became one group column */}
+          <div className="grid items-end gap-4 lg:grid-cols-[minmax(160px,1fr)_minmax(280px,1.4fr)_minmax(140px,0.9fr)_minmax(200px,1.2fr)_auto]">
+            {/* Division */}
             <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-600">Division</span>
-              <Select
+              <span className="text-xs font-medium text-slate-600">
+                Division
+              </span>
+              <LookupField
+                title="Division"
+                key={`div-${divisions.length}`}
+                label="Division"
+                compact
+                placeholder="Select division"
                 value={divCode}
-                onChange={(e) => changeDivision(e.target.value)}
-              >
-                <option value="">Select division</option>
-                {divisions.map((d) => (
-                  <option key={d.div_code} value={d.div_code}>
-                    {d.div_name}
-                  </option>
-                ))}
-              </Select>
+                displayValue={divName}
+                columns={[
+                  { field: "div_code", header: "Code" },
+                  { field: "div_name", header: "Division" },
+                ]}
+                valueField="div_code"
+                displayFields={["div_code", "div_name"]}
+                loadOptions={async () => divisions as any}
+                onChange={(value) => changeDivision(text(value))}
+              />
             </label>
 
-            <div className="relative flex min-w-0 flex-col gap-1.5">
-              <span className="text-xs font-medium text-slate-600">Quotations</span>
-
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm disabled:bg-slate-50 disabled:text-slate-400"
-                onClick={() => setDropdownOpen((open) => !open)}
-                disabled={!divCode}
-              >
-                <span className="truncate text-slate-700">
-                  {selectedDocNos.length === 0
-                    ? "Select quotations..."
-                    : `${selectedDocNos.length} selected`}
+            {/* CHANGED: From + To date grouped together */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-slate-600">
+                Date range
+              </span>
+              <div className={dateGroupClass}>
+                <input
+                  type="date"
+                  aria-label="From date"
+                  value={fromDate}
+                  max={toDate || undefined}
+                  onChange={(e) => changeDates(e.target.value, toDate)}
+                  disabled={!divCode}
+                  className={dateInnerClass}
+                />
+                <span className="shrink-0 px-1 text-xs font-medium text-slate-400">
+                  to
                 </span>
-                <span className="ml-2 text-slate-400">▾</span>
-              </button>
-
-              {dropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setDropdownOpen(false)}
-                  />
-                  <div className="absolute top-full z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-                    {loadingQuotations && (
-                      <div className="px-3 py-2 text-xs text-slate-400">Loading...</div>
-                    )}
-
-                    {!loadingQuotations && filteredQuotationOptions.length === 0 && (
-                      <div className="px-3 py-2 text-xs text-slate-400">
-                        No quotations found
-                      </div>
-                    )}
-
-                    {filteredQuotationOptions.map((q) => (
-                      <label
-                        key={q.doc_no}
-                        className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0 hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 shrink-0 accent-blue-800"
-                          checked={selectedDocNos.includes(q.doc_no)}
-                          onChange={() => toggleQuotation(q.doc_no)}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-medium text-slate-900">
-                            {q.doc_no}
-                          </span>
-                          <span className="block truncate text-xs text-slate-500">
-                            {[q.ac_name, fmtDate(q.doc_date)].filter(Boolean).join("  |  ")}
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </>
-              )}
+                <input
+                  type="date"
+                  aria-label="To date"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  onChange={(e) => changeDates(fromDate, e.target.value)}
+                  disabled={!divCode}
+                  className={dateInnerClass}
+                />
+              </div>
             </div>
+
+            {/* PR */}
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-slate-600">
+                Purchase Request (PR)
+              </span>
+              <LookupField
+                key={`pr-${divCode}-${fromDate}-${toDate}`}
+                label="PR"
+                compact
+                placeholder="Select PR"
+                value={prNo}
+                displayValue={prNo}
+                columns={[{ field: "pr_req_no", header: "PR No" }]}
+                valueField="pr_req_no"
+                displayFields={["pr_req_no"]}
+                loadOptions={() =>
+                  getDynamicLookup({
+                    parameter: "PS_QUOTATION_ENTRY_PR",
+                    loginid,
+                    code1: companyCode,
+                    code2: divCode,
+                    code3: toOracleDate(fromDate),
+                    code4: toOracleDate(toDate),
+                  })
+                }
+                disabled={!divCode || !rangeOk}
+                onChange={(value) => changePr(text(value))}
+              />
+            </label>
+
+            {/* Quotations — LookupField with search; select adds to multi list */}
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-slate-600">
+                Quotations
+              </span>
+              <LookupField
+                key={`quo-${prNo}-${filteredQuotationOptions.length}`}
+                label="Quotations"
+                compact
+                multiSelect
+                placeholder={
+                  !prNo
+                    ? "Select PR first"
+                    : loadingQuotations
+                    ? "Loading..."
+                    : "Search & add quotation..."
+                }
+                value=""
+                displayValue=""
+                columns={[
+                  { field: "doc_no", header: "Quotation No" },
+                  { field: "ac_name", header: "Supplier" },
+                  { field: "doc_date", header: "Date" },
+                ]}
+                valueField="doc_no"
+                displayFields={["doc_no", "ac_name"]}
+                loadOptions={async () =>
+                  filteredQuotationOptions.map((q) => ({
+                    ...q,
+                    doc_date: fmtDate(q.doc_date),
+                  })) as any
+                }
+                disabled={!divCode || !prNo || loadingQuotations}
+                onChange={(value) => {
+                  const docNo = text(value);
+                  if (docNo) addQuotation(docNo);
+                }}
+              />
+            </label>
 
             <div className="flex flex-col gap-1.5">
               <span className="invisible text-xs">.</span>
               <Button
                 type="button"
                 onClick={handleDisplayChart}
-                disabled={selectedDocNos.length === 0 || loadingItems}
-                className="w-full lg:w-auto"
+                disabled={selectedDocNos.length < 2 || loadingItems}
+                className="h-[38px] w-full whitespace-nowrap lg:w-auto"
               >
                 {loadingItems ? "Comparing..." : "Compare quotations"}
               </Button>
             </div>
           </div>
 
+          {/* Selected quotation chips */}
           {selectedDocNos.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              {selectedDocNos.map((docNo) => (
-                <span
-                  key={docNo}
-                  className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
-                >
-                  {docNo}
-                  <button
-                    type="button"
-                    className="text-blue-500 hover:text-blue-800"
-                    onClick={() => toggleQuotation(docNo)}
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+              <span className="mr-1 text-xs font-medium text-slate-500">
+                Selected ({selectedDocNos.length}):
+              </span>
+              {selectedDocNos.map((docNo) => {
+                const info = quotationOptions.find((q) => q.doc_no === docNo);
+                return (
+                  <span
+                    key={docNo}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-blue-50 pl-2.5 pr-1.5 py-1 text-xs text-blue-800 ring-1 ring-blue-100"
                   >
-                    ×
-                  </button>
+                    <span className="truncate font-medium">{docNo}</span>
+                    {info?.ac_name && (
+                      <span className="hidden truncate text-blue-600/80 sm:inline">
+                        · {info.ac_name}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-blue-500 transition hover:bg-blue-100 hover:text-blue-800"
+                      onClick={() => removeQuotation(docNo)}
+                      aria-label={`Remove ${docNo}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+              {selectedDocNos.length >= 2 && (
+                <span className="ml-auto text-xs text-emerald-600">
+                  Ready to compare
                 </span>
-              ))}
+              )}
             </div>
           )}
         </div>
 
         {/* ============ RESULTS ============ */}
-        <div className="grid min-w-0 gap-6">
+        <div className="grid min-w-0 gap-5">
           {!showComparison && (
-            <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-6 text-center">
+            <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+                  />
+                </svg>
+              </div>
               <p className="m-0 text-base font-medium text-slate-800">
                 No comparison yet
               </p>
-              <p className="m-0 mt-1 max-w-sm text-sm text-slate-500">
-                Pick a division, tick two or more quotations above, then choose
-                Compare quotations.
+              <p className="m-0 mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">
+                Select a division and a PR (dates optional), search and add at
+                least two quotations, then click{" "}
+                <span className="font-medium text-slate-700">
+                  Compare quotations
+                </span>
+                .
               </p>
             </div>
           )}
@@ -540,10 +702,10 @@ export function QuotationComparisonPage({
                   return (
                     <div
                       key={docNo}
-                      className={`rounded-xl border bg-white p-4 ${
+                      className={`rounded-2xl border bg-white p-4 shadow-sm transition ${
                         isLowest
-                          ? "border-emerald-500 ring-1 ring-emerald-500"
-                          : "border-slate-200"
+                          ? "border-emerald-400 ring-2 ring-emerald-500/20"
+                          : "border-slate-200/80"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -570,7 +732,7 @@ export function QuotationComparisonPage({
                         {quotedCount(docNo)} of {products.length} items quoted
                         {lowestDocNo && !isLowest && diff > 0 && (
                           <span className="text-rose-600">
-                            {"  |  +"}
+                            {"  ·  +"}
                             {formatAmount(diff)} vs lowest
                           </span>
                         )}
@@ -581,32 +743,38 @@ export function QuotationComparisonPage({
               </div>
 
               {/* Comparison matrix */}
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                   <div>
                     <h2 className="m-0 text-sm font-semibold text-slate-900">
                       Item-wise comparison
                     </h2>
                     <p className="m-0 mt-0.5 text-xs text-slate-500">
-                      Best price per item is highlighted. A dash means the item was not
-                      quoted.
+                      Best price per item is highlighted. A dash means the item
+                      was not quoted.
                     </p>
                   </div>
 
                   {!loadingItems && columns.length >= 2 && (
-                    <Button type="button" onClick={handleShowLowest} className="w-fit">
+                    <Button
+                      type="button"
+                      onClick={handleShowLowest}
+                      className="w-fit"
+                    >
                       Find lowest quotation
                     </Button>
                   )}
                 </div>
 
                 {loadingItems ? (
-                  <p className="m-0 p-6 text-sm text-slate-500">Loading items...</p>
+                  <p className="m-0 p-6 text-sm text-slate-500">
+                    Loading items...
+                  </p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-sm">
                       <thead>
-                        <tr className="bg-slate-50 text-left text-xs text-slate-600">
+                        <tr className="bg-slate-50/80 text-left text-xs text-slate-600">
                           <th className="px-5 py-3 font-semibold">Product</th>
                           {columns.map((docNo) => (
                             <th
@@ -627,7 +795,7 @@ export function QuotationComparisonPage({
                           return (
                             <tr
                               key={p.code}
-                              className="border-t border-slate-100 hover:bg-slate-50/70"
+                              className="border-t border-slate-100 hover:bg-slate-50/60"
                             >
                               <td className="px-5 py-3">
                                 <span className="block text-slate-900">
@@ -639,7 +807,8 @@ export function QuotationComparisonPage({
                               </td>
 
                               {columns.map((docNo) => {
-                                const amt = amountByProductAndDoc[p.code]?.[docNo] ?? 0;
+                                const amt =
+                                  amountByProductAndDoc[p.code]?.[docNo] ?? 0;
                                 const isBest = best !== null && amt === best;
 
                                 return (
@@ -651,9 +820,13 @@ export function QuotationComparisonPage({
                                         : isBest
                                         ? "font-semibold text-emerald-700"
                                         : "text-slate-800"
-                                    } ${lowestDocNo === docNo ? "bg-emerald-50/50" : ""}`}
+                                    } ${
+                                      lowestDocNo === docNo
+                                        ? "bg-emerald-50/40"
+                                        : ""
+                                    }`}
                                   >
-                                    {amt === 0 ? "-" : formatAmount(amt)}
+                                    {amt === 0 ? "—" : formatAmount(amt)}
                                   </td>
                                 );
                               })}
@@ -663,7 +836,7 @@ export function QuotationComparisonPage({
                       </tbody>
 
                       <tfoot>
-                        <tr className="border-t-2 border-slate-200 bg-slate-50">
+                        <tr className="border-t-2 border-slate-200 bg-slate-50/80">
                           <td className="px-5 py-3 text-sm font-semibold text-slate-900">
                             Total
                           </td>
@@ -688,8 +861,8 @@ export function QuotationComparisonPage({
 
               {/* Lowest quotation detail */}
               {lowestDocNo && (
-                <div className="overflow-hidden rounded-xl border border-emerald-300 bg-white">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-100 bg-emerald-50 px-5 py-4">
+                <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-100 bg-emerald-50/80 px-5 py-4">
                     <div>
                       <h2 className="m-0 text-sm font-semibold text-emerald-900">
                         Lowest quotation
@@ -697,7 +870,7 @@ export function QuotationComparisonPage({
                       <p className="m-0 mt-0.5 text-xs text-emerald-800/80">
                         {lowestDocNo}
                         {lowestQuotationInfo?.ac_name
-                          ? `  |  ${lowestQuotationInfo.ac_name}`
+                          ? `  ·  ${lowestQuotationInfo.ac_name}`
                           : ""}
                       </p>
                     </div>
@@ -709,11 +882,15 @@ export function QuotationComparisonPage({
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-sm">
                       <thead>
-                        <tr className="bg-slate-50 text-left text-xs text-slate-600">
+                        <tr className="bg-slate-50/80 text-left text-xs text-slate-600">
                           <th className="w-14 px-5 py-3 font-semibold">Sl</th>
-                          <th className="px-5 py-3 font-semibold">Product code</th>
+                          <th className="px-5 py-3 font-semibold">
+                            Product code
+                          </th>
                           <th className="px-5 py-3 font-semibold">Product</th>
-                          <th className="px-5 py-3 text-right font-semibold">Amount</th>
+                          <th className="px-5 py-3 text-right font-semibold">
+                            Amount
+                          </th>
                         </tr>
                       </thead>
 
@@ -721,11 +898,17 @@ export function QuotationComparisonPage({
                         {lowestItems.map((row, index) => (
                           <tr
                             key={`${row.prod_code}-${index}`}
-                            className="border-t border-slate-100 hover:bg-slate-50/70"
+                            className="border-t border-slate-100 hover:bg-slate-50/60"
                           >
-                            <td className="px-5 py-3 text-slate-400">{index + 1}</td>
-                            <td className="px-5 py-3 text-slate-700">{row.prod_code}</td>
-                            <td className="px-5 py-3 text-slate-900">{row.prod_name}</td>
+                            <td className="px-5 py-3 text-slate-400">
+                              {index + 1}
+                            </td>
+                            <td className="px-5 py-3 text-slate-700">
+                              {row.prod_code}
+                            </td>
+                            <td className="px-5 py-3 text-slate-900">
+                              {row.prod_name}
+                            </td>
                             <td className="px-5 py-3 text-right tabular-nums text-slate-900">
                               {formatAmount(row.amount)}
                             </td>
@@ -734,7 +917,7 @@ export function QuotationComparisonPage({
                       </tbody>
 
                       <tfoot>
-                        <tr className="border-t-2 border-slate-200 bg-slate-50">
+                        <tr className="border-t-2 border-slate-200 bg-slate-50/80">
                           <td
                             colSpan={3}
                             className="px-5 py-3 text-right text-sm font-semibold text-slate-900"

@@ -40,17 +40,10 @@ interface ActiveWeightage {
   isHrDefined: boolean;
 }
 
-interface HodBatch {
-  PERIOD_NUMBER: string;
-  READY_COUNT: number | string;
-  PENDING_COUNT: number | string;
-}
-
 const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENTBACK_TAB", "APPROVED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"] as const;
 const IN_PROGRESS_TAB = 1; // is tab me checkbox selection nahi dikhega
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
-const HOD_READY_FLOW_LEVEL = 3;
 const taskPageCache = new Map<string, Row[]>();
 
 function text(val: unknown): string {
@@ -264,8 +257,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const [employees, setEmployees] = useState<Row[]>([]);
   const fetchRequestId = useRef(0);
   const prevUserKeyRef = useRef(`${loginid}-${companyCode}`);
-  const [hodBatches, setHodBatches] = useState<HodBatch[]>([]);
-  const [notifying, setNotifying] = useState<string | null>(null);
+
+  // ── Notify Next Level state (Direct Button) ──
+  const [notifying, setNotifying] = useState(false);
+
   const showSelection = isHRApprover && activeTab !== IN_PROGRESS_TAB;
   const [approving, setApproving] = useState(false);
   const [approveProgress, setApproveProgress] = useState({ done: 0, total: 0 });
@@ -379,19 +374,26 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
   }, [decoratedRows, query, isHRApprover, empType, divFilter, deptFilter, empDivMap, divNameMap]);
 
-  const loadHodBatches = useCallback(async () => {
-    try {
-      const data = await pamsSelect({
-        parameter: "hod_ready_batches",
-        loginid, code1: companyCode,
-      });
-      setHodBatches((data as unknown as HodBatch[]) ?? []);
-    } catch (error) {
-      console.error("Error loading HOD batches:", error);
-    }
-  }, [loginid, companyCode]);
+  // ── Eligible Check: Next Action, Supervisor, Creator, HOD ──
+  const isEligibleToNotify = useMemo(() => {
+    return visibleRows.some((r) => {
+      // Agar document already complete hai, to skip karo
+      if (text(r.FINAL_APPROVED).toUpperCase() === "YES") return false;
 
-  useEffect(() => { void loadHodBatches(); }, [loadHodBatches]);
+      const nextAction = text(r.NEXT_ACTION_BY).trim();
+      const sup = text(r.IMMEDIATE_SUPERVISOR).trim();
+      const creator = text(r.CREATED_BY).trim();
+      const hod = text(r.HOD).trim();
+
+      // Agar user inme se kisi ek me bhi hai, toh button dikhao
+      return (
+        (nextAction && nextAction === loginid) ||
+        (sup && sup === loginid) ||
+        (creator && creator === loginid) ||
+        (hod && hod === loginid)
+      );
+    });
+  }, [visibleRows, loginid]);
 
   useEffect(() => {
     if (!companyCode) return;
@@ -709,34 +711,51 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     void loadTabCounts();
   };
 
-  const handleNotifyNextLevel = async (flowLevel: number, periodNumber: string) => {
-    const key = `${flowLevel}-${periodNumber}`;
-    setNotifying(key);
+  // ── Notify Next Level (auto-pick period from active rows) ──
+  const handleNotifyNextLevel = async () => {
+    // Jo pehli eligible row milegi, uska period utha lo
+    const eligibleRow = visibleRows.find((r) => {
+      if (text(r.FINAL_APPROVED).toUpperCase() === "YES") return false;
+      const nextAction = text(r.NEXT_ACTION_BY).trim();
+      const sup = text(r.IMMEDIATE_SUPERVISOR).trim();
+      const creator = text(r.CREATED_BY).trim();
+      const hod = text(r.HOD).trim();
+      return (
+        (nextAction && nextAction === loginid) ||
+        (sup && sup === loginid) ||
+        (creator && creator === loginid) ||
+        (hod && hod === loginid)
+      );
+    });
+
+    const periodToNotify = eligibleRow ? text(eligibleRow.PERIOD_NUMBER) : "";
+
+    if (!periodToNotify) {
+      toast.warning("No active period found to notify.");
+      return;
+    }
+
+    setNotifying(true);
     try {
       const res = await pamsSelect({
         parameter: "notify_next_level_hod_bulk",
-        loginid, code1: companyCode,
-        code2: String(flowLevel - 1),
-        code3: periodNumber,
+        loginid,
+        code1: companyCode,
+        code2: periodToNotify,
       });
       const result = text((res as unknown as Row[])?.[0]?.P_RESULT);
 
       if (result === "SUCCESS") {
-        toast.success(`Period ${periodNumber} has been sent to the next level for review.`);
-      } else if (result?.startsWith("PENDING")) {
-        const pendingCount = result.split(":")[1];
-        toast.warning(`${pendingCount} employee appraisal(s) are still pending your review. Please complete all reviews before notifying the next level.`);
+        toast.success(`Period ${periodToNotify} has been sent to the next level.`);
       } else if (result === "NOTHING_TO_NOTIFY") {
         toast.warning("There are no completed appraisals ready to notify at this time.");
       } else {
         toast.error(result || "Something went wrong while notifying the next level.");
       }
-
-      void loadHodBatches();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to notify the next level. Please try again.");
     } finally {
-      setNotifying(null);
+      setNotifying(false);
     }
   };
 
@@ -942,8 +961,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         return `${i.reason} ${i.by}`.trim();
       },
       header: "Reason",
-      size: 380,         
-      minSize: 350, 
+      size: 380,
+      minSize: 350,
       cell: ({ row }) => {
         const info = reasonInfo(row.original);
         if (!info.reason) return <span style={{ color: "#9ca3af" }}>—</span>;
@@ -1119,6 +1138,9 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
+      {/* ── Navbar right side — Complete Appraisal Button ── */}
+      
+
       {/* Tabs UI */}
       <div
         style={{
@@ -1166,32 +1188,21 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
             </button>
           );
         })}
+        {isEligibleToNotify && (
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingBottom: "4px", paddingLeft: "12px" }}>
+            <Button
+              size="sm"
+              onClick={handleNotifyNextLevel}
+              disabled={notifying}
+              style={{ background: "#082a89", opacity: notifying ? 0.85 : 1, whiteSpace: "nowrap" }}
+            >
+              <CheckCircle size={14} />
+              {notifying ? "Sending..." : "Complete Appraisal"}
+            </Button>
+          </div>
+        )}
       </div>
 
-      {hodBatches
-        .filter((b) => Number(b.PENDING_COUNT) === 0 && Number(b.READY_COUNT) > 0)
-        .map((batch) => {
-          const key = `${HOD_READY_FLOW_LEVEL}-${batch.PERIOD_NUMBER}`;
-          return (
-            <div key={batch.PERIOD_NUMBER} style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "10px 14px", background: "#f0f4ff", border: "1px solid #b3caf5",
-              borderRadius: "8px", marginBottom: "8px",
-            }}>
-              <span style={{ fontSize: "13px", color: "#082A89", fontWeight: 500 }}>
-                Period {batch.PERIOD_NUMBER} — {Number(batch.READY_COUNT)} employees reviewed, ready for next level
-              </span>
-              <Button
-                size="sm"
-                disabled={notifying === key}
-                onClick={() => handleNotifyNextLevel(HOD_READY_FLOW_LEVEL, batch.PERIOD_NUMBER)}
-                style={{ background: "#082a89" }}
-              >
-                <CheckCircle size={14} /> {notifying === key ? "Sending..." : "Completed Appraisal"}
-              </Button>
-            </div>
-          );
-        })}
       <div style={{ position: "relative" }}>
         <DataTable
           columns={columns}
