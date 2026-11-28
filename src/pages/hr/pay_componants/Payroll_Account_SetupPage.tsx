@@ -1,10 +1,3 @@
-// Payroll Account Setup page — new UI
-//  • Cascading filters (Company → Division → Department → Section) in a SectionPanel
-//  • Two-view state machine: list ↔ full-page editor (add / edit / view)
-//  • DataTable toolbar holds Reset / Refresh / Add Payroll; row actions are Edit / View
-//  • Header Save calls formRef.current?.save() — the modal + bottom Submit bar are gone
-//  • Removed: the leftover "cancel leave" handleSave, empCode / docNo state, gridRef and postFinance
-
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, Edit2, Eye, FileText, Filter, Plus, RefreshCw, RotateCcw, Save, X } from "lucide-react";
@@ -25,7 +18,7 @@ type TLeaveRow = {
   pay_comp_id: string;
   ac_code_db: string;
   ac_code_cr: string;
-  [key: string]: unknown; // keep every field the lookup returns so edit can populate from the row
+  [key: string]: unknown; 
 };
 
 type EditorMode = "add" | "edit" | "view";
@@ -50,7 +43,7 @@ const PayrollAccountSetupPage = () => {
   const userCompany = user?.company_code ?? "";
 
   // ── Filter state (codes only; names are looked up from the option lists) ──
-  const [company, setCompany] = useState("");
+  // const [company, setCompany] = useState("");
   const [division, setDivision] = useState("");
   const [department, setDepartment] = useState("");
   const [section, setSection] = useState("");
@@ -65,32 +58,32 @@ const PayrollAccountSetupPage = () => {
   const formRef = useRef<PayrollAccountFormHandle>(null);
 
   // ── Filter option queries ──
-  const { data: companies = [] } = useQuery({
-    queryKey: ["lc_company", userCompany],
-    queryFn: async () =>
-      (await fetchLookup("EDUCATION_QUALIFICATION_Company", userCompany, loginid)).map((r) => ({
-        company_code: s(r.company_code),
-        comp_name: s(r.comp_name),
-      })),
-    enabled: !!userCompany,
-  });
+  // const { data: companies = [] } = useQuery({
+  //   queryKey: ["lc_company", userCompany],
+  //   queryFn: async () =>
+  //     (await fetchLookup("EDUCATION_QUALIFICATION_Company", userCompany, loginid)).map((r) => ({
+  //       company_code: s(r.company_code),
+  //       comp_name: s(r.comp_name),
+  //     })),
+  //   enabled: !!userCompany,
+  // });
 
   const { data: divisions = [] } = useQuery({
-    queryKey: ["lc_division", company],
+    queryKey: ["lc_division", userCompany],
     queryFn: async () =>
-      (await fetchLookup("Account_division", company, loginid)).map((r) => ({
+      (await fetchLookup("Account_division", userCompany, loginid)).map((r) => ({
         div_code: s(r.div_code),
         div_name: s(r.div_name),
       })),
-    enabled: !!company,
+    enabled: !!userCompany,
     staleTime: 0,
     gcTime: 0,
   });
 
   const { data: departments = [] } = useQuery({
-    queryKey: ["lc_department", company, division],
+    queryKey: ["lc_department", userCompany, division],
     queryFn: async () =>
-      (await fetchLookup("EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE", company, division)).map((r) => ({
+      (await fetchLookup("EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE", userCompany, division)).map((r) => ({
         dept_code: s(r.dept_code),
         dept_name: s(r.dept_name),
       })),
@@ -100,9 +93,9 @@ const PayrollAccountSetupPage = () => {
   });
 
   const { data: sections = [] } = useQuery({
-    queryKey: ["lc_section", company, division, department],
+    queryKey: ["lc_section", userCompany, division, department],
     queryFn: async () =>
-      (await fetchLookup("EDUCATION_QUALIFICATION_MS_HR_SECTION", company, division, department)).map((r) => ({
+      (await fetchLookup("EDUCATION_QUALIFICATION_MS_HR_SECTION", userCompany, division, department)).map((r) => ({
         section_code: s(r.section_code),
         section_name: s(r.section_name),
       })),
@@ -112,15 +105,15 @@ const PayrollAccountSetupPage = () => {
   });
 
   // ── Grid data ──
-  const ready = !!company && !!division && !!department && !!section;
+  const ready = !!userCompany && !!division && !!department && !!section;
 
   const { data: rows = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["pa_setup", company, division, department, section],
+    queryKey: ["pa_setup", userCompany, division, department, section],
     queryFn: async () =>
       (
         await fetchLookup(
           "PAY_COMPONENT_AccountSetup",
-          company, // P_CODE1 → COMPANY_CODE
+          userCompany, // P_CODE1 → COMPANY_CODE
           division, // P_CODE2 → DIV_CODE
           department, // P_CODE3 → DEPT_CODE
           section, // P_CODE4 → SECTION_CODE
@@ -146,7 +139,7 @@ const PayrollAccountSetupPage = () => {
 
   // ── Filter handlers (each level clears everything below it) ──
   const handleCompany = (code: string) => {
-    setCompany(code);
+    // setCompany(code);
     setDivision("");
     setDepartment("");
     setSection("");
@@ -162,7 +155,7 @@ const PayrollAccountSetupPage = () => {
   };
 
   const handleReset = () => {
-    setCompany("");
+    // setCompany("");
     setDivision("");
     setDepartment("");
     setSection("");
@@ -290,7 +283,7 @@ const PayrollAccountSetupPage = () => {
           mode={editorMode}
           // the form reads UPPERCASE keys; the list rows are lowercased
           existingData={activeRow ? (uppercaseKeys(activeRow) as Partial<TPayrollAccountForm>) : undefined}
-          company_code={company}
+          company_code={userCompany}
           div_code={division}
           dept_code={department}
           section_code={section}
@@ -318,7 +311,7 @@ const PayrollAccountSetupPage = () => {
       <div className="freight-workspace-ui freight-dense-form freight-ui-standard">
       <SectionPanel title="Filters" icon={Filter}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Company">
+          {/* <Field label="Company">
             <Select value={company} onChange={(e) => handleCompany(e.target.value)}>
               <option value="">-- Select --</option>
               {companies.map((o) => (
@@ -327,10 +320,10 @@ const PayrollAccountSetupPage = () => {
                 </option>
               ))}
             </Select>
-          </Field>
+          </Field> */}
 
           <Field label="Division">
-            <Select disabled={!company} value={division} onChange={(e) => handleDivision(e.target.value)}>
+            <Select disabled={!userCompany} value={division} onChange={(e) => handleDivision(e.target.value)}>
               <option value="">-- Select --</option>
               {divisions.map((o) => (
                 <option key={o.div_code} value={o.div_code}>

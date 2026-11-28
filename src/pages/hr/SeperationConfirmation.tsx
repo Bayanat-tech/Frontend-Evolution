@@ -27,7 +27,9 @@ import { Select } from "../../components/ui/Select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { useToast } from "../../components/ui/AlertToast";
 import { executeWmsInboundSql } from "../../api/wms"; // adjust path to wherever this actually lives
-import { getDynamicLookup, getLookupValue } from "../../api/lookups";
+// NOTE: executeDynamicProc = the common proc API client (same family as getDynamicLookup / executeDynamicDelete).
+// If your export has a different name, change it here and in callApiParameter below — nothing else.
+import { executeCommonProcedure, getDynamicLookup, getLookupValue } from "../../api/lookups";
 import { useAuth } from "../../state/AuthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -69,6 +71,9 @@ const EMPLOYEE_LOOKUP_PARAMETER = "MSEHR_TRANSACTIONS_MS_HR_EMPLOYEE";
  * picking a non-initiated employee still shows "Separation is not initiated for this employee".
  */
 const ONLY_SEPARATION_INITIATED = false;
+
+/** PROC_SEPARATION_FINAL_SETTLEMENT returns "STATUS = <n>"; this is the value that means success. */
+const PROC_SUCCESS_STATUS = 1;
 
 // TODO: confirm against prod: SELECT DISTINCT STATUS_FLAG / SETTLEMENT_STATUS FROM HR_EMP_SEPARATIONS
 const STATUS_OPTIONS = [
@@ -123,14 +128,34 @@ const toDmy = (ymd: string) => {
   return y && m && d ? `${d}-${m}-${y}` : "";
 };
 
+/** yyyy-mm-dd → dd/mm/yyyy (what PROC_SEPARATION_FINAL_SETTLEMENT's TO_DATE(...,'DD/MM/YYYY') expects) */
+const toDmySlash = (ymd: string) => {
+  const [y, m, d] = ymd.split("-");
+  return y && m && d ? `${d}/${m}/${y}` : "";
+};
+
 /**
- * Calls an "API parameter" (e.g. PROC_SEPARATION_DRAFT_SETTLEMENT) and returns its P_SQL_OUT string.
- * TODO: wire this ONE function to whatever client you already use for API-parameter calls
- * (vals map to P_VAL1S1..P_VAL1S8, login id goes as P_LOGINID).
+ * Calls an "API parameter" (e.g. PROC_SEPARATION_FINAL_SETTLEMENT) through the common proc API and
+ * returns its P_SQL_OUT string. vals map to P_VAL1S1..P_VAL1S8 (sent as code1..code8),
+ * the login id goes as P_LOGINID.
  */
-async function callApiParameter(apiName: string, vals: Record<string, string>): Promise<string> {
-  void vals;
-  throw new Error(`callApiParameter is not wired yet (${apiName})`);
+async function callApiParameter(apiName: string, loginId: string, vals: string[]): Promise<string> {
+  const payload: Record<string, string> = { parameter: apiName, loginid: loginId };
+  vals.forEach((v, i) => {
+    payload[`code${i + 1}`] = v ?? "";
+  });
+  const res = (await executeCommonProcedure(payload as never)) as unknown;
+  if (typeof res === "string") return res;
+  const r = (res ?? {}) as Record<string, unknown>;
+  const out = r.p_sql_out ?? r.P_SQL_OUT ?? r.message ?? r.data;
+  return typeof out === "string" ? out : JSON.stringify(out ?? "");
+}
+
+/** P_SQL_OUT = "STATUS = <n>\nMESSAGE = <text>" */
+function parseProcOut(out: string): { status: number | null; message: string } {
+  const st = /STATUS\s*=\s*(-?\d+)/.exec(out)?.[1];
+  const message = /MESSAGE\s*=\s*([\s\S]*)$/.exec(out)?.[1]?.trim() || out;
+  return { status: st == null ? null : Number(st), message: message === "NULL" ? "" : message };
 }
 
 const pick = (row: Row | undefined, key: string) => {
@@ -650,16 +675,33 @@ export default function SeparationConfirmationPage() {
 
     setSaving(true);
     try {
+      // 1) persist the confirmation fields on the separation row
       await executeWmsInboundSql(buildUpdateQuery(companyCode, empId, loginid, form));
-      toast.success("Separation confirmed successfully");
       setDirty(false);
+
+      // 2) run the final settlement proc (P_VAL1S1..S7), then refresh the settlement grid
+      const out = await callApiParameter("PROC_SEPARATION_FINAL_SETTLEMENT", loginid, [
+        companyCode, // P_VAL1S1 company
+        divCode, // P_VAL1S2 division
+        empId, // P_VAL1S3 employee id
+        toDmySlash(form.actSeparationDate), // P_VAL1S4 separation date
+        toDmySlash(form.noticeStart), // P_VAL1S5 notice start
+        toDmySlash(form.noticeEnd), // P_VAL1S6 notice end
+        form.separationReasonCode, // P_VAL1S7 separation reason
+      ]);
+      const { status, message } = parseProcOut(out);
+      if (status !== null && status !== PROC_SUCCESS_STATUS) {
+        toast.warning(message || "Separation saved, but final settlement failed");
+      } else {
+        toast.success(message || "Separation confirmed successfully");
+      }
+      await loadSettlement(empId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to save separation");
     } finally {
       setSaving(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empId, form, companyCode, loginid]);
+  }, [empId, form, companyCode, loginid, divCode, loadSettlement, toast]);
 
   /* ── PB action buttons ── */
   // Draft Figure → PROC_SEPARATION_DRAFT_SETTLEMENT (P_VAL1S1..S8), then refresh the settlement grid
@@ -671,16 +713,16 @@ export default function SeparationConfirmationPage() {
     }
     setDrafting(true);
     try {
-      const out = await callApiParameter("PROC_SEPARATION_DRAFT_SETTLEMENT", {
-        val1s1: companyCode,
-        val1s2: divCode,
-        val1s3: empId,
-        val1s4: form.finalSettlementDone || "N",
-        val1s5: toDmy(form.actSeparationDate),
-        val1s6: toDmy(form.noticeStart),
-        val1s7: toDmy(form.noticeEnd),
-        val1s8: form.separationReasonCode,
-      });
+      const out = await callApiParameter("PROC_SEPARATION_DRAFT_SETTLEMENT", loginid, [
+        companyCode,
+        divCode,
+        empId,
+        form.finalSettlementDone || "N",
+        toDmy(form.actSeparationDate),
+        toDmy(form.noticeStart),
+        toDmy(form.noticeEnd),
+        form.separationReasonCode,
+      ]);
       // P_SQL_OUT = "STATUS = <n>\nMESSAGE = <text>"
       const message = /MESSAGE\s*=\s*([\s\S]*)$/.exec(out)?.[1]?.trim() || out;
       toast.info(message || "Draft settlement completed");

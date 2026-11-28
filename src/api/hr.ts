@@ -1,6 +1,7 @@
 import { TEmployeeDetailsUpdatePayload } from "../pages/hr/Employee Details/EmployeeDetails.types";
 import { TEmployeeHr } from "../pages/hr/Employee Master/employee-hr.types";
 import { IHrEmployee, IValidateLeaveResponse } from "../pages/hr/leave/leave-approval-types";
+import { TManReqHr } from "../pages/hr/ManReqMasterPage";
 import { api } from "./client";
 import { LookupRow } from "./lookups";
 
@@ -468,6 +469,16 @@ export async function insUpdHrEmployee(employee: TEmployeeHr): Promise<boolean> 
       return response.data?.success === true;
     } catch (err) {
       console.error('Failed to save employee:', err);
+      return false;
+    }
+  };
+
+  export async function insUpdHrManReq(form: TManReqHr): Promise<boolean> {
+    try {
+      const response = await api.post('/api/finance/man-req',{ requisition: form });  
+      return response.data?.success === true;
+    } catch (err) {
+      console.error('Failed to manpower requisition form', err);
       return false;
     }
   };
