@@ -52,6 +52,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
+import { QuickAddAccountModal, QuickAccountType, CreatedAccountResult } from "../../components/finance/QuickAddAccountModal";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
@@ -536,6 +537,15 @@ function PaymentDocumentEditor({
   const gst = useFinanceGst(form, docType, editMode);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [quickAddModal, setQuickAddModal] = useState<{
+    open: boolean;
+    accountType: QuickAccountType;
+    targetDetailId: string | null;
+  }>({
+    open: false,
+    accountType: "general",
+    targetDetailId: null,
+  });
   const [childLoading, setChildLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
@@ -1645,6 +1655,14 @@ if (tooLong.length) {
                               code4: form.div_code
                             })}
                             disabled={disabled || !form.div_code}
+                            onQuickAdd={() => {
+                              setQuickAddModal({
+                                open: true,
+                                accountType: docType === "CN" ? "customer" : "supplier",
+                                targetDetailId: null,
+                              });
+                            }}
+                            quickAddTooltip={docType === "CN" ? "Quick Add Customer Account" : "Quick Add Supplier Account"}
                             onChange={async (value, row) => {
                               const r = row || {} as Record<string, unknown>;
                               const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -1737,17 +1755,60 @@ if (tooLong.length) {
                         </CField>
 
                         {(docType === "CN" || docType === "DN") && (
-                          <CField label="Inv No" required className="col-span-1" error={limitErr("inv_no")}>
-                            <Input
-                              {...limitProps("inv_no")}
+                          <div className="col-span-1">
+                            <LookupField
+                              label="Inv No"
                               required
-                              disabled={disabled}
+                              placeholder={form.ac_code ? "Select or enter invoice..." : "Select party first"}
                               value={form.inv_no || ""}
-                              placeholder="Invoice No"
-                              className={`h-7 text-xs ${form.inv_no && form.inv_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
-                              onChange={(event) => updateField("inv_no", event.target.value)}
+                              displayValue={form.inv_no || ""}
+                              columns={[
+                                { field: "inv_no", header: "Inv / Ref No", width: 140 },
+                                { field: "inv_date", header: "Date", width: 95 },
+                                { field: "doc_type", header: "Type", width: 55 },
+                                { field: "amount", header: "Amount", width: 90 },
+                                { field: "remarks", header: "Remarks", width: 180 },
+                              ]}
+                              valueField="inv_no"
+                              displayFields={["inv_no", "inv_date", "doc_type"]}
+                              allowCustomValue
+                              disabled={disabled || !form.ac_code}
+                              loadOptions={async (query?: string) => {
+                                if (!form.ac_code) return [];
+                                try {
+                                  const res = await api.get<{ success: boolean; data?: { tableData?: any[] } | any[] }>(
+                                    `/api/finance/party_invoices`,
+                                    {
+                                      params: {
+                                        code: form.ac_code,
+                                        doc_type: docType,
+                                        div_code: form.div_code,
+                                        search: query,
+                                        limit: 100,
+                                      },
+                                    }
+                                  );
+                                  const list = (Array.isArray(res.data?.data) ? res.data.data : res.data?.data?.tableData) || [];
+                                  return list;
+                                } catch (e) {
+                                  console.warn("Failed to load party invoices:", e);
+                                  return [];
+                                }
+                              }}
+                              onChange={(val, row) => {
+                                updateField("inv_no", val);
+                                if (row && row.inv_date) {
+                                  updateField("inv_date", dateInput(row.inv_date));
+                                }
+                                if (row && row.doc_no && !form.ref_no) {
+                                  updateField("ref_no", String(row.doc_no));
+                                }
+                                if (row && row.remarks && (!form.remarks || form.remarks.trim() === "")) {
+                                  updateField("remarks", `${docType === "CN" ? "Credit Note" : "Debit Note"} against Inv# ${val} - ${row.remarks}`);
+                                }
+                              }}
                             />
-                          </CField>
+                          </div>
                         )}
 
                         {(docType === "CN" || docType === "DN") && (
@@ -2048,6 +2109,8 @@ if (tooLong.length) {
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
                       <th className="px-2 py-2 text-center text-white w-[110px]">Allocations</th>
                       <th className="px-2 py-2 text-left text-white w-[320px] min-w-[280px]">Description</th>
+                      <th className="w-18 min-w-[55px] px-2 py-2 text-right text-white">Qty</th>
+                      <th className="w-24 min-w-[95px] px-2 py-2 text-right text-white">Rate</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right text-white w-28 min-w-[110px]">Amount</th>
@@ -2063,9 +2126,9 @@ if (tooLong.length) {
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No detail lines yet — click "Add Line" to get started</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 17 : 11}>No detail lines yet — click "Add Line" to get started</td></tr>
                     ) : filteredDetail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 17 : 11}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
                     ) : filteredDetail.map((detail) => (
                       <>
                         <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
@@ -2089,6 +2152,14 @@ if (tooLong.length) {
                                   code4: form.div_code
                                 })}
                                 disabled={disabled}
+                                onQuickAdd={() => {
+                                  setQuickAddModal({
+                                    open: true,
+                                    accountType: "general",
+                                    targetDetailId: detail.id,
+                                  });
+                                }}
+                                quickAddTooltip="Quick Add Account"
                                 onChange={(value, row) => {
                                   void selectDetailAccount(detail, value, row);
                                   if (value) {
@@ -2145,6 +2216,52 @@ if (tooLong.length) {
                               placeholder="Line remarks"
                             />
                           </td>
+                          <td className="w-18 min-w-[55px] px-1 py-1">
+                            <Input
+                              disabled={disabled}
+                              className="commercial-number-input finance-money-input text-right font-medium"
+                              type="number"
+                              step="0.0001"
+                              placeholder="1"
+                              value={detail.qty ?? 1}
+                              onChange={(event) => {
+                                const newQty = Number(event.target.value || 0);
+                                const rate = Number(detail.price ?? (detail.amount && Number(detail.qty || 1) > 0 ? Number(detail.amount) / Number(detail.qty || 1) : 0));
+                                const newAmount = Number((newQty * rate).toFixed(getAppDecimals()));
+                                const taxPerc = Number(detail.tx_compnt_perc_1 || 0);
+                                const taxAmt = Number(((newAmount * taxPerc) / 100).toFixed(getAppDecimals()));
+                                updateDetail(detail.id, {
+                                  qty: newQty,
+                                  amount: newAmount,
+                                  tx_compnt_amt_1: taxAmt,
+                                  lcur_amount: Number((newAmount * Number(detail.ex_rate || form.ex_rate || 1)).toFixed(getAppDecimals())),
+                                });
+                              }}
+                            />
+                          </td>
+                          <td className="w-24 min-w-[95px] px-1 py-1">
+                            <Input
+                              disabled={disabled}
+                              className="commercial-number-input finance-money-input text-right font-medium"
+                              type="number"
+                              step="0.001"
+                              placeholder="0.000"
+                              value={detail.price != null ? detail.price : (Number(detail.qty || 1) > 0 ? Number(((detail.amount || 0) / Number(detail.qty || 1)).toFixed(getAppDecimals())) : detail.amount || 0)}
+                              onChange={(event) => {
+                                const newRate = Number(event.target.value || 0);
+                                const qty = Number(detail.qty ?? 1);
+                                const newAmount = Number((qty * newRate).toFixed(getAppDecimals()));
+                                const taxPerc = Number(detail.tx_compnt_perc_1 || 0);
+                                const taxAmt = Number(((newAmount * taxPerc) / 100).toFixed(getAppDecimals()));
+                                updateDetail(detail.id, {
+                                  price: newRate,
+                                  amount: newAmount,
+                                  tx_compnt_amt_1: taxAmt,
+                                  lcur_amount: Number((newAmount * Number(detail.ex_rate || form.ex_rate || 1)).toFixed(getAppDecimals())),
+                                });
+                              }}
+                            />
+                          </td>
                           {showAllColumns && (
                             <td className="w-[210px] px-2 py-1">
                               <LookupField
@@ -2182,11 +2299,20 @@ if (tooLong.length) {
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
                                   const newAmount = Number(event.target.value || 0);
+                                  const qty = Number(detail.qty ?? 1);
+                                  const newPrice = qty > 0 ? Number((newAmount / qty).toFixed(getAppDecimals())) : newAmount;
+                                  const taxPerc = Number(detail.tx_compnt_perc_1 || 0);
+                                  const taxAmt = Number(((newAmount * taxPerc) / 100).toFixed(getAppDecimals()));
                                   const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
                                   if (detail.child_table === "invoice" && childRows.length > 0) {
                                     updateDetailAmount(detail.id, newAmount);
                                   } else {
-                                    updateDetail(detail.id, { amount: newAmount });
+                                    updateDetail(detail.id, {
+                                      amount: newAmount,
+                                      price: newPrice,
+                                      tx_compnt_amt_1: taxAmt,
+                                      lcur_amount: Number((newAmount * Number(detail.ex_rate || form.ex_rate || 1)).toFixed(getAppDecimals())),
+                                    });
                                   }
                                 }}
                               />
@@ -2300,8 +2426,12 @@ if (tooLong.length) {
                               </Select>
                             </td>
                           )}
-                          <td className="w-24 px-2 py-1"><Input disabled={disabled} className="commercial-number-input commercial-tax-perc-input finance-money-input text-right font-semibold" type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                          <td className="finance-amount-cell w-24 min-w-[100px] px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                          <td className="w-24 px-2 py-1"><Input disabled={disabled} className="commercial-number-input commercial-tax-perc-input finance-money-input text-right font-semibold" type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => {
+                            const p = Number(event.target.value || 0);
+                            const taxAmt = Number(((Number(detail.amount || 0) * p) / 100).toFixed(getAppDecimals()));
+                            updateDetail(detail.id, { tx_compnt_perc_1: p, tx_compnt_amt_1: taxAmt });
+                          }} /></td>
+                          <td className="finance-amount-cell w-24 min-w-[100px] px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 != null ? Number(detail.tx_compnt_amt_1).toFixed(getAppDecimals(form.curr_code)) : ""} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                           {showAllColumns && (
                             <td className="w-28 min-w-[110px] px-2 py-1"><Input className="w-28 min-w-[110px]" disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                           )}
@@ -2381,6 +2511,27 @@ if (tooLong.length) {
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
         readOnly={form.canceled === "Y"}
+      />
+      <QuickAddAccountModal
+        open={quickAddModal.open}
+        onClose={() => setQuickAddModal((prev) => ({ ...prev, open: false }))}
+        accountType={quickAddModal.accountType}
+        companyCode={user?.company_code}
+        onAccountCreated={(newAcc: CreatedAccountResult) => {
+          if (quickAddModal.targetDetailId) {
+            updateDetail(quickAddModal.targetDetailId, {
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+              curr_code: newAcc.curr_code || form.curr_code,
+            });
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              ac_code: newAcc.ac_code,
+              ac_name: newAcc.ac_name,
+            }));
+          }
+        }}
       />
       <ConfirmDialog
         open={cancelConfirmOpen}
@@ -2713,6 +2864,8 @@ function emptyDetailRow({
     curr_code: currCode,
     curr_name: currName || "",
     ex_rate: 1,
+    qty: 1,
+    price: 0,
     amount: 0,
     sign_ind: docType === "CN" || docType === "CP" ? 1 : -1,
     tx_compntcat_code_1: "",
@@ -2840,6 +2993,8 @@ function mapExistingDocument(
       curr_code: text(row.curr_code),
       curr_name: text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name),
       ex_rate: Number(row.ex_rate || 1),
+      qty: Number(row.qty ?? 1),
+      price: row.price != null ? Number(row.price) : (Number(row.qty || 1) > 0 ? Number(((Number(row.amount || 0)) / Number(row.qty || 1)).toFixed(getAppDecimals())) : Number(row.amount || 0)),
       amount: Math.abs(Number(row.amount || 0)),
       sign_ind: Number(row.sign_ind || (docType === "CN" || docType === "CP" ? 1 : -1)) as 1 | -1,
       div_code: text(row.div_code),
@@ -3115,8 +3270,9 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number, decimals = 2) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+function formatAmount(value: number, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: effectiveDecimals, maximumFractionDigits: effectiveDecimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
@@ -3125,7 +3281,21 @@ function formatExRate(value: number) {
   return value < 0 ? `(${amount})` : amount;
 }
 
-function formatNumber(value: number, decimals = 2) {
-  if (!Number.isFinite(value)) return (0).toFixed(decimals);
-  return value.toFixed(decimals);
+function formatNumber(value: number, decimals?: number) {
+  const effectiveDecimals = decimals ?? (typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? (window as any).__APP_DECIMALS__ : 2);
+  if (!Number.isFinite(value)) return (0).toFixed(effectiveDecimals);
+  return value.toFixed(effectiveDecimals);
+}
+
+function getCurrencyDecimals(currCode?: string): number {
+  if (currCode) {
+    const c = String(currCode).trim().toUpperCase();
+    if (c === "OMR" || c === "BHD" || c === "KWD") return 3;
+    if (c === "SAR" || c === "AED" || c === "USD" || c === "EUR" || c === "INR" || c === "QAR") return 2;
+  }
+  return typeof window !== "undefined" && (window as any).__APP_DECIMALS__ != null ? Number((window as any).__APP_DECIMALS__) : 2;
+}
+
+function getAppDecimals(currCode?: string): number {
+  return getCurrencyDecimals(currCode);
 }

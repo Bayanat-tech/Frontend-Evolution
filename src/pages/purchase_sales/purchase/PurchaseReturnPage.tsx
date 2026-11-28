@@ -14,7 +14,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesOrderEditor } from "../../purchase_sales/sales/SalesOrdereditor";
-import { SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "../../purchase_sales/sales/SalesOrdertypes";
+import { LPR_CONFIG, SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "../../purchase_sales/sales/SalesOrdertypes";
 import { TabStrip } from "../../../components/commonComponents";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
@@ -91,7 +91,7 @@ export function PurchaseReturnPage({ onClose }: { onClose?: () => void } = {}) {
   const [cancelTarget, setCancelTarget] = useState<SalesOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-
+  const [divisionsLoading, setDivisionsLoading] = useState(true);
   // ── Row-level report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -100,60 +100,66 @@ export function PurchaseReturnPage({ onClose }: { onClose?: () => void } = {}) {
   const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
   const [reportPreviewRow, setReportPreviewRow] = useState<SalesOrderRow | null>(null);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
-    const [tabCounts, setTabCounts] = useState<Record<string, number>>({
-  PENDING: 0,
-  INPROGRESS: 0,
-  CLOSED: 0,
-  CANCELED: 0,
-  REJECTED: 0,
-  SENDBACK: 0,
-});
+  const [tabCounts, setTabCounts] = useState<Record<string, number>>({
+    PENDING: 0,
+    INPROGRESS: 0,
+    CLOSED: 0,
+    CANCELED: 0,
+    REJECTED: 0,
+    SENDBACK: 0,
+  });
 
+  // CHANGED: divisionsLoading was never set back to false, so the Add button stayed disabled
   const loadLookups = async () => {
-    const divisionData = await getDivisions();
-    setDivisions(divisionData);
+    setDivisionsLoading(true);
+    try {
+      const divisionData = await getDivisions();
+      setDivisions(divisionData);
+    } finally {
+      setDivisionsLoading(false);
+    }
   };
 
-  
+
 
   const purchaseOrderTabs = [
-  { value: "PENDING", label: "Pending" },
-  { value: "INPROGRESS", label: "In Progress" },
-  { value: "CLOSED", label: "Closed" },
-  { value: "CANCELED", label: "Canceled" },
-  { value: "REJECTED", label: "Rejected" },
-];
-const getTabCount = (tabValue: string) => {
-  return tabCounts[tabValue] ?? 0;
-};
+    { value: "PENDING", label: "Pending" },
+    { value: "INPROGRESS", label: "In Progress" },
+    { value: "CLOSED", label: "Closed" },
+    { value: "CANCELED", label: "Canceled" },
+    { value: "REJECTED", label: "Rejected" },
+  ];
+  const getTabCount = (tabValue: string) => {
+    return tabCounts[tabValue] ?? 0;
+  };
 
-const loadRows = async (clearNotice = true) => {
-  setLoading(true);
+  const loadRows = async (clearNotice = true) => {
+    setLoading(true);
 
-  if (clearNotice) setNotice(null);
+    if (clearNotice) setNotice(null);
 
-  try {
-    const response = await fetchPurchaseOrders();
+    try {
+      const response = await fetchPurchaseOrders();
 
-    setRows(response);
-    setTotalRows(response.length);
+      setRows(response);
+      setTotalRows(response.length);
 
-    setTabCounts((prev) => ({
-      ...prev,
-      [tab]: response.length,
-    }));
-  } catch (error) {
-    setNotice({
-      type: "error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unable to load purchase orders",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+      setTabCounts((prev) => ({
+        ...prev,
+        [tab]: response.length,
+      }));
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load purchase orders",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
@@ -162,24 +168,24 @@ const loadRows = async (clearNotice = true) => {
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
-       code4: SO_DOC_TYPE.LPR
+      code4: SO_DOC_TYPE.LPR
     });
 
     return response as unknown as SalesOrderRow[];
   };
 
-    const loadTabCounts = async () => {
+  const loadTabCounts = async () => {
     const visibleTabs: RequestTab[] =
       approvalLevel === 0
         ? ["PENDING", "CLOSED", "CANCELED"]
         : [
-            "PENDING",
-            "INPROGRESS",
-            "CLOSED",
-            ...(canViewCanceledTab ? ["CANCELED" as RequestTab] : []),
-            "REJECTED",
-          ];
-  
+          "PENDING",
+          "INPROGRESS",
+          "CLOSED",
+          ...(canViewCanceledTab ? ["CANCELED" as RequestTab] : []),
+          "REJECTED",
+        ];
+
     const results = await Promise.all(
       visibleTabs.map(async (tabValue) => {
         const response = await getDynamicLookup({
@@ -187,30 +193,30 @@ const loadRows = async (clearNotice = true) => {
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
           code3: tabValue,
-           code4: SO_DOC_TYPE.LPR
+          code4: SO_DOC_TYPE.LPR
         });
-  
+
         return {
           tab: tabValue,
           count: response.length,
         };
       })
     );
-  
+
     setTabCounts((prev) => {
       const next = { ...prev };
-  
+
       results.forEach(({ tab, count }) => {
         next[tab] = count;
       });
-  
+
       return next;
     });
   };
-  
+
   useEffect(() => {
     if (!user?.company_code || approvalLevel === undefined) return;
-  
+
     void loadTabCounts();
   }, [
     user?.company_code,
@@ -222,33 +228,33 @@ const loadRows = async (clearNotice = true) => {
 
   // ── Row-level print handler ───────────────────────────────────────────────
   const handlePrintSalesOrder = async (row: SalesOrderRow) => {
-  if (!row.doc_no) return;
+    if (!row.doc_no) return;
 
-  const params = {
-    company_code: user?.company_code,
-    doc_type: row.doc_type,
-    doc_no: row.doc_no,
+    const params = {
+      company_code: user?.company_code,
+      doc_type: row.doc_type,
+      doc_no: row.doc_no,
+    };
+    const preview = openPurchaseReport(`Purchase Return ${row.doc_no}`.trim());
+
+    try {
+      const html = await getSOrderReportHtml(params);
+      preview.ready({
+        html,
+        filename: `sales_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await getSoOrderReportExcel(params);
+        },
+      });
+    } catch (error) {
+      preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+    }
   };
-  const preview = openPurchaseReport(`Purchase Return ${row.doc_no}`.trim());
-
-  try {
-    const html = await getSOrderReportHtml(params);
-    preview.ready({
-      html,
-      filename: `sales_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await getSoOrderReportExcel(params);
-      },
-    });
-  } catch (error) {
-    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
-  }
-};
 
 
 
-  
+
 
   useEffect(() => {
     if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
@@ -352,6 +358,15 @@ const loadRows = async (clearNotice = true) => {
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
 
+  const handleAddClick = () => {
+    if (divisionsLoading) return;
+    if (divisions.length === 1) {
+      openCreateForDivision(divisions[0]);
+      return;
+    }
+    setDivisionPicker(true);
+  };
+
   return (
     <section className="finance-list-page grid gap-4">
       {/* <div className="finance-list-heading">
@@ -370,67 +385,66 @@ const loadRows = async (clearNotice = true) => {
           )}
         </div>
       </div> */}
-      
+
       <div className="finance-list-title">
-          <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase Return</h6>
-        </div>
+        <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase Return</h6>
+      </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-   <div className="flex flex-wrap items-center gap-1.5 pb-1">
-  {purchaseOrderTabs
-    .filter((item) => {
-      if (approvalLevel === 0) {
-        return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
-      }
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {purchaseOrderTabs
+          .filter((item) => {
+            if (approvalLevel === 0) {
+              return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
+            }
 
-      if (item.value === "CANCELED" && !canViewCanceledTab) {
-        return false;
-      }
+            if (item.value === "CANCELED" && !canViewCanceledTab) {
+              return false;
+            }
 
-      return true;
-    })
-    .map((item) => {
-      const active = tab === item.value;
+            return true;
+          })
+          .map((item) => {
+            const active = tab === item.value;
 
-      return (
-        <button
-          key={item.value}
-          type="button"
-          onClick={() => {
-            setTab(item.value as RequestTab);
-            setPageIndex(0);
-          }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-            active
-              ? "bg-[#00378C] text-white shadow-sm font-semibold"
-              : "border border-border bg-card text-foreground hover:bg-secondary"
-          }`}
-        >
-          <span>{item.label}</span>
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => {
+                  setTab(item.value as RequestTab);
+                  setPageIndex(0);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                  }`}
+              >
+                <span>{item.label}</span>
 
-          <span
-            className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-              active
-                ? "bg-white/20 text-white"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            {getTabCount(item.value)}
-          </span>
-        </button>
-      );
-    })}
-</div>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
+                      ? "bg-white/20 text-white"
+                      : "bg-muted text-muted-foreground"
+                    }`}
+                >
+                  {getTabCount(item.value)}
+                </span>
+              </button>
+            );
+          })}
+      </div>
 
       <div className="min-h-[650px]">
         <DataTable
           columns={columns}
           data={rows}
-              toolbar={
+          toolbar={
             tab === "PENDING" && (
               <button
                 title="Add Purchase Return"
-                onClick={() => setDivisionPicker(true)}
+                onClick={handleAddClick}
+                disabled={divisionsLoading}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
               >
                 <Plus size={14} />
@@ -475,7 +489,7 @@ const loadRows = async (clearNotice = true) => {
         <div className="fixed inset-0 z-50 bg-background">
           <PurchaseReturnEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={SO_CONFIG}
+            config={LPR_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}

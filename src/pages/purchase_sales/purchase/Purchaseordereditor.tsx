@@ -50,6 +50,7 @@ import {
   getPoOrderReportHtml,
   getPoOrderReportExcel,
   CompanyInfo,
+  getCompanyInfo,
 } from "../../../api/transactions";
 
 import { NewReportDialog } from "../../../components/new_report_format";
@@ -58,6 +59,7 @@ import { createPortal } from "react-dom";
 
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { PurchaseOrderPrintDialog } from "./purchaseOrderPrintDialoge";
 
 
 export type { PurchaseOrderEditorState };
@@ -106,6 +108,7 @@ export function PurchaseOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
 
   // ---- Report Preview state ----
@@ -138,45 +141,43 @@ export function PurchaseOrderEditor({
     return cat ? numberOrZero(getLookupValue(cat, "tx_percnt")) : 0;
   };
 
+  const prevHeaderTaxRef = useRef<{ type: string; cat: string } | null>(null);
+
   useEffect(() => {
-    // ADDED: Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
+    if (loading) return; // wait until saved lines are loaded
+    // Std Tax needs the category list - wait for it so saved line % is not overwritten with 0
     if (form.tx_compnt_1_expmt === "S" && taxCats.length === 0) return;
 
-    // CHANGED: from category list instead of hardcoded 5
+    const curType = form.tx_compnt_1_expmt || "";
+    const curCat = form.tx_cat_code || "";
+    const prev = prevHeaderTaxRef.current;
+    // true only when the HEADER Tax Type / Category really changed (not on load, not on line edits)
+    const headerTaxChanged = !!prev && (prev.type !== curType || prev.cat !== curCat);
+    prevHeaderTaxRef.current = { type: curType, cat: curCat };
+
     const taxPerc = resolveTaxPerc(form.tx_compnt_1_expmt, form.tx_cat_code);
 
     setRows((current) =>
-      current.map((row) => {
-        // Only reset % / amount when the Tax Type or Tax Category really changed for this line.
-        // On load (and when only the tax code changes) keep the saved line %.
-        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
-        const catChanged = (row.tx_cat_code || "") !== (form.tx_cat_code || ""); // ADDED
-        const taxChanged = typeChanged || catChanged; // ADDED
-
-        const updatedRow = {
-          ...row,
-
-          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
-          tx_cat_code: `${form.tx_cat_code || ""}`,
-          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxChanged ? taxPerc : row.tx_compnt_perc_1, // CHANGED
-          ...(taxChanged // CHANGED
-            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
-            : {}),
-        };
-
-        return updatedRow;
-      })
+      current.map((row) => ({
+        ...row,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        ...(headerTaxChanged
+          ? {
+              tx_cat_code: `${form.tx_cat_code || ""}`,
+              tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+              tx_compnt_perc_1: taxPerc,
+              tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100),
+            }
+          : {}),
+      }))
     );
-
-
   }, [
+    loading,
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
     form.tx_compnt_perc_1,
-    taxCats // ADDED
-
+    taxCats,
   ]);
 
   useEffect(() => {
@@ -222,6 +223,50 @@ export function PurchaseOrderEditor({
   //   form.tx_compnt_perc_1
 
   // ]);
+  // ADDED: new document - default Currency / Ex Rate from company info. User can still change it in the Currency lookup.
+// ADDED: new document - default Currency / Ex Rate from company info. User can still change it in the Currency lookup.
+useEffect(() => {
+  if (!editor || editor.mode === "edit") return;
+  let alive = true;
+  const initialCurr = text(emptyForm(editor).curr_code);
+  (async () => {
+    try {
+      const res: any = await getCompanyInfo();
+      const info = res?.data ?? res;
+      const code = text(info?.base_curr_code || info?.currency);
+      if (!alive || !code) return;
+
+      // resolve name / ex rate from the same lookup the Currency field uses
+      let name = "";
+      let rate = 1;
+      try {
+        const list: any[] = await getDynamicLookup({
+          parameter: "Account_Currency_CODE_Serach",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+        const match = (list || []).find(
+          (c) => text(getLookupValue(c, "curr_code")).trim().toUpperCase() === code.trim().toUpperCase()
+        );
+        if (match) {
+          name = text(getLookupValue(match, "curr_name"));
+          rate = Number(getLookupValue(match, "ex_rate")) || 1;
+        }
+      } catch { /* keep code only */ }
+
+      if (!alive) return;
+      // fill unless the user already picked a different currency
+      setForm((current) =>
+        current.curr_code && current.curr_code !== initialCurr
+          ? current
+          : { ...current, curr_code: code, curr_name: name, ex_rate: rate }
+      );
+    } catch (e) {
+      console.warn("Company info load failed", e);
+    }
+  })();
+  return () => { alive = false; };
+}, [editor]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -298,7 +343,8 @@ export function PurchaseOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
-
+          pr_req_no: text(headerRaw.pr_req_no || current.pr_req_no),
+         tx_compnt_perc_1: Number(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1 || 0),
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
           discount_scoope:
@@ -307,6 +353,7 @@ export function PurchaseOrderEditor({
               ? headerRaw.discount_scoope
               : current.discount_scoope || "ITEM",
         }));
+        
 
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -873,9 +920,9 @@ export function PurchaseOrderEditor({
                 </div>
                 {form.doc_no && (
                   <>
-                    <Button type="button" variant="secondary" onClick={handlePrint}>
-                      <Printer size={15} /> Print
-                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+  <Printer size={15} /> Print
+</Button>
                     {/* <Button
                       aria-label="Excel"
                       title="Excel"
@@ -1097,7 +1144,13 @@ export function PurchaseOrderEditor({
         flowLevel={effectiveFlowLevel}
         readOnly={!isPendingTab || isCancelled}
       />
-
+<PurchaseOrderPrintDialog
+  open={printOpen}
+  onClose={() => setPrintOpen(false)}
+  form={form}
+  companyCode={user?.company_code || ""}
+  docType={PO_DOC_TYPE.LPO}
+/>
 
       <PurchaseReportPreview />
     </>

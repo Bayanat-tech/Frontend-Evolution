@@ -39,6 +39,25 @@ type LookupRowLike = Record<string, any>;
 
 const text = (v: any) => (v === null || v === undefined ? "" : String(v));
 
+
+const extractNoDataMessage = (payload: any): string | null => {
+    let data = payload;
+    if (typeof data === "string") {
+        const t = data.trim();
+        if (!t.startsWith("{")) return null; // normal HTML report
+        try {
+            data = JSON.parse(t);
+        } catch {
+            return null;
+        }
+    }
+    if (data && typeof data === "object" && data.success === false) {
+        return data.message || "No records found for the selected filters.";
+    }
+    return null;
+};
+
+
 // ─── Field (label + child wrapper) ──────────────────────────────────────────
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -419,10 +438,16 @@ export default function PurchaseQuotationListing() {
 
         try {
             const html = await getPurchaseQuotationRegisterReportHtml(params);
+                        const noData = extractNoDataMessage(html);
+            if (noData) {
+                preview.fail(new Error(noData));
+                setMessage(noData);
+                return;
+            }
             preview.ready({
                 html,
                 filename: `purchase_quotation_register_${new Date().toISOString().slice(0, 10)}`,
-                orientation: "landscape",
+               orientation: "portrait",
                 onExcel: async () => {
                     await getPurchaseQuotationRegisterReportExcel(params);
                 },
@@ -490,7 +515,8 @@ export default function PurchaseQuotationListing() {
                         <LookupField
                             label=""
                             value={acCode}
-                            displayValue={acName ? `${acCode} - ${acName}` : acCode}
+                            // displayValue={acName ? `${acCode} - ${acName}` : acCode}
+                            displayValue={acCode ? (acName ? `${acCode} - ${acName}` : acCode) : "All"}
                             columns={[
                                 { field: "ac_code", header: "Code" },
                                 { field: "ac_name", header: "Name" },

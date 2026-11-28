@@ -178,7 +178,7 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
       { name: "id", label: "User ID", type: "number", disabledOnAdd: true, disabledOnEdit: true, placeholder: "Auto generated", table: true, width: 100 },
       { name: "username", label: "User Name", required: true, table: true, width: 220 },
       { name: "loginid", label: "Login ID", requiredOnCreate: true, disabledOnEdit: true, table: true, width: 140 },
-      { name: "userpass", label: "Password", type: "password", requiredOnCreate: true, placeholder: "At least 12 characters", editPlaceholder: "Leave blank to keep current password", table: false },
+      { name: "userpass", label: "Password", type: "password", requiredOnCreate: true, maxLength: 20, placeholder: "8 to 20 characters", editPlaceholder: "Leave blank to keep current password", table: false },
       { name: "contact_no", label: "Contact No", table: true, width: 150 },
       { name: "email_id", label: "Email", type: "email", requiredOnCreate: true, table: true, width: 260 },
       { name: "active_flag", label: "Active", type: "select", options: [{ label: "Yes", value: "Y" }, { label: "No", value: "N" }], table: true, width: 100 },
@@ -711,7 +711,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
         await saveSecurityMaster(endpoint, buildSecurityPayload(config, form, user?.company_code), method as "post" | "put");
       }
       setFormOpen(false);
-      setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
+      setNotice({ type: "success", message: config.master === "sec_login" && !editMode ? "User created. Assign an application module and screen permissions before sign-in." : `${config.title} ${editMode ? "updated" : "added"} successfully` });
       await loadRows(pageIndex, pageSize, false);
       if (isModuleData) await loadModuleDropdownRows();
     } catch (error) {
@@ -1287,7 +1287,8 @@ function renderInput(
       <div className="relative">
         <input
           disabled={disabled}
-          maxLength={field.maxLength}
+          minLength={field.name.toLowerCase() === "userpass" ? 8 : undefined}
+          maxLength={field.name.toLowerCase() === "userpass" ? 20 : field.maxLength}
           type={showPassword ? "text" : "password"}
           value={String(value ?? "")}
           placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}

@@ -131,12 +131,12 @@ export function SalesInvoiceHeaderForm({
                     <HeaderBlock label="Customer Details" icon={<Building2 size={11} />} gridCols="grid-cols-1" grow>
                         <div className="col-span-5">
                             <LookupField
-                                label="A/c code *"
+                                label="Customer*"
                                 value={form.ac_code}
                                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "city_name", header: "city" }]}
                                 valueField="ac_code"
-                                displayFields={["ac_code", "ac_name"]}
+                                displayFields={["ac_code", "ac_name", "city_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                                 disabled={headerAndLineDisabled}
                                 onChange={(value, row) =>
@@ -269,7 +269,8 @@ export function SalesInvoiceHeaderForm({
                                     displayValue={String(form.sdn_doc_no ?? "")}
                                     columns={[
                                         { field: "doc_no", header: "SDN No" },
-                                        { field: "ac_code", header: "A/c Code" },
+                                        { field: "doc_date", header: "Doc Date" },
+                                        { field: "ac_name", header: "Customer Name" },
                                     ]}
                                     valueField="doc_no"
                                     displayFields={["doc_no"]}
@@ -304,7 +305,7 @@ export function SalesInvoiceHeaderForm({
                                         setForm((current) => ({
                                             ...current,
                                             sdn_doc_no: value,
-                                            doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
+                                            // doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
                                             so_doc_date: toDateInputValue(getLookupValue(row || {}, "so_doc_date")),
                                             so_doc_no: text(getLookupValue(row || {}, "so_doc_no")),
                                             ac_code: text(getLookupValue(row || {}, "ac_code")),

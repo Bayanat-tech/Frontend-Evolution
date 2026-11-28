@@ -229,7 +229,8 @@ export default function PrRegisterPage() {
                         <LookupField
                             label=""
                             value={userId}
-                            displayValue={userName ? `${userId} - ${userName}` : userId}
+                            // displayValue={userName ? `${userId} - ${userName}` : userId}
+                            displayValue={userId ? (userName ? `${userId} - ${userName}` : userId) : "All"}
                             columns={[
                                 { field: "CREATE_USER", header: "User ID" },
                                 { field: "RPT_NAME", header: "Name" },

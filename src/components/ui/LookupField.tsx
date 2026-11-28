@@ -36,6 +36,8 @@ type LookupFieldProps = {
   className?: string;
   forceOpenDown?: boolean;
   allowCustomValue?: boolean;
+  onQuickAdd?: () => void;
+  quickAddTooltip?: string;
 };
 
 export function LookupField({
@@ -65,6 +67,8 @@ export function LookupField({
   className,
   forceOpenDown = false,
   allowCustomValue = false,
+  onQuickAdd,
+  quickAddTooltip,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -436,6 +440,19 @@ export function LookupField({
           >
             <ChevronDown size={11} />
           </button>
+          {onQuickAdd && !disabled && (
+            <button
+              className="w-5 shrink-0 grid place-items-center text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer self-stretch border-l border-slate-200 transition-colors"
+              type="button"
+              title={quickAddTooltip || "Quick Add"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickAdd();
+              }}
+            >
+              <Plus size={11} className="stroke-[2.5]" />
+            </button>
+          )}
         </div>
       </label>
 
@@ -448,8 +465,8 @@ export function LookupField({
             className="lookup-popover fixed z-[9999] flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl"
             style={popoverStyle}
           >
-            <div className="flex-none p-2 border-b border-slate-200 bg-slate-50/90">
-              <div className="relative flex items-center">
+            <div className="flex-none p-2 border-b border-slate-200 bg-slate-50/90 flex items-center gap-2">
+              <div className="relative flex-1 flex items-center">
                 <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
                 <input
                   ref={searchInputRef}
@@ -474,6 +491,19 @@ export function LookupField({
                   </button>
                 )}
               </div>
+              {onQuickAdd && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onQuickAdd();
+                  }}
+                  className="px-2.5 py-1.5 h-8.5 min-h-[34px] shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                  title={quickAddTooltip || "Add New"}
+                >
+                  <Plus size={13} /> Add New
+                </button>
+              )}
             </div>
 
             {error && <div className="m-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-200">{error}</div>}
@@ -534,9 +564,37 @@ export function LookupField({
                     <tr>
                       <td className="px-3 py-8 text-center text-xs text-slate-500" colSpan={totalCols}>
                         {query ? (
-                          <span>No records match "<strong>{query}</strong>"</span>
+                          <div className="space-y-2">
+                            <div>No records match "<strong>{query}</strong>"</div>
+                            {onQuickAdd && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpen(false);
+                                  onQuickAdd();
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#00378C] hover:bg-[#002b6e] text-white text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+                              >
+                                <Plus size={13} /> {quickAddTooltip || `Create "${query}"`}
+                              </button>
+                            )}
+                          </div>
                         ) : (
-                          <span>No records found</span>
+                          <div className="space-y-2">
+                            <div>No records found</div>
+                            {onQuickAdd && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpen(false);
+                                  onQuickAdd();
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#00378C] hover:bg-[#002b6e] text-white text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+                              >
+                                <Plus size={13} /> {quickAddTooltip || "Add New Record"}
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
