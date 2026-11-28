@@ -1,9 +1,3 @@
-// Payroll Account Setup form — new UI
-//  • forwardRef + useImperativeHandle → the parent page's header "Save" button calls save()
-//  • SectionPanel / Field from shared FormBlocks, toast for feedback (no alert banner)
-//  • No modal shell, no top bar, no bottom Submit bar — List / Close / Save live in the page header
-//  • Formik + the detail useQuery removed; edit/view populate from the list row
-
 import { Landmark, MapPin } from "lucide-react";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { executeDynamicMutationColumn90, getDynamicLookup } from "../../../api/lookups";
@@ -119,6 +113,7 @@ export const AddPayrollAccountSetupForm = forwardRef<PayrollAccountFormHandle, P
     // ── Submit (called by the page header Save button) ──
     const handleSubmit = async () => {
       const error = validate();
+      debugger;
       if (error) {
         toast.warning(error);
         return;
@@ -154,9 +149,9 @@ export const AddPayrollAccountSetupForm = forwardRef<PayrollAccountFormHandle, P
       <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
         <SectionPanel title="Location" icon={MapPin}>
           <div className="grid gap-3 md:grid-cols-4">
-            <Field label="Company">
+            {/* <Field label="Company">
               <Input disabled value={company_code} />
-            </Field>
+            </Field> */}
             <Field label="Division">
               <Input disabled value={div_code} />
             </Field>
@@ -174,7 +169,13 @@ export const AddPayrollAccountSetupForm = forwardRef<PayrollAccountFormHandle, P
             <Field label="Pay Component ID" required error={errors.PAY_COMP_ID}>
               <LookupField
                 value={form.PAY_COMP_ID}
-                onChange={(val: string) => set("PAY_COMP_ID", val)}
+                onChange={(val, row) => {
+                  set("PAY_COMP_ID", val);
+                  set(
+                    "PAY_COMP_EARN_DED",
+                    row ? str((row as Record<string, unknown>).PAY_COMP_EARN_DED) : "E",
+                  );
+                }}
                 disabled={readonly || isEdit}
                 valueField="PAY_COMP_ID"
                 displayFields={["PAY_COMP_ID", "PAY_COMP_DESC"]}
