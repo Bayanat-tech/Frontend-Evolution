@@ -571,18 +571,18 @@ export function QuickAddAccountModal({
 
   // Level 3 options based on selected Level 2
   const level3Options = useMemo(() => {
-    if (!selectedL1 || !selectedL2) return [];
+    if (!selectedL1) return [];
     const l1Node = treeData.find((n) => n.id === selectedL1);
-    const l2Node = (l1Node?.children || []).find((n) => n.id === selectedL2);
+    const l2Node = (l1Node?.children || []).find((n) => n.id === selectedL2) || l1Node?.children?.[0];
     return (l2Node?.children || []).map((node) => ({ id: node.id, label: `${node.id} - ${node.label}` }));
   }, [treeData, selectedL1, selectedL2]);
 
   // Level 4 options based on selected Level 3
   const level4Options = useMemo(() => {
-    if (!selectedL1 || !selectedL2 || !selectedL3) return [];
+    if (!selectedL1) return [];
     const l1Node = treeData.find((n) => n.id === selectedL1);
-    const l2Node = (l1Node?.children || []).find((n) => n.id === selectedL2);
-    const l3Node = (l2Node?.children || []).find((n) => n.id === selectedL3);
+    const l2Node = (l1Node?.children || []).find((n) => n.id === selectedL2) || l1Node?.children?.[0];
+    const l3Node = (l2Node?.children || []).find((n) => n.id === selectedL3) || l2Node?.children?.[0];
     return (l3Node?.children || []).map((node) => ({ id: node.id, label: `${node.id} - ${node.label}` }));
   }, [treeData, selectedL1, selectedL2, selectedL3]);
 
@@ -791,11 +791,96 @@ export function QuickAddAccountModal({
   const handleL3Change = (l3: string) => {
     setSelectedL3(l3);
     const l1Node = treeData.find((n) => n.id === selectedL1);
-    const l2Node = l1Node?.children?.find((n) => n.id === selectedL2);
+    const l2Node = l1Node?.children?.find((n) => n.id === selectedL2) || l1Node?.children?.[0];
     const l3Node = l2Node?.children?.find((n) => n.id === l3);
     const nextL4 = l3Node?.children?.[0]?.id || "";
     setSelectedL4(nextL4);
   };
+
+  // Safe Mode Toggles for L2, L3, L4 (New vs Existing)
+  const toggleL2Mode = () => {
+    const nextState = !isCreatingNewL2;
+    setIsCreatingNewL2(nextState);
+    if (nextState) {
+      setIsCreatingNewL3(true);
+      setIsCreatingNewL4(true);
+    } else {
+      const l1Node = treeData.find((n) => n.id === selectedL1) || treeData[0];
+      const validL2 = (l1Node?.children?.some((c) => c.id === selectedL2) ? selectedL2 : l1Node?.children?.[0]?.id) || "";
+      setSelectedL2(validL2);
+      const l2Node = l1Node?.children?.find((c) => c.id === validL2);
+      const validL3 = l2Node?.children?.[0]?.id || "";
+      setSelectedL3(validL3);
+      const l3Node = l2Node?.children?.find((c) => c.id === validL3);
+      setSelectedL4(l3Node?.children?.[0]?.id || "");
+    }
+  };
+
+  const toggleL3Mode = () => {
+    const nextState = !isCreatingNewL3;
+    setIsCreatingNewL3(nextState);
+    if (nextState) {
+      setIsCreatingNewL4(true);
+    } else {
+      setIsCreatingNewL2(false);
+      const l1Node = treeData.find((n) => n.id === selectedL1) || treeData[0];
+      const validL2 = (l1Node?.children?.some((c) => c.id === selectedL2) ? selectedL2 : l1Node?.children?.[0]?.id) || "";
+      setSelectedL2(validL2);
+      const l2Node = l1Node?.children?.find((c) => c.id === validL2);
+      const validL3 = (l2Node?.children?.some((c) => c.id === selectedL3) ? selectedL3 : l2Node?.children?.[0]?.id) || "";
+      setSelectedL3(validL3);
+      const l3Node = l2Node?.children?.find((c) => c.id === validL3);
+      setSelectedL4(l3Node?.children?.[0]?.id || "");
+    }
+  };
+
+  const toggleL4Mode = () => {
+    const nextState = !isCreatingNewL4;
+    setIsCreatingNewL4(nextState);
+    if (!nextState) {
+      setIsCreatingNewL2(false);
+      setIsCreatingNewL3(false);
+      const l1Node = treeData.find((n) => n.id === selectedL1) || treeData[0];
+      const validL2 = (l1Node?.children?.some((c) => c.id === selectedL2) ? selectedL2 : l1Node?.children?.[0]?.id) || "";
+      setSelectedL2(validL2);
+      const l2Node = l1Node?.children?.find((c) => c.id === validL2);
+      const validL3 = (l2Node?.children?.some((c) => c.id === selectedL3) ? selectedL3 : l2Node?.children?.[0]?.id) || "";
+      setSelectedL3(validL3);
+      const l3Node = l2Node?.children?.find((c) => c.id === validL3);
+      const validL4 = (l3Node?.children?.some((c) => c.id === selectedL4) ? selectedL4 : l3Node?.children?.[0]?.id) || "";
+      setSelectedL4(validL4);
+    }
+  };
+
+  // Auto-sync dropdown selections whenever switching back to existing mode
+  useEffect(() => {
+    if (!treeData.length || !selectedL1) return;
+
+    const l1Node = treeData.find((n) => n.id === selectedL1);
+    if (!l1Node) return;
+
+    if (!isCreatingNewL2) {
+      const validL2List = l1Node.children || [];
+      if (validL2List.length > 0 && (!selectedL2 || !validL2List.some((n) => n.id === selectedL2))) {
+        const nextL2 = validL2List[0].id;
+        setSelectedL2(nextL2);
+        const l2Node = validL2List[0];
+        if (!isCreatingNewL3) {
+          const validL3List = l2Node?.children || [];
+          if (validL3List.length > 0 && (!selectedL3 || !validL3List.some((n) => n.id === selectedL3))) {
+            const nextL3 = validL3List[0].id;
+            setSelectedL3(nextL3);
+            if (!isCreatingNewL4) {
+              const validL4List = validL3List[0]?.children || [];
+              if (validL4List.length > 0 && (!selectedL4 || !validL4List.some((n) => n.id === selectedL4))) {
+                setSelectedL4(validL4List[0].id);
+              }
+            }
+          }
+        }
+      }
+    }
+  }, [treeData, selectedL1, selectedL2, selectedL3, isCreatingNewL2, isCreatingNewL3, isCreatingNewL4]);
 
   // Handle Save
   const handleSave = async (e: React.MouseEvent) => {
@@ -1124,14 +1209,7 @@ export function QuickAddAccountModal({
                       </label>
                       <button
                         type="button"
-                        onClick={() => {
-                          const nextState = !isCreatingNewL2;
-                          setIsCreatingNewL2(nextState);
-                          if (nextState) {
-                            setIsCreatingNewL3(true);
-                            setIsCreatingNewL4(true);
-                          }
-                        }}
+                        onClick={toggleL2Mode}
                         className="text-[10px] text-[#00378C] hover:underline font-bold cursor-pointer"
                       >
                         {isCreatingNewL2 ? "Select Existing" : "+ New L2"}
@@ -1151,11 +1229,17 @@ export function QuickAddAccountModal({
                         onChange={(e) => handleL2Change(e.target.value)}
                         className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
                       >
-                        {level2Options.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
+                        {level2Options.length === 0 ? (
+                          <option value="" disabled>
+                            -- No Category Available --
                           </option>
-                        ))}
+                        ) : (
+                          level2Options.map((opt) => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.label}
+                            </option>
+                          ))
+                        )}
                       </select>
                     )}
                   </div>
@@ -1168,13 +1252,7 @@ export function QuickAddAccountModal({
                       </label>
                       <button
                         type="button"
-                        onClick={() => {
-                          const nextState = !isCreatingNewL3;
-                          setIsCreatingNewL3(nextState);
-                          if (nextState) {
-                            setIsCreatingNewL4(true);
-                          }
-                        }}
+                        onClick={toggleL3Mode}
                         className="text-[10px] text-[#00378C] hover:underline font-bold cursor-pointer"
                       >
                         {isCreatingNewL3 ? "Select Existing" : "+ New L3"}
@@ -1194,11 +1272,17 @@ export function QuickAddAccountModal({
                         onChange={(e) => handleL3Change(e.target.value)}
                         className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
                       >
-                        {level3Options.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
+                        {level3Options.length === 0 ? (
+                          <option value="" disabled>
+                            -- No Group Available (Click + New L3) --
                           </option>
-                        ))}
+                        ) : (
+                          level3Options.map((opt) => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.label}
+                            </option>
+                          ))
+                        )}
                       </select>
                     )}
                   </div>
@@ -1211,7 +1295,7 @@ export function QuickAddAccountModal({
                       </label>
                       <button
                         type="button"
-                        onClick={() => setIsCreatingNewL4(!isCreatingNewL4)}
+                        onClick={toggleL4Mode}
                         className="text-[10px] text-[#00378C] hover:underline font-bold cursor-pointer"
                       >
                         {isCreatingNewL4 ? "Select Existing" : "+ New L4"}
@@ -1232,11 +1316,17 @@ export function QuickAddAccountModal({
                         onChange={(e) => setSelectedL4(e.target.value)}
                         className="w-full text-xs rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 font-medium focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C] focus:outline-none shadow-2xs"
                       >
-                        {level4Options.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
+                        {level4Options.length === 0 ? (
+                          <option value="" disabled>
+                            -- No Sub-group Available (Click + New L4) --
                           </option>
-                        ))}
+                        ) : (
+                          level4Options.map((opt) => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.label}
+                            </option>
+                          ))
+                        )}
                       </select>
                     )}
                   </div>

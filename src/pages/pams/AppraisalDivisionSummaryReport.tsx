@@ -7,6 +7,11 @@ import { Button } from "../../components/ui/Button";
 import { LookupField } from "../../components/ui/LookupField";
 import type { LookupRow } from "../../api/lookups";
 
+// ─── Logo fallbacks (same as PerformanceReportDesign) ────────
+const FALLBACK_LOGOS: Record<string, string> = {
+    BSG: "https://objectstorage.me-dubai-1.oraclecloud.com/n/axpnrpp1t5qs/b/app-dev-bucket-test/o/COMPANY_LOGO%2Falmadinalogo.jpeg",
+};
+
 // ─── Types ───────────────────────────────────────────────────
 interface SummaryRow {
     DIV_CODE: string; DIV_NAME: string;
@@ -94,7 +99,8 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
     rows: SummaryRow[];
     filters: { div: string; dept: string; period: string };
     filterLabels: { div: string; dept: string; period: string };
-}>(({ rows, filters, filterLabels }, ref) => {
+    companyLogoUrl: string;
+}>(({ rows, filters, filterLabels, companyLogoUrl }, ref) => {
     const totals = useMemo(() => ({
         R1: rows.reduce((s, r) => s + Number(r.R1), 0),
         R2: rows.reduce((s, r) => s + Number(r.R2), 0),
@@ -147,20 +153,35 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
                 }
             `}</style>
             <div className="rpt">
-                {/* Header */}
+                {/* Header — company logo from MS_COMPANY (fallback = original SVG) */}
                 <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
                     <div style={{ flexShrink: 0, width: 187, height: 68 }}>
-                        <svg width="187" height="68" viewBox="0 0 220 80" xmlns="http://www.w3.org/2000/svg">
-                            <rect x="0" y="0" width="40" height="80" fill="#F7941D" />
-                            <rect x="40" y="0" width="155" height="80" fill="#008B9B" />
-                            <text x="117" y="17" fill="#fff" fontSize="10.5" fontFamily="Arial" textAnchor="middle" fontWeight="bold">المدينة</text>
-                            <text x="117" y="34" fill="#fff" fontSize="16" fontFamily="Arial" textAnchor="middle" fontWeight="bold">al madina</text>
-                            <text x="117" y="50" fill="#F7941D" fontSize="10" fontFamily="Arial" textAnchor="middle" fontWeight="bold" letterSpacing="2.5">LOGISTICS</text>
-                            <text x="117" y="62" fill="#fff" fontSize="8.5" fontFamily="Arial" textAnchor="middle">اللوجستية</text>
-                            <text x="117" y="74" fill="#fff" fontSize="7" fontFamily="Arial" textAnchor="middle">خدمات لوجستية فائقة</text>
-                            <polygon points="185,14 204,40 185,66" fill="#F7941D" />
-                            <polygon points="174,19 191,40 174,61" fill="#F7941D" opacity="0.5" />
-                        </svg>
+                        {companyLogoUrl ? (
+                            <img
+                                src={companyLogoUrl}
+                                alt="Company Logo"
+                                crossOrigin="anonymous"
+                                style={{
+                                    width: 187,
+                                    height: 68,
+                                    objectFit: "contain",
+                                    objectPosition: "left center",
+                                    display: "block",
+                                }}
+                            />
+                        ) : (
+                            <svg width="187" height="68" viewBox="0 0 220 80" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="0" y="0" width="40" height="80" fill="#F7941D" />
+                                <rect x="40" y="0" width="155" height="80" fill="#008B9B" />
+                                <text x="117" y="17" fill="#fff" fontSize="10.5" fontFamily="Arial" textAnchor="middle" fontWeight="bold">المدينة</text>
+                                <text x="117" y="34" fill="#fff" fontSize="16" fontFamily="Arial" textAnchor="middle" fontWeight="bold">al madina</text>
+                                <text x="117" y="50" fill="#F7941D" fontSize="10" fontFamily="Arial" textAnchor="middle" fontWeight="bold" letterSpacing="2.5">LOGISTICS</text>
+                                <text x="117" y="62" fill="#fff" fontSize="8.5" fontFamily="Arial" textAnchor="middle">اللوجستية</text>
+                                <text x="117" y="74" fill="#fff" fontSize="7" fontFamily="Arial" textAnchor="middle">خدمات لوجستية فائقة</text>
+                                <polygon points="185,14 204,40 185,66" fill="#F7941D" />
+                                <polygon points="174,19 191,40 174,61" fill="#F7941D" opacity="0.5" />
+                            </svg>
+                        )}
                     </div>
                     <div style={{ flex: 1, textAlign: "center" }}>
                         <div style={{ fontSize: 13, fontWeight: "bold" }}>Appraisal Summary Report — Division Wise</div>
@@ -333,6 +354,37 @@ const AppraisalDivisionSummaryReport = () => {
     const [reportData, setReportData]     = useState<SummaryRow[]>([]);
     const [isFetching, setIsFetching]     = useState(false);
     const [hasGenerated, setHasGenerated] = useState(false);
+    const [companyLogoUrl, setCompanyLogoUrl] = useState<string>(FALLBACK_LOGOS[company_code] ?? "");
+
+    /* fetch company logo (fallback already set from FALLBACK_LOGOS) */
+    useEffect(() => {
+        setCompanyLogoUrl(FALLBACK_LOGOS[company_code] ?? "");
+        if (!loginid || !company_code) return;
+        let cancelled = false;
+        pamsSelect<Record<string, unknown>>({
+            parameter: "MS_COMPANY_SELECT", // rename if backend param name differs
+            loginid,
+            code1: company_code,
+        })
+            .then((res) => {
+                if (cancelled) return;
+                const row = res?.[0] ?? {};
+                const url = String(
+                    row["COMPANY_LOGO_AWSURL"] ??
+                    row["company_logo_awsurl"] ??
+                    row["COMPANY_LOGO"] ??
+                    row["company_logo"] ??
+                    ""
+                ).trim();
+                if (url) setCompanyLogoUrl(url);
+            })
+            .catch(() => {
+                /* keep fallback */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [loginid, company_code]);
 
     useEffect(() => {
         if (!loginid) return;
@@ -428,7 +480,7 @@ const AppraisalDivisionSummaryReport = () => {
                 gap: 12,
                 alignItems: "flex-end",
             }}>
-            
+
                 <div style={{ flex: 1, minWidth: 200 }}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4, display: "block" }}>
                         Period
@@ -447,7 +499,7 @@ const AppraisalDivisionSummaryReport = () => {
                     </select>
                 </div>
 
-            
+
                 <div style={{ flex: 1, minWidth: 160 }}>
                     <LookupField
                         label="Division"
@@ -469,7 +521,7 @@ const AppraisalDivisionSummaryReport = () => {
                     />
                 </div>
 
-       
+
                 <div style={{ flex: 1, minWidth: 160 }}>
                     <LookupField
                         label="Department"
@@ -504,7 +556,7 @@ const AppraisalDivisionSummaryReport = () => {
                 </Button>
             </div>
 
- 
+
             <div style={{ padding: 16, backgroundColor: "#eef1f5", flex: 1, minHeight: 0, overflow: "auto" }}>
                 {!hasGenerated ? (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#888", fontSize: 14 }}>
@@ -529,6 +581,7 @@ const AppraisalDivisionSummaryReport = () => {
                                 dept: deptLabel,
                                 period: periodOptions.find(p => p.code === period)?.label || period,
                             }}
+                            companyLogoUrl={companyLogoUrl}
                         />
                     </div>
                 )}
