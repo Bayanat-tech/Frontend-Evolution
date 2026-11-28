@@ -97,7 +97,7 @@ const PAMS_CSS = `
 
 /* Hero KPIs */
 .pams-hero { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:8px; }
-.pams-hero-card { background:#fff; border:1px solid var(--pd-border); border-top:2px solid var(--tone); border-radius:5px; padding:9px 10px 7px; display:flex; flex-direction:column; gap:6px; }
+.pams-hero-card { background:var(--tone-bg); border:1px solid var(--pd-border); border-top:2px solid var(--tone); border-radius:5px; padding:9px 10px 7px; display:flex; flex-direction:column; gap:6px; }
 .pams-hero-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .pams-hero-top span { font-size:9px; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; color:#334155; }
 .pams-hero-icon { width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:6px; background:var(--tone-bg); color:var(--tone); flex-shrink:0; }
@@ -120,7 +120,7 @@ const PAMS_CSS = `
 /* Cards & grids */
 .pams-chart-grid, .pams-panel-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 @media (max-width:1000px) { .pams-chart-grid, .pams-panel-grid { grid-template-columns:1fr; } }
-.pams-card { background:#fff; border:1px solid var(--pd-border); border-radius:5px; padding:0; min-width:0; overflow:hidden; }
+.pams-card { background:var(--tone-bg); border:1px solid var(--pd-border); border-radius:5px; padding:0; min-width:0; overflow:hidden; }
 .pams-card > :not(.pams-card-head) { margin:10px 12px; }
 .pams-card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 12px; border-bottom:1px solid var(--pd-border); flex-wrap:wrap; }
 .pams-card-head h3 { display:flex; align-items:center; gap:7px; margin:0; font-size:11.5px; font-weight:800; color:var(--pd-blue); }
@@ -624,7 +624,7 @@ const PamsDashboard = () => {
       </section>
 
       <div className='pams-chart-grid'>
-        <article className='pams-card'>
+        <article className='pams-card tone-blue'>
           <div className='pams-card-head'>
             <h3><BarChart3 size={15} />Performance Distribution — {MODE_LABEL}</h3>
             <div className='pams-legend'>
@@ -646,7 +646,7 @@ const PamsDashboard = () => {
           </div>
         </article>
 
-        <article className='pams-card'>
+        <article className='pams-card tone-emerald'>
           <div className='pams-card-head'>
             <h3><ClipboardCheck size={15} />Appraisal Status</h3>
           </div>
@@ -678,7 +678,7 @@ const PamsDashboard = () => {
       </div>
 
       <div className='pams-chart-grid'>
-        <article className='pams-card'>
+        <article className='pams-card tone-indigo'>
           <div className='pams-card-head'>
             <h3><Layers size={15} />Rating Range Breakdown</h3>
             <span>{MODE_LABEL}</span>
@@ -709,7 +709,7 @@ const PamsDashboard = () => {
           </div>
         </article>
 
-        <article className='pams-card'>
+        <article className='pams-card tone-amber'>
           <div className='pams-card-head'>
             <h3><BarChart3 size={15} />Department Performance</h3>
             <span>Avg rating</span>
@@ -741,7 +741,7 @@ const PamsDashboard = () => {
         />
       </div>
 
-      <article className='pams-card'>
+      <article className='pams-card tone-blue'>
         <div className='pams-card-head'>
           <h3><Users size={15} />Department Performance Overview</h3>
           <button type='button' className='pams-export' onClick={handleExport} disabled={!deptRowsAll.length}>
