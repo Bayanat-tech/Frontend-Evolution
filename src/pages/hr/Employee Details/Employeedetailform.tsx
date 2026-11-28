@@ -1,8 +1,8 @@
 import {
-  BookOpen, Car, Contact, Home, MapPin, ShieldAlert, User, Users,
+  Car, Home, MapPin, ShieldAlert, User,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useAuth } from "../../../state/AuthContext";
 import { useToast } from "../../../components/ui/AlertToast";
 import { Input } from "../../../components/ui/Input";
@@ -13,7 +13,8 @@ import type { TEmployeeDetails } from "./EmployeeDetails.types";
 import { UpdHrEmployee } from "../../../api/hr";
 
 export type EmployeeFormHandle = {
-  save: () => Promise<void>;
+  /** Resolves true only when the details were saved. false = stay on this tab. */
+  save: () => Promise<boolean>;
   toggleAll: () => void;
 };
 
@@ -49,7 +50,22 @@ type TextKey = {
       : never;
 }[keyof TEmployeeDetails];
 
+/** field key -> error message */
+type FormErrors = Record<string, string>;
+
 const CTL = "h-7 text-xs";
+
+/** Required fields, in on-screen order (this is also the order used to pick the first one to focus). */
+const REQUIRED_FIELDS: { key: keyof TEmployeeDetails; message: string }[] = [
+  { key: "title", message: "Title is required" },
+  { key: "first_name", message: "First Name is required" },
+  { key: "gender", message: "Gender is required" },
+  { key: "supervisor_empid", message: "Supervisor is required" },
+  { key: "dept_head_emp_id", message: "Dept Head is required" },
+  { key: "manager_code", message: "Manager Code is required" },
+];
+
+const isBlank = (v: unknown) => String(v ?? "").trim() === "";
 
 /* ── date helpers ─────────────────────────────────────────────── */
 function toInputDate(value: Date | null): string {
@@ -99,20 +115,28 @@ function HeaderBlock({
 }
 
 function CField({
-  label, required, className = "", children,
+  label, required, className = "", error, fieldKey, children,
 }: {
   label: string;
   required?: boolean;
   className?: string;
+  error?: string;
+  fieldKey?: string;
   children: ReactNode;
 }) {
   return (
-    <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
+    <label
+      data-field={fieldKey}
+      className={`flex min-w-0 flex-col gap-0.5 ${
+        error ? "[&_input]:!border-destructive [&_button]:!border-destructive [&_select]:!border-destructive" : ""
+      } ${className}`}
+    >
       <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
         {label}
         {required && <span className="ml-1 text-destructive">*</span>}
       </span>
       {children}
+      {error && <span className="text-[10px] font-medium leading-tight text-destructive">{error}</span>}
     </label>
   );
 }
@@ -125,6 +149,8 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
     const { user } = useAuth();
     const { toast } = useToast();
     const [form, setForm] = useState<TEmployeeDetails>(existingData);
+    const [errors, setErrors] = useState<FormErrors>({});
+    const rootRef = useRef<HTMLDivElement | null>(null);
 
     const [lookupOptions, setLookupOptions] = useState<Record<LookupKey, LookupRow[]>>({
       title: [], gender: [], blood: [], religion: [], caste: [], marital: [], supervisor: [],
@@ -163,8 +189,16 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
 
     const loadCached = (key: LookupKey) => async () => lookupOptions[key];
 
-    const set = <K extends keyof TEmployeeDetails>(key: K, value: TEmployeeDetails[K]) =>
+    const set = <K extends keyof TEmployeeDetails>(key: K, value: TEmployeeDetails[K]) => {
       setForm((prev) => ({ ...prev, [key]: value }));
+      // clear this field's error as soon as the user edits it
+      setErrors((prev) => {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key as string];
+        return next;
+      });
+    };
 
     /* ── Field builders (add-form visual language) ──────────── */
     const textField = (
@@ -172,7 +206,13 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
       label: string,
       opts?: { required?: boolean; className?: string; type?: string },
     ) => (
-      <CField label={label} required={opts?.required} className={opts?.className}>
+      <CField
+        label={label}
+        required={opts?.required}
+        className={opts?.className}
+        error={errors[key]}
+        fieldKey={key}
+      >
         <Input
           type={opts?.type}
           className={CTL}
@@ -187,7 +227,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
       label: string,
       className?: string,
     ) => (
-      <CField label={label} className={className}>
+      <CField label={label} className={className} fieldKey={key}>
         <Input
           type="date"
           className={CTL}
@@ -206,7 +246,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
       required?: boolean,
       className?: string,
     ) => (
-      <CField label={label} required={required} className={className}>
+      <CField label={label} required={required} className={className} error={errors[key]} fieldKey={key}>
         <LookupField
           compact
           dense
@@ -225,17 +265,40 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
     );
 
     /* ── Validation ─────────────────────────────────────────── */
-    const validate = (): string | null => {
-      if (!form.title) return "Title is required";
-      if (!form.first_name?.trim()) return "First Name is required";
-      if (!form.gender) return "Gender is required";
-      return null;
+    const validate = (): FormErrors => {
+      const errs: FormErrors = {};
+      for (const { key, message } of REQUIRED_FIELDS) {
+        if (isBlank(form[key])) errs[key as string] = message;
+      }
+      return errs;
+    };
+
+    const focusFirstInvalid = (errs: FormErrors) => {
+      requestAnimationFrame(() => {
+        const root = rootRef.current;
+        if (!root) return;
+        for (const { key } of REQUIRED_FIELDS) {
+          if (!errs[key as string]) continue;
+          const wrapper = root.querySelector<HTMLElement>(`[data-field="${String(key)}"]`);
+          if (!wrapper) continue;
+          wrapper.scrollIntoView({ block: "center", behavior: "smooth" });
+          wrapper.querySelector<HTMLElement>("input, button, select")?.focus({ preventScroll: true });
+          break;
+        }
+      });
     };
 
     /* ── Save ───────────────────────────────────────────────── */
-    const handleSubmit = async () => {
-      const error = validate();
-      if (error) { toast.warning(error); return; }
+    /** Returns true only if the employee details were actually saved. */
+    const handleSubmit = async (): Promise<boolean> => {
+      const errs = validate();
+      setErrors(errs);
+      const messages = Object.values(errs);
+      if (messages.length > 0) {
+        toast.warning(messages.length > 1 ? `${messages[0]} (+${messages.length - 1} more)` : messages[0]);
+        focusFirstInvalid(errs);
+        return false; // stay on this tab
+      }
 
       try {
         const finalPayload = {
@@ -316,8 +379,10 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
         await UpdHrEmployee(finalPayload);
         toast.success("Employee details updated successfully");
         onClose(true);
+        return true;
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Unable to update employee details");
+        return false; // API failed — don't advance to the next tab
       }
     };
 
@@ -329,6 +394,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
     /* ── Render ─────────────────────────────────────────────── */
     return (
       <div
+        ref={rootRef}
         style={{ zoom: 0.8 }}
         className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-1.5"
       >
@@ -390,23 +456,22 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
                   ))}
                 </Select>
               </CField>
-              {lookupField("supervisor_empid", "Supervisor", "supervisor", "employee_id", "rpt_name", true,)}
-              {lookupField("dept_head_emp_id", "Dept Head", "supervisor", "employee_id", "rpt_name", true,)}
-              {lookupField("manager_code", "Manager Code", "supervisor", "employee_id", "rpt_name", true,)}
+              {lookupField("supervisor_empid", "Supervisor", "supervisor", "employee_id", "rpt_name", true)}
+              {lookupField("dept_head_emp_id", "Dept Head", "supervisor", "employee_id", "rpt_name", true)}
+              {lookupField("manager_code", "Manager Code", "supervisor", "employee_id", "rpt_name", true)}
             </HeaderBlock>
           </div>
-
         </div>
 
         {/* ══════════ BOTTOM HALF (4 Columns) ══════════ */}
         <div className="grid gap-1.5 xl:grid-cols-4">
 
-          {/* Col 2: Permanent + Driving Licence */}
+          {/* Col 1: Permanent Address */}
           <div className="flex h-full flex-col gap-1.5">
             <HeaderBlock
               className="flex-1"
               label="Permanent Address"
-              icon={<Home size={11} />} 
+              icon={<Home size={11} />}
               gridCols="grid-cols-1 sm:grid-cols-2"
             >
               {textField("perm_address1", "Address Line 1", { className: "sm:col-span-2" })}
@@ -417,7 +482,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
             </HeaderBlock>
           </div>
 
-          {/* Col 3: Local Address */}
+          {/* Col 2: Local Address */}
           <div className="flex h-full flex-col gap-1.5">
             <HeaderBlock
               className="flex-1"
@@ -433,7 +498,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
             </HeaderBlock>
           </div>
 
-          {/* Col 4: Emergency Contact */}
+          {/* Col 3: Emergency Contact */}
           <div className="flex h-full flex-col gap-1.5">
             <HeaderBlock
               className="flex-1"
@@ -450,18 +515,19 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
             </HeaderBlock>
           </div>
 
+          {/* Col 4: Driving Licence */}
           <HeaderBlock
-              className="flex-1"
-              label="Driving Licence"
-              icon={<Car size={11} />}
-              gridCols="grid-cols-1 sm:grid-cols-2"
-            >
-              {textField("driving_license_no", "Licence No", { className: "sm:col-span-2" })}
-              {textField("dl_issue_place", "Place of Issue", { className: "sm:col-span-2" })}
-              {dateField("dl_issue_date", "Date of Issue")}
-              {dateField("dl_valid_upto", "Valid Upto")}
+            className="flex-1"
+            label="Driving Licence"
+            icon={<Car size={11} />}
+            gridCols="grid-cols-1 sm:grid-cols-2"
+          >
+            {textField("driving_license_no", "Licence No", { className: "sm:col-span-2" })}
+            {textField("dl_issue_place", "Place of Issue", { className: "sm:col-span-2" })}
+            {dateField("dl_issue_date", "Date of Issue")}
+            {dateField("dl_valid_upto", "Valid Upto")}
           </HeaderBlock>
-          
+
         </div>
       </div>
     );
