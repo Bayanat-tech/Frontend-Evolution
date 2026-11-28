@@ -305,12 +305,14 @@ else if (table.classList.contains("pls-std")) {
     else if (table.classList.contains("gr-items")) {
       // GRN: S.No | Product | PUOM | P. Qty | LUOM | L. Qty | Net Qty
       widths = ["7%", "49%", "9%", "8%", "8%", "8%", "11%"];
-    } else if (table.classList.contains("po-items-ext")) {
-  // S.No | Product | Unit | Qty | Unit Rate | Gross Value | Disc % | Disc | Tax % | Grand Total
-  widths = ["5%", "33%", "6%", "6%", "9%", "10%", "7%", "8%", "7%", "9%"];
+    }else if (table.classList.contains("po-items-tax")) {
+  // Purchase Order Tax – 13 columns (same as Sales Order)
+  // S.No | Product | P.Qty | P.UOM | L.Qty | L.UOM | Unit Price | Line Value | Disc Amt | Net Amt | TAX% | TAX Amt | Grand Total
+  widths = ["5%", "20%", "5%", "6%", "5%", "6%", "7.5%", "9%", "7%", "8%", "5.5%", "7%", "9%"];
 } else if (table.classList.contains("po-items")) {
-  // S.No | Product | Unit | Qty | Unit Rate | Gross Value | Disc
- widths = ["8%", "45%", "7%", "8%", "10%", "12%", "10%"];
+  // Purchase Order (no tax) – 10 columns
+  // S.No | Product | P.Qty | P.UOM | L.Qty | L.UOM | Unit Price | Line Value | Disc Amt | Net Amt
+  widths = ["5%", "28%", "7%", "7%", "7%", "7%", "9%", "10%", "9%", "11%"];
 }
     else if (table.classList.contains("cr-history")) {
       // S.No | Action | By | Date & Time | Level | Next Action By | Remarks
@@ -372,7 +374,7 @@ else if (table.classList.contains("pls-std")) {
             ? "blueLine"
                        : table.classList.contains("gr-tight")
               ? ((table.classList.contains("po-kv-to") || table.classList.contains("po-kv-details")) ? "poKvBoxTight" : "poTermsBoxTight")
-              : (table.classList.contains("po-terms") || table.classList.contains("po-items") || table.classList.contains("po-grid"))
+              : (table.classList.contains("po-terms") || table.classList.contains("po-items") || table.classList.contains("po-items-tax") || table.classList.contains("po-grid"))
                 ? "poTermsBox"
                 : (table.classList.contains("po-kv-to") || table.classList.contains("po-kv-details"))
                   ? "poKvBox"
@@ -486,7 +488,7 @@ const pageOrientation = forcePortrait ? "portrait" : (report.orientation || (pre
   if (Array.isArray(node)) { node.forEach(tightenPoTables); return; }
   const cls = ([] as any[]).concat(node.style || []);
   const isPoTable = ["po-kv-to", "po-kv-details", "po-terms", "po-items"].some((c) => cls.includes(c));
-  const isExt = cls.includes("po-items-ext");
+  const isExt = cls.includes("po-items-ext") || cls.includes("po-items-tax");
   if (node.table?.body) {
     node.table.body.forEach((row: any[], rIdx: number) => row.forEach((cell: any) => {
       if (isPoTable && cell && typeof cell === "object") cell.margin = [1, 0, 1, 0]; // [left, top, right, bottom]
